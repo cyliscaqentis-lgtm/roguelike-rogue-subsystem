@@ -1,0 +1,4 @@
+@"
+*.tmp
+.vs/
+"@ | Out-File .gitignore -Encoding UTF8
