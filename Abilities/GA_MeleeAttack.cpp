@@ -169,8 +169,7 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
         FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(MeleeAttackEffect, 1.0f, ContextHandle);
         if (SpecHandle.IsValid())
         {
-            const FGameplayTag DamageTag = FGameplayTag::RequestGameplayTag(TEXT("SetByCaller.Damage"));
-            SpecHandle.Data->SetSetByCallerMagnitude(DamageTag, BaseDamage);
+            SpecHandle.Data->SetSetByCallerMagnitude(RogueGameplayTags::SetByCaller_Damage, BaseDamage);
 
             if (UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Target))
             {

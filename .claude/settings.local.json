@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(\"C:/Program Files/Epic Games/UE_5.4/Engine/Build/BatchFiles/Build.bat\" RoguelikeDungeonEditor Win64 Development -Project=\"C:/UnrealProjects/RoguelikeDungeon/RoguelikeDungeon.uproject\" -WaitMutex -FromMsBuild)",
+      "Bash(\"C:\\Program Files\\Epic Games\\UE_5.4\\Engine\\Build\\BatchFiles\\Build.bat\" RoguelikeDungeonEditor Win64 Development -Project=\"C:\\UnrealProjects\\RoguelikeDungeon\\RoguelikeDungeon.uproject\" -WaitMutex -FromMsBuild)",
+      "Bash(Select-String -Pattern \"error|warning\" -Context 0,2)",
+      "Bash(Select-Object -First 50)",
+      "Bash(\"/c/Program Files/Epic Games/UE_5.4/Engine/Build/BatchFiles/Build.bat\" RoguelikeDungeonEditor Win64 Development -Project=\"/c/UnrealProjects/RoguelikeDungeon/RoguelikeDungeon.uproject\" -WaitMutex -FromMsBuild)",
+      "Bash(cmd.exe:*)",
+      "Bash(powershell.exe -Command \"& ''C:\\Program Files\\Epic Games\\UE_5.4\\Engine\\Build\\BatchFiles\\Build.bat'' RoguelikeDungeonEditor Win64 Development -Project=''C:\\UnrealProjects\\RoguelikeDungeon\\RoguelikeDungeon.uproject'' -WaitMutex -FromMsBuild 2>&1 | Select-String -Pattern ''error|Error|ERROR|warning|Warning|WARNING'' | Select-Object -First 100\")",
+      "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& {cd ''C:\\UnrealProjects\\RoguelikeDungeon''; & ''C:\\Program Files\\Epic Games\\UE_5.4\\Engine\\Binaries\\DotNET\\UnrealBuildTool\\UnrealBuildTool.exe'' RoguelikeDungeonEditor Win64 Development ''C:\\UnrealProjects\\RoguelikeDungeon\\RoguelikeDungeon.uproject'' -WaitMutex 2>&1 | Select-Object -Last 100}\")",
+      "Bash(cat:*)",
+      "Bash(\"C:/Program Files/Epic Games/UE_5.6/Engine/Build/BatchFiles/Build.bat\" RoguelikeDungeonEditor Win64 Development -Project=\"C:/UnrealProjects/RoguelikeDungeon/RoguelikeDungeon.uproject\" -WaitMutex -FromMsBuild)",
+      "Bash(\"C:/Program Files/Epic Games/UE_5.6/Engine/Build/BatchFiles/Build.bat\" LyraEditor Win64 Development -Project=\"C:/UnrealProjects/RoguelikeDungeon/RoguelikeDungeon.uproject\" -WaitMutex -FromMsBuild)",
+      "Bash(Select-String -Pattern \"error|warning|success|Build complete\")",
+      "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"cd ''C:\\UnrealProjects\\RoguelikeDungeon''; & ''C:\\Program Files\\Epic Games\\UE_5.4\\Engine\\Build\\BatchFiles\\Build.bat'' RoguelikeDungeonEditor Win64 Development ''-Project=C:\\UnrealProjects\\RoguelikeDungeon\\RoguelikeDungeon.uproject'' -WaitMutex -FromMsBuild 2>&1 | Select-Object -Last 100\")",
+      "Bash(timeout /t 20 /nobreak)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

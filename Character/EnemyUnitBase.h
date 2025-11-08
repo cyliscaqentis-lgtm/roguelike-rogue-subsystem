@@ -7,14 +7,16 @@
 #include "UnitBase.h"
 #include "GameplayTagContainer.h"
 #include "AbilitySystemInterface.h"          // 既に実装済みなら不要
+#include "AI/Enemy/EnemyThinkerBase.h"
 #include "EnemyUnitBase.generated.h"
 
 // ===== 前方宣言 =====
 class ULyraPawnData;
+class ULyraAbilitySystemComponent;
 
 /**
  * Enemy unit class with Lyra GAS initialization
- * Uses Lyra's InitState system for proper ASC setup from PlayerState
+ * Uses Pawn-owned ASC (not PlayerState) for simpler enemy AI setup
  */
 UCLASS()
 class LYRAGAME_API AEnemyUnitBase : public AUnitBase
@@ -23,6 +25,23 @@ class LYRAGAME_API AEnemyUnitBase : public AUnitBase
 
 public:
     AEnemyUnitBase(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Enemy|AI")
+    TObjectPtr<UEnemyThinkerBase> EnemyThinkerComponent;
+
+    /** Assigns PawnData from code before possession */
+    void SetEnemyPawnData(ULyraPawnData* InPawnData);
+    ULyraPawnData* GetEnemyPawnData() const { return EnemyPawnData; }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // ★ IAbilitySystemInterface Override
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * Returns the AbilitySystemComponent owned by this Pawn
+     * Overrides UnitBase which returns PlayerState's ASC
+     */
+    virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 
 protected:
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -36,6 +55,12 @@ protected:
     virtual void PossessedBy(AController* NewController) override;
 
     /**
+     * Called after all components have been initialized
+     * Registers ASC initialization callbacks
+     */
+    virtual void PostInitializeComponents() override;
+
+    /**
      * Called when the game starts or when spawned
      * Schedules GameplayReady check
      */
@@ -45,6 +70,22 @@ protected:
      * Called when controller replicates to clients (insurance)
      */
     virtual void OnRep_Controller() override;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // ★AbilitySystem初期化コールバック
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * Called when the ability system is initialized (from PawnExtComponent)
+     * Initializes HealthComponent with the ASC
+     */
+    virtual void OnAbilitySystemInitialized();
+
+    /**
+     * Called when the ability system is uninitialized
+     * Uninitializes HealthComponent
+     */
+    virtual void OnAbilitySystemUninitialized();
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ★初期化待機メソッド
@@ -68,6 +109,13 @@ protected:
      */
     UPROPERTY(EditDefaultsOnly, Category = "Enemy|Pawn")
     TObjectPtr<ULyraPawnData> EnemyPawnData;
+
+    /**
+     * If true, BeginPlay will NOT auto-spawn a controller
+     * Used by UnitManager to set PawnData before controller possession
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Spawn")
+    bool bDeferredControllerSpawn = false;
 
 private:
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -93,4 +141,21 @@ private:
      */
     void ApplyEnemyGameplayTags();
     bool bEnemyTagsApplied = false;
+
+    /**
+     * PawnDataに含まれるAbilitySetを一度だけ付与
+     */
+    void GrantAbilitySetsIfNeeded();
+    bool bGrantedAbilitySets = false;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // ★ Ability System Component (Pawn-owned)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * The AbilitySystemComponent owned by this enemy pawn
+     * This is separate from player units which use PlayerState's ASC
+     */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy|AbilitySystem", meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<ULyraAbilitySystemComponent> AbilitySystemComponent;
 };

@@ -56,34 +56,6 @@ void ALyraTBSAIController::OnPossess(APawn* InPawn)
 {
     Super::OnPossess(InPawn);
 
-    // ★★★ PlayerStateが未作成の場合、手動で作成 ★★★
-    if (!PlayerState && GetWorld())
-    {
-        // NewObjectでPlayerStateを直接作成
-        ALyraPlayerState* NewPlayerState = NewObject<ALyraPlayerState>(
-            GetWorld(),
-            ALyraPlayerState::StaticClass(),
-            NAME_None,
-            RF_Transient
-        );
-
-        if (NewPlayerState)
-        {
-            // PlayerStateを登録
-            NewPlayerState->RegisterPlayerWithSession(false);
-            PlayerState = NewPlayerState;
-
-            // 名前を設定
-            NewPlayerState->SetPlayerName(FString::Printf(TEXT("Enemy_%s"), *InPawn->GetName()));
-
-            UE_LOG(LogTemp, Warning, TEXT("[OnPossess] ✅ PlayerState created: %s"), *NewPlayerState->GetName());
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("[OnPossess] ❌ Failed to create PlayerState"));
-        }
-    }
-
     UE_LOG(LogTemp, Log, TEXT("[OnPossess] Pawn=%s, PlayerState=%s"),
         *InPawn->GetName(),
         PlayerState ? *PlayerState->GetName() : TEXT("NULL"));

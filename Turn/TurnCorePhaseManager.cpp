@@ -3,30 +3,58 @@
 #include "TurnCorePhaseManager.h"
 #include "DistanceFieldSubsystem.h"
 #include "ConflictResolverSubsystem.h"
-// #include "Action/ActionExecutorSubsystem.h"  // ★★★ 統合完了により削除 ★★★
+// #include "Action/ActionExecutorSubsystem.h"  // ☁E�E�E�E�E☁E統合完亁E�E�E�E��E�E�E�より削除 ☁E�E�E�E�E☁E
 #include "StableActorRegistry.h"
+#include "Turn/GameTurnManagerBase.h"
 #include "TurnSystemTypes.h"
 #include "../Grid/GridOccupancySubsystem.h"
+#include "../Utility/TurnCommandEncoding.h"
 #include "UObject/UnrealType.h"
 #include "../AI/Enemy/EnemyThinkerBase.h"
 #include "GameplayTagsManager.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemInterface.h"
 #include "AbilitySystemBlueprintLibrary.h"
-#include "AbilitySystemGlobals.h"  
+#include "AbilitySystemGlobals.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/Controller.h"
 #include "Character/LyraCharacter.h"
 #include "Character/LyraPawnExtensionComponent.h"
 #include "AbilitySystem/LyraAbilitySystemComponent.h"
+#include "../Utility/RogueGameplayTags.h"
+#include "EngineUtils.h"
 
 
 DEFINE_LOG_CATEGORY(LogTurnCore);
 
+namespace TurnCorePhaseManagerPrivate
+{
+    static FGameplayTag MapIntentToGameplayEvent(const FGameplayTag& IntentTag)
+    {
+        const FGameplayTag MoveIntent = RogueGameplayTags::AI_Intent_Move;
+        const FGameplayTag AttackIntent = RogueGameplayTags::AI_Intent_Attack;
+        const FGameplayTag WaitIntent = RogueGameplayTags::AI_Intent_Wait;
+
+        if (IntentTag.MatchesTag(MoveIntent))
+        {
+            return RogueGameplayTags::GameplayEvent_Intent_Move;
+        }
+        if (IntentTag.MatchesTag(AttackIntent))
+        {
+            return RogueGameplayTags::GameplayEvent_Intent_Attack;
+        }
+        if (IntentTag.MatchesTag(WaitIntent))
+        {
+            return RogueGameplayTags::GameplayEvent_Intent_Wait;
+        }
+
+        return IntentTag;
+    }
+}
+
 // ????????????????????????????????????????????????????????????????????????
-// GenerationOrder読み取りヘルパー（反射を1回だけ）
-// ????????????????????????????????????????????????????????????????????????
+// GenerationOrder読み取りヘルパ�E�E�E�E�E�E�E�E�反封E�E�E�E��E�E�E�1回だけ！E// ????????????????????????????????????????????????????????????????????????
 static int32 ReadGenerationOrderFromBlueprint(const AActor* Actor)
 {
     static const FName GenName(TEXT("GenerationOrder"));
@@ -213,6 +241,14 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
     UE_LOG(LogTemp, Log, TEXT("[TurnCore] ResolvePhase: Resolved %d actions, Hash=0x%08X"),
         Resolved.Num(), TurnHash);
 
+    if (AGameTurnManagerBase* TurnManager = ResolveTurnManager())
+    {
+        for (const FResolvedAction& Action : Resolved)
+        {
+            TurnManager->RegisterResolvedMove(Action.SourceActor.Get(), Action.NextCell);
+        }
+    }
+
     return Resolved;
 }
 
@@ -223,33 +259,56 @@ void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& Reso
 {
     for (const FResolvedAction& Action : ResolvedActions)
     {
+        bool bHandledByTurnManager = false;
+        if (AGameTurnManagerBase* TurnManager = ResolveTurnManager())
+        {
+            bHandledByTurnManager = TurnManager->DispatchResolvedMove(Action);
+        }
+
+        if (bHandledByTurnManager)
+        {
+            continue;
+        }
         UAbilitySystemComponent* ASC = ResolveASC(Action.SourceActor);
-        if (!ASC) continue;
-        
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // 一時的に無効化：Blueprint側で実装
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        /*
+        if (!ASC)
+        {
+            UE_LOG(LogTurnCore, Error, TEXT("[Execute] ❁EASC not found for %s"),
+                *GetNameSafe(Action.SourceActor));
+            continue;
+        }
+
+        // C++ event sending
         FGameplayEventData EventData;
-        EventData.EventTag = Action.FinalAbilityTag;
+        const FGameplayTag EventTag = TurnCorePhaseManagerPrivate::MapIntentToGameplayEvent(Action.FinalAbilityTag);
+        EventData.EventTag = EventTag;
         EventData.Instigator = Action.SourceActor;
         EventData.Target = Action.SourceActor;
-        
-        int32 NumActivated = ASC->HandleGameplayEvent(EventData.EventTag, &EventData);
-        
-        UE_LOG(LogTurnCore, Log, TEXT("[Execute] → Sending %s to %s"),
-            *EventData.EventTag.ToString(),
-            *GetNameSafe(Action.SourceActor));
-        */
-        
-        // ログのみ残す
-        UE_LOG(LogTurnCore, Log, TEXT("[Execute] Skipping C++ send for %s (BP will handle)"),
-            *GetNameSafe(Action.SourceActor));
+
+        // ☁E�E�E�E�E☁ENextCellをエンコードしてEventMagnitudeに設宁E☁E�E�E�E�E☁E
+        if (Action.NextCell != FIntPoint(-1, -1))
+        {
+            const int32 EncodedCell = TurnCommandEncoding::PackCell(Action.NextCell.X, Action.NextCell.Y);
+            EventData.EventMagnitude = static_cast<float>(EncodedCell);
+
+            UE_LOG(LogTurnCore, Error,
+                TEXT("[Execute] ☁E�E�E�E�E☁EEncoded NextCell: (%d,%d) ↁEMagnitude=%.0f"),
+                Action.NextCell.X, Action.NextCell.Y, EventData.EventMagnitude);
+        }
+
+        // ☁E�E�E�E�E☁ESparky診断�E�E�E�E�E�E�E�アビリチE�E�E�E��E�E�E�発動ログ ☁E�E�E�E�E☁E
+        UE_LOG(LogTurnCore, Error,
+            TEXT("[Execute] ☁E�E�E�E�E☁ESending ability event: Intent=%s, Event=%s, Actor=%s, Cell=(%d,%d)"),
+            *Action.FinalAbilityTag.ToString(),
+            *EventTag.ToString(),
+            *GetNameSafe(Action.SourceActor),
+            Action.NextCell.X, Action.NextCell.Y);
+
+        int32 NumActivated = ASC->HandleGameplayEvent(EventTag, &EventData);
+
+        UE_LOG(LogTurnCore, Error,
+            TEXT("[Execute] ☁E�E�E�E�E☁EAbility activation result: NumActivated=%d"),
+            NumActivated);
     }
-    
-    // BP呼び出しは維持（既存のBP_ExecuteResolvedActionsイベント）
-    // ※既にある場合は以下は不要
-    // OnExecuteResolvedActions.Broadcast(ResolvedActions);
 }
 
 
@@ -265,28 +324,45 @@ void UTurnCorePhaseManager::CoreCleanupPhase()
 }
 
 // ????????????????????????????????????????????????????????????????????????
-// TimeSlot対応：高速実行ラッパ（v2.4完全版）
+// TimeSlot対応：高速実行ラチE�E�E�E��E�E�E��E�E�E�E�E�E�E�E2.4完�E版！E
 // ????????????????????????????????????????????????????????????????????????
 
 const FGameplayTag& UTurnCorePhaseManager::Tag_Move()
 {
-    static const FGameplayTag G = UGameplayTagsManager::Get()
-        .RequestGameplayTag(TEXT("AI.Intent.Move"), false);
-    return G;
+    // ☁E�E�E�E�E☁ESparky修正: 静的ローカル変数で参�Eを返す ☁E�E�E�E�E☁E
+    static const FGameplayTag Tag = RogueGameplayTags::AI_Intent_Move;
+    return Tag;
+}
+
+AGameTurnManagerBase* UTurnCorePhaseManager::ResolveTurnManager()
+{
+    if (CachedTurnManager.IsValid())
+    {
+        return CachedTurnManager.Get();
+    }
+
+    if (UWorld* World = GetWorld())
+    {
+        for (TActorIterator<AGameTurnManagerBase> It(World); It; ++It)
+        {
+            CachedTurnManager = *It;
+            return CachedTurnManager.Get();
+        }
+    }
+
+    return nullptr;
 }
 
 const FGameplayTag& UTurnCorePhaseManager::Tag_Attack()
 {
-    static const FGameplayTag G = UGameplayTagsManager::Get()
-        .RequestGameplayTag(TEXT("AI.Intent.Attack"), false);
-    return G;
+    static const FGameplayTag Tag = RogueGameplayTags::AI_Intent_Attack;
+    return Tag;
 }
 
 const FGameplayTag& UTurnCorePhaseManager::Tag_Wait()
 {
-    static const FGameplayTag G = UGameplayTagsManager::Get()
-        .RequestGameplayTag(TEXT("AI.Intent.Wait"), false);
-    return G;
+    static const FGameplayTag Tag = RogueGameplayTags::AI_Intent_Wait;
+    return Tag;
 }
 
 void UTurnCorePhaseManager::BucketizeIntentsBySlot(
@@ -313,7 +389,7 @@ void UTurnCorePhaseManager::BucketizeIntentsBySlot(
     }
 }
 // ????????????????????????????????????????????????????????????????????????
-// ExecuteMovePhaseWithSlots（完全版）
+// ExecuteMovePhaseWithSlots�E�E�E�E�E�E�E�完�E版！E
 // ????????????????????????????????????????????????????????????????????????
 
 int32 UTurnCorePhaseManager::ExecuteMovePhaseWithSlots(
@@ -378,7 +454,7 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
 
     if (AllIntents.Num() == 0)
     {
-        // ★ 変更: Verbose → Log
+        // ☁E変更: Verbose ↁELog
         UE_LOG(LogTemp, Log, TEXT("[ExecuteAttackPhaseWithSlots] No intents"));
         return 0;
     }
@@ -410,7 +486,7 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
 
         if (Attacks.Num() == 0)
         {
-            // ★ 変更: Verbose → Log
+            // ☁E変更: Verbose ↁELog
             UE_LOG(LogTemp, Log, TEXT("[Attack Slot %d] No attacks"), Slot);
             continue;
         }
@@ -451,7 +527,7 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
             UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
                 ASC->GetOwner(), AttackTag, Evt);
 
-            // ★ 変更: Verbose → Log
+            // ☁E変更: Verbose ↁELog
             UE_LOG(LogTemp, Log, TEXT("[Attack] %s attacked"),
                 *GetNameSafe(A.SourceActor));
         }
@@ -472,7 +548,7 @@ void UTurnCorePhaseManager::CoreThinkPhaseWithTimeSlots(
     OutIntents.Reset();
     OutIntents.Reserve(Enemies.Num() * 2);
 
-    const FName TagQuick(TEXT("神速"));
+    const FName TagQuick(TEXT("Quick"));
 
     for (AActor* Enemy : Enemies)
     {
@@ -512,28 +588,38 @@ void UTurnCorePhaseManager::CoreThinkPhaseWithTimeSlots(
 
 UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
 {
+    static TSet<TWeakObjectPtr<AActor>> WarnedMissingASC;
+    AActor* const SourceActor = Actor;
+    const auto ReturnWithSuccess = [SourceActor](UAbilitySystemComponent* Result)
+    {
+        if (Result)
+        {
+            WarnedMissingASC.Remove(SourceActor);
+        }
+        return Result;
+    };
     if (!Actor)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[TurnCore] ResolveASC: Actor is null"));
+        UE_LOG(LogTurnCore, Verbose, TEXT("[TurnCore] ResolveASC: Actor is null"));
         return nullptr;
     }
 
     if (UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Actor))
     {
-        return ASC;
+        return ReturnWithSuccess(ASC);
     }
 
     if (IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(Actor))
     {
         if (UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent())
         {
-            return ASC;
+            return ReturnWithSuccess(ASC);
         }
     }
 
     if (UAbilitySystemComponent* ASC = Actor->FindComponentByClass<UAbilitySystemComponent>())
     {
-        return ASC;
+        return ReturnWithSuccess(ASC);
     }
 
     if (APawn* Pawn = Cast<APawn>(Actor))
@@ -544,7 +630,7 @@ UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
             {
                 if (UAbilitySystemComponent* ASC = PSI->GetAbilitySystemComponent())
                 {
-                    return ASC;
+                    return ReturnWithSuccess(ASC);
                 }
             }
             if (UAbilitySystemComponent* PS_ASC = PS->FindComponentByClass<UAbilitySystemComponent>())
@@ -563,7 +649,7 @@ UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
             {
                 if (UAbilitySystemComponent* ASC = CSI->GetAbilitySystemComponent())
                 {
-                    return ASC;
+                    return ReturnWithSuccess(ASC);
                 }
             }
             if (APlayerState* PS = C->GetPlayerState<APlayerState>())
@@ -572,7 +658,7 @@ UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
                 {
                     if (UAbilitySystemComponent* ASC = PSI->GetAbilitySystemComponent())
                     {
-                        return ASC;
+                        return ReturnWithSuccess(ASC);
                     }
                 }
                 if (UAbilitySystemComponent* PS_ASC = PS->FindComponentByClass<UAbilitySystemComponent>())
@@ -599,7 +685,7 @@ UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
             {
                 if (UAbilitySystemComponent* ASC = PSI->GetAbilitySystemComponent())
                 {
-                    return ASC;
+                    return ReturnWithSuccess(ASC);
                 }
             }
             if (UAbilitySystemComponent* PS_ASC = PS->FindComponentByClass<UAbilitySystemComponent>())
@@ -613,17 +699,29 @@ UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[TurnCore] ResolveASC: No ASC found for %s"), *GetNameSafe(Actor));
+    if (!WarnedMissingASC.Contains(SourceActor))
+    {
+        WarnedMissingASC.Add(SourceActor);
+        UE_LOG(LogTurnCore, Warning,
+            TEXT("[TurnCore] ResolveASC: No ASC found for %s"),
+            *GetNameSafe(SourceActor));
+    }
+    else
+    {
+        UE_LOG(LogTurnCore, VeryVerbose,
+            TEXT("[TurnCore] ResolveASC: ASC still missing for %s"),
+            *GetNameSafe(SourceActor));
+    }
     return nullptr;
 }
 
 
 // ????????????????????????????????????????????????????????????????????????
-// GAS 準備完了チェック
+// GAS 準備完亁E�E�E�E��E�E�E�ェチE�E�E�E��E�E�E�
 // ????????????????????????????????????????????????????????????????????????
 
 // ????????????????????????????????????????????????????????????????????????
-// GAS 準備完了チェック（UE 5.6 対応）
+// GAS 準備完亁E�E�E�E��E�E�E�ェチE�E�E�E��E�E�E��E�E�E�E�E�E�E�EE 5.6 対応！E
 // ????????????????????????????????????????????????????????????????????????
 
 bool UTurnCorePhaseManager::IsGASReady(AActor* Actor)
@@ -634,7 +732,7 @@ bool UTurnCorePhaseManager::IsGASReady(AActor* Actor)
     }
 
     // ────────────────────────────────────────────────────────────────────
-    // Step 1: ASC を取得
+    // Step 1: ASC を取征E
     // ────────────────────────────────────────────────────────────────────
 
     UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Actor);
@@ -644,7 +742,7 @@ bool UTurnCorePhaseManager::IsGASReady(AActor* Actor)
     }
 
     // ────────────────────────────────────────────────────────────────────
-    // Step 2: ActorInfo が有効か確認
+    // Step 2: ActorInfo が有効か確誁E
     // ────────────────────────────────────────────────────────────────────
 
     const FGameplayAbilityActorInfo* Info = ASC->AbilityActorInfo.Get();
@@ -655,11 +753,11 @@ bool UTurnCorePhaseManager::IsGASReady(AActor* Actor)
     }
 
     // ────────────────────────────────────────────────────────────────────
-    // Step 3: 能力が1つ以上付与されているか確認（UE 5.6 対応）
+    // Step 3: 能力が1つ以上付与されてぁE�E�E�E��E�E�E�か確認！EE 5.6 対応！E
     // ────────────────────────────────────────────────────────────────────
 
     // UE 5.6: GetActivatableAbilities() は直接 TArray<FGameplayAbilitySpec> を返す
-    // .Items プロパティは存在しないため削除
+    // .Items プロパティは存在しなぁE�E�E�E��E�E�E�め削除
     const TArray<FGameplayAbilitySpec>& Abilities = ASC->GetActivatableAbilities();
 
     if (Abilities.Num() == 0)
@@ -686,7 +784,7 @@ bool UTurnCorePhaseManager::AllEnemiesReady(const TArray<AActor*>& Enemies) cons
         else
         {
             NotReadyCount++;
-            // 最初の数体のみ詳細ログ（ログ氾濫防止）
+            // 最初�E数体�Eみ詳細ログ�E�E�E�E�E�E�E�ログ氾濫防止�E�E�E�E�E�E�E�E
             if (NotReadyCount <= 3)
             {
                 UE_LOG(LogTemp, Verbose, TEXT("[TurnCore] AllEnemiesReady: %s not ready yet"),

@@ -12,7 +12,7 @@ struct FIntRangeOverride
 {
     GENERATED_BODY();
 
-    UPROPERTY(EditAnywhere, Category="Override")
+    UPROPERTY(EditAnywhere, Category="Override", meta=(InlineEditConditionToggle))
     bool bOverride = false;
 
     UPROPERTY(EditAnywhere, Category="Override", meta=(EditCondition="bOverride", ClampMin="0"))
@@ -27,7 +27,7 @@ struct FFloatOverride
 {
     GENERATED_BODY();
 
-    UPROPERTY(EditAnywhere, Category="Override")
+    UPROPERTY(EditAnywhere, Category="Override", meta=(InlineEditConditionToggle))
     bool bOverride = false;
 
     UPROPERTY(EditAnywhere, Category="Override", meta=(EditCondition="bOverride"))
@@ -39,7 +39,7 @@ struct FIntOverride
 {
     GENERATED_BODY();
 
-    UPROPERTY(EditAnywhere, Category="Override")
+    UPROPERTY(EditAnywhere, Category="Override", meta=(InlineEditConditionToggle))
     bool bOverride = false;
 
     UPROPERTY(EditAnywhere, Category="Override", meta=(EditCondition="bOverride", ClampMin="0"))
@@ -51,10 +51,10 @@ struct FDungeonTemplateConfig
 {
     GENERATED_BODY();
 
-    UPROPERTY(EditAnywhere, Category="Template")
+    UPROPERTY(EditAnywhere, Category="Template", meta=(DisplayName="Template Type", ToolTip="Native or Blueprint template asset used to carve the dungeon layout."))
     TSubclassOf<UDungeonTemplateAsset> TemplateClass = nullptr;
 
-    UPROPERTY(EditAnywhere, Category="Template", meta=(ClampMin="0.0"))
+    UPROPERTY(EditAnywhere, Category="Template", meta=(ClampMin="0.0", UIMin="0.0", UIMax="5.0", ToolTip="Relative selection weight. When empty, defaults will be injected automatically."))
     float Weight = 1.0f;
 
     UPROPERTY(EditAnywhere, Category="Overrides") FIntRangeOverride RoomSize;
@@ -108,23 +108,53 @@ class LYRAGAME_API URogueFloorConfigData : public UDataAsset
 {
     GENERATED_BODY()
 public:
-    UPROPERTY(EditAnywhere, Category="Common|Geometry") int32 Width = 64;
-    UPROPERTY(EditAnywhere, Category="Common|Geometry") int32 Height = 64;
-    UPROPERTY(EditAnywhere, Category="Common|Geometry") int32 CellSizeUU = 100;
-    UPROPERTY(EditAnywhere, Category="Common|Rooms")   int32 MinRoomSize = 4;
-    UPROPERTY(EditAnywhere, Category="Common|Rooms")   int32 MaxRoomSize = 10;
-    UPROPERTY(EditAnywhere, Category="Common|Rooms")   int32 MinRooms = 10;
-    UPROPERTY(EditAnywhere, Category="Common|Rooms")   int32 MaxRooms = 24;
-    UPROPERTY(EditAnywhere, Category="Common|Margins") int32 RoomMargin = 1;
-    UPROPERTY(EditAnywhere, Category="Common|Margins") int32 OuterMargin = 1;
-    UPROPERTY(EditAnywhere, Category="Common|Algo")    float StopSplitProbability = 0.15f;
-    UPROPERTY(EditAnywhere, Category="Common|Algo")    float ExtraConnectorChance  = 0.10f;
-    UPROPERTY(EditAnywhere, Category="Common|Algo", meta=(ClampMin="0.0", ClampMax="1.0"))
-                                                        float ReachabilityThreshold = 0.9f;
-    UPROPERTY(EditAnywhere, Category="Common|Quality") int32 MaxReroll = 8;
-    UPROPERTY(EditAnywhere, Category="Common|Doors")   int32 MinDoorSpacing = 2;
+    URogueFloorConfigData();
 
-    UPROPERTY(EditAnywhere, Category="Templates")
+    virtual void PostLoad() override;
+
+    UPROPERTY(EditAnywhere, Category="Common|Geometry", meta=(ClampMin="16", ClampMax="512", UIMin="16", UIMax="256", ToolTip="Grid width in cells."))
+    int32 Width = 64;
+
+    UPROPERTY(EditAnywhere, Category="Common|Geometry", meta=(ClampMin="16", ClampMax="512", UIMin="16", UIMax="256", ToolTip="Grid height in cells."))
+    int32 Height = 64;
+
+    UPROPERTY(EditAnywhere, Category="Common|Geometry", meta=(ClampMin="50", ClampMax="500", UIMin="50", UIMax="200", ToolTip="Cell size (centimeters) used when spawning meshes."))
+    int32 CellSizeUU = 100;
+
+    UPROPERTY(EditAnywhere, Category="Common|Rooms", meta=(ClampMin="2", ClampMax="64", UIMin="2", UIMax="16"))
+    int32 MinRoomSize = 4;
+
+    UPROPERTY(EditAnywhere, Category="Common|Rooms", meta=(ClampMin="2", ClampMax="64", UIMin="4", UIMax="32"))
+    int32 MaxRoomSize = 10;
+
+    UPROPERTY(EditAnywhere, Category="Common|Rooms", meta=(ClampMin="1", ClampMax="128", UIMin="4", UIMax="64"))
+    int32 MinRooms = 10;
+
+    UPROPERTY(EditAnywhere, Category="Common|Rooms", meta=(ClampMin="1", ClampMax="256", UIMin="4", UIMax="64"))
+    int32 MaxRooms = 24;
+
+    UPROPERTY(EditAnywhere, Category="Common|Margins", meta=(ClampMin="0", ClampMax="16"))
+    int32 RoomMargin = 1;
+
+    UPROPERTY(EditAnywhere, Category="Common|Margins", meta=(ClampMin="0", ClampMax="32"))
+    int32 OuterMargin = 1;
+
+    UPROPERTY(EditAnywhere, Category="Common|Algo", meta=(ClampMin="0.0", ClampMax="1.0"))
+    float StopSplitProbability = 0.15f;
+
+    UPROPERTY(EditAnywhere, Category="Common|Algo", meta=(ClampMin="0.0", ClampMax="1.0"))
+    float ExtraConnectorChance  = 0.10f;
+
+    UPROPERTY(EditAnywhere, Category="Common|Algo", meta=(ClampMin="0.0", ClampMax="1.0"))
+    float ReachabilityThreshold = 0.9f;
+
+    UPROPERTY(EditAnywhere, Category="Common|Quality", meta=(ClampMin="1", ClampMax="64"))
+    int32 MaxReroll = 8;
+
+    UPROPERTY(EditAnywhere, Category="Common|Doors", meta=(ClampMin="1", ClampMax="16"))
+    int32 MinDoorSpacing = 2;
+
+    UPROPERTY(EditAnywhere, Category="Templates", meta=(TitleProperty="TemplateClass", ShowOnlyInnerProperties, ToolTip="Weighted list of generation templates. Default presets are injected automatically when empty."))
     TArray<FDungeonTemplateConfig> TemplateConfigs;
 
     UPROPERTY(EditAnywhere, Category="Templates", meta=(DeprecatedProperty, DisplayName="Template Weights (Legacy)"))
@@ -137,4 +167,8 @@ public:
 
     UFUNCTION(CallInEditor, Category="Templates")
     void MigrateFromLegacy();
+
+private:
+    void EnsureDefaultTemplates();
+    void SanitizeResolvedParams(FDungeonResolvedParams& Params) const;
 };

@@ -9,7 +9,7 @@
 #include "AbilitySystemComponent.h"
 #include "Debug/TurnSystemInterfaces.h"
 #include "Turn/TurnSystemTypes.h"
-#include "Utility/TurnCommon.h"
+#include "Utility/TurnAuthorityUtils.h"
 #include "Grid/DungeonFloorGenerator.h"
 #include "Grid/URogueDungeonSubsystem.h"
 #include "Grid/DungeonConfigAsset.h"
@@ -21,6 +21,7 @@ class UEnemyAISubsystem;
 class UTurnActionBarrierSubsystem;
 class UAbilitySystemComponent;
 class AGridPathfindingLibrary;
+class AUnitBase;
 class AUnitManager;
 class URogueDungeonSubsystem;
 class UDebugObserverCSV;
@@ -34,7 +35,7 @@ class UDungeonConfigAsset;
 struct FTurnContext;
 class ATBSLyraGameMode;
 
-// 笘・・笘・繝薙Ν繝芽ｭ伜挨逕ｨ螳壽焚 笘・・笘・static constexpr int32 kEnemyPhasePatchID = 20251030;
+// 笘�E・笘�E繝薙Ν繝芽�E�伜挨逕ｨ螳壽焁E笘�E・笘�Estatic constexpr int32 kEnemyPhasePatchID = 20251030;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPlayerInputReceived);
 
@@ -45,7 +46,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnFloorReady, int32, FloorIndex);
 /**
  * AGameTurnManagerBase
  *
- * 繧ｿ繝ｼ繝ｳ繝吶・繧ｹ繧ｲ繝ｼ繝縺ｮ荳ｭ譬ｸ繝槭ロ繝ｼ繧ｸ繝｣繝ｼ・・++邨ｱ蜷育沿・・ */
+ * 繧�E�繝ｼ繝ｳ繝吶・繧�E�繧�E�繝ｼ繝縺�E�荳�E�譬�E�繝槭ロ繝ｼ繧�E�繝｣繝ｼ・・++邨�E�蜷育沿・・ */
 UCLASS(Blueprintable, BlueprintType)
 class LYRAGAME_API AGameTurnManagerBase : public AActor
 {
@@ -53,7 +54,7 @@ class LYRAGAME_API AGameTurnManagerBase : public AActor
 
 public:
     //==========================================================================
-    // 繧ｳ繝ｳ繧ｹ繝医Λ繧ｯ繧ｿ/繧ｪ繝ｼ繝舌・繝ｩ繧､繝蛾未謨ｰ
+    // 繧�E�繝ｳ繧�E�繝医Λ繧�E�繧�E�/繧�E�繝ｼ繝�E・繝ｩ繧�E�繝蛾未謨�E�
     //==========================================================================
 
     AGameTurnManagerBase();
@@ -63,13 +64,13 @@ public:
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
     //==========================================================================
-    // 繧ｰ繝ｪ繝・ラ蛻晄悄蛹悶ョ繝舌ャ繧ｰ
+    // 繧�E�繝ｪ繝�Eラ蛻晁E��蛹悶ョ繝�Eャ繧�E�
     //==========================================================================
 
     void InitializeGridDebug();
 
     //==========================================================================
-    // 繝ｬ繝励Μ繧ｱ繝ｼ繧ｷ繝ｧ繝ｳ騾夂衍繝上Φ繝峨Λ
+    // 繝ｬ繝励Μ繧�E�繝ｼ繧�E�繝ｧ繝ｳ騾夂衍繝上Φ繝峨΁E
     //==========================================================================
 
     UFUNCTION()
@@ -82,7 +83,7 @@ public:
     void OnRep_CurrentTurnId();
 
     //==========================================================================
-    // 繧ｿ繝ｼ繝ｳID/WindowID蜿門ｾ・    //==========================================================================
+    // 繧�E�繝ｼ繝ｳID/WindowID蜿門�E�・    //==========================================================================
 
     UFUNCTION(BlueprintPure, Category = "Turn")
     int32 GetCurrentTurnId() const { return CurrentTurnId; }
@@ -94,74 +95,74 @@ public:
     int32 GetCurrentTurnIndex() const { return CurrentTurnIndex; }
 
     //==========================================================================
-    // PathFinder繧ｭ繝｣繝・す繝･蜿門ｾ・    //==========================================================================
+    // PathFinder繧�E�繝｣繝�Eす繝･蜿門�E�・    //==========================================================================
 
     UFUNCTION(BlueprintPure, Category = "Turn|Services")
     AGridPathfindingLibrary* GetCachedPathFinder() const;
 
     //==========================================================================
-    // 繝繝ｳ繧ｸ繝ｧ繝ｳ逕滓・繧ｷ繧ｹ繝・Β邨ｱ蜷・PI
+    // 繝繝ｳ繧�E�繝ｧ繝ｳ逕滓�E繧�E�繧�E�繝�EΒ邨�E�蜷・PI
     //==========================================================================
 
-    /** 繝繝ｳ繧ｸ繝ｧ繝ｳSubsystem縺ｸ縺ｮ繧｢繧ｯ繧ｻ繧ｵ */
+    /** 繝繝ｳ繧�E�繝ｧ繝ｳSubsystem縺�E�縺�E�繧�E�繧�E�繧�E�繧�E� */
     UFUNCTION(BlueprintCallable, Category="Dungeon|Access")
     URogueDungeonSubsystem* GetDungeonSystem() const { return DungeonSystem; }
 
-    /** FloorGenerator縺ｸ縺ｮ繧｢繧ｯ繧ｻ繧ｵ */
+    /** FloorGenerator縺�E�縺�E�繧�E�繧�E�繧�E�繧�E� */
     UFUNCTION(BlueprintCallable, Category="Dungeon|Access")
     ADungeonFloorGenerator* GetFloorGenerator() const;
 
-    /** 謖・ｮ壹ヵ繝ｭ繧｢縺ｮ逕滓・繧剃ｿ晁ｨｼ・域悴逕滓・縺ｪ繧臥函謌撰ｼ・*/
+    /** 謖�E�E�壹ヵ繝ｭ繧�E�縺�E�逕滓�E繧剁E��晁E���E�・域悴逕滓�E縺�E�繧臥函謌撰�E�・*/
     UFUNCTION(BlueprintCallable, Category="Dungeon|Flow")
     bool EnsureFloorGenerated(int32 FloorIndex);
 
-    /** 谺｡繝輔Ο繧｢縺ｸ驕ｷ遘ｻ・・loorIndex++縺励※逕滓・・・*/
+    /** 谺�E�繝輔Ο繧�E�縺�E�驕ｷ遘ｻ・・loorIndex++縺励※逕滓�E・・*/
     UFUNCTION(BlueprintCallable, Category="Dungeon|Flow")
     bool NextFloor();
 
-    /** BP莠呈鋤繧ｰ繝ｪ繝・ラAPI・壹Ρ繝ｼ繝ｫ繝牙ｺｧ讓吶°繧峨げ繝ｪ繝・ラ迥ｶ諷九ｒ蜿門ｾ・*/
+    /** BP莠呈鋤繧�E�繝ｪ繝�EラAPI・壹Ρ繝ｼ繝ｫ繝牙�E��E�讓吶°繧峨げ繝ｪ繝�Eラ迥�E�諷九ｒ蜿門�E�・*/
     UFUNCTION(BlueprintCallable, Category="Dungeon|Grid")
     int32 TM_ReturnGridStatus(FVector World) const;
 
-    /** BP莠呈鋤繧ｰ繝ｪ繝・ラAPI・壹Ρ繝ｼ繝ｫ繝牙ｺｧ讓吶・繧ｰ繝ｪ繝・ラ蛟､繧貞､画峩 */
+    /** BP莠呈鋤繧�E�繝ｪ繝�EラAPI・壹Ρ繝ｼ繝ｫ繝牙�E��E�讓吶・繧�E�繝ｪ繝�Eラ蛟､繧貞､画峩 */
     UFUNCTION(BlueprintCallable, Category="Dungeon|Grid")
     void TM_GridChangeVector(FVector World, int32 Value);
 
-    /** 繝励Ξ繧､繝､繝ｼ繧帝嚴谿ｵ荳翫ｊ・・tairUp・峨・菴咲ｽｮ縺ｫ繝ｯ繝ｼ繝・*/
+    /** 繝励Ξ繧�E�繝､繝ｼ繧帝嚴谿�E�荳翫�E��E・tairUp・峨・菴咲�E��E�縺�E�繝ｯ繝ｼ繝�E*/
     UFUNCTION(BlueprintCallable, Category="Dungeon|Flow")
     void WarpPlayerToStairUp(AActor* Player);
 
     //==========================================================================
-    // 繧ｰ繝ｪ繝・ラ繧ｳ繧ｹ繝郁ｨｭ螳夲ｼ・lueprint逕ｨ・・    //==========================================================================
+    // 繧�E�繝ｪ繝�Eラ繧�E�繧�E�繝郁�E��E�螳夲�E�・lueprint逕ｨ・・    //==========================================================================
 
-    /** Blueprint逕ｨ・壽欠螳壹＠縺溘げ繝ｪ繝・ラ繧ｻ繝ｫ繧貞｣√↓險ｭ螳・*/
+    /** Blueprint逕ｨ・壽欠螳壹�E�縺溘げ繝ｪ繝�Eラ繧�E�繝ｫ繧貞｣√�E險�E�螳・*/
     UFUNCTION(BlueprintCallable, Category = "Turn|Grid")
     void SetWallCell(int32 X, int32 Y);
 
-    /** Blueprint逕ｨ・壽欠螳壹＠縺溘Ρ繝ｼ繝ｫ繝牙ｺｧ讓吶ｒ螢√↓險ｭ螳・*/
+    /** Blueprint逕ｨ・壽欠螳壹�E�縺溘Ρ繝ｼ繝ｫ繝牙�E��E�讓吶�E�螢√�E險�E�螳・*/
     UFUNCTION(BlueprintCallable, Category = "Turn|Grid")
     void SetWallAtWorldPosition(FVector WorldPosition);
 
-    /** Blueprint逕ｨ・夂洸蠖｢鬆伜沺繧貞｣√↓險ｭ螳・*/
+    /** Blueprint逕ｨ・夂洸蠖｢鬁E��沺繧貞｣√�E險�E�螳・*/
     UFUNCTION(BlueprintCallable, Category = "Turn|Grid")
     void SetWallRect(int32 MinX, int32 MinY, int32 MaxX, int32 MaxY);
 
     //==========================================================================
-    // Barrier騾｣謳ｺ
+    // Barrier騾�E�謳�E�
     //==========================================================================
 
     UFUNCTION()
     void OnAllMovesFinished(int32 FinishedTurnId);
 
     //==========================================================================
-    // 蛻晄悄蛹悶す繧ｹ繝・Β
+    // 蛻晁E��蛹悶す繧�E�繝�E΁E
     //==========================================================================
 
     UFUNCTION(BlueprintCallable, Category = "Turn|System")
     void InitializeTurnSystem();
 
     //==========================================================================
-    // 繧ｿ繝ｼ繝ｳ騾ｲ陦窟PI
+    // 繧�E�繝ｼ繝ｳ騾�E�陦窟PI
     //==========================================================================
 
     UFUNCTION(BlueprintCallable, Category = "Turn|Flow")
@@ -267,7 +268,7 @@ public:
     virtual void ExecuteEnemyAttacks_Implementation();
 
     //==========================================================================
-    // Yangus・亥酔譎らｧｻ蜍募捉繧奇ｼ・    //==========================================================================
+    // Yangus・亥酔譎ら�E��E�蜍募捉繧奁E��・    //==========================================================================
 
 
     UFUNCTION(BlueprintCallable, Category = "Turn|Yangus")
@@ -361,45 +362,45 @@ public:
     UPROPERTY(EditAnywhere, Instanced, Category = "Turn|Hooks|Debug")
     TArray<TObjectPtr<UObject>> DebugObservers;
 
-    // 陦・21莉倩ｿ代↓霑ｽ蜉・・urrentTurnId縺ｮ荳具ｼ・    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Turn|Legacy")
+    // 陦・21莉倩�E�代↓霑�E�蜉・・urrentTurnId縺�E�荳具�E�・    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Turn|Legacy")
     int32 CurrentTurnIndex = 0;
 
     //==========================================================================
-    // 繝繝ｳ繧ｸ繝ｧ繝ｳ逕滓・繧ｷ繧ｹ繝・Β邨ｱ蜷医・繝ｭ繝代ユ繧｣
+    // 繝繝ｳ繧�E�繝ｧ繝ｳ逕滓�E繧�E�繧�E�繝�EΒ邨�E�蜷医・繝ｭ繝代ユ繧�E�
     //==========================================================================
 
-    /** 繝繝ｳ繧ｸ繝ｧ繝ｳ逕滓・Subsystem縺ｸ縺ｮ蜿ら・ */
+    /** 繝繝ｳ繧�E�繝ｧ繝ｳ逕滓�ESubsystem縺�E�縺�E�蜿ら�E */
     UPROPERTY()
     TObjectPtr<URogueDungeonSubsystem> DungeonSystem = nullptr;
 
-    /** 蛻晄悄繝輔Ο繧｢險ｭ螳夂畑Config */
+    /** 蛻晁E��繝輔Ο繧�E�險�E�螳夂畑Config */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Dungeon|Config")
     TSoftObjectPtr<UDungeonConfigAsset> InitialFloorConfig;
 
-    /** 髢句ｧ九ヵ繝ｭ繧｢繧､繝ｳ繝・ャ繧ｯ繧ｹ */
+    /** 髢句�E�九ヵ繝ｭ繧�E�繧�E�繝ｳ繝�Eャ繧�E�繧�E� */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Dungeon|Config")
     int32 StartFloorIndex = 0;
 
-    /** 迴ｾ蝨ｨ縺ｮ繝輔Ο繧｢繧､繝ｳ繝・ャ繧ｯ繧ｹ・亥・驛ｨ邂｡逅・畑・・*/
+    /** 迴�E�蝨�E�縺�E�繝輔Ο繧�E�繧�E�繝ｳ繝�Eャ繧�E�繧�E�・亥・驛ｨ邂｡送E�E畑�E・*/
     UPROPERTY(BlueprintReadOnly, Category="Dungeon|State")
     int32 CurrentFloorIndex = 0;
 
-    /** 繝輔Ο繧｢逕滓・螳御ｺ・う繝吶Φ繝・*/
+    /** 繝輔Ο繧�E�逕滓�E螳御�E�・ぁE��吶Φ繝�E*/
     UPROPERTY(BlueprintAssignable, Category="Dungeon|Events")
     FOnFloorReady OnFloorReady;
 
     //==========================================================================
-    // 笘・AP System・医い繧ｯ繧ｷ繝ｧ繝ｳ繝昴う繝ｳ繝亥宛・・    //==========================================================================
+    // 笘�EAP System・医ぁE���E�繧�E�繝ｧ繝ｳ繝昴ぁE��ｳ繝亥宛�E・    //==========================================================================
     
-    /** 1繧ｿ繝ｼ繝ｳ縺ゅ◆繧翫・譛螟ｧAP */
+    /** 1繧�E�繝ｼ繝ｳ縺めE��繧翫・譛螟ｧAP */
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Turn System|AP")
     int32 PlayerAPPerTurn = 1;
     
-    /** 迴ｾ蝨ｨ縺ｮ繝励Ξ繧､繝､繝ｼ谿帰P・医Ξ繝励Μ繧ｱ繝ｼ繝域耳螂ｨ・・*/
+    /** 迴�E�蝨�E�縺�E�繝励Ξ繧�E�繝､繝ｼ谿帰P・医Ξ繝励Μ繧�E�繝ｼ繝域耳螂ｨ・・*/
     UPROPERTY(Replicated, BlueprintReadOnly, Category = "Turn System|AP")
     int32 PlayerAP = 0;
 
-    /** AP縺・縺ｫ縺ｪ縺｣縺溘→縺阪・謨ｵ繝輔ぉ繝ｼ繧ｺ繧ｭ繝･繝ｼ繝輔Λ繧ｰ */
+    /** AP縺・縺�E�縺�E�縺�E�縺溘�E縺阪・謨�E�繝輔ぉ繝ｼ繧�E�繧�E�繝･繝ｼ繝輔Λ繧�E� */
     UPROPERTY()
     bool bEnemyPhaseQueued = false;
 
@@ -418,7 +419,7 @@ public:
     FSimulBatch CurrentSimulBatch;
 
     //==========================================================================
-    // BP莠呈鋤繝励Ο繝代ユ繧｣
+    // BP莠呈鋤繝励Ο繝代ユ繧�E�
     //==========================================================================
 
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Turn|Legacy")
@@ -432,6 +433,25 @@ public:
 
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Turn|Legacy")
     TArray<TObjectPtr<AActor>> CachedEnemies;
+
+    /** ターン冁E��使用する、収雁E�Eソート済みの安定した敵リスチE*/
+    UPROPERTY(BlueprintReadOnly, Category = "Turn|State")
+    TArray<TObjectPtr<AActor>> CachedEnemiesForTurn;
+
+    /** プレイヤーの移動意図�E�次のResolveまで保持�E�E*/
+    UPROPERTY()
+    FEnemyIntent PendingPlayerIntent;
+
+    UPROPERTY()
+    bool bPendingPlayerIntent = false;
+
+    /** 今ターン中に解決済みの移動�E予紁E��Ector→Cell�E�E*/
+    UPROPERTY(Transient)
+    TMap<TWeakObjectPtr<AActor>, FIntPoint> PendingMoveReservations;
+
+    /** 敵リスト�Eリビジョン番号、EollectEnemiesが完亁E��るたびにインクリメンチE*/
+    UPROPERTY(BlueprintReadOnly, Category = "Turn|State")
+    int32 EnemiesRevision = 0;
 
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Turn|Legacy")
     int32 InputWindowId = 0;
@@ -451,7 +471,7 @@ public:
     bool bPlayerMoveInProgress = false;
 
     //==========================================================================
-    // 繝代ヵ繧ｩ繝ｼ繝槭Φ繧ｹ譛驕ｩ蛹・    //==========================================================================
+    // 繝代ヵ繧�E�繝ｼ繝槭Φ繧�E�譛驕ｩ蛹・    //==========================================================================
 
     UPROPERTY(Transient)
     TWeakObjectPtr<AGridPathfindingLibrary> CachedPathFinder;
@@ -463,10 +483,10 @@ public:
     FOnTurnStarted OnTurnStarted;
 
     //==========================================================================
-    // 繝繝ｳ繧ｸ繝ｧ繝ｳ貅門ｙ螳御ｺ・う繝吶Φ繝医ワ繝ｳ繝峨Λ・育峩蜿ら・豕ｨ蜈･・・    //==========================================================================
+    // 繝繝ｳ繧�E�繝ｧ繝ｳ貁E���E�螳御�E�・ぁE��吶Φ繝医ワ繝ｳ繝峨Λ�E育峩蜿ら�E豕ｨ蜈･・・    //==========================================================================
 
     UFUNCTION()
-    void HandleDungeonReady(); // 竊・縺薙％縺ｧ縺ｮ縺ｿ InitializeTurnSystem() 繧貞他縺ｶ
+    void HandleDungeonReady(URogueDungeonSubsystem* InDungeonSys); // 竊�E縺薙！E���E�縺�E�縺�E� InitializeTurnSystem() 繧貞他縺�E�
 
     UPROPERTY()
     TObjectPtr<AGridPathfindingLibrary> PathFinder = nullptr;
@@ -485,6 +505,19 @@ public:
     UFUNCTION(BlueprintCallable, Category="Turn|State")
     void MarkMoveInProgress(bool bInProgress);
 
+    /** 解決済み移動�E予紁E��クリア */
+    void ClearResolvedMoves();
+
+    /** 解決済み移動を登録 */
+    void RegisterResolvedMove(AActor* Actor, const FIntPoint& Cell);
+
+    /** 持E��セルへの移動が予紁E��れてぁE��ぁE*/
+    bool IsMoveAuthorized(AActor* Actor, const FIntPoint& Cell) const;
+    bool HasReservationFor(AActor* Actor, const FIntPoint& Cell) const;
+    void ReleaseMoveReservation(AActor* Actor);
+
+    bool TriggerPlayerMoveAbility(const FResolvedAction& Action, AUnitBase* Unit);
+
     /** Open input window for player moves */
     UFUNCTION(BlueprintCallable, Category="Turn")
     void OpenInputWindow();
@@ -492,18 +525,22 @@ public:
     /** Apply wait input gate to player ASC */
     void ApplyWaitInputGate(bool bOpen);
 
-    /** 繝悶・繝ｫ・九ち繧ｰ縺ｮ莠碁㍾骰ｵ讀懆ｨｼ・医し繝ｼ繝舌・讓ｩ髯舌・縺ｿ諠ｳ螳夲ｼ・*/
+    /** 繝悶・繝ｫ・九ち繧�E�縺�E�莠碁㍾骰�E�讀懁E���E�・医し繝ｼ繝�E・讓ｩ髯舌�E縺�E�諠�E�螳夲�E�・*/
     UFUNCTION(BlueprintCallable, Category = "Turn|State")
     bool IsInputOpen_Server() const;
 
 protected:
     //==========================================================================
-    // PathFinder隗｣豎ｺ繝ｻ逕滓・・医ヵ繧ｩ繝ｼ繝ｫ繝舌ャ繧ｯ逕ｨ・・    //==========================================================================
+    // PathFinder隗｣豎ｺ繝ｻ逕滓�E・医ヵ繧�E�繝ｼ繝ｫ繝�Eャ繧�E�逕ｨ・・    //==========================================================================
     void ResolveOrSpawnPathFinder();
     
     //==========================================================================
-    // UnitManager隗｣豎ｺ繝ｻ逕滓・・医ヵ繧ｩ繝ｼ繝ｫ繝舌ャ繧ｯ逕ｨ・・    //==========================================================================
+    // UnitManager隗｣豎ｺ繝ｻ逕滓�E・医ヵ繧�E�繝ｼ繝ｫ繝�Eャ繧�E�逕ｨ・・    //==========================================================================
     void ResolveOrSpawnUnitManager();
+
+public:
+    // Public access for TurnCorePhaseManager
+    bool DispatchResolvedMove(const FResolvedAction& Action);
 
 protected:
     //==========================================================================
@@ -513,29 +550,29 @@ protected:
     void OnPlayerMoveCompleted(const FGameplayEventData* Payload);
 
     //==========================================================================
-    // Phase 4: 繧ｿ繝ｼ繝ｳ騾ｲ陦後・莠碁㍾骰ｵ
+    // Phase 4: 繧�E�繝ｼ繝ｳ騾�E�陦後�E莠碁㍾骰�E�
     //==========================================================================
 
     bool CanAdvanceTurn(int32 TurnId) const;
 
     //==========================================================================
-    // 繧ｿ繝ｼ繝ｳ騾ｲ謐礼憾諷・    //==========================================================================
+    // 繧�E�繝ｼ繝ｳ騾�E�謐礼憾諷・    //==========================================================================
 
     UPROPERTY(BlueprintReadWrite, ReplicatedUsing = OnRep_CurrentTurnId, Category = "Turn")
     int32 CurrentTurnId = 0;
 
-    /** 蛻晏屓繧ｿ繝ｼ繝ｳ髢句ｧ九・驥崎､・亟豁｢繝輔Λ繧ｰ・医し繝ｼ繝先ｨｩ髯仙・縺ｮ縺ｿ菴ｿ逕ｨ・・*/
+    /** 蛻晏屓繧�E�繝ｼ繝ｳ髢句�E�九�E驥崎､・亟豁E��繝輔Λ繧�E�・医し繝ｼ繝�E�E��E�髯仙�E縺�E�縺�E�菴�E�逕ｨ・・*/
     UPROPERTY(Replicated)
     bool bFirstTurnStarted = false;
-    /** StartFirstTurn縺ｮ繝ｪ繝医Λ繧､逕ｨ */
+    /** StartFirstTurn縺�E�繝ｪ繝医Λ繧�E�逕ｨ */
     FTimerHandle StartFirstTurnRetryHandle;
     int32 StartFirstTurnRetryCount = 0;
 
-    // 繝励Ξ繧､繝､繝ｼ遘ｻ蜍募ｮ御ｺ・-> 謨ｵ繝輔ぉ繝ｼ繧ｺ遘ｻ陦後・霆ｽ驕・ｻｶ襍ｷ蜍慕畑
+    // 繝励Ξ繧�E�繝､繝ｼ遘ｻ蜍募�E�御�E�・-> 謨�E�繝輔ぉ繝ｼ繧�E�遘ｻ陦後�E霁E��驕�E�E��E�襍ｷ蜍�E畁E
     FTimerHandle EnemyPhaseKickoffHandle;
 
     //==========================================================================
-    // 繝・Μ繧ｲ繝ｼ繝医ワ繝ｳ繝峨Ν
+    // 繝�EΜ繧�E�繝ｼ繝医ワ繝ｳ繝峨΁E
     //==========================================================================
 
     FDelegateHandle AllMovesFinishedHandle;
@@ -543,40 +580,48 @@ protected:
 
 
     //==========================================================================
-    // Helper髢｢謨ｰ
+    // Helper髢�E�謨�E�
     //==========================================================================
 
     AGridPathfindingLibrary* FindPathFinder(UWorld* World) const;
     UAbilitySystemComponent* GetPlayerASC() const;
 
-    /** ASC貅門ｙ繧貞ｾ・▲縺ｦ蛻晏屓繧ｿ繝ｼ繝ｳ繧帝幕蟋・*/
+    /** ASC貁E���E�繧貞ｾ・▲縺�E�蛻晏屓繧�E�繝ｼ繝ｳ繧帝幕蟋・*/
     UFUNCTION()
     void TryStartFirstTurnAfterASCReady();
 
     //==========================================================================
-    // Phase螳溯｡・    //==========================================================================
+    // Phase螳溯�E�・    //==========================================================================
 
     void ExecuteSequentialPhase();
     void ExecuteSimultaneousPhase();
     void ExecuteMovePhase();
+    void HandleManualMoveFinished(AUnitBase* Unit);
+    void RegisterManualMoveDelegate(AUnitBase* Unit, bool bIsPlayerFallback);
+    void FinalizePlayerMove(AActor* CompletedActor);
+    TMap<AUnitBase*, FDelegateHandle> ActiveMoveDelegates;
+    TSet<TWeakObjectPtr<AUnitBase>> PendingPlayerFallbackMoves;
     void ExecuteAttacks();
     void EndEnemyTurn();
     void ExecutePlayerMove();
     void OnPlayerMoveAccepted();
     
-    // 笘・・笘・邨ｱ蜷茨ｼ哂ctionExecutorSubsystem縺ｮSendPlayerMove讖溯・繧堤ｧｻ邂｡ 笘・・笘・    bool SendPlayerMove(const FPlayerCommand& Command);
+    // 笘�E・笘�E邨�E�蜷茨�E�哂ctionExecutorSubsystem縺�E�SendPlayerMove讖溯・繧堤�E��E�邂｡ 笘�E・笘�E    bool SendPlayerMove(const FPlayerCommand& Command);
     
-    // 笘・・笘・邨ｱ蜷茨ｼ哺oveConflictRuleSet縺ｮ讖溯・繧堤ｧｻ邂｡ 笘・・笘・    /** 繧｢繧ｯ繧ｿ繝ｼ縺ｮ蜆ｪ蜈亥ｺｦ繧貞叙蠕・*/
+    // 笘�E・笘�E邨�E�蜷茨�E�哺oveConflictRuleSet縺�E�讖溯・繧堤�E��E�邂｡ 笘�E・笘�E    /** 繧�E�繧�E�繧�E�繝ｼ縺�E�蜁E��蜈亥�E��E�繧貞叙蠕�E*/
     int32 GetMovePriority(const FGameplayTagContainer& ActorTags) const;
     
-    /** 蜈･繧梧崛繧上ｊ蜿ｯ閭ｽ縺句愛螳・*/
+    /** 蜈･繧梧崛繧上ｊ蜿�E�閭�E�縺句愛螳・*/
     bool CanSwapActors(const FGameplayTagContainer& ActorA, const FGameplayTagContainer& ActorB) const;
     
-    /** 謚ｼ縺怜・縺怜庄閭ｽ縺句愛螳・*/
+    /** 謚ｼ縺怜�E縺怜庁E���E�縺句愛螳・*/
     bool CanPushActor(const FGameplayTagContainer& Pusher, const FGameplayTagContainer& Pushed) const;
 
+    /** Barrier完亁E��にInProgressタグが残留してぁE��ぁE��チェチE��し、忁E��なら強制除去する */
+    void ClearResidualInProgressTags();
+
     //==========================================================================
-    // Dynamic 繝・Μ繧ｲ繝ｼ繝医ワ繝ｳ繝峨Λ
+    // Dynamic 繝�EΜ繧�E�繝ｼ繝医ワ繝ｳ繝峨΁E
     //==========================================================================
 
     UFUNCTION()
@@ -597,17 +642,17 @@ protected:
 protected:
     void RunTurn();
 
-    // UI譖ｴ譁ｰ蟆ら畑繝ｭ繝ｼ繧ｫ繝ｫ繝上Φ繝峨Λ・医ち繧ｰ謫堺ｽ懊・遖∵ｭ｢・・    void OnWaitingForPlayerInputChanged_Local(bool bNow);
-    // 讓ｩ螽∫嶌蠖難ｼ医し繝ｼ繝・or Standalone・峨〒縺ｮ縺ｿ WaitingForPlayerInput 繧貞､画峩
+    // UI譖ｴ譁E��蟁E��畑繝ｭ繝ｼ繧�E�繝ｫ繝上Φ繝峨Λ�E医ち繧�E�謫堺�E�懊�E遖∵�E��E�・・    void OnWaitingForPlayerInputChanged_Local(bool bNow);
+    // 讓ｩ螽∫嶌蠖難�E�医し繝ｼ繝�Eor Standalone・峨〒縺�E�縺�E� WaitingForPlayerInput 繧貞､画峩
     void SetWaitingForPlayerInput_ServerLike(bool bNew);
 
     //==========================================================================
-    // Subsystem・医く繝｣繝・す繝･・・    //==========================================================================
+    // Subsystem・医く繝｣繝�Eす繝･・・    //==========================================================================
 
     UPROPERTY()
     TObjectPtr<UEnemyAISubsystem> EnemyAISubsystem = nullptr;
 
-    // 笘・・笘・ActionExecutorSubsystem 縺ｨ TurnPhaseManagerComponent 縺ｯ蟄伜惠縺励↑縺・◆繧√さ繝｡繝ｳ繝医い繧ｦ繝・    // 蠢・ｦ√↓蠢懊§縺ｦ縲・cpp蛛ｴ縺ｧ驕ｩ蛻・↑繧ｯ繝ｩ繧ｹ縺ｫ鄂ｮ縺肴鋤縺医※縺上□縺輔＞
+    // 笘�E・笘�EActionExecutorSubsystem 縺�E� TurnPhaseManagerComponent 縺�E�蟁E��惠縺励↑縺・◁E��√さ繝｡繝ｳ繝医ぁE���E�繝�E    // 蠢・�E�√�E蠢懊§縺�E�縲・cpp蛛ｴ縺�E�驕ｩ蛻・↑繧�E�繝ｩ繧�E�縺�E�鄂ｮ縺肴鋤縺医※縺上□縺輔！E
     // UPROPERTY(Transient)
     // TObjectPtr<UActionExecutorSubsystem> ActionExecutor = nullptr;
 
@@ -618,16 +663,17 @@ protected:
     bool bTurnContinuing = false;
 
     //==========================================================================
-    // 繧ｿ繧ｰ繝｡繝ｳ繝舌・螟画焚
+    // 繧�E�繧�E�繝｡繝ｳ繝�E・螟画焁E
     //==========================================================================
 
+    FGameplayTag Tag_MoveCommandEvent;
     FGameplayTag Tag_AbilityMove;
     FGameplayTag Tag_TurnAbilityCompleted;
     FGameplayTag Phase_Turn_Init;
     FGameplayTag Phase_Player_Wait;
 
     //==========================================================================
-    // 迥ｶ諷狗ｮ｡逅・    //==========================================================================
+    // 迥�E�諷狗ｮ�E�送E�E    //==========================================================================
 
     bool bHasInitialized = false;
     
@@ -636,7 +682,7 @@ protected:
 
 private:
     //==========================================================================
-    // Phase 2: WindowId讀懆ｨｼ逕ｨ縺ｮ蜀・Κ繝倥Ν繝代・
+    // Phase 2: WindowId讀懁E���E�逕ｨ縺�E�蜀・Κ繝倥Ν繝代・
     //==========================================================================
 
     void ProcessPlayerCommand(const FPlayerCommand& Command);
@@ -644,7 +690,7 @@ private:
     void StartTurnMoves(int32 TurnId);
 
     //==========================================================================
-    // 蜀・Κ迥ｶ諷・    //==========================================================================
+    // 蜀・Κ迥�E�諷・    //==========================================================================
 
     UPROPERTY()
     TArray<TWeakObjectPtr<AActor>> CachedEnemiesWeak;
@@ -656,14 +702,17 @@ private:
 
     FTimerHandle AbilityWaitTimerHandle;
 
-    // CollectEnemies 蜀崎ｩｦ陦檎畑
+    // CollectEnemies 蜀崎ｩ�E�陦檎畑
     FTimerHandle RecollectEnemiesTimerHandle;
     int32 PendingTeamCountLast = 0;
     int32 CollectEnemiesRetryCount = 0;
     static constexpr int32 CollectEnemiesMaxRetries = 3;
 
+    // ☁E�E☁EEndEnemyTurn 多重試行抑止用フラグ ☁E�E☁E
+    bool bEndTurnPosted = false;
+
     //==========================================================================
-    // 繧ｿ繧ｰ蛻晄悄蛹夜未謨ｰ
+    // 繧�E�繧�E�蛻晁E��蛹夜未謨�E�
     //==========================================================================
 
     void InitGameplayTags();
@@ -671,10 +720,13 @@ private:
     static float EncodeDir8ToMagnitude(const FVector2D& Dir);
     FVector2D CalculateDirectionFromTargetCell(const FIntPoint& TargetCell);
 
-    // 譁ｹ蜷代・謨ｴ謨ｰ繝代ャ繧ｯ/繧｢繝ｳ繝代ャ繧ｯ・郁ｪ､蟾ｮ繧ｼ繝ｭ驕区成・・    static int32 PackDirection(const FIntPoint& Dir);
+    // 譁E��蜷代・謨�E�謨�E�繝代ャ繧�E�/繧�E�繝ｳ繝代ャ繧�E�・郁E���E�蟾�E�繧�E�繝ｭ驕区成�E・    static int32 PackDirection(const FIntPoint& Dir);
     static FIntPoint UnpackDirection(int32 Magnitude);
 
-    // 笘・・笘・莠碁㍾邨らｫｯ髦ｲ豁｢繝輔Λ繧ｰ 笘・・笘・    UPROPERTY(Transient)
+    // 笘�E・笘�E莠碁㍾邨らｫ�E�髦�E�豁E��繝輔Λ繧�E� 笘�E・笘�E    UPROPERTY(Transient)
     bool bEnemyTurnEnding = false;
 };
+
+
+
 

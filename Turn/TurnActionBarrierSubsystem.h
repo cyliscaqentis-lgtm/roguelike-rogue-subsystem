@@ -55,7 +55,16 @@ struct FTurnState
 {
     GENERATED_BODY()
 
-    /** 未完了のActionIDマップ（Actor -> [ActionID配列]） */
+    /** ペンディング中の ActionID 集合 */
+    TSet<FGuid> PendingActionIds;
+
+    /** Actor ごとの未完了 ActionID */
+    TMap<TWeakObjectPtr<AActor>, FGuid> ActorToAction;
+
+    /** ActionID から Actor への逆引き */
+    TMap<FGuid, TWeakObjectPtr<AActor>> ActionToActor;
+
+    /** Actor ごとの保留アクション配列（複数アクション対応） */
     TMap<TWeakObjectPtr<AActor>, TArray<FGuid>> PendingActions;
 
     /** ActionID開始時刻マップ（タイムアウト検出用） */
@@ -131,11 +140,25 @@ public:
     void RemoveOldTurns(int32 CurrentTurn);
 
     //==========================================================================
+    // ★★★ 冪等API: Token方式のBarrier管理（二重登録/完了を無害化）
+    //==========================================================================
+
+    /** 重複安全な登録（Ownerはログ表示目的） */
+    UFUNCTION(BlueprintCallable, Category = "TurnBarrier")
+    void RegisterActionOnce(AActor* Owner, FGuid& OutToken);
+
+    /** 重複安全な完了 */
+    UFUNCTION(BlueprintCallable, Category = "TurnBarrier")
+    void CompleteActionToken(const FGuid& Token);
+
+    //==========================================================================
     // ★★★ Phase 6: タイムアウト管理
     //==========================================================================
 
     /** タイムアウトチェック */
     void CheckTimeouts();
+    void CompactTurnState(FTurnState& State);
+    bool RemoveActionById(FTurnState& State, const FGuid& ActionId);
 
     //==========================================================================
     // ★★★ デリゲート（Blueprint購読用）
@@ -263,6 +286,18 @@ private:
     FTimerHandle SafetyTimeoutHandle;
 
     //==========================================================================
+    // ★★★ Token方式の状態管理（冪等API用）
+    //==========================================================================
+
+    /** 有効トークン集合 */
+    UPROPERTY(Transient)
+    TSet<FGuid> ActiveTokens;
+
+    /** デバッグ用：トークン→所有者 */
+    UPROPERTY(Transient)
+    TMap<FGuid, TWeakObjectPtr<AActor>> TokenOwners;
+
+    //==========================================================================
     // 内部メソッド
     //==========================================================================
 
@@ -270,7 +305,7 @@ private:
     bool IsServer() const;
 
     /** 完了デリゲートを発火 */
-    void FireAllFinished();
+    void FireAllFinished(int32 TurnId);
 
     /** タイムアウト時のコールバック */
     void OnSafetyTimeout();

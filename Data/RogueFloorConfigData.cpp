@@ -1,9 +1,60 @@
 #include "Data/RogueFloorConfigData.h"
 #include "Data/DungeonTemplateAsset.h"
+#include "Data/DungeonPresetTemplates.h"
 #include "Math/RandomStream.h"
+
+namespace
+{
+    FDungeonTemplateConfig MakeTemplateConfig(
+        TSubclassOf<UDungeonTemplateAsset> TemplateClass,
+        float Weight,
+        int32 MinRooms,
+        int32 MaxRooms,
+        int32 MinRoomSize,
+        int32 MaxRoomSize,
+        float ExtraConnector = -1.f,
+        float StopSplitProbability = -1.f)
+    {
+        FDungeonTemplateConfig Config;
+        Config.TemplateClass = TemplateClass;
+        Config.Weight = Weight;
+        Config.Rooms.bOverride = true;
+        Config.Rooms.Min = MinRooms;
+        Config.Rooms.Max = MaxRooms;
+        Config.RoomSize.bOverride = true;
+        Config.RoomSize.Min = MinRoomSize;
+        Config.RoomSize.Max = MaxRoomSize;
+
+        if (ExtraConnector >= 0.0f)
+        {
+            Config.ExtraConnectorChance.bOverride = true;
+            Config.ExtraConnectorChance.Value = ExtraConnector;
+        }
+        if (StopSplitProbability >= 0.0f)
+        {
+            Config.StopSplitProbability.bOverride = true;
+            Config.StopSplitProbability.Value = StopSplitProbability;
+        }
+
+        return Config;
+    }
+}
+
+URogueFloorConfigData::URogueFloorConfigData()
+{
+    EnsureDefaultTemplates();
+}
+
+void URogueFloorConfigData::PostLoad()
+{
+    Super::PostLoad();
+    EnsureDefaultTemplates();
+}
 
 const FDungeonTemplateConfig* URogueFloorConfigData::PickTemplateConfig(FRandomStream& Rng) const
 {
+    const_cast<URogueFloorConfigData*>(this)->EnsureDefaultTemplates();
+
     if (TemplateConfigs.Num() > 0)
     {
         double Sum = 0.0;
@@ -104,6 +155,7 @@ FDungeonResolvedParams URogueFloorConfigData::ResolveParamsFor(const FDungeonTem
     if (In.OuterMargin.bOverride) Out.OuterMargin = In.OuterMargin.Value;
     if (In.MaxReroll.bOverride) Out.MaxReroll = In.MaxReroll.Value;
 
+    SanitizeResolvedParams(Out);
     return Out;
 }
 
@@ -118,4 +170,41 @@ void URogueFloorConfigData::MigrateFromLegacy()
         TemplateConfigs.Add(T);
     }
     Modify();
+}
+
+void URogueFloorConfigData::EnsureDefaultTemplates()
+{
+    if (TemplateConfigs.Num() > 0 || TemplateWeights_Legacy.Num() > 0)
+    {
+        return;
+    }
+
+    TemplateConfigs.Reserve(4);
+    TemplateConfigs.Add(MakeTemplateConfig(UDungeonTemplate_NormalBSP::StaticClass(), 0.45f, 12, 28, 5, 12, 0.2f, 0.1f));
+    TemplateConfigs.Add(MakeTemplateConfig(UDungeonTemplate_LargeHall::StaticClass(), 0.2f, 6, 12, 6, 10, 0.05f));
+    TemplateConfigs.Add(MakeTemplateConfig(UDungeonTemplate_FourQuads::StaticClass(), 0.2f, 4, 8, 6, 12, 0.15f));
+    TemplateConfigs.Add(MakeTemplateConfig(UDungeonTemplate_CentralCross::StaticClass(), 0.15f, 6, 14, 4, 9, 0.25f));
+}
+
+void URogueFloorConfigData::SanitizeResolvedParams(FDungeonResolvedParams& Params) const
+{
+    Params.Width = FMath::Clamp(Params.Width, 16, 512);
+    Params.Height = FMath::Clamp(Params.Height, 16, 512);
+    Params.CellSizeUU = FMath::Clamp(Params.CellSizeUU, 50, 500);
+
+    Params.MinRoomSize = FMath::Clamp(Params.MinRoomSize, 2, 64);
+    Params.MaxRoomSize = FMath::Clamp(Params.MaxRoomSize, Params.MinRoomSize, 96);
+
+    Params.MinRooms = FMath::Clamp(Params.MinRooms, 1, 256);
+    Params.MaxRooms = FMath::Clamp(FMath::Max(Params.MaxRooms, Params.MinRooms), Params.MinRooms, 512);
+
+    Params.RoomMargin = FMath::Clamp(Params.RoomMargin, 0, 16);
+    Params.OuterMargin = FMath::Clamp(Params.OuterMargin, 0, FMath::Min(Params.Width, Params.Height) / 3);
+
+    Params.StopSplitProbability = FMath::Clamp(Params.StopSplitProbability, 0.0f, 1.0f);
+    Params.ExtraConnectorChance = FMath::Clamp(Params.ExtraConnectorChance, 0.0f, 1.0f);
+    Params.ReachabilityThreshold = FMath::Clamp(Params.ReachabilityThreshold, 0.3f, 1.0f);
+
+    Params.MaxReroll = FMath::Clamp(Params.MaxReroll, 1, 64);
+    Params.MinDoorSpacing = FMath::Clamp(Params.MinDoorSpacing, 1, 16);
 }

@@ -107,6 +107,11 @@ public:
         OutTileSize = TileSize;
     }
 
+    UFUNCTION(BlueprintPure, Category = "Pathfinding|Setup")
+    FVector GetGridOrigin() const { return Origin; }
+
+    FORCEINLINE float GetNavPlaneZ() const { return Origin.Z; }
+
     // ==================== 旧PathFinder互換エイリアス ====================
 
     /** 旧PathFinderのGridChange互換 */
@@ -130,6 +135,9 @@ public:
     /** 統合された歩行可能性判定（地形+占有） */
     UFUNCTION(BlueprintCallable, Category = "Grid|Walkability")
     bool IsCellWalkable(const FIntPoint& Cell) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Grid|Walkability")
+    bool IsCellWalkableIgnoringActor(const FIntPoint& Cell, AActor* IgnoreActor) const;
 
     /** FVector版の歩行可能性判定 */
     UFUNCTION(BlueprintCallable, Category = "Grid|Walkability")

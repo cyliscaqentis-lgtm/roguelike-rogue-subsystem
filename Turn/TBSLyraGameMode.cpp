@@ -12,9 +12,47 @@
 #include "Grid/GridOccupancySubsystem.h"
 #include "Rogue/Data/RogueFloorConfigData.h"
 
+namespace TBSLyraGameMode_Private
+{
+	template<typename TActor>
+	TActor* EnsureSingletonActor(UWorld* World, const TCHAR* DebugLabel)
+	{
+		if (!World)
+		{
+			return nullptr;
+		}
+
+		for (TActorIterator<TActor> It(World); It; ++It)
+		{
+			if (IsValid(*It))
+			{
+				DIAG_LOG(Log, TEXT("[TBSLyraGameMode] %s already present: %s"),
+					DebugLabel, *GetNameSafe(*It));
+				return *It;
+			}
+		}
+
+		FActorSpawnParameters Params = ATBSLyraGameMode::MakeAlwaysSpawnParams();
+		TActor* Spawned = World->SpawnActor<TActor>(TActor::StaticClass(), FTransform::Identity, Params);
+
+		if (IsValid(Spawned))
+		{
+			DIAG_LOG(Log, TEXT("[TBSLyraGameMode] Spawned %s singleton: %s"),
+				DebugLabel, *GetNameSafe(Spawned));
+		}
+		else
+		{
+			DIAG_LOG(Error, TEXT("[TBSLyraGameMode] Failed to spawn %s singleton"), DebugLabel);
+		}
+
+		return Spawned;
+	}
+}
+
 ATBSLyraGameMode::ATBSLyraGameMode()
 {
 	PrimaryActorTick.bCanEverTick = false;
+	bStartPlayersAsSpectators = true;
 }
 
 FActorSpawnParameters ATBSLyraGameMode::MakeAdjustDontSpawnParams()
@@ -38,17 +76,8 @@ void ATBSLyraGameMode::BeginPlay()
 	
 	SpawnBootstrapActors();
 
-	if (Dgn)
-	{
-		URogueFloorConfigData* Config = LoadObject<URogueFloorConfigData>(nullptr, TEXT("/Game/Rogue/Systems/URogueFloorConfigData.URogueFloorConfigData"));
-		if (Config)
-		{
-			Dgn->RegisterFloorConfig(1, Config);
-		}
-		Dgn->OnGridReady.AddDynamic(this, &ATBSLyraGameMode::HandleGridComplete);
-	}
-
-	BuildDungeonAsync(); // 非同期生成 → 完了時に HandleGridComplete()
+	// All dungeon generation logic is now handled by GameTurnManager and URogueDungeonSubsystem
+	// The trigger is centralized in GameTurnManager::OnExperienceLoaded.
 }
 
 // ======= Trace: GetWorldVariables（BP の pure 関数相当）=======
@@ -94,39 +123,11 @@ void ATBSLyraGameMode::SpawnBootstrapActors()
 		ensure(Dgn);
 	}
 
-	DIAG_LOG(Log, TEXT("[TBSLyraGameMode] SpawnBootstrapActors: Dgn=%p (PFL/UM are managed by TurnManager)"),
+	TBSLyraGameMode_Private::EnsureSingletonActor<AGridPathfindingLibrary>(World, TEXT("PathFinder"));
+	TBSLyraGameMode_Private::EnsureSingletonActor<AUnitManager>(World, TEXT("UnitManager"));
+
+	DIAG_LOG(Log, TEXT("[TBSLyraGameMode] SpawnBootstrapActors: Dgn=%p (PathFinder/UnitManager ensured)"),
 		static_cast<void*>(Dgn.Get()));
-}
-
-void ATBSLyraGameMode::BuildDungeonAsync()
-{
-	// 既存のダンジョン生成フローにフックしてください
-	// 完了時に HandleGridComplete() を呼ぶ
-	// 例：URogueDungeonSubsystem の FOnDungeonGenerated デリゲートにバインド
-	if (Dgn)
-	{
-		DIAG_LOG(Log, TEXT("[TBSLyraGameMode] BuildDungeonAsync: Dungeon subsystem ready"));
-		// 既存の生成フローが完了したら HandleGridComplete() を呼ぶ
-		// ここでは既存のGridComplete()からの呼び出しに依存
-		Dgn->TransitionToFloor(1);
-	}
-}
-
-void ATBSLyraGameMode::GridComplete(const TArray<int32>& Grid, const TArray<AAABB*>& Rooms)
-{
-	// PathFinderとUnitManagerはGameTurnManagerが所有するため、ここでは初期化しない
-	// OnDungeonReadyを発火して、TurnManagerに初期化を委譲
-	DIAG_LOG(Log, TEXT("[TBSLyraGameMode] GridComplete: Broadcasting OnDungeonReady (TurnManager will initialize PFL/UM)"));
-	
-	// 準備完了イベントを発火
-	HandleGridComplete();
-}
-
-void ATBSLyraGameMode::HandleGridComplete()
-{
-	// これが唯一の"準備完了"シグナル
-	DIAG_LOG(Log, TEXT("[TBSLyraGameMode] HandleGridComplete: Broadcasting OnDungeonReady"));
-	OnDungeonReady.Broadcast();
 }
 
 void ATBSLyraGameMode::TeamTurnReset(int32 Team)

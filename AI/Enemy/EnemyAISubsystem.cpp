@@ -16,7 +16,7 @@ void UEnemyAISubsystem::BuildObservations(
 {
     OutObs.Empty(Enemies.Num());
 
-    UE_LOG(LogEnemyAI, Warning,
+    UE_LOG(LogEnemyAI, Verbose,
         TEXT("[BuildObservations] ==== START ==== Enemies=%d, Player=%s, PathFinder=%s"),
         Enemies.Num(),
         Player ? *Player->GetName() : TEXT("NULL"),
@@ -60,7 +60,7 @@ void UEnemyAISubsystem::BuildObservations(
         // ★★★ 重要：Enemyの有効性チェック ★★★
         if (!IsValid(Enemy))
         {
-            UE_LOG(LogEnemyAI, Warning, TEXT("[BuildObservations] Enemy[%d] is invalid, skipping"), i);
+            UE_LOG(LogEnemyAI, Log, TEXT("[BuildObservations] Enemy[%d] is invalid, skipping"), i);
             ++InvalidEnemies;
             continue;
         }
@@ -83,7 +83,7 @@ void UEnemyAISubsystem::BuildObservations(
         }
     }
 
-    UE_LOG(LogEnemyAI, Warning,
+    UE_LOG(LogEnemyAI, Log,
         TEXT("[BuildObservations] ==== RESULT ==== Generated %d observations (Valid=%d, Invalid=%d)"),
         OutObs.Num(), ValidEnemies, InvalidEnemies);
 
@@ -111,17 +111,17 @@ void UEnemyAISubsystem::BuildObservations(
                 }
             }
             
-            UE_LOG(LogEnemyAI, Warning,
+            UE_LOG(LogEnemyAI, Verbose,
                 TEXT("[BuildObservations] GridOccupancy SAMPLE: %d/%d cells blocked around player (%d,%d)"),
                 BlockedCount, TotalCells, PlayerGrid.X, PlayerGrid.Y);
-                
+
             // 敵の位置が占有されているか確認
             for (int32 i = 0; i < FMath::Min(3, OutObs.Num()); ++i)
             {
                 const FEnemyObservation& Obs = OutObs[i];
                 // ★★★ 引数のPathFinderの統合APIを使用 ★★★
                 bool bEnemyOccupied = PathFinder && !PathFinder->IsCellWalkable(Obs.GridPosition);
-                UE_LOG(LogEnemyAI, Warning,
+                UE_LOG(LogEnemyAI, Verbose,
                     TEXT("[BuildObservations] Enemy[%d] at (%d,%d): SelfOccupied=%d"),
                     i, Obs.GridPosition.X, Obs.GridPosition.Y, bEnemyOccupied ? 1 : 0);
             }

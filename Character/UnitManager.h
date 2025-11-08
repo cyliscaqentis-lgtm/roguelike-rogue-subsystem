@@ -10,6 +10,8 @@ class AAABB;
 class AUnitBase;
 class AGridPathfindingLibrary;
 class APlayerControllerBase;
+class UDebugObserverCSV;
+class ULyraPawnData;
 
 UCLASS()
 class LYRAGAME_API AUnitManager : public AActor
@@ -29,9 +31,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Init")
 	TObjectPtr<AGridPathfindingLibrary> PathFinder = nullptr;
 
+	// ===== CSVログ出力用（オプション）=====
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Init")
+	TObjectPtr<UDebugObserverCSV> DebugObserverCSV = nullptr;
+
 	// ===== 設定値（BP のデフォルト相当）=====
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Units")
 	int32 UnitsPerRoom = 3;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Units", meta=(ClampMin="1"))
+	int32 InitialEnemyCount = 5;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Units")
 	int32 DefaultPoints = 6; // 敵の初期振り分けポイント
@@ -41,6 +50,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Units")
 	TSubclassOf<AUnitBase> EnemyUnitClass;
+
+	/** PawnData applied to spawned enemies (C++ path) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Units", meta=(AllowPrivateAccess="true"))
+	TObjectPtr<ULyraPawnData> DefaultEnemyPawnData = nullptr;
 
 	// ===== ランタイム配列 =====
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Units")
@@ -64,6 +77,10 @@ public:
 	// Trace: GenerateBasicEnemyTeam
 	UFUNCTION(BlueprintCallable) void GenerateBasicEnemyTeam();
 
+	// 敵ユニットをスポーン（既存BPロジックのC++実装）
+	UFUNCTION(BlueprintCallable, Category="Units")
+	int32 SpawnEnemyUnits(int32 DesiredEnemyCount = -1);
+
 	// Trace: OnTBSCharacterPossessed_Event
 	UFUNCTION(BlueprintCallable) void OnTBSCharacterPossessed(AUnitBase* ControlledPawn);
 
@@ -77,8 +94,12 @@ public:
 	UFUNCTION(BlueprintCallable) TArray<FVector> SpawnLocations(AAABB* InputRoom, int32 NumberOfSpawns);
 	UFUNCTION(BlueprintCallable) int32 RoomArea(AAABB* InputAABB) const;
 
+	// ルーム管理（外部アクセス用）
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Rooms")
+	TObjectPtr<AAABB> PlayerStartRoom = nullptr;
+
 private:
-	// 作業用 “現在編集中のステータス変数” （BP と同じ書き込み順）
+	// 作業用 "現在編集中のステータス変数" （BP と同じ書き込み順）
 	int32 Strength=0, Intelligence=0, Dexterity=0, Constitution=0;
 	float Health=0, CurrentHealth=0, Power=0, CurrentPower=0, Speed=0, CurrentSpeed=0;
 	float MaxSightRange=0, CurrentSightRange=0;
@@ -93,9 +114,13 @@ private:
 	UPROPERTY() TArray<TObjectPtr<AAABB>> Rooms;
 	UPROPERTY() TArray<TObjectPtr<AAABB>> BigEnoughRooms;
 	UPROPERTY() TArray<TObjectPtr<AAABB>> PlayerStartRooms;
-	UPROPERTY() TObjectPtr<AAABB> PlayerStartRoom = nullptr;
+	bool bEnemyStatsInitialized = false;
+	bool bEnemiesSpawned = false;
 
 	// ヘルパ
 	void EnsureTeamSize2();
 	FVector GetRoomHalfExtents(AAABB* Room) const;
+	
+	// ★★★ CSVログ出力ヘルパ ★★★
+	void LogToCSV(const FString& Category, const FString& Message);
 };

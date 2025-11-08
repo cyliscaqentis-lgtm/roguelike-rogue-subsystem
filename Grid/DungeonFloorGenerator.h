@@ -101,7 +101,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Generation")
     FDungeonGenParams GenParams;
 
-    void Generate(class URogueFloorConfigData* Config, FRandomStream& Rng);
+    void Generate(const URogueFloorConfigData* Config, FRandomStream& Rng);
 
     UFUNCTION(BlueprintCallable, Category="Grid")
     int32 ReturnGridStatus(FVector InputVector) const;
@@ -162,4 +162,7 @@ private:
     bool ValidateReachability(float& OutRatio, const FDungeonResolvedParams& Params);
     bool IsWalkable(int32 X, int32 Y) const;
     int32 CountWalkable() const;
+    int32 ComputeRoomClusterCount() const;
+
+    bool GenerateFallbackLayout(const FDungeonResolvedParams& Params, FRandomStream& Rng);
 };

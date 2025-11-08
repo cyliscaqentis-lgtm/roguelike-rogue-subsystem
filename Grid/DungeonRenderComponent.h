@@ -61,6 +61,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rendering") bool bRenderInGame = true;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rendering") bool bBuildInstancesImmediately = false;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rendering|Collision") bool bEnableCollision = true;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Rendering|Collision", meta=(EditCondition="bEnableCollision"))
+    FName CollisionProfileName = NAME_None;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Debug") EDebugDrawMode DebugDrawMode = EDebugDrawMode::None;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Debug") float DebugDrawScale = 1.0f;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Debug") FLinearColor DebugGridColor = FLinearColor(0.5f, 0.5f, 0.5f, 0.3f);

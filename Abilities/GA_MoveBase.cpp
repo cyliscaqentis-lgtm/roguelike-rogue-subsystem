@@ -7,6 +7,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Rogue/Character/UnitBase.h"
 #include "Rogue/Data/MoveInputPayloadBase.h"
@@ -15,7 +16,7 @@
 #include "Rogue/Turn/TurnActionBarrierSubsystem.h"
 #include "Rogue/Utility/RogueGameplayTags.h"
 #include "Turn/GameTurnManagerBase.h"
-#include "Turn/TurnEncoding.h"
+#include "Utility/TurnCommandEncoding.h"
 
 #include "../ProjectDiagnostics.h"
 
@@ -27,9 +28,66 @@ namespace GA_MoveBase_Private
 	static constexpr float WaypointSpacingCm = 10.0f;
 	static constexpr float AlignTraceUp = 200.0f;
 	static constexpr float AlignTraceDown = 2000.0f;
-	static const FGameplayTag DungeonStepTag = FGameplayTag::RequestGameplayTag(TEXT("Event.Dungeon.Step"));
-	static const FGameplayTag TurnAbilityCompletedTag = FGameplayTag::RequestGameplayTag(TEXT("Gameplay.Event.Turn.Ability.Completed"));
-	static const FGameplayTag MoveAbilityCompletedTag = FGameplayTag::RequestGameplayTag(TEXT("Ability.Move.Completed"));
+
+	static int32 AxisSign(float Value)
+	{
+		if (Value > KINDA_SMALL_NUMBER)
+		{
+			return 1;
+		}
+		if (Value < -KINDA_SMALL_NUMBER)
+		{
+			return -1;
+		}
+		return 0;
+	}
+
+	static FIntPoint QuantizeStepToGrid(const FIntPoint& RawStep, const FVector2D& RawDir, bool& bAdjusted)
+	{
+		const int32 XSign = AxisSign(RawDir.X);
+		const int32 YSign = AxisSign(RawDir.Y);
+
+		FIntPoint Result(XSign, YSign);
+		const bool bHasDiagIntent = (XSign != 0 && YSign != 0);
+
+		if (Result == FIntPoint::ZeroValue)
+		{
+			Result.X = AxisSign(static_cast<float>(RawStep.X));
+			Result.Y = AxisSign(static_cast<float>(RawStep.Y));
+		}
+
+		Result.X = FMath::Clamp(Result.X, -1, 1);
+		Result.Y = FMath::Clamp(Result.Y, -1, 1);
+
+		const int32 ManDist = FMath::Abs(Result.X) + FMath::Abs(Result.Y);
+		if (ManDist == 0)
+		{
+			return FIntPoint::ZeroValue;
+		}
+
+		bAdjusted = (Result.X != RawStep.X || Result.Y != RawStep.Y);
+
+		if (ManDist > 2)
+		{
+			Result.X = FMath::Clamp(Result.X, -1, 1);
+			Result.Y = FMath::Clamp(Result.Y, -1, 1);
+		}
+
+		if (!bHasDiagIntent && ManDist > 1)
+		{
+			// Prefer the dominant axis when direction input was mostly axial.
+			if (FMath::Abs(RawDir.X) >= FMath::Abs(RawDir.Y))
+			{
+				Result.Y = 0;
+			}
+			else
+			{
+				Result.X = 0;
+			}
+		}
+
+		return Result;
+	}
 }
 
 UGA_MoveBase::UGA_MoveBase(const FObjectInitializer& ObjectInitializer)
@@ -45,11 +103,11 @@ UGA_MoveBase::UGA_MoveBase(const FObjectInitializer& ObjectInitializer)
 	ActivationBlockedTags.AddTag(RogueGameplayTags::State_Action_InProgress.GetTag());
 	ActivationBlockedTags.AddTag(RogueGameplayTags::State_Ability_Executing.GetTag());
 
-	ActivationOwnedTags.AddTag(RogueGameplayTags::State_Action_InProgress.GetTag());
+	// ActivationOwnedTags.AddTag(RogueGameplayTags::State_Action_InProgress.GetTag()); // Manually managed now
 	ActivationOwnedTags.AddTag(TagStateMoving);
 
 	FAbilityTriggerData Trigger;
-	Trigger.TriggerTag = RogueGameplayTags::Ability_Move.GetTag();
+	Trigger.TriggerTag = RogueGameplayTags::GameplayEvent_Intent_Move;
 	Trigger.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
 	AbilityTriggers.Add(Trigger);
 
@@ -81,6 +139,28 @@ void UGA_MoveBase::ActivateAbility(
 {
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
+	if (ActorInfo && ActorInfo->IsNetAuthority())
+	{
+		if (UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get())
+		{
+			const FGameplayTag Tag = RogueGameplayTags::State_Action_InProgress;
+			ASC->AddLooseGameplayTag(Tag);
+			++InProgressStack;
+			UE_LOG(LogTurnManager, Verbose, TEXT("[InProgress] %s ++ (ThisAbility=%d, Total=%d)"), *GetNameSafe(ActorInfo->AvatarActor.Get()), InProgressStack, ASC->GetTagCount(Tag));
+		}
+	}
+
+	// ☁E�E☁ESparky診断�E�アビリチE��起動確誁E☁E�E☁E
+	AActor* Avatar = GetAvatarActorFromActorInfo();
+	int32 TeamId = -1;
+	if (AUnitBase* Unit = Cast<AUnitBase>(Avatar))
+	{
+		TeamId = Unit->Team;
+	}
+	UE_LOG(LogTurnManager, Error,
+		TEXT("[GA_MoveBase] ☁E�E☁EABILITY ACTIVATED: Actor=%s, Team=%d"),
+		*GetNameSafe(Avatar), TeamId);
+
 	CachedSpecHandle = Handle;
 	if (ActorInfo)
 	{
@@ -88,7 +168,6 @@ void UGA_MoveBase::ActivateAbility(
 	}
 	CachedActivationInfo = ActivationInfo;
 
-	AActor* Avatar = GetAvatarActorFromActorInfo();
 	CachedStartLocWS = Avatar ? Avatar->GetActorLocation() : FVector::ZeroVector;
 	CachedFirstLoc = CachedStartLocWS;
 	FirstLoc = CachedStartLocWS;
@@ -97,6 +176,17 @@ void UGA_MoveBase::ActivateAbility(
 	if (!TriggerEventData)
 	{
 		UE_LOG(LogTurnManager, Error, TEXT("[GA_MoveBase] ActivateAbility failed: TriggerEventData is null"));
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
+	// ☁E�E☁ESparky修正: 無限ループガーチE- 無効なMagnitudeを即座に拒否 ☁E�E☁E
+	const int32 RawMagnitude = FMath::RoundToInt(TriggerEventData->EventMagnitude);
+	if (RawMagnitude < TurnCommandEncoding::kDirBase)  // 1000未満は無効
+	{
+		UE_LOG(LogTurnManager, Error,
+			TEXT("[GA_MoveBase] ☁E�E☁EINFINITE LOOP GUARD: Invalid magnitude=%d (expected >= %d, got %.2f) - ABORTING ABILITY"),
+			RawMagnitude, TurnCommandEncoding::kDirBase, TriggerEventData->EventMagnitude);
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
@@ -122,12 +212,25 @@ void UGA_MoveBase::ActivateAbility(
 		UE_LOG(LogTurnManager, Warning, TEXT("[GA_MoveBase] Barrier subsystem not found"));
 	}
 
+	// ★★★ Token方式: 一度だけ登録（冪等） ★★★
+	if (HasAuthority(&ActivationInfo))
+	{
+		if (UTurnActionBarrierSubsystem* Barrier = GetBarrierSubsystem())
+		{
+			// bBarrierRegistered は既存の RegisterBarrier() で設定されるため、
+			// Token登録は常に実行する（別トラッキング）
+			Barrier->RegisterActionOnce(GetAvatarActorFromActorInfo(), /*out*/BarrierToken);
+			UE_LOG(LogTurnManager, Verbose,
+				TEXT("[GA_MoveBase] Token registered: %s"), *BarrierToken.ToString());
+		}
+	}
+
 	UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
 	if (ASC)
 	{
 		int32 CountBefore = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress.GetTag());
 		DIAG_LOG(Log, TEXT("[GA_MoveBase] ActivateAbility: InProgress count before=%d"), CountBefore);
-		ASC->AddLooseGameplayTag(GA_MoveBase_Private::DungeonStepTag);
+		ASC->AddLooseGameplayTag(RogueGameplayTags::Event_Dungeon_Step);
 	}
 
 	AUnitBase* Unit = Cast<AUnitBase>(Avatar);
@@ -153,7 +256,11 @@ void UGA_MoveBase::ActivateAbility(
 		return;
 	}
 
-	const FVector CurrentLocation = Avatar->GetActorLocation();
+	const float FixedZ = ComputeFixedZ(Unit, PathFinder);
+	FVector CurrentLocation = SnapToCellCenterFixedZ(Avatar->GetActorLocation(), FixedZ);
+	Avatar->SetActorLocation(CurrentLocation, false, nullptr, ETeleportType::TeleportPhysics);
+	CachedStartLocWS = CurrentLocation;
+	CachedFirstLoc = CurrentLocation;
 	const FIntPoint CurrentCell = PathFinder->WorldToGrid(CurrentLocation);
 
 	FVector2D Dir2D(EncodedDirection.X, EncodedDirection.Y);
@@ -164,23 +271,55 @@ void UGA_MoveBase::ActivateAbility(
 		return;
 	}
 
-	const FIntPoint Step(
+	FIntPoint Step(
 		FMath::RoundToInt(Dir2D.X),
 		FMath::RoundToInt(Dir2D.Y));
 
-	if (Step.X == 0 && Step.Y == 0)
+	bool bAxisAdjusted = false;
+	Step = GA_MoveBase_Private::QuantizeStepToGrid(Step, Dir2D, bAxisAdjusted);
+
+	if (Step == FIntPoint::ZeroValue)
 	{
 		UE_LOG(LogTurnManager, Warning, TEXT("[GA_MoveBase] Normalized direction truncated to zero step"));
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
 
+	if (bAxisAdjusted)
+	{
+		UE_LOG(LogTurnManager, VeryVerbose,
+			TEXT("[GA_MoveBase] Direction quantized to grid: Step=(%d,%d)"),
+			Step.X, Step.Y);
+	}
+
 	const FIntPoint NextCell = CurrentCell + Step;
+
+	if (const AGameTurnManagerBase* TurnManager = GetTurnManager())
+	{
+		if (!TurnManager->IsMoveAuthorized(Unit, NextCell))
+		{
+			UE_LOG(LogTurnManager, Warning,
+				TEXT("[GA_MoveBase] Move to (%d,%d) not authorized for %s"),
+				NextCell.X, NextCell.Y, *GetNameSafe(Unit));
+			EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+			return;
+		}
+	}
+
+	if (!PathFinder->IsCellWalkableIgnoringActor(NextCell, Unit))
+	{
+		UE_LOG(LogTurnManager, Warning,
+			TEXT("[GA_MoveBase] Cell (%d,%d) is blocked by terrain; aborting move"),
+			NextCell.X, NextCell.Y);
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
 	const FVector2D StepDir2D(Step.X, Step.Y);
 	const FVector LocalTarget = CalculateNextTilePosition(CurrentLocation, StepDir2D);
 
-	NextTileStep = SnapToCellCenter(LocalTarget);
-	NextTileStep.Z = CachedStartLocWS.Z;
+	NextTileStep = SnapToCellCenterFixedZ(LocalTarget, FixedZ);
+	NextTileStep.Z = FixedZ;
 
 	const float MoveDistance = FVector::Dist(CurrentLocation, NextTileStep);
 	if (MoveDistance > GA_MoveBase_Private::MaxAllowedStepDistance)
@@ -194,17 +333,8 @@ void UGA_MoveBase::ActivateAbility(
 
 	if (MoveDistance < KINDA_SMALL_NUMBER)
 	{
-		UE_LOG(LogTurnManager, Verbose, TEXT("[GA_MoveBase] Zero distance move detected – ending ability"));
+		UE_LOG(LogTurnManager, Verbose, TEXT("[GA_MoveBase] Zero distance move detected  Eending ability"));
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
-		return;
-	}
-
-	if (!IsTileWalkable(NextTileStep, Unit))
-	{
-		UE_LOG(LogTurnManager, Warning,
-			TEXT("[GA_MoveBase] Next tile %s is not walkable"),
-			*NextTileStep.ToCompactString());
-		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
 
@@ -214,6 +344,16 @@ void UGA_MoveBase::ActivateAbility(
 
 	const FRotator TargetRotator(0.f, DesiredYaw, 0.f);
 	Avatar->SetActorRotation(TargetRotator, ETeleportType::TeleportPhysics);
+
+	// Walkability check
+	if (!IsTileWalkable(NextTileStep, Unit))
+	{
+		UE_LOG(LogTurnManager, Warning,
+			TEXT("[GA_MoveBase] Next tile %s is not walkable"),
+			*NextTileStep.ToCompactString());
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
 
 	BindMoveFinishedDelegate();
 
@@ -226,14 +366,16 @@ void UGA_MoveBase::ActivateAbility(
 		for (int32 Index = 1; Index <= NumSamples; ++Index)
 		{
 			const float Alpha = static_cast<float>(Index) / static_cast<float>(NumSamples);
-			PathPoints.Add(FMath::Lerp(CurrentLocation, EndPos, Alpha));
+			FVector Sample = FMath::Lerp(CurrentLocation, EndPos, Alpha);
+			Sample.Z = FixedZ;
+			PathPoints.Add(Sample);
 		}
 
 		Unit->MoveUnit(PathPoints);
 	}
 	else
 	{
-		UE_LOG(LogTurnManager, Warning, TEXT("[GA_MoveBase] Unit cast failed – finishing immediately"));
+		UE_LOG(LogTurnManager, Warning, TEXT("[GA_MoveBase] Unit cast failed  Efinishing immediately"));
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 	}
 }
@@ -254,6 +396,21 @@ void UGA_MoveBase::CancelAbility(
 	bool bReplicateCancelAbility)
 {
 	UE_LOG(LogMoveVerbose, Verbose, TEXT("[GA_MoveBase] Ability cancelled"));
+
+	if (ActorInfo && ActorInfo->IsNetAuthority())
+	{
+		if (UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get())
+		{
+			const FGameplayTag Tag = RogueGameplayTags::State_Action_InProgress;
+			while (InProgressStack > 0)
+			{
+				ASC->RemoveLooseGameplayTag(Tag);
+				--InProgressStack;
+			}
+			UE_LOG(LogTurnManager, Verbose, TEXT("[InProgress] %s -- (Cancelled, ThisAbility=0, Total=%d)"), *GetNameSafe(ActorInfo->AvatarActor.Get()), ASC->GetTagCount(Tag));
+		}
+	}
+
 	Super::CancelAbility(Handle, ActorInfo, ActivationInfo, bReplicateCancelAbility);
 }
 
@@ -264,6 +421,28 @@ void UGA_MoveBase::EndAbility(
 	bool bReplicateEndAbility,
 	bool bWasCancelled)
 {
+	if (ActorInfo && ActorInfo->IsNetAuthority())
+	{
+		if (UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get())
+		{
+			const FGameplayTag Tag = RogueGameplayTags::State_Action_InProgress;
+			while (InProgressStack > 0)
+			{
+				ASC->RemoveLooseGameplayTag(Tag);
+				--InProgressStack;
+			}
+			UE_LOG(LogTurnManager, Verbose, TEXT("[InProgress] %s -- (ThisAbility=0, Total=%d)"), *GetNameSafe(ActorInfo->AvatarActor.Get()), ASC->GetTagCount(Tag));
+		}
+	}
+
+	// ☁E�E☁ESparky修正: 再�E防止 ☁E�E☁E
+	if (bIsEnding)
+	{
+		UE_LOG(LogTurnManager, Error, TEXT("[GA_MoveBase] ☁E�E☁EAlready ending, ignoring recursive call"));
+		return;
+	}
+	bIsEnding = true;
+
 	const double Elapsed = (AbilityStartTime > 0.0)
 		? (FPlatformTime::Seconds() - AbilityStartTime)
 		: 0.0;
@@ -285,43 +464,89 @@ void UGA_MoveBase::EndAbility(
 
 	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
 	{
-		ASC->RemoveLooseGameplayTag(GA_MoveBase_Private::DungeonStepTag);
+		ASC->RemoveLooseGameplayTag(RogueGameplayTags::Event_Dungeon_Step);
 	}
 
+	// ☁E�E☁ESparky修正: 状態を保存してからBarrierに通知�E�クリア前に�E�E��E☁E�E☁E
+	const int32 SavedTurnId = MoveTurnId;
+	const FGuid SavedActionId = MoveActionId;
+	AActor* SavedAvatar = GetAvatarActorFromActorInfo();
+
+	// ☁E�E☁E修正: Barrierに通知�E�新ActionID APIのみ使用�E�E☁E�E☁E
 	if (UWorld* World = GetWorld())
 	{
 		if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
 		{
-			AActor* Avatar = GetAvatarActorFromActorInfo();
-			if (Barrier && Avatar)
+			if (SavedAvatar && SavedTurnId != INDEX_NONE && SavedActionId.IsValid())
 			{
-				Barrier->CompleteAction(Avatar, MoveTurnId, MoveActionId);
-				Barrier->NotifyMoveFinished(Avatar, MoveTurnId);
+				Barrier->CompleteAction(SavedAvatar, SavedTurnId, SavedActionId);
+				// ☁E�E☁EレガシーAPI�E�EotifyMoveFinished�E��E削除 - 二重通知を防止 ☁E�E☁E
+
+				UE_LOG(LogTurnManager, Log,
+					TEXT("[GA_MoveBase] Barrier notified: Actor=%s, TurnId=%d, ActionId=%s"),
+					*GetNameSafe(SavedAvatar), SavedTurnId, *SavedActionId.ToString());
+			}
+
+			// ★★★ Token方式: 冪等Complete ★★★
+			if (HasAuthority(&ActivationInfo) && BarrierToken.IsValid())
+			{
+				Barrier->CompleteActionToken(BarrierToken);
+				UE_LOG(LogTurnManager, Verbose,
+					TEXT("[GA_MoveBase] Token completed: %s"), *BarrierToken.ToString());
+				BarrierToken.Invalidate();
 			}
 		}
 	}
 
-	MoveTurnId = INDEX_NONE;
-	MoveActionId.Invalidate();
+	// ☁E�E☁ESparky修正: CompletedTurnIdForEventを設定！EendCompletionEventで使用�E�E☁E�E☁E
+	CompletedTurnIdForEvent = SavedTurnId;
 
-	SendCompletionEvent(bWasCancelled);
+	// ☁E�E☁E重要E Super::EndAbility()の前にMoveTurnIdをクリアしなぁE��E☁E�E☁E
+	// 基底クラスがSendCompletionEventを呼ぶ可能性があめE
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+
+	// ☁E�E☁ESparky修正: Super::EndAbility()の後にクリア ☁E�E☁E
+	MoveTurnId = INDEX_NONE;
+	MoveActionId.Invalidate();
+	CompletedTurnIdForEvent = INDEX_NONE;
+	bBarrierRegistered = false; // ☁E�E☁EHotfix: 次回�EアビリチE��起動で再登録可能にする ☁E�E☁E
+
+	bIsEnding = false;
 }
 
 void UGA_MoveBase::SendCompletionEvent(bool bTimedOut)
 {
-	Super::SendCompletionEvent(bTimedOut);
+    if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
+    {
+        const int32 NotifiedTurnId = (CompletedTurnIdForEvent != INDEX_NONE)
+            ? CompletedTurnIdForEvent
+            : MoveTurnId;
 
-	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
-	{
-		FGameplayEventData EventData;
-		EventData.EventMagnitude = bTimedOut ? 1.0f : 0.0f;
-		EventData.Instigator = GetAvatarActorFromActorInfo();
+        // ☁E�E☁ESparky修正: 無効なTurnIdでイベントを送信しなぁE☁E�E☁E
+        if (NotifiedTurnId == INDEX_NONE || NotifiedTurnId < 0)
+        {
+            UE_LOG(LogTurnManager, Error,
+                TEXT("[SendCompletionEvent] ☁E�E☁EINVALID TurnId=%d, NOT sending completion event! (Actor=%s)"),
+                NotifiedTurnId, *GetNameSafe(GetAvatarActorFromActorInfo()));
+            return;  // イベント送信を中止
+        }
 
-		ASC->HandleGameplayEvent(GA_MoveBase_Private::TurnAbilityCompletedTag, &EventData);
-		ASC->HandleGameplayEvent(GA_MoveBase_Private::MoveAbilityCompletedTag, &EventData);
-	}
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[TurnNotify] GA_MoveBase completion: Actor=%s TurnId=%d"),
+            *GetNameSafe(GetAvatarActorFromActorInfo()), NotifiedTurnId);
+
+        FGameplayEventData EventData;
+        EventData.Instigator = GetAvatarActorFromActorInfo();
+        EventData.OptionalObject = this;
+        EventData.EventMagnitude = static_cast<float>(NotifiedTurnId);  // ☁E�E☁ESparky修正: 直接使用�E�EMath::Maxなし！E☁E�E☁E
+        EventData.EventTag = RogueGameplayTags::Gameplay_Event_Turn_Ability_Completed;
+
+        ASC->HandleGameplayEvent(RogueGameplayTags::Gameplay_Event_Turn_Ability_Completed, &EventData);
+
+        EventData.EventTag = RogueGameplayTags::Ability_Move_Completed;
+        ASC->HandleGameplayEvent(RogueGameplayTags::Ability_Move_Completed, &EventData);
+    }
 }
 
 bool UGA_MoveBase::ExtractDirectionFromEventData(const FGameplayEventData* EventData, FVector& OutDirection)
@@ -336,11 +561,11 @@ bool UGA_MoveBase::ExtractDirectionFromEventData(const FGameplayEventData* Event
 	DIAG_LOG(Log, TEXT("[GA_MoveBase] ExtractDirection magnitude=%d (raw=%.2f)"),
 		Magnitude, EventData->EventMagnitude);
 
-	if (Magnitude >= 2000000)
+	if (Magnitude >= TurnCommandEncoding::kCellBase)
 	{
 		int32 GridX = 0;
 		int32 GridY = 0;
-		if (TurnEncoding::UnpackCell(Magnitude, GridX, GridY))
+		if (TurnCommandEncoding::UnpackCell(Magnitude, GridX, GridY))
 		{
 			OutDirection = FVector(GridX, GridY, -1.0f);
 			return true;
@@ -351,19 +576,18 @@ bool UGA_MoveBase::ExtractDirectionFromEventData(const FGameplayEventData* Event
 		return false;
 	}
 
-	if (Magnitude >= 1000)
+	if (Magnitude >= TurnCommandEncoding::kDirBase)
 	{
-		const int32 PackedDir = Magnitude - 1000;
 		int32 Dx = 0;
 		int32 Dy = 0;
-		if (TurnEncoding::UnpackDir(PackedDir, Dx, Dy))
+		if (TurnCommandEncoding::UnpackDir(Magnitude, Dx, Dy))
 		{
 			OutDirection = FVector(Dx, Dy, 0.0f);
 			return true;
 		}
 
 		UE_LOG(LogTurnManager, Warning,
-			TEXT("[GA_MoveBase] UnpackDir failed for code=%d"), PackedDir);
+			TEXT("[GA_MoveBase] UnpackDir failed for code=%d"), Magnitude);
 		return false;
 	}
 
@@ -388,31 +612,41 @@ FVector2D UGA_MoveBase::QuantizeToGridDirection(const FVector& InDirection)
 
 FVector UGA_MoveBase::CalculateNextTilePosition(const FVector& CurrentPosition, const FVector2D& Dir)
 {
-	const FVector PlanarDir(Dir.X, Dir.Y, 0.0f);
-	const FVector SafeDir = PlanarDir.SizeSquared() > KINDA_SMALL_NUMBER
-		? PlanarDir.GetSafeNormal()
-		: FVector::ZeroVector;
-	return CurrentPosition + SafeDir * GridSize;
+	const FVector StepDelta(Dir.X * GridSize, Dir.Y * GridSize, 0.0f);
+	return CurrentPosition + StepDelta;
 }
 
 bool UGA_MoveBase::IsTileWalkable(const FVector& TilePosition, AUnitBase* Self)
 {
-	const FVector Aligned = AlignZToGround(TilePosition);
-	const FIntPoint Cell = GetPathFinder()
-		? GetPathFinder()->WorldToGrid(Aligned)
-		: FIntPoint::ZeroValue;
+    const AGridPathfindingLibrary* PathFinder = GetPathFinder();
+    if (!PathFinder)
+    {
+        return false;
+    }
 
-	return IsTileWalkable(Cell);
+    const FIntPoint Cell = PathFinder->WorldToGrid(TilePosition);
+    AActor* ActorToIgnore = Self ? static_cast<AActor*>(Self) : const_cast<AActor*>(GetAvatarActorFromActorInfo());
+    return PathFinder->IsCellWalkableIgnoringActor(Cell, ActorToIgnore);
 }
 
 bool UGA_MoveBase::IsTileWalkable(const FIntPoint& Cell) const
 {
-	const AGridPathfindingLibrary* PathFinder = GetPathFinder();
-	if (!PathFinder)
-	{
-		return false;
-	}
-	return PathFinder->IsCellWalkable(Cell);
+    const AGridPathfindingLibrary* PathFinder = GetPathFinder();
+    if (!PathFinder)
+    {
+        return false;
+    }
+
+    AActor* IgnoreActor = const_cast<AActor*>(GetAvatarActorFromActorInfo());
+    if (!PathFinder->IsCellWalkableIgnoringActor(Cell, IgnoreActor))
+    {
+        UE_LOG(LogTurnManager, Verbose,
+            TEXT("[IsTileWalkable] Cell (%d,%d) blocked for %s."),
+            Cell.X, Cell.Y, *GetNameSafe(IgnoreActor));
+        return false;
+    }
+
+    return true;
 }
 
 void UGA_MoveBase::UpdateGridState(const FVector& Position, int32 Value)
@@ -469,28 +703,131 @@ const AGridPathfindingLibrary* UGA_MoveBase::GetPathFinder() const
 	return nullptr;
 }
 
+UTurnActionBarrierSubsystem* UGA_MoveBase::GetBarrierSubsystem() const
+{
+	if (CachedBarrier.IsValid())
+	{
+		return CachedBarrier.Get();
+	}
+
+	const AActor* Avatar = GetAvatarActorFromActorInfo();
+	if (!Avatar)
+	{
+		return nullptr;
+	}
+
+	if (UWorld* World = Avatar->GetWorld())
+	{
+		CachedBarrier = World->GetSubsystem<UTurnActionBarrierSubsystem>();
+		return CachedBarrier.Get();
+	}
+
+	return nullptr;
+}
+
+AGameTurnManagerBase* UGA_MoveBase::GetTurnManager() const
+{
+	if (CachedTurnManager.IsValid())
+	{
+		return CachedTurnManager.Get();
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<AGameTurnManagerBase> It(World); It; ++It)
+		{
+			CachedTurnManager = *It;
+			return CachedTurnManager.Get();
+		}
+	}
+
+	return nullptr;
+}
+
 void UGA_MoveBase::BindMoveFinishedDelegate()
 {
 	if (MoveFinishedHandle.IsValid())
 	{
+		UE_LOG(LogTurnManager, Warning,
+			TEXT("[BindMoveFinishedDelegate] %s: Already bound, skipping"),
+			*GetNameSafe(GetAvatarActorFromActorInfo()));
 		return;
 	}
 
 	if (AUnitBase* Unit = Cast<AUnitBase>(GetAvatarActorFromActorInfo()))
 	{
 		MoveFinishedHandle = Unit->OnMoveFinished.AddUObject(this, &UGA_MoveBase::OnMoveFinished);
+
+		// ☁E�E☁ESparky診断�E�デリゲートバインド�E功確誁E☁E�E☁E
+		UE_LOG(LogTurnManager, Error,
+			TEXT("[BindMoveFinishedDelegate] ☁E�E☁ESUCCESS: Unit %s delegate bound to GA_MoveBase::OnMoveFinished (Handle IsValid=%d)"),
+			*GetNameSafe(Unit), MoveFinishedHandle.IsValid() ? 1 : 0);
+	}
+	else
+	{
+		// ☁E�E☁ESparky診断�E�キャスト失敁E☁E�E☁E
+		UE_LOG(LogTurnManager, Error,
+			TEXT("[BindMoveFinishedDelegate] ☁E�E☁EFAILED: Avatar is not a UnitBase! Avatar=%s"),
+			*GetNameSafe(GetAvatarActorFromActorInfo()));
 	}
 }
 
 void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
 {
-	if (Unit)
-	{
-		CachedFirstLoc = Unit->GetActorLocation();
-		UpdateGridState(CachedFirstLoc, 1);
-	}
+    // ☁E�E☁E二重通知防止: Barrier通知は EndAbility() でのみ行う ☁E�E☁E
+    // OnMoveFinished ↁEEndAbility の頁E��呼ばれるため、ここでは Barrier を触らなぁE
 
-	EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, false);
+    // TurnId変更の検�E�E�デバッグログのみ�E�E
+    if (UWorld* World = GetWorld())
+    {
+        if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
+        {
+            const int32 CurrentTurnId = Barrier->GetCurrentTurnId();
+            if (MoveTurnId != INDEX_NONE && MoveTurnId != CurrentTurnId)
+            {
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("[OnMoveFinished] TurnId mismatch detected: MoveTurnId=%d, CurrentTurnId=%d (Actor=%s)"),
+                    MoveTurnId, CurrentTurnId, *GetNameSafe(Unit));
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("[OnMoveFinished] Barrier notification will be handled by EndAbility() with TurnId=%d"),
+                    MoveTurnId);
+            }
+        }
+    }
+
+    int32 TagCountBefore = -1;
+    int32 TagCountAfter = -1;
+
+    const AGridPathfindingLibrary* PathFinder = GetPathFinder();
+    if (Unit)
+    {
+        const float FixedZ = ComputeFixedZ(Unit, PathFinder);
+        const FVector SnappedLoc = SnapToCellCenterFixedZ(Unit->GetActorLocation(), FixedZ);
+        Unit->SetActorLocation(SnappedLoc, false, nullptr, ETeleportType::TeleportPhysics);
+
+        CachedFirstLoc = SnappedLoc;
+        UpdateGridState(CachedFirstLoc, 1);
+
+        UE_LOG(LogTurnManager, Log,
+            TEXT("[MoveComplete] Unit %s reached destination, GA_MoveBase ending (TurnId=%d)"),
+            *GetNameSafe(Unit), MoveTurnId);
+    }
+
+    if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
+    {
+        TagCountBefore = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress.GetTag());
+    }
+
+    EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, false);
+
+    if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
+    {
+        TagCountAfter = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress.GetTag());
+    }
+
+    UE_LOG(LogTurnManager, Verbose,
+        TEXT("[MoveComplete] InProgress tag count (Actor=%s): %d -> %d"),
+        *GetNameSafe(Unit), TagCountBefore, TagCountAfter);
 }
 
 void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
@@ -504,24 +841,31 @@ void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
 	}
 
 	const AGridPathfindingLibrary* PathFinder = GetPathFinder();
-	if (!PathFinder)
-	{
-		UE_LOG(LogTurnManager, Error, TEXT("[GA_MoveBase] StartMoveToCell failed: PathFinder missing"));
-		EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, true);
-		return;
-	}
+    if (!PathFinder)
+    {
+        UE_LOG(LogTurnManager, Error, TEXT("[GA_MoveBase] StartMoveToCell failed: PathFinder missing"));
+        EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, true);
+        return;
+    }
 
-	if (!IsTileWalkable(TargetCell))
-	{
-		UE_LOG(LogTurnManager, Warning,
-			TEXT("[GA_MoveBase] Target cell (%d,%d) not walkable"), TargetCell.X, TargetCell.Y);
-		EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, true);
-		return;
-	}
+    const AGameTurnManagerBase* TurnManager = GetTurnManager();
+    const bool bTargetReserved = (TurnManager && Unit)
+        ? TurnManager->HasReservationFor(Unit, TargetCell)
+        : false;
 
-	const FVector StartPos = Unit->GetActorLocation();
+    if (!bTargetReserved && !IsTileWalkable(TargetCell))
+    {
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[GA_MoveBase] Target cell (%d,%d) not walkable"), TargetCell.X, TargetCell.Y);
+        EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, true);
+        return;
+    }
+
+	const float FixedZ = ComputeFixedZ(Unit, PathFinder);
+	FVector StartPos = SnapToCellCenterFixedZ(Unit->GetActorLocation(), FixedZ);
+	Unit->SetActorLocation(StartPos, false, nullptr, ETeleportType::TeleportPhysics);
 	const FIntPoint CurrentCell = PathFinder->WorldToGrid(StartPos);
-	const FVector EndPos = SnapToCellCenter(PathFinder->GridToWorld(TargetCell, StartPos.Z));
+	const FVector EndPos = PathFinder->GridToWorld(TargetCell, FixedZ);
 	const float TotalDistance = FVector::Dist(StartPos, EndPos);
 
 	if (TotalDistance < KINDA_SMALL_NUMBER)
@@ -543,7 +887,9 @@ void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
 	for (int32 Index = 1; Index <= NumSamples; ++Index)
 	{
 		const float Alpha = static_cast<float>(Index) / static_cast<float>(NumSamples);
-		PathPoints.Add(FMath::Lerp(StartPos, EndPos, Alpha));
+		FVector Sample = FMath::Lerp(StartPos, EndPos, Alpha);
+		Sample.Z = FixedZ;
+		PathPoints.Add(Sample);
 	}
 
 	BindMoveFinishedDelegate();
@@ -560,6 +906,33 @@ FVector UGA_MoveBase::SnapToCellCenter(const FVector& WorldPos) const
 
 	const FIntPoint Cell = PathFinder->WorldToGrid(WorldPos);
 	return PathFinder->GridToWorld(Cell, WorldPos.Z);
+}
+
+FVector UGA_MoveBase::SnapToCellCenterFixedZ(const FVector& WorldPos, float FixedZ) const
+{
+	const AGridPathfindingLibrary* PathFinder = GetPathFinder();
+	if (!PathFinder)
+	{
+		return FVector(WorldPos.X, WorldPos.Y, FixedZ);
+	}
+
+	const FIntPoint Cell = PathFinder->WorldToGrid(WorldPos);
+	return PathFinder->GridToWorld(Cell, FixedZ);
+}
+
+float UGA_MoveBase::ComputeFixedZ(const AUnitBase* Unit, const AGridPathfindingLibrary* PathFinder) const
+{
+	const float HalfHeight = (Unit && Unit->GetCapsuleComponent())
+		? Unit->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()
+		: 0.f;
+
+	float PlaneZ = PathFinder ? PathFinder->GetNavPlaneZ() : 0.f;
+	if (!PathFinder && Unit)
+	{
+		PlaneZ = Unit->GetActorLocation().Z - HalfHeight;
+	}
+
+	return PlaneZ + HalfHeight;
 }
 
 FVector UGA_MoveBase::AlignZToGround(const FVector& WorldPos, float TraceUp, float TraceDown) const
@@ -618,6 +991,15 @@ bool UGA_MoveBase::RegisterBarrier(AActor* Avatar)
 		return false;
 	}
 
+	// ☁E�E☁EHotfix: 二重登録防止ガーチE☁E�E☁E
+	if (bBarrierRegistered)
+	{
+		UE_LOG(LogTurnManager, Warning,
+			TEXT("[GA_MoveBase] RegisterBarrier called again for %s - already registered with ActionId=%s"),
+			*Avatar->GetName(), *MoveActionId.ToString());
+		return true; // 既に登録済みなのでtrueを返す
+	}
+
 	if (UWorld* World = Avatar->GetWorld())
 	{
 		if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
@@ -625,10 +1007,12 @@ bool UGA_MoveBase::RegisterBarrier(AActor* Avatar)
 			const int32 CurrentTurn = Barrier->GetCurrentTurnId();
 			MoveTurnId = CurrentTurn;
 			MoveActionId = Barrier->RegisterAction(Avatar, MoveTurnId);
-			Barrier->NotifyMoveStarted(Avatar, MoveTurnId);
+			bBarrierRegistered = true; // ☁E�E☁E登録完亁E��ラグを立てめE☁E�E☁E
+			// ☁E�E☁EレガシーAPI�E�EotifyMoveStarted�E��E削除 - 新ActionID APIのみ使用 ☁E�E☁E
 			return true;
 		}
 	}
 
 	return false;
 }
+

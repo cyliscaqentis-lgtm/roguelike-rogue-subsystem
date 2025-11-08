@@ -4,8 +4,11 @@
 #include "EnemyUnitBase.h"
 #include "Character/LyraPawnExtensionComponent.h"
 #include "Character/LyraPawnData.h"
+#include "Character/LyraHealthComponent.h"
 #include "AbilitySystem/LyraAbilitySystemComponent.h"
-#include "Player/LyraPlayerState.h"  
+#include "AbilitySystem/LyraAbilitySet.h"
+#include "Player/LyraPlayerState.h"
+#include "Character/LyraTBSAIController.h"
 #include "TimerManager.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
@@ -20,113 +23,117 @@ static const FGameplayTag TAG_Faction_Enemy = FGameplayTag::RequestGameplayTag(T
 AEnemyUnitBase::AEnemyUnitBase(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
 {
+    EnemyThinkerComponent = ObjectInitializer.CreateDefaultSubobject<UEnemyThinkerBase>(this, TEXT("EnemyThinker"));
+
+    // ★★★ ASCコンポーネントを作成（Pawn-owned） ★★★
+    AbilitySystemComponent = ObjectInitializer.CreateDefaultSubobject<ULyraAbilitySystemComponent>(this, TEXT("AbilitySystemComponent"));
+    AbilitySystemComponent->SetIsReplicated(true);
+    AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
+
+    // ★★★ 修正: コントローラーの自動スポーンを無効化 ★★★
+    // UnitManagerがPawnData設定後に明示的にSpawnDefaultController()を呼び出す
+    AutoPossessAI = EAutoPossessAI::Disabled;
+    AIControllerClass = ALyraTBSAIController::StaticClass();
+    bDeferredControllerSpawn = true;  // デフォルトで遅延スポーンを有効化
+
+    UE_LOG(LogEnemyUnit, Log, TEXT("[Constructor] ASC created for enemy unit (deferred controller spawn enabled)"));
+}
+
+void AEnemyUnitBase::PostInitializeComponents()
+{
+    Super::PostInitializeComponents();
+
+    // ★★★ 重要: PawnExtensionにAbilitySystem初期化コールバックを登録 ★★★
+    // これがないとOnAbilitySystemInitialized()が呼ばれない！
+    if (ULyraPawnExtensionComponent* PawnExt = FindComponentByClass<ULyraPawnExtensionComponent>())
+    {
+        PawnExt->OnAbilitySystemInitialized_RegisterAndCall(
+            FSimpleMulticastDelegate::FDelegate::CreateUObject(this, &ThisClass::OnAbilitySystemInitialized));
+        PawnExt->OnAbilitySystemUninitialized_Register(
+            FSimpleMulticastDelegate::FDelegate::CreateUObject(this, &ThisClass::OnAbilitySystemUninitialized));
+
+        UE_LOG(LogEnemyUnit, Log, TEXT("[PostInitializeComponents] ✅ ASC initialization callbacks registered"));
+    }
+    else
+    {
+        UE_LOG(LogEnemyUnit, Error, TEXT("[PostInitializeComponents] ❌ PawnExtension not found!"));
+    }
 }
 
 void AEnemyUnitBase::PossessedBy(AController* NewController)
 {
     UE_LOG(LogEnemyUnit, Log, TEXT("[PossessedBy] ========== START: %s =========="), *GetName());
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // ★ステップ1: PawnData を設定
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    if (HasAuthority())
+    {
+        UE_LOG(LogEnemyUnit, Display, TEXT("[PossessedBy] EnemyPawnData=%s (before Super)"),
+            EnemyPawnData ? *EnemyPawnData->GetName() : TEXT("NULL"));
+    }
+
     ULyraPawnExtensionComponent* PawnExt = FindComponentByClass<ULyraPawnExtensionComponent>();
+    if (HasAuthority() && PawnExt && EnemyPawnData && !PawnExt->GetPawnData<ULyraPawnData>())
+    {
+        PawnExt->SetPawnData(EnemyPawnData);
+        UE_LOG(LogEnemyUnit, Log, TEXT("[PossessedBy] ✅ SetPawnData before Super: %s"), *EnemyPawnData->GetName());
+    }
+
+    Super::PossessedBy(NewController);
+
     if (!PawnExt)
     {
         UE_LOG(LogEnemyUnit, Error, TEXT("[PossessedBy] ❌ PawnExtension not found: %s"), *GetName());
         return;
     }
 
-    if (EnemyPawnData && !PawnExt->GetPawnData<ULyraPawnData>())
+    if (AbilitySystemComponent)
     {
-        PawnExt->SetPawnData(EnemyPawnData);
-        UE_LOG(LogEnemyUnit, Log, TEXT("[PossessedBy] ✅ SetPawnData: %s"), *EnemyPawnData->GetName());
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // ★ステップ2: Super を呼ぶ
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    Super::PossessedBy(NewController);
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // ★ステップ3: InitState を進める（ASC は自動初期化）
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    PawnExt->HandleControllerChanged();
-    PawnExt->CheckDefaultInitialization();
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // ★ステップ4: Team 同期
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    RefreshTeamFromController();
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // ★診断ログ + Avatar 設定（追加）
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // PS 取得（単一宣言に統一）
-    APlayerState* PS = GetPlayerState<APlayerState>();
-    if (!PS)
-    {
-        UE_LOG(LogEnemyUnit, Warning, TEXT("[PossessedBy] PlayerState not found on %s"), *GetName());
-        return;
-    }
-
-    if (ALyraPlayerState* LyraPS = Cast<ALyraPlayerState>(PS))
-    {
-        UE_LOG(LogEnemyUnit, Log, TEXT("[PossessedBy] ✅ PlayerState: %s"), *LyraPS->GetName());
-
-        if (ULyraAbilitySystemComponent* PS_ASC = LyraPS->GetLyraAbilitySystemComponent())
-        {
-            UE_LOG(LogEnemyUnit, Log, TEXT("[PossessedBy] ✅ PlayerState ASC found"));
-            UE_LOG(LogEnemyUnit, Log, TEXT("[PossessedBy]    - Owner: %s"), *GetNameSafe(PS_ASC->GetOwnerActor()));
-            UE_LOG(LogEnemyUnit, Log, TEXT("[PossessedBy]    - Avatar (Before): %s"), *GetNameSafe(PS_ASC->GetAvatarActor()));
-
-            // ASC初期化は Controller 側 / OnRep_PlayerState に任せる
-            // ★ PlayerState上ASCパターンでは、サーバ側で Owner=PS / Avatar=このPawn を明示初期化する
-            UAbilitySystemComponent* ASC = nullptr;
-            if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(LyraPS))
-            {
-                ASC = ASI->GetAbilitySystemComponent();
-            }
-            if (!ASC)
-            {
-                ASC = LyraPS->FindComponentByClass<UAbilitySystemComponent>();
-            }
-            if (ASC)
-            {
-                ASC->InitAbilityActorInfo(LyraPS, this);
-                UE_LOG(LogEnemyUnit, Log, TEXT("[PossessedBy] InitAbilityActorInfo: Owner=%s, Avatar=%s"),
-                    *GetNameSafe(LyraPS), *GetNameSafe(this));
-                if (ASC->GetAvatarActor_Direct() != this)
-                {
-                    UE_LOG(LogEnemyUnit, Warning, TEXT("[PossessedBy] Avatar mismatch: ASC has %s"),
-                        *GetNameSafe(ASC->GetAvatarActor_Direct()));
-                }
-            }
-
-            UE_LOG(LogEnemyUnit, Log, TEXT("[PossessedBy]    - Avatar (After): %s"), *GetNameSafe(PS_ASC->GetAvatarActor()));
-            UE_LOG(LogEnemyUnit, Log, TEXT("[PossessedBy]    - Abilities: %d"), PS_ASC->GetActivatableAbilities().Num());
-            UE_LOG(LogEnemyUnit, Log, TEXT("[PossessedBy]    - AttributeSets: %d"), PS_ASC->GetSpawnedAttributes().Num());
-        }
-        else
-        {
-            UE_LOG(LogEnemyUnit, Error, TEXT("[PossessedBy] ❌ PlayerState ASC is NULL"));
-        }
+        PawnExt->InitializeAbilitySystem(AbilitySystemComponent, this);
+        UE_LOG(LogEnemyUnit, Log, TEXT("[PossessedBy] ✅ ASC initialized via PawnExtension (Owner=%s)"),
+            *GetNameSafe(this));
     }
     else
     {
-        UE_LOG(LogEnemyUnit, Error, TEXT("[PossessedBy] ❌ PlayerState NOT found"));
+        UE_LOG(LogEnemyUnit, Error, TEXT("[PossessedBy] ❌ AbilitySystemComponent is NULL"));
     }
 
+    PawnExt->HandleControllerChanged();
+    PawnExt->CheckDefaultInitialization();
+
+    RefreshTeamFromController();
+    // ★★★ 修正: GrantAbilitySetsIfNeeded() は OnAbilitySystemInitialized() で呼ばれる ★★★
+    // ここでは呼ばない（二重付与を防ぐ）
+    // ApplyEnemyGameplayTags() も OnAbilitySystemInitialized() で呼ばれる
+
     UE_LOG(LogEnemyUnit, Log, TEXT("[PossessedBy] ========== END: %s =========="), *GetName());
-    
-    // Team 設定の直後にタグを保証（ASCがこのタイミングで確実に存在）
-    ApplyEnemyGameplayTags();
 }
 
 void AEnemyUnitBase::BeginPlay()
 {
     Super::BeginPlay();
-    // サーバ側で可能なら即付与（ASCが既に存在するケース）
-    ApplyEnemyGameplayTags();
+
+    // ★★★ 修正: bDeferredControllerSpawnがtrueの場合、コントローラースポーンをスキップ ★★★
+    // UnitManagerがPawnData設定後に明示的にSpawnDefaultController()を呼び出す
+    if (HasAuthority() && Controller == nullptr && !bDeferredControllerSpawn)
+    {
+        SpawnDefaultController();
+    }
+
+    if (ULyraPawnExtensionComponent* PawnExt = FindComponentByClass<ULyraPawnExtensionComponent>())
+    {
+        if (EnemyPawnData && HasAuthority() && !PawnExt->GetPawnData<ULyraPawnData>())
+        {
+            PawnExt->SetPawnData(EnemyPawnData);
+            UE_LOG(LogEnemyUnit, Log, TEXT("[BeginPlay] ✅ SetPawnData: %s"), *EnemyPawnData->GetName());
+        }
+
+        PawnExt->CheckDefaultInitialization();
+    }
+    else
+    {
+        UE_LOG(LogEnemyUnit, Error, TEXT("[BeginPlay] ❌ PawnExtension not found on %s"), *GetName());
+    }
+
+    // ★★★ 修正: ApplyEnemyGameplayTags() は OnAbilitySystemInitialized() で呼ばれる ★★★
 
     if (HasAuthority())
     {
@@ -138,8 +145,77 @@ void AEnemyUnitBase::BeginPlay()
 void AEnemyUnitBase::OnRep_Controller()
 {
     Super::OnRep_Controller();
-    // クライアント側での視覚化/UI用に、タグが欠落していたら保険で要求
-    // ※ 実際の付与はサーバのみ（二重付与防止）
+
+    if (ULyraPawnExtensionComponent* PawnExt = FindComponentByClass<ULyraPawnExtensionComponent>())
+    {
+        PawnExt->HandleControllerChanged();
+        PawnExt->CheckDefaultInitialization();
+    }
+}
+
+void AEnemyUnitBase::OnAbilitySystemInitialized()
+{
+    ULyraAbilitySystemComponent* LyraASC = Cast<ULyraAbilitySystemComponent>(AbilitySystemComponent);
+    if (!LyraASC)
+    {
+        UE_LOG(LogEnemyUnit, Error, TEXT("[OnAbilitySystemInitialized] ❌ ASC is NULL for %s"), *GetName());
+        return;
+    }
+
+    // ★★★ 重要: AbilitySetを先に付与してからHealthComponentを初期化 ★★★
+    // これにより HealthSet が ASC に確実に存在する状態で初期化できる
+    GrantAbilitySetsIfNeeded();
+
+    // デバッグ: AttributeSet が正しく付与されたか確認
+    const TArray<UAttributeSet*>& AttrSets = LyraASC->GetSpawnedAttributes();
+    UE_LOG(LogEnemyUnit, Log, TEXT("[OnAbilitySystemInitialized] ASC has %d AttributeSets"), AttrSets.Num());
+
+    // HealthSet の存在確認
+    bool bHasHealthSet = false;
+    for (const UAttributeSet* AttrSet : AttrSets)
+    {
+        if (AttrSet && AttrSet->GetClass()->GetName().Contains(TEXT("Health")))
+        {
+            bHasHealthSet = true;
+            UE_LOG(LogEnemyUnit, Log, TEXT("[OnAbilitySystemInitialized]   - Found HealthSet: %s"), *AttrSet->GetClass()->GetName());
+            break;
+        }
+    }
+
+    if (!bHasHealthSet)
+    {
+        UE_LOG(LogEnemyUnit, Error, TEXT("[OnAbilitySystemInitialized] ❌ HealthSet not found in AttributeSets!"));
+    }
+
+    // HealthComponentの初期化（HealthSet付与後）
+    if (ULyraHealthComponent* HealthComp = FindComponentByClass<ULyraHealthComponent>())
+    {
+        if (bHasHealthSet)
+        {
+            HealthComp->InitializeWithAbilitySystem(LyraASC);
+            UE_LOG(LogEnemyUnit, Log, TEXT("[OnAbilitySystemInitialized] ✅ HealthComponent initialized for %s"), *GetName());
+        }
+        else
+        {
+            UE_LOG(LogEnemyUnit, Error, TEXT("[OnAbilitySystemInitialized] ❌ Skipping HealthComponent init (no HealthSet)"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogEnemyUnit, Warning, TEXT("[OnAbilitySystemInitialized] ⚠️ HealthComponent not found for %s"), *GetName());
+    }
+
+    // 敵タグの適用
+    ApplyEnemyGameplayTags();
+}
+
+void AEnemyUnitBase::OnAbilitySystemUninitialized()
+{
+    if (ULyraHealthComponent* HealthComp = FindComponentByClass<ULyraHealthComponent>())
+    {
+        HealthComp->UninitializeFromAbilitySystem();
+        UE_LOG(LogEnemyUnit, Log, TEXT("[OnAbilitySystemUninitialized] ✅ HealthComponent uninitialized for %s"), *GetName());
+    }
 }
 
 void AEnemyUnitBase::ApplyEnemyGameplayTags()
@@ -187,8 +263,7 @@ void AEnemyUnitBase::ApplyEnemyGameplayTags()
 
 void AEnemyUnitBase::OnGameplayReady()
 {
-    // ★ UnitBase::GetAbilitySystemComponent() を使用
-    // これで常にPlayerStateのASCが返される
+    // ★ Pawn-owned ASC をチェック
     ULyraAbilitySystemComponent* CurrentASC = Cast<ULyraAbilitySystemComponent>(GetAbilitySystemComponent());
 
     const bool bReady =
@@ -226,3 +301,84 @@ void AEnemyUnitBase::OnGameplayReady()
 #endif
 }
 
+void AEnemyUnitBase::GrantAbilitySetsIfNeeded()
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    if (bGrantedAbilitySets)
+    {
+        return;
+    }
+
+    if (!AbilitySystemComponent)
+    {
+        UE_LOG(LogEnemyUnit, Warning, TEXT("[GrantAbilitySets] ASC missing on %s"), *GetName());
+        return;
+    }
+
+    if (!EnemyPawnData)
+    {
+        UE_LOG(LogEnemyUnit, Warning, TEXT("[GrantAbilitySets] EnemyPawnData missing on %s"), *GetName());
+        return;
+    }
+
+    for (const ULyraAbilitySet* AbilitySet : EnemyPawnData->AbilitySets)
+    {
+        if (AbilitySet)
+        {
+            AbilitySet->GiveToAbilitySystem(AbilitySystemComponent, nullptr);
+            UE_LOG(LogEnemyUnit, Log, TEXT("[GrantAbilitySets] AbilitySet granted: %s for %s"),
+                *AbilitySet->GetName(), *GetName());
+        }
+    }
+
+    UE_LOG(LogEnemyUnit, Log, TEXT("[GrantAbilitySets] ✅ Abilities=%d AttrSets=%d for %s"),
+        AbilitySystemComponent->GetActivatableAbilities().Num(),
+        AbilitySystemComponent->GetSpawnedAttributes().Num(),
+        *GetName());
+
+    bGrantedAbilitySets = true;
+}
+
+//------------------------------------------------------------------------------
+// IAbilitySystemInterface Override
+//------------------------------------------------------------------------------
+UAbilitySystemComponent* AEnemyUnitBase::GetAbilitySystemComponent() const
+{
+    // ★★★ Pawn上のASCを返す（PlayerStateのASCではない） ★★★
+    return AbilitySystemComponent;
+}
+
+void AEnemyUnitBase::SetEnemyPawnData(ULyraPawnData* InPawnData)
+{
+    if (InPawnData == nullptr)
+    {
+        UE_LOG(LogEnemyUnit, Warning, TEXT("[SetEnemyPawnData] InPawnData is NULL for %s"), *GetName());
+        return;
+    }
+
+    if (EnemyPawnData == InPawnData)
+    {
+        return;
+    }
+
+    EnemyPawnData = InPawnData;
+    UE_LOG(LogEnemyUnit, Log, TEXT("[SetEnemyPawnData] Assigned PawnData=%s to %s"),
+        *EnemyPawnData->GetName(), *GetName());
+
+    if (HasAuthority())
+    {
+        if (ULyraPawnExtensionComponent* PawnExt = FindComponentByClass<ULyraPawnExtensionComponent>())
+        {
+            if (!PawnExt->GetPawnData<ULyraPawnData>())
+            {
+                PawnExt->SetPawnData(EnemyPawnData);
+                UE_LOG(LogEnemyUnit, Log, TEXT("[SetEnemyPawnData] Applied PawnData immediately on %s"),
+                    *GetName());
+            }
+        }
+    }
+}

@@ -8,7 +8,7 @@
 #include "Kismet/GameplayStatics.h"
 
 // ★★★ CVar定義 ★★★
-static int32 GTS_DF_MaxCells = 100000;  // ★★★ 30000→100000に拡大：大規模マップ対応 ★★★
+static int32 GTS_DF_MaxCells = 300000;  // ★★★ default拡張：64x64以上のマップで余裕を持たせる ★★★
 static FAutoConsoleVariableRef CVarTS_DF_MaxCells(
     TEXT("ts.DistanceField.MaxCells"),
     GTS_DF_MaxCells,
@@ -114,7 +114,8 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& Playe
         };
 
     // 2. 早期終了
-    int32 RemainingTargets = OptionalTargets.Num();
+    TSet<FIntPoint> PendingTargets = OptionalTargets;
+    int32 RemainingTargets = PendingTargets.Num();
 
     const int32 MaxCells = GTS_DF_MaxCells;
     const bool bDiagonal = !!GTS_DF_AllowDiag;
@@ -133,6 +134,9 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& Playe
     Open.HeapPush(FOpenNode{ PlayerCell, 0 }, FOpenNodeLess{});
     DistanceMap.Add(PlayerCell, 0);
 
+    // ★★★ Sparky修正: Closed Set追加で重複処理を防ぐ ★★★
+    TSet<FIntPoint> ClosedSet;
+
     static const FIntPoint StraightDirs[] = { {1, 0}, {-1, 0}, {0, 1}, {0, -1} };
     static const FIntPoint DiagonalDirs[] = { {1, 1}, {1, -1}, {-1, 1}, {-1, -1} };
 
@@ -141,35 +145,59 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& Playe
 
     while (Open.Num() > 0)
     {
-        if (++ProcessedCells > MaxCells)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[DistanceField] MaxCells limit reached: Processed=%d"), ProcessedCells);
-            break;
-        }
-
         FOpenNode Current;
         Open.HeapPop(Current, FOpenNodeLess{});
+
+        // ★★★ Sparky修正: 早期終了 - 既に処理済みのセルはスキップ ★★★
+        if (ClosedSet.Contains(Current.Cell))
+        {
+            continue;  // 重複エントリをスキップ（処理済み）
+        }
+
+        if (++ProcessedCells > MaxCells)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[DistanceField] MaxCells limit reached: Processed=%d (Queue=%d)"), ProcessedCells, Open.Num());
+            break;
+        }
 
         if (!InBounds(Current.Cell))
         {
             continue;
         }
 
-        const int32* Known = DistanceMap.Find(Current.Cell);
-        if (Known && *Known < Current.Cost)
+        // ★★★ Sparky修正: このセルを処理済みとしてマーク ★★★
+        ClosedSet.Add(Current.Cell);
+
+        if (RemainingTargets > 0 && PendingTargets.Remove(Current.Cell) > 0)
         {
-            continue;
+            --RemainingTargets;
+            if (RemainingTargets == 0 && OptionalTargets.Num() > 0)
+            {
+                UE_LOG(LogTemp, Log, TEXT("[DistanceField] All requested targets reached after %d cells"), ProcessedCells);
+            }
         }
+
+        UE_LOG(LogTemp, VeryVerbose,
+            TEXT("[DistanceField] Processing Cell=(%d,%d) Cost=%d Queue=%d Closed=%d"),
+            Current.Cell.X, Current.Cell.Y, Current.Cost, Open.Num(), ClosedSet.Num());
 
         auto Relax = [&](const FIntPoint& Next, int32 StepCost)
             {
-                if (!InBounds(Next)) 
+                if (!InBounds(Next))
                 {
                     return;
                 }
-                
+
+                // ★★★ Sparky最適化: 既に処理済みのセルはスキップ ★★★
+                if (ClosedSet.Contains(Next))
+                {
+                    return;  // 既に最短距離確定済み
+                }
+
+                const bool bIsTargetCell = PendingTargets.Contains(Next);
+
                 // ★★★ PathFinderの統合API IsCellWalkable を使用 ★★★
-                if (!GridPathfinding->IsCellWalkable(Next))
+                if (!bIsTargetCell && Next != PlayerCell && !GridPathfinding->IsCellWalkable(Next))
                 {
                     return;
                 }
@@ -216,6 +244,19 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& Playe
     if (RemainingTargets > 0)
     {
         UE_LOG(LogTemp, Error, TEXT("[DistanceField] ★ %d enemies could not be reached by Dijkstra field!"), RemainingTargets);
+        int32 LoggedTargets = 0;
+        for (const FIntPoint& Pending : PendingTargets)
+        {
+            const int32* DistEntry = DistanceMap.Find(Pending);
+            UE_LOG(LogTemp, Warning,
+                TEXT("[DistanceField] Pending target Cell=(%d,%d) DistEntry=%s"),
+                Pending.X, Pending.Y,
+                DistEntry ? *FString::Printf(TEXT("%d"), *DistEntry) : TEXT("NONE"));
+            if (++LoggedTargets >= 16)
+            {
+                break;
+            }
+        }
         
         // 個別敵チェック（簡易版）
         if (UWorld* World = GetWorld())

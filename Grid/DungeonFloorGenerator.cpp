@@ -1,17 +1,16 @@
 #include "Grid/DungeonFloorGenerator.h"
 #include "Data/RogueFloorConfigData.h"
 #include "Data/DungeonTemplateAsset.h"
-#include "Data/DungeonPresetTemplates.h"
 #include "Math/RandomStream.h"
-#include "Algo/RandomShuffle.h"
 #include "Containers/Queue.h"
+#include "UObject/UObjectGlobals.h"
 
 ADungeonFloorGenerator::ADungeonFloorGenerator()
 {
     PrimaryActorTick.bCanEverTick = false;
 }
 
-void ADungeonFloorGenerator::Generate(URogueFloorConfigData* Config, FRandomStream& Rng)
+void ADungeonFloorGenerator::Generate(const URogueFloorConfigData* Config, FRandomStream& Rng)
 {
     if (!Config)
     {
@@ -20,13 +19,22 @@ void ADungeonFloorGenerator::Generate(URogueFloorConfigData* Config, FRandomStre
     }
 
     const FDungeonTemplateConfig* Picked = Config->PickTemplateConfig(Rng);
-    if (!Picked || !Picked->TemplateClass)
+    if (!Picked)
     {
-        // Fallback to a default preset if nothing is picked, to ensure generation can proceed.
-        UE_LOG(LogTemp, Warning, TEXT("[Generator] No template picked from Config. Falling back to NormalBSP."));
-        static FDungeonTemplateConfig FallbackConfig;
-        FallbackConfig.TemplateClass = UDungeonTemplate_NormalBSP::StaticClass();
-        Picked = &FallbackConfig;
+        UE_LOG(LogTemp, Warning, TEXT("[Generator] No template picked from Config."));
+        return;
+    }
+
+    UDungeonTemplateAsset* TemplateAsset = nullptr;
+    if (Picked->TemplateClass)
+    {
+        TemplateAsset = NewObject<UDungeonTemplateAsset>(this, Picked->TemplateClass, NAME_None, RF_Transient);
+    }
+
+    if (!TemplateAsset)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Generator] No valid template class provided in Config."));
+        return;
     }
 
     const FDungeonResolvedParams Params = Config->ResolveParamsFor(*Picked);
@@ -35,7 +43,7 @@ void ADungeonFloorGenerator::Generate(URogueFloorConfigData* Config, FRandomStre
     GridHeight = Params.Height;
     CellSize = Params.CellSizeUU;
 
-    GenerateWithTemplate(Picked->TemplateClass->GetDefaultObject<UDungeonTemplateAsset>(), Params, Rng);
+    GenerateWithTemplate(TemplateAsset, Params, Rng);
 }
 
 void ADungeonFloorGenerator::GenerateWithTemplate(UDungeonTemplateAsset* TemplateAsset, const FDungeonResolvedParams& Params, FRandomStream& Rng)
@@ -45,6 +53,11 @@ void ADungeonFloorGenerator::GenerateWithTemplate(UDungeonTemplateAsset* Templat
         UE_LOG(LogTemp, Error, TEXT("[Generator] GenerateWithTemplate called with null TemplateAsset."));
         return;
     }
+
+    // Reset cached stats so we do not leak values from previous generations
+    LastGeneratedRoomCount = 0;
+    LastGeneratedWalkableCount = 0;
+    LastGeneratedReachability = 0.0f;
 
     for (int attempt = 0; attempt < Params.MaxReroll; ++attempt)
     {
@@ -57,6 +70,19 @@ void ADungeonFloorGenerator::GenerateWithTemplate(UDungeonTemplateAsset* Templat
         FixDoubleWidthCorridors();
         AutoPlaceDoors(Params);
         PlaceStairsFarthestPair();
+
+        const int32 ActualRoomCount = ComputeRoomClusterCount();
+        LastGeneratedRoomCount = ActualRoomCount;
+        if (ActualRoomCount <= 0 || (Params.MinRooms > 0 && ActualRoomCount < Params.MinRooms))
+        {
+            UE_LOG(LogTemp, Warning,
+                TEXT("Dungeon attempt %d rejected: produced %d rooms (min required=%d) with template %s. Re-rolling..."),
+                attempt + 1,
+                ActualRoomCount,
+                Params.MinRooms,
+                *GetNameSafe(TemplateAsset));
+            continue;
+        }
 
         float reachability = 0.0f;
         if (ValidateReachability(reachability, Params))
@@ -72,6 +98,11 @@ void ADungeonFloorGenerator::GenerateWithTemplate(UDungeonTemplateAsset* Templat
 
     UE_LOG(LogTemp, Warning, TEXT("Dungeon FAILED: Seed=%s after %d attempts"),
            *Rng.ToString(), Params.MaxReroll);
+
+    if (GenerateFallbackLayout(Params, Rng))
+    {
+        return;
+    }
 }
 
 // --- Restored Logic ---
@@ -449,6 +480,109 @@ int32 ADungeonFloorGenerator::CountWalkable() const
     return c;
 }
 
+bool ADungeonFloorGenerator::GenerateFallbackLayout(const FDungeonResolvedParams& Params, FRandomStream& Rng)
+{
+    FDungeonResolvedParams RelaxedParams = Params;
+    RelaxedParams.MinRooms = FMath::Min(Params.MinRooms, 4);
+    RelaxedParams.ReachabilityThreshold = FMath::Min(Params.ReachabilityThreshold, 0.25f);
+
+    ResetGrid(ECellType::Wall);
+    EnsureOuterWall();
+
+    bool bGenerated = Make_CentralCrossWithMiniRooms(Rng, RelaxedParams);
+    if (!bGenerated)
+    {
+        const int32 Margin = FMath::Clamp(RelaxedParams.RoomMargin + 1, 1, 4);
+        const int32 RoomW = FMath::Clamp(GridWidth - (Margin * 2), Params.MinRoomSize, GridWidth - 2);
+        const int32 RoomH = FMath::Clamp(GridHeight - (Margin * 2), Params.MinRoomSize, GridHeight - 2);
+        FillRect(Margin, Margin, RoomW, RoomH, ECellType::Room);
+        LastGeneratedRoomCount = 1;
+        bGenerated = true;
+    }
+
+    if (!bGenerated)
+    {
+        return false;
+    }
+
+    FixDoubleWidthCorridors();
+    AutoPlaceDoors(RelaxedParams);
+    PlaceStairsFarthestPair();
+
+    LastGeneratedWalkableCount = CountWalkable();
+    float ReachValue = 0.0f;
+    if (!ValidateReachability(ReachValue, RelaxedParams))
+    {
+        ReachValue = FMath::Clamp(ReachValue, 0.0f, 1.0f);
+    }
+    LastGeneratedReachability = ReachValue;
+
+    UE_LOG(LogTemp, Warning,
+        TEXT("Dungeon FALLBACK generated: Rooms=%d Walkable=%d Reach=%.1f%%"),
+        LastGeneratedRoomCount,
+        LastGeneratedWalkableCount,
+        ReachValue * 100.0f);
+    return true;
+}
+
+int32 ADungeonFloorGenerator::ComputeRoomClusterCount() const
+{
+    if (GridWidth <= 0 || GridHeight <= 0 || mGrid.Num() != GridWidth * GridHeight)
+    {
+        return 0;
+    }
+
+    const int32 RoomValue = static_cast<int32>(ECellType::Room);
+    TArray<uint8> Visited;
+    Visited.Init(0, mGrid.Num());
+    int32 ClusterCount = 0;
+
+    for (int32 Y = 0; Y < GridHeight; ++Y)
+    {
+        for (int32 X = 0; X < GridWidth; ++X)
+        {
+            const int32 IndexValue = Index(X, Y);
+            if (Visited[IndexValue] || mGrid[IndexValue] != RoomValue)
+            {
+                continue;
+            }
+
+            ++ClusterCount;
+            TQueue<FIntPoint> Queue;
+            Queue.Enqueue(FIntPoint(X, Y));
+            Visited[IndexValue] = 1;
+
+            while (!Queue.IsEmpty())
+            {
+                FIntPoint Current;
+                Queue.Dequeue(Current);
+
+                static const FIntPoint Directions[4] = { {1,0}, {-1,0}, {0,1}, {0,-1} };
+                for (const FIntPoint& Dir : Directions)
+                {
+                    const int32 NX = Current.X + Dir.X;
+                    const int32 NY = Current.Y + Dir.Y;
+                    if (!InBounds(NX, NY))
+                    {
+                        continue;
+                    }
+
+                    const int32 NeighborIdx = Index(NX, NY);
+                    if (Visited[NeighborIdx] || mGrid[NeighborIdx] != RoomValue)
+                    {
+                        continue;
+                    }
+
+                    Visited[NeighborIdx] = 1;
+                    Queue.Enqueue(FIntPoint(NX, NY));
+                }
+            }
+        }
+    }
+
+    return ClusterCount;
+}
+
 bool ADungeonFloorGenerator::ValidateReachability(float& OutRatio, const FDungeonResolvedParams& Params)
 {
     FIntPoint start{ -1,-1 };
@@ -522,5 +656,3 @@ void ADungeonFloorGenerator::FillRect(int32 X, int32 Y, int32 W, int32 H, ECellT
         }
     }
 }
-
-

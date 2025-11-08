@@ -2,6 +2,7 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/CollisionProfile.h"
 #include "Materials/MaterialInterface.h"
 #include "DrawDebugHelpers.h"
 
@@ -9,6 +10,10 @@ UDungeonRenderComponent::UDungeonRenderComponent()
 {
     PrimaryComponentTick.bCanEverTick = false;
     bVisualizeComponent = false;
+    if (CollisionProfileName.IsNone())
+    {
+        CollisionProfileName = UCollisionProfile::BlockAll_ProfileName;
+    }
 }
 
 void UDungeonRenderComponent::BeginPlay()
@@ -62,9 +67,27 @@ UInstancedStaticMeshComponent* UDungeonRenderComponent::CreateISMComponent(
     auto* ISM = NewObject<UInstancedStaticMeshComponent>(Owner, *ComponentName);
     ISM->SetStaticMesh(Mesh);
     if (Material) ISM->SetMaterial(0, Material);
-    ISM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    ISM->SetCollisionResponseToAllChannels(ECR_Ignore);
+
+    if (bEnableCollision)
+    {
+        if (!CollisionProfileName.IsNone())
+        {
+            ISM->SetCollisionProfileName(CollisionProfileName);
+        }
+        else
+        {
+            ISM->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+            ISM->SetCollisionResponseToAllChannels(ECR_Block);
+        }
+    }
+    else
+    {
+        ISM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        ISM->SetCollisionResponseToAllChannels(ECR_Ignore);
+    }
+
     ISM->SetupAttachment(this);
+    ISM->SetMobility(GetMobility());
     ISM->RegisterComponent();
     Owner->AddOwnedComponent(ISM);
 
@@ -102,14 +125,39 @@ void UDungeonRenderComponent::BuildAllInstances(ADungeonFloorGenerator* FloorGen
     {
         for (int32 X = 0; X < W; ++X)
         {
-            const int32 V = Grid[Y * W + X];
-            
-            if (V < 0) AddInstanceToISM(WallISM, X, Y);
-            else if (V == 0) AddInstanceToISM(FloorISM, X, Y);
-            else if (V == 1) AddInstanceToISM(CorridorISM, X, Y);
-            else if (V == 2) AddInstanceToISM(RoomISM, X, Y);
-            else if (V == 3) AddInstanceToISM(DoorISM, X, Y);
-            else if (V == 4 || V == 5) AddInstanceToISM(StairISM, X, Y);
+            const int32 Value = Grid[Y * W + X];
+
+            if (Value < 0)
+            {
+                AddInstanceToISM(WallISM, X, Y);
+                continue;
+            }
+
+            const ECellType CellType = static_cast<ECellType>(Value);
+            switch (CellType)
+            {
+                case ECellType::Wall:
+                    AddInstanceToISM(WallISM, X, Y);
+                    break;
+                case ECellType::Floor:
+                    AddInstanceToISM(FloorISM, X, Y);
+                    break;
+                case ECellType::Corridor:
+                    AddInstanceToISM(CorridorISM, X, Y);
+                    break;
+                case ECellType::Room:
+                    AddInstanceToISM(RoomISM, X, Y);
+                    break;
+                case ECellType::Door:
+                    AddInstanceToISM(DoorISM, X, Y);
+                    break;
+                case ECellType::StairUp:
+                case ECellType::StairDown:
+                    AddInstanceToISM(StairISM, X, Y);
+                    break;
+                default:
+                    break;
+            }
         }
     }
 }

@@ -58,6 +58,8 @@ void UGA_TurnActionBase::EndAbility(const FGameplayAbilitySpecHandle Handle,
 
     GetAbilitySystemComponentFromActorInfo()->RemoveLooseGameplayTag(RogueGameplayTags::State_Ability_Executing);
 
+    Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+
     if (!bCompletionSent)
     {
         SendCompletionEvent(false);
@@ -65,8 +67,6 @@ void UGA_TurnActionBase::EndAbility(const FGameplayAbilitySpecHandle Handle,
     }
 
     UE_LOG(LogTemp, Verbose, TEXT("[GA_TurnActionBase] %s ended (Cancelled: %d)"), *GetName(), bWasCancelled);
-
-    Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }
 
 void UGA_TurnActionBase::OnTimeout()

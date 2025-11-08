@@ -83,9 +83,14 @@ public:
     float GridSize = 100.f;
 
     // ===== 移動設定 =====
-    // ★★★ Geminiが推奨: 150→75で視認可能なアニメーション速度 ★★★
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unit|Movement")
-    float PixelsPerSec = 75.f;  // Geminiの推奨: 50-75が理想（視認しやすい速度）
+    float PixelsPerSec = 300.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unit|Movement")
+    float MinPixelsPerSec = 150.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unit|Movement")
+    float MaxPixelsPerSec = 1200.f;
 
     // ★★★ 重要：Blueprintでtrueに設定されていても、C++で強制的にfalseにします ★★★
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Unit|Movement", meta = (AllowPrivateAccess = "true"))
@@ -100,8 +105,11 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Unit|Movement")
     FIntPoint GridPosition = FIntPoint(0, 0);
 
-    UPROPERTY(BlueprintReadWrite, Category = "Unit|Movement")
+    UPROPERTY(BlueprintReadOnly, Category = "Unit|Movement")
     FVector2D MoveDir2D = FVector2D::ZeroVector;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Unit|Movement")
+    FVector CurrentVelocity;
 
     // ===== 戦闘パラメータ（基本値） =====
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unit|Combat")
@@ -208,6 +216,7 @@ protected:
     void EnsureDynamicMaterial();
     void ApplyTeamColor();
     void UpdateValidSelectionColor();
+    void ApplyMovementSpeedFromStats();
 
 protected:
     // 移動状態

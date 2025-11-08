@@ -62,6 +62,9 @@ namespace RogueGameplayTags
     UE_DEFINE_GAMEPLAY_TAG(Gameplay_Event_Turn_Ability_Started, "Gameplay.Event.Turn.Ability.Started");
     UE_DEFINE_GAMEPLAY_TAG(GameplayEvent_Enemy_ActionFinished, "GameplayEvent.Enemy.ActionFinished");
     UE_DEFINE_GAMEPLAY_TAG(GameplayEvent_Turn_StartMove, "Turn.StartMove");
+    UE_DEFINE_GAMEPLAY_TAG(GameplayEvent_Intent_Move, "GameplayEvent.Intent.Move");
+    UE_DEFINE_GAMEPLAY_TAG(GameplayEvent_Intent_Attack, "GameplayEvent.Intent.Attack");
+    UE_DEFINE_GAMEPLAY_TAG(GameplayEvent_Intent_Wait, "GameplayEvent.Intent.Wait");
 
     // State tags -------------------------------------------------------------
     UE_DEFINE_GAMEPLAY_TAG(State_Ability_Executing, "State.Ability.Executing");

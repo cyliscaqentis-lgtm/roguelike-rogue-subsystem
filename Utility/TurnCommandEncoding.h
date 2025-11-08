@@ -1,8 +1,8 @@
-// TurnEncoding.h
+// TurnCommandEncoding.h
 #pragma once
 #include "CoreMinimal.h"
 
-namespace TurnEncoding
+namespace TurnCommandEncoding
 {
     // Dir: (-1,0,+1)
     constexpr int32 kDirBase = 1000;

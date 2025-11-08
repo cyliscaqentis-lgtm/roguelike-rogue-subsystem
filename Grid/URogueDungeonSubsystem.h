@@ -3,14 +3,19 @@
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Subsystems/WorldSubsystem.h"
+
 class ADungeonFloorGenerator;
-class URogueFloorConfigData;
+class URogueFloorConfigData; // Use the RogueFloorConfigData Asset
 class UDungeonRenderComponent;
 class AAABB;
 
 #include "URogueDungeonSubsystem.generated.h"
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGridReady);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGridReady, URogueDungeonSubsystem*, DungeonSubsystem);
 
 UCLASS()
 class LYRAGAME_API URogueDungeonSubsystem : public UWorldSubsystem
@@ -18,11 +23,9 @@ class LYRAGAME_API URogueDungeonSubsystem : public UWorldSubsystem
     GENERATED_BODY()
 
 public:
-    UFUNCTION(BlueprintCallable, Category="Rogue|Dungeon")
-    void RegisterFloorConfig(int32 FloorIndex, URogueFloorConfigData* Config);
-
-    UFUNCTION(BlueprintCallable, Category="Rogue|Dungeon")
-    void TransitionToFloor(int32 FloorIndex);
+    /** The single entry point to start dungeon generation, driven by a config actor placed in the level. */
+    UFUNCTION(BlueprintCallable, Category = "Rogue|Dungeon")
+    void StartGenerateFromLevel();
 
     UFUNCTION(BlueprintCallable, Category="Rogue|Dungeon")
     ADungeonFloorGenerator* GetFloorGenerator() const;
@@ -35,15 +38,6 @@ public:
     FOnGridReady OnGridReady;
 
     UPROPERTY(EditAnywhere, Category="Rogue|Dungeon")
-    TObjectPtr<URogueFloorConfigData> DefaultConfig = nullptr;
-
-    UPROPERTY(EditAnywhere, Category="Rogue|Dungeon")
-    bool bUseRandomSeed = true;
-
-    UPROPERTY(EditAnywhere, Category="Rogue|Dungeon")
-    int32 SeedBase = 12345;
-
-    UPROPERTY(EditAnywhere, Category="Rogue|Dungeon")
     FName RenderSingletonTag = FName(TEXT("RogueGridRenderSingleton"));
 
     UFUNCTION(BlueprintCallable, Category="Rogue|Dungeon|Debug")
@@ -52,11 +46,17 @@ public:
     /** 生成済みダンジョンから検出した部屋マーカーを取得（生成されていない場合は空配列） */
     void GetGeneratedRooms(TArray<AAABB*>& OutRooms) const;
 
+    /** 指定されたフロアに遷移（新しいダンジョンを生成） */
+    UFUNCTION(BlueprintCallable, Category="Rogue|Dungeon")
+    void TransitionToFloor(int32 FloorIndex);
+
     virtual void Deinitialize() override;
 
 protected:
     UPROPERTY(Transient)
     TObjectPtr<ADungeonFloorGenerator> FloorGenerator = nullptr;
+
+    bool bDungeonGenerationStarted = false;
 
     UPROPERTY(Transient)
     TObjectPtr<UDungeonRenderComponent> RenderComponent = nullptr;
@@ -64,16 +64,13 @@ protected:
     UPROPERTY(Transient)
     TArray<TObjectPtr<AAABB>> RoomMarkers;
 
-    UPROPERTY(Transient)
-    TMap<int32, TObjectPtr<URogueFloorConfigData>> FloorConfigMap;
-
-    int32 CurrentFloorIndex = INDEX_NONE;
-
     void EnsureFloorGenerator();
     void EnsureRenderComponent();
     void EnsureRenderComponentFromPlacedActor();
-    URogueFloorConfigData* GetActiveConfig(int32 FloorIndex) const;
-    void BuildFloor_Internal(URogueFloorConfigData* Config, int32 FloorIndex);
+
+    /** Starts the actual generation process using a loaded config asset. */
+    void StartGenerate(const URogueFloorConfigData* Cfg);
+
     void RebuildRoomMarkers();
     void DestroyRoomMarkers();
 };

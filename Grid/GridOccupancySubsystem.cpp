@@ -1,5 +1,3 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #include "GridOccupancySubsystem.h"
 
 void UGridOccupancySubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -12,11 +10,12 @@ void UGridOccupancySubsystem::Deinitialize()
 {
     ActorToCell.Empty();
     OccupiedCells.Empty();
+    ReservedCells.Empty();
+    ActorToReservation.Empty();
     UE_LOG(LogTemp, Log, TEXT("[GridOccupancy] Deinitialized"));
     Super::Deinitialize();
 }
 
-// ★★★ 神速対応の核心：アクターの現在セル位置を取得 ★★★
 FIntPoint UGridOccupancySubsystem::GetCellOfActor(AActor* Actor) const
 {
     if (!Actor)
@@ -24,11 +23,14 @@ FIntPoint UGridOccupancySubsystem::GetCellOfActor(AActor* Actor) const
         return FIntPoint::ZeroValue;
     }
 
-    const FIntPoint* CellPtr = ActorToCell.Find(Actor);
-    return CellPtr ? *CellPtr : FIntPoint::ZeroValue;
+    if (const FIntPoint* CellPtr = ActorToCell.Find(Actor))
+    {
+        return *CellPtr;
+    }
+
+    return FIntPoint::ZeroValue;
 }
 
-// ★★★ セル位置を更新（移動実行後に呼び出す） ★★★
 void UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
 {
     if (!Actor)
@@ -36,14 +38,13 @@ void UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
         return;
     }
 
-    // 旧セルの占有を解除
-    const FIntPoint* OldCellPtr = ActorToCell.Find(Actor);
-    if (OldCellPtr)
+    ReleaseReservationForActor(Actor);
+
+    if (const FIntPoint* OldCellPtr = ActorToCell.Find(Actor))
     {
         OccupiedCells.Remove(*OldCellPtr);
     }
 
-    // 新セルに更新
     ActorToCell.Add(Actor, NewCell);
     OccupiedCells.Add(NewCell, Actor);
 
@@ -51,39 +52,35 @@ void UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
         *GetNameSafe(Actor), NewCell.X, NewCell.Y);
 }
 
-// ★★★ IsWalkableはPathFinderに統一するため削除 ★★★
-/*
-bool UGridOccupancySubsystem::IsWalkable(const FIntPoint& Cell) const
-{
-    // ★★★ マップ範囲チェック ★★★
-    const int32 MapSize = 64; // ★ プロジェクトのマップサイズに合わせる
-
-    if (Cell.X < 0 || Cell.X >= MapSize || Cell.Y < 0 || Cell.Y >= MapSize)
-    {
-        return false;
-    }
-
-    // ★★★ 占有チェック ★★★
-    const TWeakObjectPtr<AActor>* OccupierPtr = OccupiedCells.Find(Cell);
-    if (OccupierPtr && OccupierPtr->IsValid())
-    {
-        return false;  // 占有されている
-    }
-
-    return true;
-}
-*/
-
 bool UGridOccupancySubsystem::IsCellOccupied(const FIntPoint& Cell) const
 {
-    // ★★★ 占有チェック ★★★
-    const TWeakObjectPtr<AActor>* OccupierPtr = OccupiedCells.Find(Cell);
-    if (OccupierPtr && OccupierPtr->IsValid())
+    if (const TWeakObjectPtr<AActor>* OccupierPtr = OccupiedCells.Find(Cell))
     {
-        return true;  // 占有されている
+        if (OccupierPtr->IsValid())
+        {
+            return true;
+        }
     }
-    
-    return false;  // 占有されていない
+
+    if (const TWeakObjectPtr<AActor>* ReservedPtr = ReservedCells.Find(Cell))
+    {
+        if (ReservedPtr->IsValid())
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+AActor* UGridOccupancySubsystem::GetActorAtCell(const FIntPoint& Cell) const
+{
+    if (const TWeakObjectPtr<AActor>* OccupierPtr = OccupiedCells.Find(Cell))
+    {
+        return OccupierPtr->Get();
+    }
+
+    return nullptr;
 }
 
 void UGridOccupancySubsystem::OccupyCell(const FIntPoint& Cell, AActor* Actor)
@@ -102,9 +99,7 @@ void UGridOccupancySubsystem::OccupyCell(const FIntPoint& Cell, AActor* Actor)
 
 void UGridOccupancySubsystem::ReleaseCell(const FIntPoint& Cell)
 {
-    // セル→アクターのマップから削除
     OccupiedCells.Remove(Cell);
-
     UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] Cell (%d, %d) released"),
         Cell.X, Cell.Y);
 }
@@ -116,14 +111,89 @@ void UGridOccupancySubsystem::UnregisterActor(AActor* Actor)
         return;
     }
 
-    // アクター→セルのマップから削除
-    const FIntPoint* CellPtr = ActorToCell.Find(Actor);
-    if (CellPtr)
+    if (const FIntPoint* CellPtr = ActorToCell.Find(Actor))
     {
         OccupiedCells.Remove(*CellPtr);
     }
     ActorToCell.Remove(Actor);
+    ReleaseReservationForActor(Actor);
 
     UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] Actor %s unregistered"),
         *GetNameSafe(Actor));
+}
+
+void UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint& Cell)
+{
+    if (!Actor)
+    {
+        return;
+    }
+
+    ReleaseReservationForActor(Actor);
+    ReservedCells.Add(Cell, Actor);
+    ActorToReservation.Add(Actor, Cell);
+
+    UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] Cell (%d, %d) reserved by %s"),
+        Cell.X, Cell.Y, *GetNameSafe(Actor));
+}
+
+void UGridOccupancySubsystem::ReleaseReservationForActor(AActor* Actor)
+{
+    if (!Actor)
+    {
+        return;
+    }
+
+    if (const FIntPoint* CellPtr = ActorToReservation.Find(Actor))
+    {
+        ReservedCells.Remove(*CellPtr);
+        ActorToReservation.Remove(Actor);
+        UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] Reservation cleared for %s"),
+            *GetNameSafe(Actor));
+    }
+}
+
+void UGridOccupancySubsystem::ClearAllReservations()
+{
+    ReservedCells.Reset();
+    ActorToReservation.Reset();
+    UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] All reservations cleared"));
+}
+
+bool UGridOccupancySubsystem::IsCellReserved(const FIntPoint& Cell) const
+{
+    if (const TWeakObjectPtr<AActor>* ReservedPtr = ReservedCells.Find(Cell))
+    {
+        return ReservedPtr->IsValid();
+    }
+
+    return false;
+}
+
+AActor* UGridOccupancySubsystem::GetReservationOwner(const FIntPoint& Cell) const
+{
+    if (const TWeakObjectPtr<AActor>* ReservedPtr = ReservedCells.Find(Cell))
+    {
+        return ReservedPtr->Get();
+    }
+
+    return nullptr;
+}
+
+bool UGridOccupancySubsystem::IsReservationOwnedByActor(AActor* Actor, const FIntPoint& Cell) const
+{
+    if (!Actor)
+    {
+        return false;
+    }
+
+    if (const TWeakObjectPtr<AActor>* ReservedPtr = ReservedCells.Find(Cell))
+    {
+        if (ReservedPtr->IsValid())
+        {
+            return ReservedPtr->Get() == Actor;
+        }
+    }
+
+    return false;
 }

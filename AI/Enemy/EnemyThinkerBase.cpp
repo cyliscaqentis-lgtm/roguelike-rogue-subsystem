@@ -62,7 +62,7 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
     if (GridPathfinding)
     {
         // ★★★ PathFinderの統合API IsCellWalkable を使用 ★★★
-        bool bCurrentWalkable = GridPathfinding->IsCellWalkable(Intent.CurrentCell);
+        bool bCurrentWalkable = GridPathfinding->IsCellWalkableIgnoringActor(Intent.CurrentCell, Intent.Actor.Get());
         UE_LOG(LogTemp, Warning, TEXT("[PathFinder] Enemy at (%d,%d): Walkable=%d"), 
             Intent.CurrentCell.X, Intent.CurrentCell.Y, bCurrentWalkable ? 1 : 0);
         
@@ -98,6 +98,59 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
     const FIntPoint BeforeNextCell = Intent.NextCell;
     Intent.NextCell = DistanceField->GetNextStepTowardsPlayer(Intent.CurrentCell);
     int32 Distance = DistanceField->GetDistance(Intent.CurrentCell);
+
+    const int32 CurrentDF = Distance;
+    const FIntPoint NeighborOffsets[4] = {
+        { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }
+    };
+
+    UE_LOG(LogTemp, Verbose,
+        TEXT("[Thinker] %s DF(Current=%d) TargetCandidate=(%d,%d) Distance=%d"),
+        *GetNameSafe(GetOwner()), CurrentDF, Intent.NextCell.X, Intent.NextCell.Y, Distance);
+
+    FIntPoint BestCell = Intent.NextCell;
+    int32 BestDF = Distance;
+
+    for (int32 idx = 0; idx < 4; ++idx)
+    {
+        const FIntPoint TestCell = Intent.CurrentCell + NeighborOffsets[idx];
+        const int32 NeighborDist = DistanceField->GetDistance(TestCell);
+        UE_LOG(LogTemp, Verbose,
+            TEXT("[Thinker] %s Neighbor[%d] Cell=(%d,%d) DF=%d"),
+            *GetNameSafe(GetOwner()), idx, TestCell.X, TestCell.Y, NeighborDist);
+
+        if (NeighborDist >= 0 && (BestDF < 0 || NeighborDist < BestDF))
+        {
+            BestCell = TestCell;
+            BestDF = NeighborDist;
+        }
+    }
+
+    if (BestDF >= 0 && (Distance < 0 || Intent.NextCell == Intent.CurrentCell || BestDF < Distance))
+    {
+        UE_LOG(LogTemp, Verbose,
+            TEXT("[Thinker] %s Fallback target override: (%d,%d) DF=%d"),
+            *GetNameSafe(GetOwner()), BestCell.X, BestCell.Y, BestDF);
+        Intent.NextCell = BestCell;
+        Distance = BestDF;
+    }
+
+    bool bPathFound = false;
+    int32 PathLen = 0;
+    if (GridPathfinding && Intent.NextCell != Intent.CurrentCell)
+    {
+        TArray<FVector> DebugPath;
+        const FVector StartWorld = GridPathfinding->GridToWorld(Intent.CurrentCell, GetOwner()->GetActorLocation().Z);
+        const FVector EndWorld = GridPathfinding->GridToWorld(Intent.NextCell, GetOwner()->GetActorLocation().Z);
+        UE_LOG(LogTemp, Verbose,
+            TEXT("[Thinker] %s FindPath CALL Start=(%d,%d) End=(%d,%d)"),
+            *GetNameSafe(GetOwner()), Intent.CurrentCell.X, Intent.CurrentCell.Y, Intent.NextCell.X, Intent.NextCell.Y);
+        bPathFound = GridPathfinding->FindPathIgnoreEndpoints(StartWorld, EndWorld, DebugPath, true, EGridHeuristic::MaxDXDY, 200000, true);
+        PathLen = DebugPath.Num();
+        UE_LOG(LogTemp, Verbose,
+            TEXT("[Thinker] %s FindPath RESULT Success=%d PathLen=%d"),
+            *GetNameSafe(GetOwner()), bPathFound ? 1 : 0, PathLen);
+    }
     
     // ★★★ 異常な値を検出 ★★★
     if (Intent.NextCell.X < -100 || Intent.NextCell.X > 100 || Intent.NextCell.Y < -100 || Intent.NextCell.Y > 100)
@@ -158,9 +211,9 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
         // P2対策：現在セル==目的セルならWaitにダウングレード
         if (Intent.NextCell == Intent.CurrentCell)
         {
-            Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"));
-            UE_LOG(LogTurnManager, Verbose, TEXT("[DecideIntent] %s: ★ WAIT intent (already at target)"),
-                *GetNameSafe(GetOwner()));
+        Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"));
+        UE_LOG(LogTurnManager, Log, TEXT("[Thinker] %s WAIT - NextCell identical to current"),
+            *GetNameSafe(GetOwner()));
         }
         else
         {

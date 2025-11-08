@@ -1,4 +1,4 @@
-// UnitBase.cpp
+﻿// UnitBase.cpp
 // Location: Rogue/Character/UnitBase.cpp
 
 #include "UnitBase.h"
@@ -7,16 +7,21 @@
 #include "GenericTeamAgentInterface.h"
 #include "AIController.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Animation/AnimInstance.h"
 #include "Kismet/GameplayStatics.h"
 #include "Character/UnitManager.h"
+#include "Character/LyraPawnExtensionComponent.h"
+#include "Character/LyraHealthComponent.h"
+#include "Character/LyraPawnData.h"
 
-// ログカテゴリ定義
+// 繝ｭ繧ｰ繧ｫ繝・ざ繝ｪ螳夂ｾｩ
 DEFINE_LOG_CATEGORY_STATIC(LogUnitBase, Log, All);
 
 //------------------------------------------------------------------------------
-// コンストラクタ
+// 繧ｳ繝ｳ繧ｹ繝医Λ繧ｯ繧ｿ
 //------------------------------------------------------------------------------
 AUnitBase::AUnitBase(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -25,7 +30,7 @@ AUnitBase::AUnitBase(const FObjectInitializer& ObjectInitializer)
 }
 
 //------------------------------------------------------------------------------
-// GetAbilitySystemComponent（PlayerStateのASCを返す）
+// GetAbilitySystemComponent・・layerState縺ｮASC繧定ｿ斐☆・・
 //------------------------------------------------------------------------------
 UAbilitySystemComponent* AUnitBase::GetAbilitySystemComponent() const
 {
@@ -44,31 +49,74 @@ void AUnitBase::BeginPlay()
 {
     Super::BeginPlay();
 
-    // ★★★ 診断：BeginPlay前の値を確認 ★★★
+    // ★★★ ASC/Health初期化順序の保証（サーバーのみ） ★★★
+    if (HasAuthority())
+    {
+        if (ULyraPawnExtensionComponent* Ext = FindComponentByClass<ULyraPawnExtensionComponent>())
+        {
+            // PawnDataチェック（BP漏れ対策）
+            const ULyraPawnData* PD = Ext->GetPawnData<ULyraPawnData>();
+            if (!PD)
+            {
+                UE_LOG(LogUnitBase, Warning, TEXT("UnitBase: PawnData is null on %s"), *GetName());
+            }
+
+            // ASC → Health の順で初期化（二重初期化ガードにより安全）
+            // GetAbilitySystemComponent() は親クラス（Character）のメソッドを使用
+            if (UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
+            {
+                if (ULyraAbilitySystemComponent* LyraASC = Cast<ULyraAbilitySystemComponent>(ASC))
+                {
+                    Ext->InitializeAbilitySystem(LyraASC, this);
+                    if (ULyraHealthComponent* Health = FindComponentByClass<ULyraHealthComponent>())
+                    {
+                        Health->InitializeWithAbilitySystem(LyraASC);
+                    }
+                }
+            }
+        }
+    }
+
+    // 笘・・笘・險ｺ譁ｭ・咤eginPlay蜑阪・蛟､繧堤｢ｺ隱・笘・・笘・
     UE_LOG(LogUnitBase, Error, 
         TEXT("[BeginPlay] %s: BEFORE - bSkipMoveAnimation=%d, PixelsPerSec=%.1f, TickEnabled=%d"),
         *GetName(), bSkipMoveAnimation, PixelsPerSec, PrimaryActorTick.bCanEverTick);
 
     SetActorTickEnabled(true);
 
-    // ★★★ 強制：アニメーションスキップを無効化 ★★★
+    // 笘・・笘・蠑ｷ蛻ｶ・壹い繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ繧ｹ繧ｭ繝・・繧堤┌蜉ｹ蛹・笘・・笘・
     bSkipMoveAnimation = false;
     UE_LOG(LogUnitBase, Error, 
         TEXT("[BeginPlay] %s: AFTER - FORCED bSkipMoveAnimation=FALSE, PixelsPerSec=%.1f, TickEnabled=%d"),
         *GetName(), PixelsPerSec, IsActorTickEnabled());
 
-    // マテリアル初期化
+    // 繝槭ユ繝ｪ繧｢繝ｫ蛻晄悄蛹・
     EnsureDynamicMaterial();
     ApplyTeamColor();
     UpdateValidSelectionColor();
+    if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+    {
+        const float HalfHeight = GetCapsuleComponent()
+            ? GetCapsuleComponent()->GetScaledCapsuleHalfHeight()
+            : 0.f;
+        const float PlaneZ = GetActorLocation().Z - HalfHeight;
 
-    // AI Controller の MoveBlockDetection を有効化
+        MoveComp->SetPlaneConstraintEnabled(true);
+        MoveComp->SetPlaneConstraintNormal(FVector::UpVector);
+        MoveComp->SetPlaneConstraintOrigin(FVector(0.f, 0.f, PlaneZ));
+        MoveComp->bSnapToPlaneAtStart = true;
+        MoveComp->GravityScale = 0.f;
+        MoveComp->SetMovementMode(MOVE_Flying);
+    }
+
+
+    // AI Controller 縺ｮ MoveBlockDetection 繧呈怏蜉ｹ蛹・
     if (AAIController* AI = Cast<AAIController>(GetController()))
     {
         AI->SetMoveBlockDetection(true);
     }
 
-    // Team初期同期
+    // Team蛻晄悄蜷梧悄
     RefreshTeamFromController();
 }
 
@@ -79,7 +127,7 @@ void AUnitBase::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
 
-    // ★★★ 診断：Tickが呼ばれているか確認（Moving時のみ） ★★★
+    // 笘・・笘・險ｺ譁ｭ・啜ick縺悟他縺ｰ繧後※縺・ｋ縺狗｢ｺ隱搾ｼ・oving譎ゅ・縺ｿ・・笘・・笘・
     static int32 TickCount = 0;
     if (MoveStatus == EUnitMoveStatus::Moving)
     {
@@ -97,7 +145,7 @@ void AUnitBase::Tick(float DeltaSeconds)
 }
 
 //------------------------------------------------------------------------------
-// Team同期
+// Team蜷梧悄
 //------------------------------------------------------------------------------
 void AUnitBase::OnRep_Controller()
 {
@@ -121,34 +169,42 @@ void AUnitBase::RefreshTeamFromController()
 }
 
 //------------------------------------------------------------------------------
-// MoveUnit（移動開始）
+// MoveUnit・育ｧｻ蜍暮幕蟋具ｼ・
 //------------------------------------------------------------------------------
 void AUnitBase::MoveUnit(const TArray<FVector>& InPath)
 {
     PathArray = InPath;
 
-    // ★★★ 最優先：アニメーションスキップを絶対にfalseにする ★★★
+    // 笘・・笘・譛蜆ｪ蜈茨ｼ壹い繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ繧ｹ繧ｭ繝・・繧堤ｵｶ蟇ｾ縺ｫfalse縺ｫ縺吶ｋ 笘・・笘・
     bSkipMoveAnimation = false;
     SetActorTickEnabled(true);
     
-    // ★★★ 緊急診断：MoveUnit呼び出し時の状態を確認 ★★★
+    // 笘・・笘・邱頑･險ｺ譁ｭ・哺oveUnit蜻ｼ縺ｳ蜃ｺ縺玲凾縺ｮ迥ｶ諷九ｒ遒ｺ隱・笘・・笘・
     UE_LOG(LogUnitBase, Error,
         TEXT("[MoveUnit] %s CALLED: PathNum=%d, bSkipMoveAnimation=%d (FORCED TO 0!), PixelsPerSec=%.1f, TickEnabled=%d"),
         *GetName(), PathArray.Num(), bSkipMoveAnimation, PixelsPerSec, IsActorTickEnabled());
 
-    // 移動距離上限で切り詰め
+    // 遘ｻ蜍戊ｷ晞屬荳企剞縺ｧ蛻・ｊ隧ｰ繧・
     if (PathArray.Num() > CurrentMovementRange)
     {
         PathArray.SetNum(CurrentMovementRange);
     }
 
-    // パスが空の場合は即座に完了
+    // 繝代せ縺檎ｩｺ縺ｮ蝣ｴ蜷医・蜊ｳ蠎ｧ縺ｫ螳御ｺ・
     if (PathArray.Num() == 0)
     {
         UE_LOG(LogUnitBase, Warning, TEXT("[MoveUnit] %s: Empty path!"), *GetName());
         MoveStatus = EUnitMoveStatus::Idle;
+        CurrentVelocity = FVector::ZeroVector;
 
-        // ★★★ デリゲート Broadcast（重要！） ★★★
+        UE_LOG(LogUnitBase, Verbose,
+            TEXT("[MoveComplete] %s finished MoveUnit path"), *GetName());
+
+        UE_LOG(LogUnitBase, Log,
+            TEXT("[MoveComplete] 笘・・笘・Unit %s MOVE ANIMATION COMPLETED! (Broadcast OnMoveFinished)"),
+            *GetName());
+
+        // 笘・・笘・繝・Μ繧ｲ繝ｼ繝・Broadcast・磯㍾隕・ｼ・ｼ・笘・・笘・
         OnMoveFinished.Broadcast(this);
         return;
     }
@@ -158,68 +214,76 @@ void AUnitBase::MoveUnit(const TArray<FVector>& InPath)
 }
 
 //------------------------------------------------------------------------------
-// StartNextLeg（次の移動区間を開始）
+// StartNextLeg・域ｬ｡縺ｮ遘ｻ蜍募玄髢薙ｒ髢句ｧ具ｼ・
 //------------------------------------------------------------------------------
 void AUnitBase::StartNextLeg()
 {
-    // ★★★ パスが終了したら完了通知 ★★★
+    // 笘・・笘・繝代せ縺檎ｵゆｺ・＠縺溘ｉ螳御ｺ・夂衍 笘・・笘・
     if (!PathArray.IsValidIndex(MoveCounter))
     {
         MoveStatus = EUnitMoveStatus::Idle;
+        CurrentVelocity = FVector::ZeroVector;
 
-        // ★★★ デリゲート Broadcast（重要！） ★★★
+        UE_LOG(LogUnitBase, Verbose,
+            TEXT("[MoveComplete] %s finished MoveUnit path"), *GetName());
+
+        UE_LOG(LogUnitBase, Log,
+            TEXT("[MoveComplete] 笘・・笘・Unit %s MOVE ANIMATION COMPLETED! (Broadcast OnMoveFinished)"),
+            *GetName());
+
+        // 笘・・笘・繝・Μ繧ｲ繝ｼ繝・Broadcast・磯㍾隕・ｼ・ｼ・笘・・笘・
         OnMoveFinished.Broadcast(this);
 
         UE_LOG(LogUnitBase, Log, TEXT("[StartNextLeg] %s: Movement completed!"), *GetName());
         return;
     }
 
-    // 次の目標点へ移動開始
+    // 谺｡縺ｮ逶ｮ讓咏せ縺ｸ遘ｻ蜍暮幕蟋・
     LegStart = GetActorLocation();
     LegEnd = PathArray[MoveCounter];
-    LegEnd.Z = LegStart.Z; // 2D 移動
+    LegEnd.Z = LegStart.Z; // 2D 遘ｻ蜍・
 
-    // 距離が0の場合は次のウェイポイントへスキップ
+    // 霍晞屬縺・縺ｮ蝣ｴ蜷医・谺｡縺ｮ繧ｦ繧ｧ繧､繝昴う繝ｳ繝医∈繧ｹ繧ｭ繝・・
     const float Distance = FVector::Dist2D(LegStart, LegEnd);
     if (Distance < 0.1f)
     {
         ++MoveCounter;
-        StartNextLeg(); // 再帰で次の区間へ
+        StartNextLeg(); // 蜀榊ｸｰ縺ｧ谺｡縺ｮ蛹ｺ髢薙∈
         return;
     }
 
     LegAlpha = 0.f;
     MoveStatus = EUnitMoveStatus::Moving;
     
-    // ★★★ 最終防御：ここでもう一度falseを強制 ★★★
+    // 笘・・笘・譛邨る亟蠕｡・壹％縺薙〒繧ゅ≧荳蠎ｦfalse繧貞ｼｷ蛻ｶ 笘・・笘・
     bSkipMoveAnimation = false;
 
-    // ★★★ 診断ログ：アニメーション状態を確認 ★★★
+    // 笘・・笘・險ｺ譁ｭ繝ｭ繧ｰ・壹い繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ迥ｶ諷九ｒ遒ｺ隱・笘・・笘・
     UE_LOG(LogUnitBase, Warning,
         TEXT("[StartNextLeg] %s: bSkipMoveAnimation=%d (FORCED FALSE), Distance=%.1f, Start=%s, End=%s"),
         *GetName(), bSkipMoveAnimation, Distance, *LegStart.ToCompactString(), *LegEnd.ToCompactString());
 
-    // アニメーションスキップなら即座に移動（このコードパスは絶対に実行されないはず）
+    // 繧｢繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ繧ｹ繧ｭ繝・・縺ｪ繧牙叉蠎ｧ縺ｫ遘ｻ蜍包ｼ医％縺ｮ繧ｳ繝ｼ繝峨ヱ繧ｹ縺ｯ邨ｶ蟇ｾ縺ｫ螳溯｡後＆繧後↑縺・・縺夲ｼ・
     if (bSkipMoveAnimation)
     {
         UE_LOG(LogUnitBase, Error, 
-            TEXT("[StartNextLeg] %s: ❌ INSTANT TELEPORT (bSkipMoveAnimation=TRUE) - THIS IS THE PROBLEM!"), 
+            TEXT("[StartNextLeg] %s: 笶・INSTANT TELEPORT (bSkipMoveAnimation=TRUE) - THIS IS THE PROBLEM!"), 
             *GetName());
         SetActorLocation(LegEnd);
         ++MoveCounter;
-        StartNextLeg(); // 再帰
+        StartNextLeg(); // 蜀榊ｸｰ
     }
     else
     {
-        // Verbose: 正常なアニメーション開始は冗長
+        // Verbose: 豁｣蟶ｸ縺ｪ繧｢繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ髢句ｧ九・蜀鈴聞
         UE_LOG(LogUnitBase, Verbose, 
-            TEXT("[StartNextLeg] %s: ✅ Smooth animation started (bSkipMoveAnimation=FALSE, Dist=%.1f, Speed=%.1f)"), 
+            TEXT("[StartNextLeg] %s: 笨・Smooth animation started (bSkipMoveAnimation=FALSE, Dist=%.1f, Speed=%.1f)"), 
             *GetName(), Distance, PixelsPerSec);
     }
 }
 
 //------------------------------------------------------------------------------
-// UpdateMove（移動中の更新）
+// UpdateMove・育ｧｻ蜍穂ｸｭ縺ｮ譖ｴ譁ｰ・・
 //------------------------------------------------------------------------------
 void AUnitBase::UpdateMove(float DeltaSeconds)
 {
@@ -228,44 +292,75 @@ void AUnitBase::UpdateMove(float DeltaSeconds)
     const float OldAlpha = LegAlpha;
     LegAlpha = FMath::Min(1.f, LegAlpha + DeltaSeconds / Duration);
 
-    // 線形補間で移動
     const FVector OldLoc = GetActorLocation();
     const FVector NewLoc = FMath::Lerp(LegStart, LegEnd, LegAlpha);
+
+    // 速度と向きを計算して更新
+    if (DeltaSeconds > 0.f)
+    {
+        CurrentVelocity = (NewLoc - OldLoc) / DeltaSeconds;
+
+        // 停止している場合は向きを変えない
+        if (!CurrentVelocity.IsNearlyZero())
+        {
+            // Z軸の傾きを無視した水平な向きを計算
+            const FRotator NewRotation = FRotator(0.f, CurrentVelocity.Rotation().Yaw, 0.f);
+            SetActorRotation(NewRotation);
+        }
+    }
+    else
+    {
+        CurrentVelocity = FVector::ZeroVector;
+    }
+
     SetActorLocation(NewLoc, false);
     const FVector ActualLoc = GetActorLocation();
 
-    // ★★★ 緊急診断：実際に位置が変わっているか確認 ★★★
+    // 笘・・笘・邱頑･險ｺ譁ｭ・壼ｮ滄圀縺ｫ菴咲ｽｮ縺悟､峨ｏ縺｣縺ｦ縺・ｋ縺狗｢ｺ隱・笘・・笘・
     static int32 UpdateCount = 0;
     if (UpdateCount < 5)
     {
-        UE_LOG(LogUnitBase, Error,
-            TEXT("[UpdateMove] %s: Alpha %.3f→%.3f, OldLoc=%s, NewLoc=%s, ActualLoc=%s, Moved=%.2f"),
-            *GetName(), OldAlpha, LegAlpha, 
-            *OldLoc.ToCompactString(), *NewLoc.ToCompactString(), *ActualLoc.ToCompactString(),
+        const FString OldLocStr = OldLoc.ToCompactString();
+        const FString NewLocStr = NewLoc.ToCompactString();
+        const FString ActualLocStr = ActualLoc.ToCompactString();
+
+        UE_LOG(LogUnitBase, Verbose,
+            TEXT("[UpdateMove] %s: Alpha %.3f -> %.3f, OldLoc=%s, NewLoc=%s, ActualLoc=%s, Moved=%.2f"),
+            *GetName(), OldAlpha, LegAlpha,
+            *OldLocStr, *NewLocStr, *ActualLocStr,
             FVector::Dist(OldLoc, ActualLoc));
         UpdateCount++;
     }
-    
-    // ★★★ 診断ログ（最初のフレームのみ） ★★★
+
+    // 笘・・笘・險ｺ譁ｭ繝ｭ繧ｰ・域怙蛻昴・繝輔Ξ繝ｼ繝縺ｮ縺ｿ・・笘・・笘・
     if (LegAlpha < 0.1f)
     {
-        UE_LOG(LogUnitBase, Log,
+        UE_LOG(LogUnitBase, Verbose,
             TEXT("[UpdateMove] %s: Distance=%.1f, Duration=%.2fs, Speed=%.1f units/s"),
             *GetName(), Dist, Duration, PixelsPerSec);
     }
 
-    // 到達判定
+    // 蛻ｰ驕泌愛螳・
     const float DistToTarget = FVector::Dist2D(GetActorLocation(), LegEnd);
+
+    // 笘・・笘・Sparky險ｺ譁ｭ・壼芦驕泌愛螳壹・隧ｳ邏ｰ繝ｭ繧ｰ 笘・・笘・
+    UE_LOG(LogUnitBase, Verbose,
+        TEXT("[UpdateMove] 笘・%s: DistToTarget=%.2f, DistanceSnap=%.2f, LegAlpha=%.3f, Reached=%d"),
+        *GetName(), DistToTarget, DistanceSnap, LegAlpha,
+        (DistToTarget <= DistanceSnap || LegAlpha >= 1.f) ? 1 : 0);
+
     if (DistToTarget <= DistanceSnap || LegAlpha >= 1.f)
     {
-        UE_LOG(LogUnitBase, Log, TEXT("[UpdateMove] %s: Reached target"), *GetName());
+        UE_LOG(LogUnitBase, Log,
+            TEXT("[UpdateMove] 笘・・笘・%s: TARGET REACHED! Calling StartNextLeg (MoveCounter=%d, PathArray.Num=%d)"),
+            *GetName(), MoveCounter, PathArray.Num());
         ++MoveCounter;
         StartNextLeg();
     }
 }
 
 //------------------------------------------------------------------------------
-// ビジュアル制御
+// 繝薙ず繝･繧｢繝ｫ蛻ｶ蠕｡
 //------------------------------------------------------------------------------
 void AUnitBase::EnsureDynamicMaterial()
 {
@@ -284,7 +379,7 @@ void AUnitBase::EnsureDynamicMaterial()
         DynMat = UMaterialInstanceDynamic::Create(BaseMat, this);
         MeshComp->SetMaterial(0, DynMat);
 
-        // 初期値設定
+        // 蛻晄悄蛟､險ｭ螳・
         DynMat->SetScalarParameterValue(Param_Selected, 0.f);
         DynMat->SetScalarParameterValue(Param_Highlight, 0.f);
     }
@@ -303,10 +398,27 @@ void AUnitBase::UpdateValidSelectionColor()
     if (!DynMat) return;
 
     const FLinearColor ValidColor = (Team > 0)
-        ? FLinearColor(1.f, 0.069f, 0.06f, 1.f)  // 赤（敵）
-        : FLinearColor(0.062f, 0.085f, 1.f, 1.f); // 青（味方）
+        ? FLinearColor(1.f, 0.069f, 0.06f, 1.f)  // 襍､・域雰・・
+        : FLinearColor(0.062f, 0.085f, 1.f, 1.f); // 髱抵ｼ亥袖譁ｹ・・
 
     DynMat->SetVectorParameterValue(Param_ValidSelection, ValidColor);
+}
+
+void AUnitBase::ApplyMovementSpeedFromStats()
+{
+    const float StatSpeed =
+        (StatBlock.CurrentSpeed > KINDA_SMALL_NUMBER) ? StatBlock.CurrentSpeed :
+        (StatBlock.MaxSpeed > KINDA_SMALL_NUMBER ? StatBlock.MaxSpeed : PixelsPerSec);
+
+    const float TargetSpeed = FMath::Clamp(StatSpeed, MinPixelsPerSec, MaxPixelsPerSec);
+    if (!FMath::IsNearlyEqual(TargetSpeed, PixelsPerSec))
+    {
+        UE_LOG(LogUnitBase, Display,
+            TEXT("[MovementSpeed] %s: PixelsPerSec %.1f -> %.1f (Stat=%.1f)"),
+            *GetName(), PixelsPerSec, TargetSpeed, StatSpeed);
+    }
+
+    PixelsPerSec = TargetSpeed;
 }
 
 void AUnitBase::SetSelected(bool bNewSelected)
@@ -328,7 +440,7 @@ void AUnitBase::SetHighlighted(bool bNewHighlighted)
 }
 
 //------------------------------------------------------------------------------
-// カーソル反応
+// 繧ｫ繝ｼ繧ｽ繝ｫ蜿榊ｿ・
 //------------------------------------------------------------------------------
 void AUnitBase::NotifyActorBeginCursorOver()
 {
@@ -344,11 +456,11 @@ void AUnitBase::NotifyActorEndCursorOver()
 }
 
 //------------------------------------------------------------------------------
-// タイル管理
+// 繧ｿ繧､繝ｫ邂｡逅・
 //------------------------------------------------------------------------------
 void AUnitBase::AdjustTile()
 {
-    // 古いタイルの Team をリセット
+    // 蜿､縺・ち繧､繝ｫ縺ｮ Team 繧偵Μ繧ｻ繝・ヨ
     if (TileIAmOn)
     {
         if (UClass* TileClass = TileIAmOn->GetClass())
@@ -361,7 +473,7 @@ void AUnitBase::AdjustTile()
         }
     }
 
-    // 現在位置のタイルを LineTrace で検出
+    // 迴ｾ蝨ｨ菴咲ｽｮ縺ｮ繧ｿ繧､繝ｫ繧・LineTrace 縺ｧ讀懷・
     FVector Start = GetActorLocation() + FVector(0, 0, 25);
     FVector End = GetActorLocation() - FVector(0, 0, 250);
 
@@ -380,7 +492,7 @@ void AUnitBase::AdjustTile()
     {
         TileIAmOn = HitResult.GetActor();
 
-        // 新しいタイルに Team を設定
+        // 譁ｰ縺励＞繧ｿ繧､繝ｫ縺ｫ Team 繧定ｨｭ螳・
         if (UClass* TileClass = TileIAmOn->GetClass())
         {
             if (FIntProperty* TeamProp = FindFProperty<FIntProperty>(TileClass, TEXT("Team")))
@@ -392,13 +504,13 @@ void AUnitBase::AdjustTile()
 }
 
 //------------------------------------------------------------------------------
-// ユニット検出
+// 繝ｦ繝九ャ繝域､懷・
 //------------------------------------------------------------------------------
 TArray<AUnitBase*> AUnitBase::GetAdjacentPlayers() const
 {
     TArray<AUnitBase*> Result;
 
-    // 8方向のオフセット
+    // 8譁ｹ蜷代・繧ｪ繝輔そ繝・ヨ
     static const FVector2D Directions[8] = {
         FVector2D(0, 1), FVector2D(1, 1), FVector2D(1, 0), FVector2D(1, -1),
         FVector2D(0, -1), FVector2D(-1, -1), FVector2D(-1, 0), FVector2D(-1, 1)
@@ -407,11 +519,11 @@ TArray<AUnitBase*> AUnitBase::GetAdjacentPlayers() const
     const FVector MyLocation = GetActorLocation();
     const float SearchRadius = 60.f;
 
-    // 全ての UnitBase を取得
+    // 蜈ｨ縺ｦ縺ｮ UnitBase 繧貞叙蠕・
     TArray<AActor*> AllUnits;
     UGameplayStatics::GetAllActorsOfClass(GetWorld(), AUnitBase::StaticClass(), AllUnits);
 
-    // 8方向をチェック
+    // 8譁ｹ蜷代ｒ繝√ぉ繝・け
     for (const FVector2D& Dir : Directions)
     {
         FVector AdjacentPos(
@@ -439,14 +551,14 @@ TArray<AUnitBase*> AUnitBase::GetAdjacentPlayers() const
 }
 
 //------------------------------------------------------------------------------
-// SetStatVars - UnitManagerから呼ばれるステータス反映処理
+// SetStatVars - UnitManager縺九ｉ蜻ｼ縺ｰ繧後ｋ繧ｹ繝・・繧ｿ繧ｹ蜿肴丐蜃ｦ逅・
 //------------------------------------------------------------------------------
 void AUnitBase::SetStatVars()
 {
-    // StatBlockから各メンバ変数へコピー（UnitManagerが使用）
-    // 実装はUnitManagerの要求に合わせて調整してください
+    // StatBlock縺九ｉ蜷・Γ繝ｳ繝仙､画焚縺ｸ繧ｳ繝斐・・・nitManager縺御ｽｿ逕ｨ・・
+    // 螳溯｣・・UnitManager縺ｮ隕∵ｱゅ↓蜷医ｏ縺帙※隱ｿ謨ｴ縺励※縺上□縺輔＞
     Team = StatBlock.Team;
-    CurrentMovementRange = StatBlock.CurrentTotalMovementRnage;
+    CurrentMovementRange = FMath::Max(1, StatBlock.CurrentTotalMovementRnage);
     
     MeleeBaseAttack = StatBlock.MeleeBaseAttack;
     RangedBaseAttack = StatBlock.RangedBaseAttack;
@@ -465,6 +577,8 @@ void AUnitBase::SetStatVars()
     CurrentDamageAvoidance = StatBlock.CurrentDamageAvoidance;
     CurrentMagicResist = StatBlock.CurrentMagicResist;
     CurrentMagicPenetration = StatBlock.CurrentMagicPenetration;
-    
-    UE_LOG(LogUnitBase, Log, TEXT("SetStatVars: Team=%d, Movement=%d"), Team, CurrentMovementRange);
+
+    ApplyMovementSpeedFromStats();
+
+    UE_LOG(LogUnitBase, Log, TEXT("SetStatVars: Team=%d, MovementRange=%d"), Team, CurrentMovementRange);
 }

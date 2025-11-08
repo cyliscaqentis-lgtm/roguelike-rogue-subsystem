@@ -14,7 +14,7 @@ class AAABB;
 class URogueDungeonSubsystem;
 
 // ダンジョン準備完了デリゲート（TurnManagerが購読）
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FTurnWorldReady);
+// DECLARE_DYNAMIC_MULTICAST_DELEGATE(FTurnWorldReady); // NOTE: This is now obsolete, GameTurnManager subscribes directly to the subsystem.
 
 /** Blueprint の GetWorldVariables の戻り値に相当 */
 USTRUCT(BlueprintType)
@@ -51,16 +51,8 @@ public:
 	FORCEINLINE AUnitManager* GetUnitManager() const { return nullptr; } // GameTurnManagerが所有
 	FORCEINLINE URogueDungeonSubsystem* GetDungeonSubsystem() const { return Dgn; }
 
-	// ダンジョン準備完了イベント（Grid完了後に一度だけ発火）
-	UPROPERTY(BlueprintAssignable)
-	FTurnWorldReady OnDungeonReady;
-
 protected:
 	virtual void BeginPlay() override;
-
-	// BP からも呼べる入口（必要に応じて）
-	UFUNCTION(BlueprintCallable, Category="TBS|Grid")
-	void GridComplete(const TArray<int32>& Grid, const TArray<AAABB*>& Rooms);
 
 	UFUNCTION(BlueprintCallable, Category="TBS|Team")
 	void TeamTurnReset(int32 Team);
@@ -72,18 +64,9 @@ protected:
 	FWorldVariables GetWorldVariables() const;
 
 private:
-	// DungeonSubsystemのみ保持（SubsystemはWorldが所有）
-	UPROPERTY() TObjectPtr<URogueDungeonSubsystem> Dgn = nullptr;
+	// DungeonSubsystem is now accessed via the GameTurnManager
+	UPROPERTY()
+	TObjectPtr<URogueDungeonSubsystem> Dgn = nullptr;
 
-	// PathFinderとUnitManagerはGameTurnManagerが所有するため、ここでは保持しない
-	// 後方互換性のため、クラスプロパティは残すが使用しない
-	UPROPERTY(EditDefaultsOnly, Category="TBS|Pathfinding")
-	TSubclassOf<AGridPathfindingLibrary> PathfindingLibraryClass;
-
-	UPROPERTY(EditDefaultsOnly, Category="TBS|Units")
-	TSubclassOf<AUnitManager> UnitManagerClass;
-
-	void SpawnBootstrapActors();   // PFL, UM の生成
-	void BuildDungeonAsync();      // ダンジョン生成を開始（既存フローにフック）
-	UFUNCTION() void HandleGridComplete(); // 生成完了で OnDungeonReady を発火
+	void SpawnBootstrapActors();
 };

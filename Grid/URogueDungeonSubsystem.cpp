@@ -3,41 +3,95 @@
 #include "Engine/World.h"
 #include "Math/RandomStream.h"
 #include "Data/RogueFloorConfigData.h"
+#include "Grid/DungeonConfigActor.h"
 #include "Grid/DungeonFloorGenerator.h"
 #include "Grid/DungeonRenderComponent.h"
 #include "Grid/AABB.h"
 #include "Components/BoxComponent.h"
 #include "Containers/Queue.h"
 
-void URogueDungeonSubsystem::RegisterFloorConfig(int32 FloorIndex, URogueFloorConfigData* Config)
+void URogueDungeonSubsystem::StartGenerateFromLevel()
 {
-    if (!Config) return;
-    FloorConfigMap.Add(FloorIndex, Config);
+    // Authority check & Re-entrancy guard
+    if (!GetWorld() || !GetWorld()->GetAuthGameMode())
+    {
+        return; // Not on server
+    }
+    if (bDungeonGenerationStarted)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[RogueSubsystem] StartGenerateFromLevel: Generation already started. Ignored."));
+        return;
+    }
+
+    TArray<AActor*> FoundActors;
+    UGameplayStatics::GetAllActorsOfClass(GetWorld(), ADungeonConfigActor::StaticClass(), FoundActors);
+
+    const URogueFloorConfigData* Config = nullptr;
+    ADungeonConfigActor* ConfigActor = nullptr;
+
+    if (FoundActors.Num() > 0)
+    {
+        ConfigActor = Cast<ADungeonConfigActor>(FoundActors[0]);
+        if (ConfigActor && ConfigActor->DungeonConfigAsset)
+        {
+            Config = ConfigActor->DungeonConfigAsset;
+        }
+    }
+
+    if (!Config)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[RogueSubsystem] No URogueFloorConfigData found in level. Place an ADungeonConfigActor and assign a valid config asset."));
+        // As a fail-safe, we could generate a default/fallback dungeon here, but for now, we stop.
+        return;
+    }
+    
+    UE_LOG(LogTemp, Warning, TEXT("[RogueSubsystem] ConfigActor=%s, ConfigDA=%s"), *GetNameSafe(ConfigActor), *Config->GetPathName());
+
+    // Set the flag *before* starting generation
+    bDungeonGenerationStarted = true;
+    StartGenerate(Config);
 }
 
-void URogueDungeonSubsystem::TransitionToFloor(int32 FloorIndex)
+void URogueDungeonSubsystem::StartGenerate(const URogueFloorConfigData* Cfg)
 {
-    CurrentFloorIndex = FloorIndex;
+    if (!Cfg)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[RogueSubsystem] StartGenerate: Invalid config provided."));
+        return;
+    }
 
     EnsureFloorGenerator();
     if (!FloorGenerator || !IsValid(FloorGenerator))
     {
-        UE_LOG(LogTemp, Warning, TEXT("[RogueSubsystem] No FloorGenerator."));
+        UE_LOG(LogTemp, Error, TEXT("[RogueSubsystem] No FloorGenerator available."));
         return;
     }
 
-    URogueFloorConfigData* Config = GetActiveConfig(FloorIndex);
-    if (!Config)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[RogueSubsystem] No Config for floor %d."), FloorIndex);
-        return;
-    }
+    FRandomStream Rng;
+    Rng.GenerateNewSeed(); // URogueFloorConfigData にはシード設定がないため、常に新しいシードを生成
 
-    BuildFloor_Internal(Config, FloorIndex);
+    UE_LOG(LogTemp, Display, TEXT("[RogueSubsystem] Generate START (Seed=%d, Map=%dx%d, Cell=%d)"), Rng.GetCurrentSeed(), Cfg->Width, Cfg->Height, Cfg->CellSizeUU);
+
+    FloorGenerator->Generate(Cfg, Rng);
+    
+    RebuildRoomMarkers();
 
     EnsureRenderComponent();
+    if (RenderComponent && IsValid(RenderComponent))
+    {
+        RenderComponent->RenderDungeonFromFloor(FloorGenerator);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[RogueSubsystem] RenderComponent not available. Dungeon mesh will not be shown."));
+    }
 
-    OnGridReady.Broadcast();
+    int32 RoomCount, WalkableCount;
+    float Reachability;
+    FloorGenerator->GetGenerationStats(RoomCount, WalkableCount, Reachability);
+    UE_LOG(LogTemp, Display, TEXT("[RogueSubsystem] Generate DONE (Rooms=%d, Walkable=%d, Reach=%.1f%%)"), RoomCount, WalkableCount, Reachability * 100.0f);
+
+    OnGridReady.Broadcast(this);
 }
 
 UDungeonRenderComponent* URogueDungeonSubsystem::GetRenderComponent()
@@ -53,11 +107,10 @@ ADungeonFloorGenerator* URogueDungeonSubsystem::GetFloorGenerator() const
 
 void URogueDungeonSubsystem::SmokeTest() const
 {
-    UE_LOG(LogTemp, Log, TEXT("[RogueSubsystem] World=%s  FG=%s  RC=%s  Floor=%d"),
+    UE_LOG(LogTemp, Log, TEXT("[RogueSubsystem] World=%s  FG=%s  RC=%s"),
         *GetNameSafe(GetWorld()),
         *GetNameSafe(FloorGenerator),
-        *GetNameSafe(RenderComponent),
-        CurrentFloorIndex);
+        *GetNameSafe(RenderComponent));
 }
 
 void URogueDungeonSubsystem::GetGeneratedRooms(TArray<AAABB*>& OutRooms) const
@@ -72,13 +125,44 @@ void URogueDungeonSubsystem::GetGeneratedRooms(TArray<AAABB*>& OutRooms) const
     }
 }
 
-URogueFloorConfigData* URogueDungeonSubsystem::GetActiveConfig(int32 FloorIndex) const
+void URogueDungeonSubsystem::TransitionToFloor(int32 FloorIndex)
 {
-    if (const TObjectPtr<URogueFloorConfigData>* Found = FloorConfigMap.Find(FloorIndex))
+    // Authority check
+    if (!GetWorld() || !GetWorld()->GetAuthGameMode())
     {
-        return Found->Get();
+        UE_LOG(LogTemp, Warning, TEXT("[RogueSubsystem] TransitionToFloor: Not on server. Ignored."));
+        return;
     }
-    return DefaultConfig;
+
+    TArray<AActor*> FoundActors;
+    UGameplayStatics::GetAllActorsOfClass(GetWorld(), ADungeonConfigActor::StaticClass(), FoundActors);
+
+    const URogueFloorConfigData* Config = nullptr;
+    ADungeonConfigActor* ConfigActor = nullptr;
+
+    if (FoundActors.Num() > 0)
+    {
+        ConfigActor = Cast<ADungeonConfigActor>(FoundActors[0]);
+        if (ConfigActor && ConfigActor->DungeonConfigAsset)
+        {
+            Config = ConfigActor->DungeonConfigAsset;
+        }
+    }
+
+    if (!Config)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[RogueSubsystem] TransitionToFloor: No URogueFloorConfigData found in level."));
+        return;
+    }
+
+    // Reset generation flag to allow re-generation
+    bDungeonGenerationStarted = false;
+
+    // Destroy existing room markers before generating new floor
+    DestroyRoomMarkers();
+
+    // Start generation with the config (seed can be modified based on FloorIndex if needed)
+    StartGenerate(Config);
 }
 
 void URogueDungeonSubsystem::EnsureFloorGenerator()
@@ -156,25 +240,6 @@ void URogueDungeonSubsystem::EnsureRenderComponent()
     {
         RenderComponent->ComponentTags.AddUnique(RenderSingletonTag);
     }
-}
-
-void URogueDungeonSubsystem::BuildFloor_Internal(URogueFloorConfigData* Config, int32 FloorIndex)
-{
-    if (!Config || !FloorGenerator) return;
-
-    FRandomStream Rng;
-    if (bUseRandomSeed)
-    {
-        Rng.GenerateNewSeed();
-    }
-    else
-    {
-        const int32 Seed = HashCombine(::GetTypeHash(SeedBase), ::GetTypeHash(FloorIndex));
-        Rng.Initialize(Seed);
-    }
-
-    FloorGenerator->Generate(Config, Rng);
-    RebuildRoomMarkers();
 }
 
 void URogueDungeonSubsystem::DestroyRoomMarkers()

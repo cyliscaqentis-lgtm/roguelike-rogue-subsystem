@@ -3,12 +3,36 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
+#include "UObject/ConstructorHelpers.h"
+#include "Components/CapsuleComponent.h"
 
 // ===== あなたのプロジェクト固有のヘッダ =====
 #include "Grid/AABB.h"
 #include "Character/UnitBase.h"
+#include "Character/EnemyUnitBase.h"
 #include "Grid/GridPathfindingLibrary.h"
+#include "Grid/GridOccupancySubsystem.h"
 #include "Player/PlayerControllerBase.h"
+#include "Debug/DebugObserverCSV.h"
+#include "UObject/UObjectGlobals.h"
+#include "Character/LyraPawnData.h"
+
+namespace UnitManager_Private
+{
+	static void OccupyInitialCell(UWorld* World, AGridPathfindingLibrary* PathFinder, AActor* Actor)
+	{
+		if (!World || !PathFinder || !Actor)
+		{
+			return;
+		}
+
+		if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
+		{
+			const FIntPoint Cell = PathFinder->WorldToGrid(Actor->GetActorLocation());
+			Occupancy->OccupyCell(Cell, Actor);
+		}
+	}
+}
 
 AUnitManager::AUnitManager()
 {
@@ -16,6 +40,26 @@ AUnitManager::AUnitManager()
 
 	// TeamSize を 2 要素にしておく（[0]=プレイヤー, [1]=敵）
 	EnsureTeamSize2();
+
+	// C++で BP_EnemyUnitBase を直接参照して設定
+	static ConstructorHelpers::FClassFinder<AEnemyUnitBase> BP_EnemyUnitFinder(TEXT("/Game/Rogue/Characters/BP_EnemyUnitBase"));
+	if (BP_EnemyUnitFinder.Succeeded())
+	{
+		EnemyUnitClass = BP_EnemyUnitFinder.Class;
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("[UnitManager] Failed to find BP_EnemyUnitBase. Check the path in the constructor. Spawning will fail."));
+	}
+
+	if (!DefaultEnemyPawnData)
+	{
+		DefaultEnemyPawnData = LoadObject<ULyraPawnData>(nullptr, TEXT("/Game/Characters/Heroes/SimplePawnData/TBS_EnemyPawnData.TBS_EnemyPawnData"));
+		if (!DefaultEnemyPawnData)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[UnitManager] Failed to load default enemy PawnData asset."));
+		}
+	}
 }
 
 void AUnitManager::EnsureTeamSize2()
@@ -23,6 +67,11 @@ void AUnitManager::EnsureTeamSize2()
 	if (TeamSize.Num() < 2)
 	{
 		TeamSize.SetNum(2);
+	}
+
+	if (TeamSize[0] <= 0)
+	{
+		TeamSize[0] = 1;
 	}
 }
 
@@ -37,9 +86,8 @@ void AUnitManager::InitUnitArrays()
 {
 	EnsureTeamSize2();
 
-	// TeamSize[1] = SelectInt(A=floor(MapSize.X), B=32, pickA=(floor(MapSize.X) <= 32))
-	const int32 MapX = FMath::FloorToInt(MapSize.X);
-	TeamSize[1] = (MapX <= 32) ? MapX : 32;
+	const int32 DesiredEnemies = FMath::Max(InitialEnemyCount, 1);
+	TeamSize[1] = DesiredEnemies;
 
 	// StatBlock を (TeamSize[1] + TeamSize[0]) にリサイズし、DefaultStatBlock を詰める
 	const int32 Total = TeamSize[1] + TeamSize[0];
@@ -81,6 +129,181 @@ void AUnitManager::GenerateBasicEnemyTeam()
 		SetStartingHealthAndPower();
 		SetUnitStatBlock(idx);
 	}
+}
+
+int32 AUnitManager::SpawnEnemyUnits(int32 DesiredEnemyCount)
+{
+	EnsureTeamSize2();
+
+	if (!PathFinder)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UnitManager::SpawnEnemyUnits: PathFinder not set"));
+		return 0;
+	}
+
+	if (bEnemiesSpawned)
+	{
+		UE_LOG(LogTemp, Verbose, TEXT("UnitManager::SpawnEnemyUnits: Already spawned enemies, skipping"));
+		return 0;
+	}
+
+	const int32 TargetEnemyCount = (DesiredEnemyCount >= 0)
+		? DesiredEnemyCount
+		: TeamSize[1];
+
+	if (TargetEnemyCount <= 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UnitManager::SpawnEnemyUnits: TargetEnemyCount <= 0"));
+		return 0;
+	}
+
+	if (!bEnemyStatsInitialized)
+	{
+		GenerateBasicEnemyTeam();
+		bEnemyStatsInitialized = true;
+	}
+
+	TArray<TObjectPtr<AAABB>> CandidateRooms = BigEnoughRooms;
+	if (CandidateRooms.Num() == 0)
+	{
+		CandidateRooms = Rooms;
+	}
+
+	int32 SpawnedEnemies = 0;
+	bool bLoggedMissingEnemyClass = false;
+
+	while (SpawnedEnemies < TargetEnemyCount && CandidateRooms.Num() > 0)
+	{
+		const int32 Counter = FMath::RandRange(0, CandidateRooms.Num() - 1);
+		AAABB* EnemyRoom = CandidateRooms[Counter];
+		CandidateRooms.RemoveAt(Counter);
+
+		if (!IsValid(EnemyRoom) || EnemyRoom == PlayerStartRoom)
+		{
+			continue;
+		}
+
+		const int32 Remaining = TargetEnemyCount - SpawnedEnemies;
+		const int32 SpawnCountThisRoom = FMath::Min(UnitsPerRoom, Remaining);
+		const TArray<FVector> EnemySpawns = SpawnLocations(EnemyRoom, SpawnCountThisRoom);
+
+		for (const FVector& Loc : EnemySpawns)
+		{
+			if (!EnemyUnitClass)
+			{
+				if (!bLoggedMissingEnemyClass)
+				{
+					UE_LOG(LogTemp, Error, TEXT("UnitManager::SpawnEnemyUnits: EnemyUnitClass is not set."));
+					bLoggedMissingEnemyClass = true;
+				}
+				continue;
+			}
+
+			UWorld* World = GetWorld();
+			if (!World)
+			{
+				UE_LOG(LogTemp, Error, TEXT("UnitManager::SpawnEnemyUnits: World is null"));
+				return SpawnedEnemies;
+			}
+
+			// ★★★ CDOからカプセル半高を取得して床から正しい高さでスポーン ★★★
+		float CapsuleHalfHeight = 0.f;
+		if (EnemyUnitClass)
+		{
+			const AEnemyUnitBase* CDO = EnemyUnitClass->GetDefaultObject<AEnemyUnitBase>();
+			if (CDO && CDO->GetCapsuleComponent())
+			{
+				CapsuleHalfHeight = CDO->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+			}
+		}
+
+		// 安全マージン（床めり込み回避）
+		constexpr float ZEpsilon = 0.5f;
+
+		// 床(Z=0) + カプセル半高で配置 → BeginPlayの平面拘束でこの高さに固定される
+		FVector SpawnLoc = Loc;
+		SpawnLoc.Z = Loc.Z + CapsuleHalfHeight + ZEpsilon;
+
+		UE_LOG(LogTemp, Warning, TEXT("EnemySpawn Z=%.2f (Loc.Z=%.2f, HalfHeight=%.2f)"),
+			SpawnLoc.Z, Loc.Z, CapsuleHalfHeight);
+
+		FTransform SpawnTM(FRotator::ZeroRotator, SpawnLoc, FVector::OneVector);
+			FActorSpawnParameters P;
+			P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+			AEnemyUnitBase* Enemy = World->SpawnActor<AEnemyUnitBase>(EnemyUnitClass, SpawnTM, P);
+			if (!Enemy)
+			{
+				continue;
+			}
+
+			if (Enemy->HasAuthority())
+			{
+				if (AEnemyUnitBase* EnemyUnit = Cast<AEnemyUnitBase>(Enemy))
+				{
+					ULyraPawnData* PawnDataToApply = DefaultEnemyPawnData;
+
+					if (!PawnDataToApply)
+					{
+						if (EnemyUnitClass)
+						{
+							if (const AEnemyUnitBase* EnemyCDO = Cast<AEnemyUnitBase>(EnemyUnitClass->GetDefaultObject()))
+							{
+								PawnDataToApply = EnemyCDO->GetEnemyPawnData();
+							}
+						}
+					}
+
+					// ★★★ 修正: PawnData設定後にコントローラーをスポーン ★★★
+					if (PawnDataToApply)
+					{
+						EnemyUnit->SetEnemyPawnData(PawnDataToApply);
+
+						// PawnData設定後、コントローラーをスポーン（bDeferredControllerSpawn=trueのため）
+						if (!EnemyUnit->GetController())
+						{
+							EnemyUnit->SpawnDefaultController();
+							UE_LOG(LogTemp, Log, TEXT("[UnitManager] Spawned controller for %s after PawnData setup"),
+								*EnemyUnit->GetName());
+						}
+					}
+					else
+					{
+						UE_LOG(LogTemp, Warning, TEXT("[UnitManager] No PawnData available for %s (DefaultEnemyPawnData unset, class CDO empty)"),
+							*EnemyUnit->GetName());
+					}
+				}
+
+				Enemy->StatBlock = DefaultStatBlock;
+				Enemy->SetStatVars();
+				Enemy->SetActorHiddenInGame(false);
+				Enemy->Team = 1;
+				AllUnits.Add(Enemy);
+
+				UnitManager_Private::OccupyInitialCell(World, PathFinder, Enemy);
+				++SpawnedEnemies;
+
+				if (SpawnedEnemies >= TargetEnemyCount)
+				{
+					break;
+				}
+			}
+		}
+	}
+
+	if (SpawnedEnemies >= TargetEnemyCount)
+	{
+		UE_LOG(LogTemp, Log, TEXT("UnitManager::SpawnEnemyUnits: Spawned %d enemies"), SpawnedEnemies);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("UnitManager::SpawnEnemyUnits: Spawned %d/%d enemies (not enough rooms?)"),
+			SpawnedEnemies, TargetEnemyCount);
+	}
+
+	bEnemiesSpawned = SpawnedEnemies > 0;
+	return SpawnedEnemies;
 }
 
 // ========================= Trace: GetUnitStatBlock =========================
@@ -150,9 +373,12 @@ void AUnitManager::CalculateDerivedValues()
 	const int32 Max3  = (Major >= Dexterity) ? Major : Dexterity;
 	Power = Max3 * 5.f;
 
-	NumberOfMoves = Constitution / 4;
-	MovementRange = Dexterity / 4;
-	CurrentMovementRange = MovementRange * NumberOfMoves;
+    NumberOfMoves = FMath::Max(1, Constitution / 4);
+    MovementRange = FMath::Max(1, Dexterity / 4);
+    CurrentMovementRange = FMath::Max(1, MovementRange * NumberOfMoves);
+    UE_LOG(LogTemp, Log,
+        TEXT("[UnitManager] Calculated move stats: Dex=%d Con=%d -> MovementRange=%d, NumberOfMoves=%d, CurrentMovement=%d"),
+        Dexterity, Constitution, MovementRange, NumberOfMoves, CurrentMovementRange);
 
 	CurrentMagicResist      = (Intelligence * 1.25f) + BaseMagicResist;
 	CurrentDamageAvoidance  = (Dexterity    * 1.25f) + BaseDamageAvoidance;
@@ -187,6 +413,8 @@ void AUnitManager::BuildUnits(const TArray<AAABB*>& RoomsIn)
 	PlayerStartRooms.Reset();
 	PlayerStartRoom = nullptr;
 
+	UE_LOG(LogTemp, Warning, TEXT("BuildUnits: Received %d rooms."), Rooms.Num());
+
 	// BigEnoughRooms: RoomArea > TeamSize[1] * 1
 	for (AAABB* R : Rooms)
 	{
@@ -197,6 +425,8 @@ void AUnitManager::BuildUnits(const TArray<AAABB*>& RoomsIn)
 		}
 	}
 
+	UE_LOG(LogTemp, Warning, TEXT("BuildUnits: Found %d BigEnoughRooms (needs to be > 0)."), BigEnoughRooms.Num());
+
 	// PlayerStartRooms: RoomArea > TeamSize[0] * 2
 	for (AAABB* R : BigEnoughRooms)
 	{
@@ -206,15 +436,33 @@ void AUnitManager::BuildUnits(const TArray<AAABB*>& RoomsIn)
 		}
 	}
 
+	UE_LOG(LogTemp, Warning, TEXT("BuildUnits: Found %d PlayerStartRooms (needs to be > 0)."), PlayerStartRooms.Num());
+
 	// ランダムでプレイヤー開始部屋を決定
 	if (PlayerStartRooms.Num() == 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UnitManager: No PlayerStartRooms found."));
+		const FString Message = TEXT("UnitManager: No PlayerStartRooms found.");
+		UE_LOG(LogTemp, Warning, TEXT("%s"), *Message);
+		LogToCSV(TEXT("UnitManager"), Message);
 		return;
 	}
 
 	const int32 PlayerRoomStartIndex = FMath::RandRange(0, PlayerStartRooms.Num() - 1);
 	PlayerStartRoom = PlayerStartRooms[PlayerRoomStartIndex];
+
+	// ★★★ 追加：ログ ★★★
+	if (PlayerStartRoom)
+	{
+		const FString Message = FString::Printf(TEXT("BuildUnits - Selected PlayerStartRoom at Location: %s"), *PlayerStartRoom->GetActorLocation().ToString());
+		UE_LOG(LogTemp, Log, TEXT("UnitManager::%s"), *Message);
+		LogToCSV(TEXT("UnitManager"), Message);
+	}
+	else
+	{
+		const FString Message = TEXT("BuildUnits - Failed to select a PlayerStartRoom!");
+		UE_LOG(LogTemp, Warning, TEXT("UnitManager::%s"), *Message);
+		LogToCSV(TEXT("UnitManager"), Message);
+	}
 
 	// BigEnoughRooms からプレイヤー部屋を除外
 	BigEnoughRooms.Remove(PlayerStartRoom);
@@ -223,9 +471,17 @@ void AUnitManager::BuildUnits(const TArray<AAABB*>& RoomsIn)
 // ========================= Trace: OnTBSCharacterPossessed_Event =========================
 void AUnitManager::OnTBSCharacterPossessed(AUnitBase* ControlledPawnAsTBS_PlayerPawn)
 {
+	// ★★★ 追加：ログ ★★★
+	const FString RoomLocationStr = PlayerStartRoom ? PlayerStartRoom->GetActorLocation().ToString() : TEXT("nullptr");
+	const FString Message1 = FString::Printf(TEXT("OnTBSCharacterPossessed - Event received. PlayerStartRoom is at: %s"), *RoomLocationStr);
+	UE_LOG(LogTemp, Log, TEXT("UnitManager::%s"), *Message1);
+	LogToCSV(TEXT("UnitManager"), Message1);
+
 	if (!PlayerStartRoom || !ControlledPawnAsTBS_PlayerPawn || !PathFinder)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UnitManager::OnTBSCharacterPossessed missing refs"));
+		const FString Message2 = TEXT("OnTBSCharacterPossessed missing refs");
+		UE_LOG(LogTemp, Warning, TEXT("UnitManager::%s"), *Message2);
+		LogToCSV(TEXT("UnitManager"), Message2);
 		return;
 	}
 
@@ -237,16 +493,22 @@ void AUnitManager::OnTBSCharacterPossessed(AUnitBase* ControlledPawnAsTBS_Player
 	// プレイヤー分のスポーン位置を算出（TeamSize[0]）
 	const TArray<FVector> PlayerSpawns = SpawnLocations(PlayerStartRoom, TeamSize[0]);
 
-	// ひとまず “最初の 1 体” をプレイヤー駒として配置（BP は同一 Pawn をループで動かしてているためここは保守的に）
+	// ひとまず "最初の 1 体" をプレイヤー駒として配置（BP は同一 Pawn をループで動かしてているためここは保守的に）
 	if (PlayerSpawns.Num() > 0)
 	{
+		// ★★★ 追加：ログ ★★★
+		const FString Message3 = FString::Printf(TEXT("OnTBSCharacterPossessed - Final Spawn Location: %s"), *PlayerSpawns[0].ToString());
+		UE_LOG(LogTemp, Log, TEXT("UnitManager::%s"), *Message3);
+		LogToCSV(TEXT("UnitManager"), Message3);
+
 		FHitResult LocationHit;
 		ControlledPawnAsTBS_PlayerPawn->K2_SetActorLocation(PlayerSpawns[0] + FVector(0,0,50), false, LocationHit, false);
 		ControlledPawnAsTBS_PlayerPawn->StatBlock = DefaultStatBlock; // BP: Set StatBlock = Default
 		ControlledPawnAsTBS_PlayerPawn->SetStatVars();                // BP: SetStatVars()
 		AllUnits.Add(ControlledPawnAsTBS_PlayerPawn);
 		ControlledPawnAsTBS_PlayerPawn->Team = 0;
-		PathFinder->GridChangeVector(ControlledPawnAsTBS_PlayerPawn->K2_GetActorLocation(), -1);
+
+		UnitManager_Private::OccupyInitialCell(GetWorld(), PathFinder, ControlledPawnAsTBS_PlayerPawn);
 	}
 
 	// Controller の PathFinder 参照を注入
@@ -258,70 +520,8 @@ void AUnitManager::OnTBSCharacterPossessed(AUnitBase* ControlledPawnAsTBS_Player
 		}
 	}
 
-	// Trace: Set TeamIndex=1 → GenerateBasicEnemyTeam()
-	GenerateBasicEnemyTeam();
-
-	// ===== 敵ユニットを部屋ごとにスポーン =====
-	const int32 RoomsToUse = FMath::Max(1, (TeamSize[1] + (TeamSize[0] - 1)) / FMath::Max(1, UnitsPerRoom));
-
-	for (int32 i = TeamSize[0]; i < RoomsToUse + TeamSize[0]; ++i)
-	{
-		if (BigEnoughRooms.Num() == 0) break;
-
-		int32 Counter = FMath::RandRange(0, BigEnoughRooms.Num() - 1);
-
-		// プレイヤー開始部屋を引いた場合は入れ替え／再抽選の簡易処理
-		if (BigEnoughRooms[Counter] == PlayerStartRoom)
-		{
-			BigEnoughRooms.RemoveAt(Counter);
-			if (BigEnoughRooms.Num() == 0) break;
-			Counter = (Counter == 0) ? 0 : Counter - 1;
-		}
-
-		AAABB* EnemyRoom = BigEnoughRooms.IsValidIndex(Counter) ? BigEnoughRooms[Counter] : nullptr;
-		if (!IsValid(EnemyRoom))
-		{
-			UE_LOG(LogTemp, Warning, TEXT("BigEnoughRoomNotValid"));
-			continue;
-		}
-
-		// この部屋のスポーン位置を決定し、使い切りとする
-		const TArray<FVector> EnemySpawns = SpawnLocations(EnemyRoom, UnitsPerRoom);
-		BigEnoughRooms.RemoveAt(Counter);
-
-		for (const FVector& Loc : EnemySpawns)
-		{
-			if (!EnemyUnitClass) continue;
-
-			FTransform SpawnTM(FRotator::ZeroRotator, Loc + FVector(0,0,30), FVector::OneVector);
-
-			FActorSpawnParameters P;
-			P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-			AUnitBase* Enemy = GetWorld()->SpawnActor<AUnitBase>(EnemyUnitClass, SpawnTM, P);
-			if (!Enemy) continue;
-
-			if (Enemy->HasAuthority())
-			{
-				// LyraTeamBlueprintLibrary::ChangeTeamForActor(Enemy, /*NewTeamId*/ 2); // 利用可能なら
-				Enemy->StatBlock = DefaultStatBlock;
-				Enemy->SetStatVars();
-				Enemy->SetActorHiddenInGame(false);
-				AllUnits.Add(Enemy);
-				Enemy->Team = 1;
-				PathFinder->GridChangeVector(Enemy->K2_GetActorLocation(), -1);
-			}
-			else
-			{
-				if (GEngine) GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Yellow, TEXT("Hello"));
-			}
-		}
-
-		// BP 最後の ChangeTeamForActor(プレイヤーPawn, 1) 相当（必要なら）
-		// LyraTeamBlueprintLibrary::ChangeTeamForActor(ControlledPawnAsTBS_PlayerPawn, 1);
-	}
-
-	// BP: PrimeSound(None) は無処理で OK
+	const int32 SpawnedEnemies = SpawnEnemyUnits();
+	UE_LOG(LogTemp, Log, TEXT("UnitManager::OnTBSCharacterPossessed spawned %d enemies"), SpawnedEnemies);
 }
 
 // ========================= Trace: RoomArea(InputAABB) =========================
@@ -344,6 +544,12 @@ TArray<FVector> AUnitManager::SpawnLocations(AAABB* InputRoom, int32 NumberOfSpa
 	const FVector Center = InputRoom->GetActorLocation();
 	const FVector Half   = GetRoomHalfExtents(InputRoom);
 
+	// ★★★ 占有情報チェック用のサブシステム取得 ★★★
+	UWorld* World = GetWorld();
+	UGridOccupancySubsystem* Occupancy = World ? World->GetSubsystem<UGridOccupancySubsystem>() : nullptr;
+
+	UE_LOG(LogTemp, Warning, TEXT("SpawnLocations: Searching for %d spawns in room at %s with half-extents %s"), NumberOfSpawns, *Center.ToString(), *Half.ToString());
+
 	for (int32 n = 0; n < NumberOfSpawns; ++n)
 	{
 		// 16 回まで試行して被り/進入不可を避ける
@@ -356,15 +562,25 @@ TArray<FVector> AUnitManager::SpawnLocations(AAABB* InputRoom, int32 NumberOfSpa
 				FMath::FloorToInt((Center.Y - Half.Y) / 100.f),
 				FMath::FloorToInt((Center.Y + Half.Y) / 100.f) - 1);
 
-			const FVector Candidate( RX * 100.f + 50.f, RY * 100.f + 50.f, 0.f );
+			const FVector Candidate( RX * 100.f + 50.f, RY * 100.f + 50.f, Center.Z );
 
 			if (!Out.Contains(Candidate))
 			{
-				// BP: PathFinder.mGrid[...] == -1 で “不可” のニュアンス → ここでは “>=0 なら可” と解釈
+				// ★★★ 1. グリッドステータスをチェック（通行可能か） ★★★
 				const int32 Status = PathFinder->ReturnGridStatus(Candidate);
-				if (Status >= 0)
+
+				// ★★★ 2. 占有状態をチェック（既に他のユニットがいないか） ★★★
+				const FIntPoint Cell = PathFinder->WorldToGrid(Candidate);
+				const bool bIsOccupied = Occupancy ? Occupancy->IsCellOccupied(Cell) : false;
+
+				UE_LOG(LogTemp, Log, TEXT("SpawnLocations: Attempt %d for spawn %d. Candidate: %s, Cell: (%d,%d), Status: %d, Occupied: %d"),
+					t, n, *Candidate.ToString(), Cell.X, Cell.Y, Status, bIsOccupied ? 1 : 0);
+
+				// ★★★ 通行可能かつ未占有の場合のみスポーン位置として採用 ★★★
+				if (Status >= 0 && !bIsOccupied)
 				{
 					Out.Add(Candidate);
+					UE_LOG(LogTemp, Warning, TEXT("SpawnLocations: Found valid spawn at %s (Cell: %d,%d)"), *Candidate.ToString(), Cell.X, Cell.Y);
 					break; // 次のユニットへ
 				}
 			}
@@ -378,4 +594,13 @@ TArray<FVector> AUnitManager::SpawnLocations(AAABB* InputRoom, int32 NumberOfSpa
 FVector AUnitManager::GetRoomHalfExtents(AAABB* Room) const
 {
 	return Room ? Room->GetBoxExtent() : FVector::ZeroVector;
+}
+
+// ★★★ CSVログ出力ヘルパ ★★★
+void AUnitManager::LogToCSV(const FString& Category, const FString& Message)
+{
+	if (DebugObserverCSV)
+	{
+		DebugObserverCSV->LogMessage(Category, Message);
+	}
 }

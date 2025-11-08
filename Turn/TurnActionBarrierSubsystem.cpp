@@ -37,20 +37,13 @@ void UTurnActionBarrierSubsystem::Initialize(FSubsystemCollectionBase& Collectio
 void UTurnActionBarrierSubsystem::Deinitialize()
 {
     // 未完了のアクションがある場合は警告
-    for (const auto& TurnPair : TurnStates)
+    for (auto& TurnPair : TurnStates)
     {
-        int32 TurnId = TurnPair.Key;
-        const FTurnState& State = TurnPair.Value;
+        const int32 TurnId = TurnPair.Key;
+        FTurnState& State = TurnPair.Value;
+        // CompactTurnState(State);  // TODO: Implement if needed
 
-        int32 PendingCount = 0;
-        for (const auto& ActorPair : State.PendingActions)
-        {
-            if (ActorPair.Key.IsValid())
-            {
-                PendingCount += ActorPair.Value.Num();
-            }
-        }
-
+        const int32 PendingCount = State.PendingActionIds.Num();
         if (PendingCount > 0)
         {
             UE_LOG(LogTurnBarrier, Error,
@@ -87,14 +80,20 @@ void UTurnActionBarrierSubsystem::BeginTurn(int32 TurnId)
 
     // CurrentTurnIdを更新
     CurrentTurnId = TurnId;
+    CurrentKey.TurnId = TurnId;
 
     // 新しいターンの状態を初期化
     FTurnState& State = TurnStates.FindOrAdd(TurnId);
     State.TurnStartTime = FPlatformTime::Seconds();
-    State.PendingActions.Empty(); // 念のためクリア
-    State.ActionStartTimes.Empty();
+    State.PendingActionIds.Reset();
+    State.ActorToAction.Reset();
+    State.ActionToActor.Reset();
+    State.ActionStartTimes.Reset();
 
-    UE_LOG(LogTurnBarrier, Log, TEXT("[Barrier] BeginTurn: Turn=%d"), TurnId);
+    if (bEnableVerboseLogging)
+    {
+        UE_LOG(LogTurnBarrier, Log, TEXT("[Barrier] BeginTurn: Turn=%d"), TurnId);
+    }
 
     // 古いターンの掃除（2ターン以前は削除）
     RemoveOldTurns(TurnId);
@@ -281,6 +280,59 @@ int32 UTurnActionBarrierSubsystem::GetPendingActionCount(int32 TurnId) const
         }
     }
     return Count;
+}
+
+// ============================================================================
+// 冪等API: RegisterActionOnce
+// ============================================================================
+
+void UTurnActionBarrierSubsystem::RegisterActionOnce(AActor* Owner, FGuid& OutToken)
+{
+    if (!OutToken.IsValid())
+    {
+        OutToken = FGuid::NewGuid();
+    }
+
+    if (ActiveTokens.Contains(OutToken))
+    {
+        UE_LOG(LogTurnBarrier, VeryVerbose,
+            TEXT("[RegisterActionOnce] Duplicate token=%s owner=%s"),
+            *OutToken.ToString(),
+            Owner ? *Owner->GetName() : TEXT("null"));
+        return;
+    }
+
+    ActiveTokens.Add(OutToken);
+    TokenOwners.Add(OutToken, Owner);
+
+    UE_LOG(LogTurnBarrier, Verbose,
+        TEXT("[RegisterActionOnce] token=%s owner=%s"),
+        *OutToken.ToString(),
+        Owner ? *Owner->GetName() : TEXT("null"));
+}
+
+// ============================================================================
+// 冪等API: CompleteActionToken
+// ============================================================================
+
+void UTurnActionBarrierSubsystem::CompleteActionToken(const FGuid& Token)
+{
+    if (!Token.IsValid())
+    {
+        UE_LOG(LogTurnBarrier, VeryVerbose, TEXT("[CompleteActionToken] invalid token"));
+        return;
+    }
+
+    if (!ActiveTokens.Remove(Token))
+    {
+        UE_LOG(LogTurnBarrier, VeryVerbose,
+            TEXT("[CompleteActionToken] unknown token=%s"), *Token.ToString());
+        return;
+    }
+
+    TokenOwners.Remove(Token);
+    UE_LOG(LogTurnBarrier, Verbose,
+        TEXT("[CompleteActionToken] token=%s completed"), *Token.ToString());
 }
 
 // ============================================================================
@@ -562,7 +614,7 @@ void UTurnActionBarrierSubsystem::NotifyMoveFinished(AActor* Unit, int32 InTurnI
 
     if (PendingMoves <= 0)
     {
-        FireAllFinished();
+        FireAllFinished(InTurnId);
     }
 }
 
@@ -578,7 +630,7 @@ void UTurnActionBarrierSubsystem::ForceFinishBarrier()
         CurrentKey.TurnId, PendingMoves);
 
     PendingMoves = 0;
-    FireAllFinished();
+    FireAllFinished(CurrentKey.TurnId);
 }
 
 TArray<AActor*> UTurnActionBarrierSubsystem::GetNotifiedUnits() const
@@ -610,14 +662,12 @@ TArray<AActor*> UTurnActionBarrierSubsystem::GetNotifiedActorsThisTurn() const
 // 内部ヘルパー: デリゲート発火
 //==============================================================================
 
-void UTurnActionBarrierSubsystem::FireAllFinished()
+void UTurnActionBarrierSubsystem::FireAllFinished(int32 TurnId)
 {
     if (!IsServer())
     {
         return;
     }
-
-    const int32 TurnId = CurrentKey.TurnId;
 
     UE_LOG(LogTurnBarrier, Log,
         TEXT("Turn %d: FireAllFinished - Broadcasting OnAllMovesFinished"),

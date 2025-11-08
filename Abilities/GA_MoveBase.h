@@ -6,28 +6,29 @@
 #include "GameplayTagContainer.h"
 #include "GA_MoveBase.generated.h"
 
-// 蜑肴婿螳｣險
+// 蜑肴婿螳�E�險
 class AGridPathfindingLibrary;
 class AUnitBase;
 class UTurnActionBarrierSubsystem;
 class UGridOccupancySubsystem;
+class AGameTurnManagerBase;
 
 /**
  * UGA_MoveBase
- * 繝励Ξ繧､繝､繝ｼ繝ｦ繝九ャ繝医・遘ｻ蜍輔い繝薙Μ繝・ぅ
+ * 繝励Ξ繧�E�繝､繝ｼ繝ｦ繝九ャ繝医・遘ｻ蜍輔い繝薙Μ繝�EぁE
  *
- * 笘・・笘・Phase 3 蟇ｾ蠢懶ｼ・繧ｿ繧ｰ繧ｷ繧ｹ繝・Β + Barrier邨ｱ蜷茨ｼ・
+ * 笘�E・笘�EPhase 3 蟁E��蠢懶�E�・繧�E�繧�E�繧�E�繧�E�繝�E΁E+ Barrier邨�E�蜷茨�E�・
  *
  * 讖溯・:
- * - EnhancedInput邨檎罰縺ｧ繧ｫ繝｡繝ｩ逶ｸ蟇ｾ譁ｹ蜷代ｒ蜿励￠蜿悶ｊ縲√げ繝ｪ繝・ラ遘ｻ蜍輔ｒ螳溯｡・
- * - State.Moving 繧ｿ繧ｰ縺ｫ繧医ｋ蜀崎ｵｷ蜍暮亟豁｢・・ctivationBlockedTags・・
- * - 笘・・笘・State.Action.InProgress 繧ｿ繧ｰ縺ｮ邂｡逅・ｼ・A縺瑚ｲｬ莉ｻ繧呈戟縺､・・
- * - 笘・・笘・Barrier::RegisterAction() / CompleteAction() 縺ｫ繧医ｋ騾ｲ陦悟宛蠕｡
- * - 遘ｻ蜍募ｮ御ｺ・ｾ後↓ Ability.Move.Completed 繧､繝吶Φ繝医ｒ騾∽ｿ｡・医ち繝ｼ繝ｳ蜷梧悄・・
- * - 3轤ｹ隧ｰ繧∝ｯｾ蠢懶ｼ壼ｺｧ讓吶せ繝翫ャ繝励〇霆ｸ陬懈ｭ｣縲∬ｨｺ譁ｭ繝ｭ繧ｰ
- * - TurnId繧ｭ繝｣繝励メ繝｣縺ｫ繧医ｋ荳堺ｸ閾ｴ蟇ｾ遲・ *
- * 縲占ｲｬ莉ｻ遽・峇縲・ * - State.Action.InProgress 繧ｿ繧ｰ縺ｮ莉倅ｸ・蜑･螂ｪ・・wnedTags・・ * - Barrier 縺ｸ縺ｮ RegisterAction / CompleteAction 騾夂衍
- * - TurnManager 縺ｯ InProgress 繧ｿ繧ｰ縺ｫ荳蛻・ｧｦ繧峨↑縺・ */
+ * - EnhancedInput邨檎罰縺�E�繧�E�繝｡繝ｩ逶�E�蟁E��譁E��蜷代�E�蜿励�E�蜿悶�E�縲√げ繝ｪ繝�Eラ遘ｻ蜍輔ｒ螳溯�E�・
+ * - State.Moving 繧�E�繧�E�縺�E�繧医�E�蜀崎ｵ�E�蜍暮亟豁E��・・ctivationBlockedTags・・
+ * - 笘�E・笘�EState.Action.InProgress 繧�E�繧�E�縺�E�邂｡送E�E�E�・A縺瑚ｲ�E�莉ｻ繧呈戟縺�E�・・
+ * - 笘�E・笘�EBarrier::RegisterAction() / CompleteAction() 縺�E�繧医�E�騾�E�陦悟宛蠕｡
+ * - 遘ｻ蜍募�E�御�E�・�E�後�E Ability.Move.Completed 繧�E�繝吶Φ繝医�E�騾∽�E��E�・医ち繝ｼ繝ｳ蜷梧悁E�E・
+ * - 3轤�E�隧�E�繧∝ｯ�E�蠢懶�E�壼�E��E�讓吶せ繝翫ャ繝励、E���E�陬懈ｭ�E�縲∬�E��E�譁E��繝ｭ繧�E�
+ * - TurnId繧�E�繝｣繝励メ繝｣縺�E�繧医�E�荳堺�E�閾�E�蟁E��遲・ *
+ * 縲占�E��E�莉ｻ遽・峁E��・ * - State.Action.InProgress 繧�E�繧�E�縺�E�莉倁E��・蜑･螂ｪ・・wnedTags・・ * - Barrier 縺�E�縺�E� RegisterAction / CompleteAction 騾夂衁E
+ * - TurnManager 縺�E� InProgress 繧�E�繧�E�縺�E�荳蛻・�E��E�繧峨↑縺・ */
 UCLASS(Abstract, Blueprintable)
 class LYRAGAME_API UGA_MoveBase : public UGA_TurnActionBase
 {
@@ -37,7 +38,7 @@ public:
     UGA_MoveBase(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
     //--------------------------------------------------------------------------
-    // GameplayAbility 繧ｪ繝ｼ繝舌・繝ｩ繧､繝・    //--------------------------------------------------------------------------
+    // GameplayAbility 繧�E�繝ｼ繝�E・繝ｩ繧�E�繝�E    //--------------------------------------------------------------------------
 
     virtual void ActivateAbility(
         const FGameplayAbilitySpecHandle Handle,
@@ -80,14 +81,14 @@ protected:
     virtual void SendCompletionEvent(bool bTimedOut = false) override;
 
     //==========================================================================
-    // 笘・・笘・Phase 6: 繧ｿ繧､繝繧｢繧ｦ繝亥ｯｾ蠢・    //==========================================================================
+    // 笘�E・笘�EPhase 6: 繧�E�繧�E�繝繧�E�繧�E�繝亥�E��E�蠢・    //==========================================================================
 
     /**
-     * 繧｢繝薙Μ繝・ぅ髢句ｧ区凾蛻ｻ・医ち繧､繝繧｢繧ｦ繝郁ｨｺ譁ｭ逕ｨ・・     */
+     * 繧�E�繝薙Μ繝�EぁE��句�E�区凾蛻�E�・医ち繧�E�繝繧�E�繧�E�繝郁�E��E�譁E��逕ｨ・・     */
     double AbilityStartTime = 0.0;
 
     //--------------------------------------------------------------------------
-    // 險ｭ螳壹ヱ繝ｩ繝｡繝ｼ繧ｿ
+    // 險�E�螳壹ヱ繝ｩ繝｡繝ｼ繧�E�
     //--------------------------------------------------------------------------
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Move")
@@ -102,14 +103,14 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Move")
     float GridSize = 100.0f;
 
-    /** 繧｢繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ繧偵せ繧ｭ繝・・縺吶ｋ霍晞屬髢ｾ蛟､・・=蟶ｸ縺ｫ繧｢繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ蜀咲函・・*/
+    /** 繧�E�繝九Γ繝ｼ繧�E�繝ｧ繝ｳ繧偵せ繧�E�繝�E・縺吶�E�霍晞屬髢�E�蛟､・・=蟶�E�縺�E�繧�E�繝九Γ繝ｼ繧�E�繝ｧ繝ｳ蜀咲函・・*/
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Move|Animation")
-    float SkipAnimIfUnderDistance = 0.0f;  // 笘・・笘・繝・ヵ繧ｩ繝ｫ繝・縺ｫ螟画峩・壼ｸｸ縺ｫ繧｢繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ蜀咲函 笘・・笘・
+    float SkipAnimIfUnderDistance = 0.0f;  // 笘�E・笘�E繝�Eヵ繧�E�繝ｫ繝�E縺�E�螟画峩・壼�E��E�縺�E�繧�E�繝九Γ繝ｼ繧�E�繝ｧ繝ｳ蜀咲函 笘�E・笘�E
     UPROPERTY(EditDefaultsOnly, Category = "GAS|Tags")
     FGameplayTag StateMovingTag = FGameplayTag::RequestGameplayTag(TEXT("State.Moving"));
 
     //--------------------------------------------------------------------------
-    // 蜀・Κ迥ｶ諷具ｼ・lueprintReadOnly - 繝・ヰ繝・げ逕ｨ・・    //--------------------------------------------------------------------------
+    // 蜀・Κ迥�E�諷具�E�・lueprintReadOnly - 繝�Eヰ繝�Eげ逕ｨ・・    //--------------------------------------------------------------------------
 
     UPROPERTY(BlueprintReadOnly, Category = "Move|State")
     FVector Direction = FVector::ZeroVector;
@@ -129,54 +130,58 @@ protected:
     UPROPERTY(BlueprintReadOnly, Category = "Move|State")
     float CurrentSpeed = 0.0f;
 
-    //--------------------------------------------------------------------------
-    // C++蜀・Κ螳溯｣・    //--------------------------------------------------------------------------
+    int32 CompletedTurnIdForEvent = INDEX_NONE;
 
-    /** EventData縺九ｉDirection謚ｽ蜃ｺ */
+    //--------------------------------------------------------------------------
+    // C++蜀・Κ螳溯�E�・    //--------------------------------------------------------------------------
+
+    /** EventData縺九ｉDirection謚ｽ蜁E�� */
     bool ExtractDirectionFromEventData(const FGameplayEventData* EventData, FVector& OutDirection);
 
-    /** 8譁ｹ蜷鷹㍼蟄仙喧 */
+    /** 8譁E��蜷鷹㍼蟁E��喧 */
     FVector2D QuantizeToGridDirection(const FVector& InDirection);
 
-    /** 繧ｰ繝ｪ繝・ラ蠎ｧ讓呵ｨ育ｮ・*/
+    /** 繧�E�繝ｪ繝�Eラ蠎ｧ讓呵�E�育�E�・*/
     FVector CalculateNextTilePosition(const FVector& CurrentPosition, const FVector2D& Dir);
 
     /**
-     * 遘ｻ蜍募庄閭ｽ蛻､螳夲ｼ・轤ｹ隧ｰ繧∝ｯｾ蠢懃沿・・     */
+     * 遘ｻ蜍募庁E���E�蛻�E�螳夲�E�・轤�E�隧�E�繧∝ｯ�E�蠢懁E��・・     */
     bool IsTileWalkable(const FVector& TilePosition, AUnitBase* Self = nullptr);
 
-    /** 繧ｰ繝ｪ繝・ラ迥ｶ諷区峩譁ｰ */
+    /** 繧�E�繝ｪ繝�Eラ迥�E�諷区峩譁E�� */
     void UpdateGridState(const FVector& Position, int32 Value);
 
-    /** 蜊譛峨・繧ｵ繝悶す繧ｹ繝・Β縺ｫ莉ｻ縺帙ｋ・域立UpdateGridState縺ｮ莉｣譖ｿ・・*/
+    /** 蜊譛峨・繧�E�繝悶す繧�E�繝�EΒ縺�E�莉ｻ縺帙ｋ�E域立UpdateGridState縺�E�莉｣譖ｿ・・*/
     void UpdateOccupancy(AActor* Unit, const FIntPoint& NewCell);
 
-    /** 豁ｩ陦悟庄蜷ｦ縺ｯOccupancy/DistanceField縺ｫ蟋碑ｭｲ */
+    /** 豁E��陦悟庁E���E�縺�E�Occupancy/DistanceField縺�E�蟋碑ｭ�E� */
     bool IsTileWalkable(const FIntPoint& Cell) const;
 
-    /** 蝗櫁ｻ｢隗貞ｺｦ繧・5蠎ｦ蜊倅ｽ阪↓荳ｸ繧√ｋ */
+    /** 蝗櫁E���E�隗貞ｺ�E�繧・5蠎ｦ蜊倁E��阪↓荳�E�繧√ａE*/
     float RoundYawTo45Degrees(float Yaw);
 
-    /** 繝・Μ繧ｲ繝ｼ繝医ヰ繧､繝ｳ繝・*/
+    /** 繝�EΜ繧�E�繝ｼ繝医ヰ繧�E�繝ｳ繝�E*/
     void BindMoveFinishedDelegate();
 
-    /** 遘ｻ蜍募ｮ御ｺ・さ繝ｼ繝ｫ繝舌ャ繧ｯ */
+    /** 遘ｻ蜍募�E�御�E�・さ繝ｼ繝ｫ繝�Eャ繧�E� */
     UFUNCTION()
     void OnMoveFinished(AUnitBase* Unit);
 
-    /** 繧ｻ繝ｫ蠎ｧ讓呎欠螳壹〒縺ｮ遘ｻ蜍暮幕蟋具ｼ域雰繝ｦ繝九ャ繝育畑・・*/
+    /** 繧�E�繝ｫ蠎ｧ讓呎欠螳壹〒縺�E�遘ｻ蜍暮幕蟋具�E�域雰繝ｦ繝九ャ繝育畑�E・*/
     void StartMoveToCell(const FIntPoint& TargetCell);
 
     //--------------------------------------------------------------------------
-    // 3轤ｹ隧ｰ繧・ｼ壼ｺｧ讓呎ｭ｣隕丞喧繝ｻ險ｺ譁ｭ繝ｦ繝ｼ繝・ぅ繝ｪ繝・ぅ
+    // 3轤�E�隧�E�繧・�E�壼�E��E�讓呎�E��E�隕丞喧繝ｻ險�E�譁E��繝ｦ繝ｼ繝�EぁE��ｪ繝�EぁE
     //--------------------------------------------------------------------------
 
     FVector SnapToCellCenter(const FVector& WorldPos) const;
+    FVector SnapToCellCenterFixedZ(const FVector& WorldPos, float FixedZ) const;
+    float ComputeFixedZ(const AUnitBase* Unit, const AGridPathfindingLibrary* PathFinder) const;
     FVector AlignZToGround(const FVector& WorldPos, float TraceUp = 200.0f, float TraceDown = 2000.0f) const;
     void DebugDumpAround(const FIntPoint& Center);
 
     //--------------------------------------------------------------------------
-    // Blueprint諡｡蠑ｵ繝昴う繝ｳ繝茨ｼ医い繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ蛻ｶ蠕｡・・    //--------------------------------------------------------------------------
+    // Blueprint諡�E�蠑ｵ繝昴ぁE��ｳ繝茨�E�医ぁE��九Γ繝ｼ繧�E�繝ｧ繝ｳ蛻�E�蠕｡・・    //--------------------------------------------------------------------------
 
     UFUNCTION(BlueprintImplementableEvent, Category = "Move|Animation")
     void ExecuteMoveAnimation(const TArray<FVector>& Path);
@@ -187,50 +192,82 @@ protected:
 
 private:
     //--------------------------------------------------------------------------
-    // 笘・・笘・Phase 3: Barrier邨ｱ蜷医→InProgress繧ｿ繧ｰ邂｡逅・    //--------------------------------------------------------------------------
+    // 笘�E・笘�EPhase 3: Barrier邨�E�蜷医→InProgress繧�E�繧�E�邂｡送E�E    //--------------------------------------------------------------------------
 
     /**
-     * 繧｢繝薙Μ繝・ぅ髢句ｧ区凾縺ｮTurnId
-     * Barrier::RegisterAction() 縺ｨ CompleteAction() 縺ｧ菴ｿ逕ｨ
+     * 繧�E�繝薙Μ繝�EぁE��句�E�区凾縺�E�TurnId
+     * Barrier::RegisterAction() 縺�E� CompleteAction() 縺�E�菴�E�逕ｨ
      */
     int32 MoveTurnId = INDEX_NONE;
 
     /**
-     * 笘・・笘・譁ｰ隕剰ｿｽ蜉: 繧｢繝薙Μ繝・ぅ縺ｮActionID
-     * Barrier::RegisterAction() 縺ｧ蜿門ｾ・     * Barrier::CompleteAction() 縺ｧ菴ｿ逕ｨ
+     * 笘�E・笘�E譁E��隕剰�E��E�蜉: 繧�E�繝薙Μ繝�EぁE���E�ActionID
+     * Barrier::RegisterAction() 縺�E�蜿門�E�・     * Barrier::CompleteAction() 縺�E�菴�E�逕ｨ
      */
     FGuid MoveActionId;
 
+    /**
+     * ☁E�E☁EHotfix: Barrier二重登録防止フラグ
+     * RegisterBarrier()が同一インスタンスで褁E��回呼ばれても登録は1回�Eみ
+     */
+    bool bBarrierRegistered = false;
+
+    /**
+     * ★★★ Token方式: Barrier完了トークン（冪等Complete用）
+     */
+    UPROPERTY(Transient)
+    FGuid BarrierToken;
+
+    /**
+     * ★★★ Token方式: Barrierサブシステムのキャッシュ
+     */
+    mutable TWeakObjectPtr<UTurnActionBarrierSubsystem> CachedBarrier;
+
+    /**
+     * ★★★ Token方式: ワールドからBarrier取得（キャッシュ付き）
+     */
+    UTurnActionBarrierSubsystem* GetBarrierSubsystem() const;
+
     //--------------------------------------------------------------------------
-    // State.Moving 繧ｿ繧ｰ・亥・襍ｷ蜍暮亟豁｢・・    //--------------------------------------------------------------------------
+    // State.Moving 繧�E�繧�E�・亥・襍ｷ蜍暮亟豁E��・・    //--------------------------------------------------------------------------
 
     UPROPERTY()
     FGameplayTag TagStateMoving;
 
     //--------------------------------------------------------------------------
-    // PathFinder繝ｻ繝・Μ繧ｲ繝ｼ繝・    //--------------------------------------------------------------------------
+    // PathFinder繝ｻ繝�EΜ繧�E�繝ｼ繝�E    //--------------------------------------------------------------------------
 
     UPROPERTY()
     mutable TWeakObjectPtr<class AGridPathfindingLibrary> CachedPathFinder;
+    mutable TWeakObjectPtr<AGameTurnManagerBase> CachedTurnManager;
 
     /**
-     * PathFinder縺ｮ蜿門ｾ励ｒ荳邂・園縺ｫ髮・ｴ・     */
+     * PathFinder縺�E�蜿門�E�励�E�荳邂�E園縺�E�髮・�E�・     */
     const class AGridPathfindingLibrary* GetPathFinder() const;
+    AGameTurnManagerBase* GetTurnManager() const;
 
     FDelegateHandle MoveFinishedHandle;
 
     //--------------------------------------------------------------------------
-    // 遘ｻ蜍暮幕蟋倶ｽ咲ｽｮ・医Ρ繝ｼ繝ｫ繝牙ｺｧ讓呻ｼ会ｼ・ridOccupancy隗｣謾ｾ逕ｨ・・    //--------------------------------------------------------------------------
+    // 遘ｻ蜍暮幕蟋倶�E�咲�E��E�・医Ρ繝ｼ繝ｫ繝牙�E��E�讓呻�E�会ｼ・ridOccupancy隗｣謾�E�逕ｨ・・    //--------------------------------------------------------------------------
 
     FVector CachedStartLocWS = FVector::ZeroVector;
 
     //--------------------------------------------------------------------------
-    // 繧ｭ繝｣繝・す繝･螟画焚・・nMoveFinished 縺ｧ菴ｿ逕ｨ・・    //--------------------------------------------------------------------------
+    // 繧�E�繝｣繝�Eす繝･螟画焚�E・nMoveFinished 縺�E�菴�E�逕ｨ・・    //--------------------------------------------------------------------------
 
     FGameplayAbilitySpecHandle CachedSpecHandle;
     FGameplayAbilityActorInfo CachedActorInfo;
     FGameplayAbilityActivationInfo CachedActivationInfo;
     FVector CachedFirstLoc = FVector::ZeroVector;
 
+    // ☁E�E☁ESparky修正: 再�E防止フラグ ☁E�E☁E
+    bool bIsEnding = false;
+
     bool RegisterBarrier(AActor* Avatar);
+
+    /** こ�EアビリチE��インスタンスが積んだInProgressタグの数 */
+    UPROPERTY(Transient)
+    int32 InProgressStack = 0;
 };
+

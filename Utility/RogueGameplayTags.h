@@ -66,6 +66,9 @@ namespace RogueGameplayTags
     LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Gameplay_Event_Turn_Ability_Started);
     LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayEvent_Enemy_ActionFinished);
     LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayEvent_Turn_StartMove);
+    LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayEvent_Intent_Move);
+    LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayEvent_Intent_Attack);
+    LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayEvent_Intent_Wait);
 
     // State tags -------------------------------------------------------------
     LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Ability_Executing);
