@@ -109,7 +109,7 @@ void ADungeonFloorGenerator::GenerateWithTemplate(UDungeonTemplateAsset* Templat
 
 void ADungeonFloorGenerator::ResetGrid(ECellType Fill)
 {
-    mGrid.Init(static_cast<int32>(Fill), GridWidth * GridHeight);
+    GridCells.Init(static_cast<int32>(Fill), GridWidth * GridHeight);
 }
 
 void ADungeonFloorGenerator::EnsureOuterWall()
@@ -121,13 +121,13 @@ void ADungeonFloorGenerator::EnsureOuterWall()
 void ADungeonFloorGenerator::SetCellXY(int32 X, int32 Y, ECellType Type)
 {
     if (!InBounds(X, Y)) return;
-    mGrid[Index(X, Y)] = static_cast<int32>(Type);
+    GridCells[Index(X, Y)] = static_cast<int32>(Type);
 }
 
 ECellType ADungeonFloorGenerator::GetCellXY(int32 X, int32 Y) const
 {
     if (!InBounds(X, Y)) return ECellType::Wall;
-    return static_cast<ECellType>(mGrid[Index(X, Y)]);
+    return static_cast<ECellType>(GridCells[Index(X, Y)]);
 }
 
 void ADungeonFloorGenerator::CarveLineX(const FIntPoint& A, const FIntPoint& B, ECellType Type)
@@ -527,14 +527,14 @@ bool ADungeonFloorGenerator::GenerateFallbackLayout(const FDungeonResolvedParams
 
 int32 ADungeonFloorGenerator::ComputeRoomClusterCount() const
 {
-    if (GridWidth <= 0 || GridHeight <= 0 || mGrid.Num() != GridWidth * GridHeight)
+    if (GridWidth <= 0 || GridHeight <= 0 || GridCells.Num() != GridWidth * GridHeight)
     {
         return 0;
     }
 
     const int32 RoomValue = static_cast<int32>(ECellType::Room);
     TArray<uint8> Visited;
-    Visited.Init(0, mGrid.Num());
+    Visited.Init(0, GridCells.Num());
     int32 ClusterCount = 0;
 
     for (int32 Y = 0; Y < GridHeight; ++Y)
@@ -542,7 +542,7 @@ int32 ADungeonFloorGenerator::ComputeRoomClusterCount() const
         for (int32 X = 0; X < GridWidth; ++X)
         {
             const int32 IndexValue = Index(X, Y);
-            if (Visited[IndexValue] || mGrid[IndexValue] != RoomValue)
+            if (Visited[IndexValue] || GridCells[IndexValue] != RoomValue)
             {
                 continue;
             }
@@ -568,7 +568,7 @@ int32 ADungeonFloorGenerator::ComputeRoomClusterCount() const
                     }
 
                     const int32 NeighborIdx = Index(NX, NY);
-                    if (Visited[NeighborIdx] || mGrid[NeighborIdx] != RoomValue)
+                    if (Visited[NeighborIdx] || GridCells[NeighborIdx] != RoomValue)
                     {
                         continue;
                     }
@@ -620,7 +620,7 @@ int32 ADungeonFloorGenerator::ReturnGridStatus(FVector InputVector) const
     const int32 X = FMath::FloorToInt(InputVector.X / float(CellSize));
     const int32 Y = FMath::FloorToInt(InputVector.Y / float(CellSize));
     if (!InBounds(X, Y)) return -999;
-    return mGrid[Index(X, Y)];
+    return GridCells[Index(X, Y)];
 }
 
 void ADungeonFloorGenerator::GridChangeVector(FVector InputVector, int32 Value)
@@ -628,7 +628,7 @@ void ADungeonFloorGenerator::GridChangeVector(FVector InputVector, int32 Value)
     const int32 X = FMath::FloorToInt(InputVector.X / float(CellSize));
     const int32 Y = FMath::FloorToInt(InputVector.Y / float(CellSize));
     if (!InBounds(X, Y)) return;
-    mGrid[Index(X, Y)] = Value;
+    GridCells[Index(X, Y)] = Value;
 }
 
 void ADungeonFloorGenerator::GetGenerationStats(int32& OutRoomCount, int32& OutWalkableCount, float& OutReachability)

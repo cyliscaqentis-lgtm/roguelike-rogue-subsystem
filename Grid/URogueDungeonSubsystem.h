@@ -56,6 +56,9 @@ protected:
     UPROPERTY(Transient)
     TObjectPtr<ADungeonFloorGenerator> FloorGenerator = nullptr;
 
+    UPROPERTY(Transient)
+    TObjectPtr<class ADungeonConfigActor> CachedConfigActor = nullptr;
+
     bool bDungeonGenerationStarted = false;
 
     UPROPERTY(Transient)
@@ -67,6 +70,7 @@ protected:
     void EnsureFloorGenerator();
     void EnsureRenderComponent();
     void EnsureRenderComponentFromPlacedActor();
+    void EnsureConfigActor();
 
     /** Starts the actual generation process using a loaded config asset. */
     void StartGenerate(const URogueFloorConfigData* Cfg);
