@@ -61,11 +61,6 @@ bool UTurnActionBarrierSubsystem::IsServer() const
     return World && World->GetAuthGameMode() != nullptr;
 }
 
-TStatId UTurnActionBarrierSubsystem::GetStatId() const
-{
-    RETURN_QUICK_DECLARE_CYCLE_STAT(UTurnActionBarrierSubsystem, STATGROUP_Tickables);
-}
-
 // ============================================================================
 // 公開API: BeginTurn
 // ============================================================================
