@@ -213,10 +213,15 @@ public:
     FLinearColor TeamNColor = FLinearColor(0.61f, 0.245f, 0.198f, 1.f);
 
 protected:
+    virtual void PostInitializeComponents() override;
     virtual void BeginPlay() override;
     virtual void Tick(float DeltaSeconds) override;
     virtual void NotifyActorBeginCursorOver() override;
     virtual void NotifyActorEndCursorOver() override;
+
+    // ★★★ AbilitySystem初期化コールバック（2025-11-09追加） ★★★
+    virtual void OnAbilitySystemInitialized();
+    virtual void OnAbilitySystemUninitialized();
 
     // ✅ Team同期（Controller/PSからの反映）
     virtual void OnRep_Controller() override;
@@ -231,6 +236,10 @@ protected:
     void ApplyTeamColor();
     void UpdateValidSelectionColor();
     void ApplyMovementSpeedFromStats();
+
+    // ★★★ AbilitySet付与（2025-11-09追加） ★★★
+    void GrantAbilitySetsIfNeeded();
+    bool bGrantedAbilitySets = false;
 
 protected:
     // 移動状態

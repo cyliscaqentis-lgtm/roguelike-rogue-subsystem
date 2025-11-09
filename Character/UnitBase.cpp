@@ -3,6 +3,7 @@
 
 #include "UnitBase.h"
 #include "AbilitySystem/LyraAbilitySystemComponent.h"
+#include "AbilitySystem/LyraAbilitySet.h"
 #include "Player/LyraPlayerState.h"
 #include "GenericTeamAgentInterface.h"
 #include "AIController.h"
@@ -42,6 +43,161 @@ AUnitBase::AUnitBase(const FObjectInitializer& ObjectInitializer)
 }
 
 //------------------------------------------------------------------------------
+// PostInitializeComponents - AbilitySystem初期化コールバック登録
+//------------------------------------------------------------------------------
+void AUnitBase::PostInitializeComponents()
+{
+    Super::PostInitializeComponents();
+
+    // ★★★ 重要: PawnExtensionにAbilitySystem初期化コールバックを登録 ★★★
+    // これがないとOnAbilitySystemInitialized()が呼ばれない！
+    if (ULyraPawnExtensionComponent* PawnExt = FindComponentByClass<ULyraPawnExtensionComponent>())
+    {
+        PawnExt->OnAbilitySystemInitialized_RegisterAndCall(
+            FSimpleMulticastDelegate::FDelegate::CreateUObject(this, &ThisClass::OnAbilitySystemInitialized));
+        PawnExt->OnAbilitySystemUninitialized_Register(
+            FSimpleMulticastDelegate::FDelegate::CreateUObject(this, &ThisClass::OnAbilitySystemUninitialized));
+
+        UE_LOG(LogUnitBase, Warning, TEXT("[PostInitializeComponents] ✅ ASC callbacks registered for %s"), *GetName());
+    }
+    else
+    {
+        UE_LOG(LogUnitBase, Error, TEXT("[PostInitializeComponents] ❌ PawnExtension not found on %s!"), *GetName());
+    }
+}
+
+//------------------------------------------------------------------------------
+// OnAbilitySystemInitialized - ASC初期化完了時のコールバック
+//------------------------------------------------------------------------------
+void AUnitBase::OnAbilitySystemInitialized()
+{
+    UE_LOG(LogUnitBase, Warning, TEXT("[OnAbilitySystemInitialized] ========== START: %s =========="), *GetName());
+
+    UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+    if (!ASC)
+    {
+        UE_LOG(LogUnitBase, Error, TEXT("[OnAbilitySystemInitialized] ❌ ASC is NULL for %s"), *GetName());
+        return;
+    }
+
+    ULyraAbilitySystemComponent* LyraASC = Cast<ULyraAbilitySystemComponent>(ASC);
+    if (!LyraASC)
+    {
+        UE_LOG(LogUnitBase, Error, TEXT("[OnAbilitySystemInitialized] ❌ Not a LyraASC for %s"), *GetName());
+        return;
+    }
+
+    // ★★★ 重要: AbilitySetを先に付与してからHealthComponentを初期化 ★★★
+    GrantAbilitySetsIfNeeded();
+
+    // デバッグ: AttributeSet が正しく付与されたか確認
+    const TArray<UAttributeSet*>& AttrSets = LyraASC->GetSpawnedAttributes();
+    UE_LOG(LogUnitBase, Warning, TEXT("[OnAbilitySystemInitialized] ASC has %d AttributeSets"), AttrSets.Num());
+
+    // HealthSet の存在確認
+    bool bHasHealthSet = false;
+    for (const UAttributeSet* AttrSet : AttrSets)
+    {
+        if (AttrSet && AttrSet->GetClass()->GetName().Contains(TEXT("Health")))
+        {
+            bHasHealthSet = true;
+            UE_LOG(LogUnitBase, Log, TEXT("[OnAbilitySystemInitialized]   - Found HealthSet: %s"), *AttrSet->GetClass()->GetName());
+            break;
+        }
+    }
+
+    if (!bHasHealthSet)
+    {
+        UE_LOG(LogUnitBase, Warning, TEXT("[OnAbilitySystemInitialized] ⚠️ HealthSet not found (may be okay for some units)"));
+    }
+
+    // HealthComponentの初期化（HealthSet付与後）
+    if (ULyraHealthComponent* HealthComp = FindComponentByClass<ULyraHealthComponent>())
+    {
+        if (bHasHealthSet)
+        {
+            HealthComp->InitializeWithAbilitySystem(LyraASC);
+            UE_LOG(LogUnitBase, Log, TEXT("[OnAbilitySystemInitialized] ✅ HealthComponent initialized for %s"), *GetName());
+        }
+        else
+        {
+            UE_LOG(LogUnitBase, Warning, TEXT("[OnAbilitySystemInitialized] ⚠️ Skipping HealthComponent init (no HealthSet)"));
+        }
+    }
+
+    UE_LOG(LogUnitBase, Warning, TEXT("[OnAbilitySystemInitialized] ========== END: %s =========="), *GetName());
+}
+
+//------------------------------------------------------------------------------
+// OnAbilitySystemUninitialized - ASC破棄時のコールバック
+//------------------------------------------------------------------------------
+void AUnitBase::OnAbilitySystemUninitialized()
+{
+    if (ULyraHealthComponent* HealthComp = FindComponentByClass<ULyraHealthComponent>())
+    {
+        HealthComp->UninitializeFromAbilitySystem();
+        UE_LOG(LogUnitBase, Log, TEXT("[OnAbilitySystemUninitialized] ✅ HealthComponent uninitialized for %s"), *GetName());
+    }
+}
+
+//------------------------------------------------------------------------------
+// GrantAbilitySetsIfNeeded - PawnDataからAbilitySetを付与
+//------------------------------------------------------------------------------
+void AUnitBase::GrantAbilitySetsIfNeeded()
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    if (bGrantedAbilitySets)
+    {
+        UE_LOG(LogUnitBase, Verbose, TEXT("[GrantAbilitySets] Already granted for %s"), *GetName());
+        return;
+    }
+
+    UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+    if (!ASC)
+    {
+        UE_LOG(LogUnitBase, Warning, TEXT("[GrantAbilitySets] ASC missing on %s"), *GetName());
+        return;
+    }
+
+    // PawnDataをPawnExtensionから取得
+    const ULyraPawnData* PawnData = nullptr;
+    if (ULyraPawnExtensionComponent* PawnExt = FindComponentByClass<ULyraPawnExtensionComponent>())
+    {
+        PawnData = PawnExt->GetPawnData<ULyraPawnData>();
+    }
+
+    if (!PawnData)
+    {
+        UE_LOG(LogUnitBase, Warning, TEXT("[GrantAbilitySets] PawnData missing on %s (may be set later)"), *GetName());
+        return;
+    }
+
+    // AbilitySetsを付与
+    int32 AbilityCount = 0;
+    for (const ULyraAbilitySet* AbilitySet : PawnData->AbilitySets)
+    {
+        if (AbilitySet)
+        {
+            AbilitySet->GiveToAbilitySystem(ASC, nullptr);
+            AbilityCount++;
+            UE_LOG(LogUnitBase, Log, TEXT("[GrantAbilitySets] AbilitySet granted: %s for %s"),
+                *AbilitySet->GetName(), *GetName());
+        }
+    }
+
+    UE_LOG(LogUnitBase, Warning, TEXT("[GrantAbilitySets] ✅ Abilities=%d AttrSets=%d for %s"),
+        ASC->GetActivatableAbilities().Num(),
+        ASC->GetSpawnedAttributes().Num(),
+        *GetName());
+
+    bGrantedAbilitySets = true;
+}
+
+//------------------------------------------------------------------------------
 // GetAbilitySystemComponent・・layerState縺ｮASC繧定ｿ斐☆・・
 //------------------------------------------------------------------------------
 UAbilitySystemComponent* AUnitBase::GetAbilitySystemComponent() const
@@ -61,33 +217,8 @@ void AUnitBase::BeginPlay()
 {
     Super::BeginPlay();
 
-    // ★★★ ASC/Health初期化順序の保証（サーバーのみ） ★★★
-    if (HasAuthority())
-    {
-        if (ULyraPawnExtensionComponent* Ext = FindComponentByClass<ULyraPawnExtensionComponent>())
-        {
-            // PawnDataチェック（BP漏れ対策）
-            const ULyraPawnData* PD = Ext->GetPawnData<ULyraPawnData>();
-            if (!PD)
-            {
-                UE_LOG(LogUnitBase, Warning, TEXT("UnitBase: PawnData is null on %s"), *GetName());
-            }
-
-            // ASC → Health の順で初期化（二重初期化ガードにより安全）
-            // GetAbilitySystemComponent() は親クラス（Character）のメソッドを使用
-            if (UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
-            {
-                if (ULyraAbilitySystemComponent* LyraASC = Cast<ULyraAbilitySystemComponent>(ASC))
-                {
-                    Ext->InitializeAbilitySystem(LyraASC, this);
-                    if (ULyraHealthComponent* Health = FindComponentByClass<ULyraHealthComponent>())
-                    {
-                        Health->InitializeWithAbilitySystem(LyraASC);
-                    }
-                }
-            }
-        }
-    }
+    // ★★★ 注意: ASC/Health初期化は OnAbilitySystemInitialized() で行われる ★★★
+    // PostInitializeComponents() で登録したコールバックが自動的に呼ばれる
 
     // 笘・・笘・險ｺ譁ｭ・咤eginPlay蜑阪・蛟､繧堤｢ｺ隱・笘・・笘・
     UE_LOG(LogUnitBase, Error, 
