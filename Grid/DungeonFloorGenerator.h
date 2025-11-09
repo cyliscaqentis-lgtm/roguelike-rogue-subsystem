@@ -81,7 +81,7 @@ public:
     ADungeonFloorGenerator();
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Grid")
-    TArray<int32> mGrid;
+    TArray<int32> GridCells;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Grid")
     int32 GridWidth = 64;

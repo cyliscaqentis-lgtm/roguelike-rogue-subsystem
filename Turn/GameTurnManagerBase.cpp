@@ -9,6 +9,12 @@
 #include "Grid/GridOccupancySubsystem.h"
 #include "AI/Enemy/EnemyTurnDataSubsystem.h"
 #include "Turn/TurnSystemTypes.h"
+#include "Turn/TurnCommandHandler.h"
+#include "Turn/TurnEventDispatcher.h"
+#include "Turn/TurnDebugSubsystem.h"
+#include "Turn/TurnFlowCoordinator.h"
+#include "Turn/PlayerInputProcessor.h"
+#include "Utility/GridUtils.h"
 #include "Utility/RogueGameplayTags.h"
 #include "Debug/TurnSystemInterfaces.h"
 #include "AbilitySystemGlobals.h"
@@ -100,6 +106,47 @@ void AGameTurnManagerBase::InitializeTurnSystem()
     }
 
     UE_LOG(LogTurnManager, Log, TEXT("InitializeTurnSystem: Starting..."));
+
+    //==========================================================================
+    // ★★★ 新規: Subsystem初期化（2025-11-09リファクタリング） ★★★
+    //==========================================================================
+    UWorld* World = GetWorld();
+    if (World)
+    {
+        CommandHandler = World->GetSubsystem<UTurnCommandHandler>();
+        EventDispatcher = World->GetSubsystem<UTurnEventDispatcher>();
+        DebugSubsystem = World->GetSubsystem<UTurnDebugSubsystem>();
+        TurnFlowCoordinator = World->GetSubsystem<UTurnFlowCoordinator>();
+        PlayerInputProcessor = World->GetSubsystem<UPlayerInputProcessor>();
+
+        if (!CommandHandler)
+        {
+            UE_LOG(LogTurnManager, Error, TEXT("Failed to get UTurnCommandHandler subsystem"));
+        }
+        if (!EventDispatcher)
+        {
+            UE_LOG(LogTurnManager, Error, TEXT("Failed to get UTurnEventDispatcher subsystem"));
+        }
+        if (!DebugSubsystem)
+        {
+            UE_LOG(LogTurnManager, Error, TEXT("Failed to get UTurnDebugSubsystem subsystem"));
+        }
+        if (!TurnFlowCoordinator)
+        {
+            UE_LOG(LogTurnManager, Error, TEXT("Failed to get UTurnFlowCoordinator subsystem"));
+        }
+        if (!PlayerInputProcessor)
+        {
+            UE_LOG(LogTurnManager, Error, TEXT("Failed to get UPlayerInputProcessor subsystem"));
+        }
+
+        UE_LOG(LogTurnManager, Log, TEXT("Subsystems initialized: CommandHandler=%s, EventDispatcher=%s, DebugSubsystem=%s, TurnFlowCoordinator=%s, PlayerInputProcessor=%s"),
+            CommandHandler ? TEXT("OK") : TEXT("FAIL"),
+            EventDispatcher ? TEXT("OK") : TEXT("FAIL"),
+            DebugSubsystem ? TEXT("OK") : TEXT("FAIL"),
+            TurnFlowCoordinator ? TEXT("OK") : TEXT("FAIL"),
+            PlayerInputProcessor ? TEXT("OK") : TEXT("FAIL"));
+    }
 
     //==========================================================================
     // Step 1: CachedPlayerPawn
@@ -646,12 +693,35 @@ void AGameTurnManagerBase::BuildAllObservations()
 void AGameTurnManagerBase::NotifyPlayerInputReceived()
 {
     UE_LOG(LogTurnManager, Log, TEXT("[Turn%d]NotifyPlayerInputReceived"), CurrentTurnIndex);
-    OnPlayerInputReceived.Broadcast();
+
+    // ★★★ Phase 1: EventDispatcher経由でイベント配信（2025-11-09） ★★★
+    // ★★★ Week 1: UPlayerInputProcessorに委譲（2025-11-09リファクタリング）
+    if (PlayerInputProcessor)
+    {
+        PlayerInputProcessor->NotifyPlayerInputReceived();
+    }
+
+    if (EventDispatcher)
+    {
+        EventDispatcher->BroadcastPlayerInputReceived();
+    }
+    else
+    {
+        // Fallback: 後方互換性
+        OnPlayerInputReceived.Broadcast();
+    }
+
     // 二重進行防止�E�ここで征E��ゲートを閉じてから継綁E
     if (WaitingForPlayerInput)
     {
         WaitingForPlayerInput = false;
         ApplyWaitInputGate(false);
+
+        // ★★★ コアシステム: CommandHandler経由でInput Window終了（2025-11-09） ★★★
+        if (CommandHandler)
+        {
+            CommandHandler->EndInputWindow();
+        }
     }
     ContinueTurnAfterInput();
 }
@@ -780,7 +850,15 @@ void AGameTurnManagerBase::BuildObservations_Implementation()
 
 void AGameTurnManagerBase::StartTurn()
 {
-    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] StartTurn called"), CurrentTurnIndex);
+    // ★★★ Week 1: UTurnFlowCoordinatorに転送（2025-11-09リファクタリング）
+    if (TurnFlowCoordinator)
+    {
+        TurnFlowCoordinator->StartTurn();
+    }
+    else
+    {
+        UE_LOG(LogTurnManager, Error, TEXT("[StartTurn] TurnFlowCoordinator not available!"));
+    }
 }
 
 void AGameTurnManagerBase::RunTurn()
@@ -847,9 +925,27 @@ void AGameTurnManagerBase::RunTurn()
 // ========== 修正�E�PhaseManagerに委譲 ==========
 void AGameTurnManagerBase::BeginPhase(FGameplayTag PhaseTag)
 {
+    // ★★★ Phase 1: フェーズ変更イベント配信（2025-11-09） ★★★
+    FGameplayTag OldPhase = CurrentPhase;
     CurrentPhase = PhaseTag;
     PhaseStartTime = FPlatformTime::Seconds();
-    UE_LOG(LogTurnPhase, Log, TEXT("PhaseStart:%s"), *PhaseTag.ToString());
+
+    // EventDispatcher経由でフェーズ変更を通知
+    if (EventDispatcher)
+    {
+        EventDispatcher->BroadcastPhaseChanged(OldPhase, PhaseTag);
+    }
+
+    // DebugSubsystem経由でログ記録
+    if (DebugSubsystem)
+    {
+        DebugSubsystem->LogPhaseTransition(OldPhase, PhaseTag);
+    }
+    else
+    {
+        // Fallback: 直接ログ
+        UE_LOG(LogTurnPhase, Log, TEXT("PhaseStart:%s"), *PhaseTag.ToString());
+    }
 
     if (PhaseTag == Phase_Player_Wait)
     {
@@ -984,6 +1080,22 @@ void AGameTurnManagerBase::CollectEnemies_Implementation()
     UE_LOG(LogTurnManager, Warning, TEXT("[CollectEnemies] ==== START ===="));
     UE_LOG(LogTurnManager, Warning, TEXT("[CollectEnemies] Before: CachedEnemies.Num()=%d"), CachedEnemies.Num());
 
+    // ★★★ Phase 4: UEnemyAISubsystem経由でEnemy収集（2025-11-09） ★★★
+    if (EnemyAISubsystem)
+    {
+        TArray<AActor*> CollectedEnemies;
+        EnemyAISubsystem->CollectAllEnemies(CachedPlayerPawn, CollectedEnemies);
+
+        CachedEnemies.Empty();
+        CachedEnemies = CollectedEnemies;
+
+        UE_LOG(LogTurnManager, Warning, TEXT("[CollectEnemies] EnemyAISubsystem collected %d enemies"), CachedEnemies.Num());
+        return;
+    }
+
+    // ★★★ Fallback: 既存のロジック（EnemyAISubsystemがない場合） ★★★
+    UE_LOG(LogTurnManager, Warning, TEXT("[CollectEnemies] EnemyAISubsystem not available, using fallback"));
+
     // ☁E�E☁EAPawnで検索�E�Encludeが不要E��E☁E�E☁E
     TArray<AActor*> Found;
     UGameplayStatics::GetAllActorsOfClass(GetWorld(), APawn::StaticClass(), Found);
@@ -997,6 +1109,7 @@ void AGameTurnManagerBase::CollectEnemies_Implementation()
 
     // ☁E�E☁E重要E��CachedEnemiesを完�Eにクリアしてから再構篁E☁E�E☁E
     CachedEnemies.Empty();
+    CachedEnemies.Reserve(Found.Num());
 
     for (AActor* A : Found)
     {
@@ -1604,10 +1717,28 @@ void AGameTurnManagerBase::AdvanceTurnAndRestart()
     // ターンインクリメンチE
     //==========================================================================
     const int32 PreviousTurn = CurrentTurnIndex;
+
+    // ★★★ Week 1: UTurnFlowCoordinatorに委譲（2025-11-09リファクタリング）
+    if (TurnFlowCoordinator)
+    {
+        // ターンを終了してから進める
+        TurnFlowCoordinator->EndTurn();
+        TurnFlowCoordinator->AdvanceTurn();
+    }
+
+    // ★★★ コアシステム: OnTurnEnded配信（2025-11-09） ★★★
+    if (EventDispatcher)
+    {
+        EventDispatcher->BroadcastTurnEnded(PreviousTurn);
+    }
+
     CurrentTurnIndex++;
 
+    // ★★★ Phase 5補完: EndTurnリトライフラグをリセット（2025-11-09） ★★★
+    bEndTurnPosted = false;
+
     UE_LOG(LogTurnManager, Log,
-        TEXT("[AdvanceTurnAndRestart] Turn advanced: %d ↁE%d"),
+        TEXT("[AdvanceTurnAndRestart] Turn advanced: %d → %d (bEndTurnPosted reset)"),
         PreviousTurn, CurrentTurnIndex);
 
     //==========================================================================
@@ -1652,7 +1783,16 @@ void AGameTurnManagerBase::AdvanceTurnAndRestart()
     //==========================================================================
     bTurnContinuing = false;
 
-    OnTurnStarted.Broadcast(CurrentTurnIndex);
+    // ★★★ リファクタリング: EventDispatcher経由でイベント配信（2025-11-09） ★★★
+    if (EventDispatcher)
+    {
+        EventDispatcher->BroadcastTurnStarted(CurrentTurnIndex);
+    }
+    else
+    {
+        // Fallback: 直接Broadcast（後方互換性）
+        OnTurnStarted.Broadcast(CurrentTurnIndex);
+    }
 
     UE_LOG(LogTurnManager, Log,
         TEXT("[AdvanceTurnAndRestart] OnTurnStarted broadcasted for turn %d"),
@@ -1687,8 +1827,16 @@ void AGameTurnManagerBase::StartFirstTurn()
         }
     }
 
-    // 既存�EOnTurnStarted通知
-    OnTurnStarted.Broadcast(CurrentTurnIndex);
+    // ★★★ リファクタリング: EventDispatcher経由でイベント配信（2025-11-09） ★★★
+    if (EventDispatcher)
+    {
+        EventDispatcher->BroadcastTurnStarted(CurrentTurnIndex);
+    }
+    else
+    {
+        // Fallback: 直接Broadcast（後方互換性）
+        OnTurnStarted.Broadcast(CurrentTurnIndex);
+    }
 
     UE_LOG(LogTurnManager, Log, TEXT("StartFirstTurn: OnTurnStarted broadcasted for turn %d"), CurrentTurnIndex);
 }
@@ -1847,10 +1995,11 @@ void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnIndex)
                 }
             }
 
-            // ☁E�E☁Eマンハッタン距離計算ラムダ ☁E�E☁E
+            // ★★★ 最適化: GridUtils使用（重複コード削除 2025-11-09）
+            // マンハッタン距離計算はGridUtilsを使用
             auto Manhattan = [](const FIntPoint& A, const FIntPoint& B) -> int32
                 {
-                    return FMath::Abs(A.X - B.X) + FMath::Abs(A.Y - B.Y);
+                    return FGridUtils::ManhattanDistance(A, B);
                 };
 
             // ☁E�E☁E最遠の敵までの距離を計箁E☁E�E☁E
@@ -1977,7 +2126,7 @@ void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnIndex)
 void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerCommand& Command)
 {
     //==========================================================================
-    // ☁E�E☁EチE��チE��: 経路確誁E
+    // ★★★ Phase 2: CommandHandler経由でコマンド処理（2025-11-09） ★★★
     //==========================================================================
     UE_LOG(LogTurnManager, Warning, TEXT("[✁EROUTE CHECK] OnPlayerCommandAccepted_Implementation called!"));
 
@@ -1990,32 +2139,47 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
         return;
     }
 
-    UE_LOG(LogTurnManager, Log, TEXT("[GameTurnManager] OnPlayerCommandAccepted: Tag=%s, TurnId=%d, WindowId=%d, TargetCell=(%d,%d)"),
-        *Command.CommandTag.ToString(), Command.TurnId, Command.WindowId, Command.TargetCell.X, Command.TargetCell.Y);
-
-    //==========================================================================
-    // (2) TurnId検証�E��E等化�E�E
-    //==========================================================================
-    if (Command.TurnId != CurrentTurnIndex && Command.TurnId != INDEX_NONE)
+    // ★★★ コアシステム: CommandHandler経由で完全処理（2025-11-09） ★★★
+    if (CommandHandler)
     {
-        UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Command rejected - TurnId mismatch or invalid (%d != %d)"),
-            Command.TurnId, CurrentTurnIndex);
-        return;
+        // ProcessPlayerCommandで検証と受理を一括処理
+        if (!CommandHandler->ProcessPlayerCommand(Command))
+        {
+            UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Command processing failed by CommandHandler"));
+            return;
+        }
+        // 検証・受理成功 → 既存のロジックで実際の処理を継続
     }
-
-    //==========================================================================
-    // (3) 二重移動チェチE��
-    //==========================================================================
-    if (bPlayerMoveInProgress)
+    else
     {
-        UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Move in progress, ignoring command"));
-        return;
-    }
+        // Fallback: 既存の検証ロジック
+        UE_LOG(LogTurnManager, Log, TEXT("[GameTurnManager] OnPlayerCommandAccepted: Tag=%s, TurnId=%d, WindowId=%d, TargetCell=(%d,%d)"),
+            *Command.CommandTag.ToString(), Command.TurnId, Command.WindowId, Command.TargetCell.X, Command.TargetCell.Y);
 
-    if (!WaitingForPlayerInput)
-    {
-        UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Not waiting for input"));
-        return;
+        //==========================================================================
+        // (2) TurnId検証�E��E等化�E�E
+        //==========================================================================
+        if (Command.TurnId != CurrentTurnIndex && Command.TurnId != INDEX_NONE)
+        {
+            UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Command rejected - TurnId mismatch or invalid (%d != %d)"),
+                Command.TurnId, CurrentTurnIndex);
+            return;
+        }
+
+        //==========================================================================
+        // (3) 二重移動チェチE��
+        //==========================================================================
+        if (bPlayerMoveInProgress)
+        {
+            UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Move in progress, ignoring command"));
+            return;
+        }
+
+        if (!WaitingForPlayerInput)
+        {
+            UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Not waiting for input"));
+            return;
+        }
     }
 
     //==========================================================================
@@ -2070,6 +2234,30 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
         TEXT("[GameTurnManager] EventData prepared - Tag=%s, Magnitude=%.2f, Direction=(%.0f,%.0f)"),
         *EventData.EventTag.ToString(), EventData.EventMagnitude,
         Command.Direction.X, Command.Direction.Y);
+
+    //==========================================================================
+    // ★★★ Phase 5: Register Player Reservation (2025-11-09) ★★★
+    // Calculate target cell and register in reservation system BEFORE movement
+    //==========================================================================
+    if (CachedPathFinder.IsValid())
+    {
+        const FIntPoint CurrentCell = CachedPathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
+        const FIntPoint TargetCell(
+            CurrentCell.X + static_cast<int32>(Command.Direction.X),
+            CurrentCell.Y + static_cast<int32>(Command.Direction.Y));
+
+        // Register player's intended move in reservation system
+        RegisterResolvedMove(PlayerPawn, TargetCell);
+
+        UE_LOG(LogTurnManager, Log,
+            TEXT("[GameTurnManager] Player reservation registered: (%d,%d) → (%d,%d)"),
+            CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y);
+    }
+    else
+    {
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[GameTurnManager] PathFinder not available - Player reservation skipped"));
+    }
 
     //==========================================================================
     // (9) GAS起動！Ebility.Moveを発動！E
@@ -2431,12 +2619,16 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
     // ☁E�E☁EPhase 5: AP残量確認とGate再オープン
     //==========================================================================
 
-    // TODO: APシスチE��が実裁E��れたら、以下�Eコメントを解除
+    // ★★★ 将来的な拡張: APシステム統合（2025-11-09） ★★★
+    // APシステムが実装されたら、以下のコードを有効化してください
+    // - PlayerAttributeSetにAPアトリビュートを追加
+    // - AP消費/回復のロジックを実装
+    // - Gate再オープンの条件をAP残量に基づいて制御
     /*
     int32 PlayerAP = 0;
     if (UAbilitySystemComponent* ASC = GetPlayerASC())
     {
-        // APの取得方法（例：AttributeSetから�E�E
+        // APの取得方法（例：AttributeSetから）
         const UPlayerAttributeSet* Attrs = ASC->GetSet<UPlayerAttributeSet>();
         PlayerAP = Attrs ? Attrs->GetActionPoints() : 0;
     }
@@ -2500,8 +2692,8 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
         TEXT("Turn %d: Move completed, ending player phase (AP system not implemented)"),
         CurrentTurnIndex);
 
-    // TODO: APシスチE��実裁E���E削除
-    // 暫定的にフェーズ終亁E��忁E��に応じて次のフェーズへ�E�E
+    // ★★★ 現在はAPシステム未実装のため、フェーズ遷移は別のロジックで制御 ★★★
+    // APシステム実装後は、AP残量に基づいてフェーズ遷移を制御する
 }
 
 
@@ -2587,20 +2779,25 @@ void AGameTurnManagerBase::OnAttacksFinished(int32 TurnId)
 
 void AGameTurnManagerBase::ExecuteMovePhase()
 {
-    // ☁E�E☁EUActionExecutorSubsystem は存在しなぁE��めコメントアウチE
-    UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] ExecuteMovePhase: ActionExecutor not available (class not found)"), CurrentTurnIndex);
-    return;
-    /*
-    UActionExecutorSubsystem* ActionExec = GetWorld()->GetSubsystem<UActionExecutorSubsystem>();
-    UEnemyTurnDataSubsystem* EnemyData = GetWorld()->GetSubsystem<UEnemyTurnDataSubsystem>();
-    UTurnActionBarrierSubsystem* Barrier = GetWorld()->GetSubsystem<UTurnActionBarrierSubsystem>();
+    // ★★★ Phase 5: ConflictResolver Integration (2025-11-09) ★★★
+    // Use TurnCorePhaseManager instead of non-existent ActionExecutorSubsystem
 
-    if (!ActionExec || !EnemyData)
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] ExecuteMovePhase: World is null"), CurrentTurnIndex);
+        return;
+    }
+
+    UTurnCorePhaseManager* PhaseManager = World->GetSubsystem<UTurnCorePhaseManager>();
+    UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>();
+
+    if (!PhaseManager || !EnemyData)
     {
         UE_LOG(LogTurnManager, Error,
-            TEXT("[Turn %d] ExecuteMovePhase: ActionExecutor=%d or EnemyTurnData=%d not found"),
+            TEXT("[Turn %d] ExecuteMovePhase: PhaseManager=%d or EnemyData=%d not found"),
             CurrentTurnIndex,
-            ActionExec != nullptr,
+            PhaseManager != nullptr,
             EnemyData != nullptr);
 
         EndEnemyTurn();
@@ -2610,14 +2807,37 @@ void AGameTurnManagerBase::ExecuteMovePhase()
     if (EnemyData->Intents.Num() == 0)
     {
         UE_LOG(LogTurnManager, Warning,
-            TEXT("[Turn %d] ExecuteMovePhase: No enemy intents, skipping move phase"),
+            TEXT("[Turn %d] ExecuteMovePhase: No enemy intents, skipping"),
             CurrentTurnIndex);
 
         EndEnemyTurn();
         return;
     }
-    // ... 残りのコーチE...
-    */
+
+    UE_LOG(LogTurnManager, Log,
+        TEXT("[Turn %d] ExecuteMovePhase: Processing %d intents via ConflictResolver"),
+        CurrentTurnIndex, EnemyData->Intents.Num());
+
+    //==========================================================================
+    // (1) Conflict Resolution: Convert Intents → ResolvedActions
+    //==========================================================================
+    TArray<FResolvedAction> ResolvedActions = PhaseManager->CoreResolvePhase(EnemyData->Intents);
+
+    UE_LOG(LogTurnManager, Log,
+        TEXT("[Turn %d] ConflictResolver produced %d resolved actions"),
+        CurrentTurnIndex, ResolvedActions.Num());
+
+    //==========================================================================
+    // (2) Execute Resolved Actions: Trigger GAS abilities
+    //==========================================================================
+    PhaseManager->CoreExecutePhase(ResolvedActions);
+
+    UE_LOG(LogTurnManager, Log,
+        TEXT("[Turn %d] ExecuteMovePhase complete - movements dispatched"),
+        CurrentTurnIndex);
+
+    // Note: Movement completion is handled via Barrier callbacks
+    // EndEnemyTurn() will be called when all movements finish
 }
 
 
@@ -2809,25 +3029,41 @@ void AGameTurnManagerBase::EndEnemyTurn()
         }
 
         //======================================================================
-        // ☁E�E☁Eリトライ機構（オプション�E�E
-        // 0.5秒後に再チェチE��
+        // ★★★ Phase 5補完: リトライ連打防止（2025-11-09） ★★★
+        // 最初の1回だけリトライをスケジュール、以降は抑止
         //======================================================================
-        if (UWorld* World = GetWorld())
+        if (!bEndTurnPosted)
         {
-            FTimerHandle RetryHandle;
-            World->GetTimerManager().SetTimer(
-                RetryHandle,
-                [this]() { EndEnemyTurn(); },
-                0.5f,
-                false
-            );
+            bEndTurnPosted = true;  // フラグを立てる
 
-            UE_LOG(LogTurnManager, Warning,
-                TEXT("[EndEnemyTurn] Retry scheduled in 0.5s"));
+            if (UWorld* World = GetWorld())
+            {
+                FTimerHandle RetryHandle;
+                World->GetTimerManager().SetTimer(
+                    RetryHandle,
+                    [this]() { EndEnemyTurn(); },
+                    0.5f,
+                    false
+                );
+
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("[EndEnemyTurn] Retry scheduled in 0.5s"));
+            }
+        }
+        else
+        {
+            UE_LOG(LogTurnManager, Log,
+                TEXT("[EndEnemyTurn] Retry suppressed (already posted)"));
         }
 
         return;  // ☁E�E☁E進行を中止
     }
+
+    //==========================================================================
+    // ★★★ Phase 5補完: 残留タグクリーンアップ（2025-11-09） ★★★
+    // Barrier完了後、ターン進行前に残留InProgressタグを掃除
+    //==========================================================================
+    ClearResidualInProgressTags();
 
     //==========================================================================
     // (1) 次のターンへ進む
@@ -2835,9 +3071,76 @@ void AGameTurnManagerBase::EndEnemyTurn()
     AdvanceTurnAndRestart();
 }
 
+//------------------------------------------------------------------------------
+// ★★★ Phase 5補完: 残留InProgressタグの強制クリーンアップ（2025-11-09） ★★★
+//------------------------------------------------------------------------------
+void AGameTurnManagerBase::ClearResidualInProgressTags()
+{
+    static const FGameplayTag InProgressTag = FGameplayTag::RequestGameplayTag(FName("State.Action.InProgress"));
 
+    if (!InProgressTag.IsValid())
+    {
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[InProgressDiag] State.Action.InProgress tag not found"));
+        return;
+    }
 
+    TArray<AActor*> AllUnits;
 
+    // プレイヤー追加
+    if (APawn* PlayerPawn = GetPlayerPawn())
+    {
+        AllUnits.Add(PlayerPawn);
+    }
+
+    // 敵追加
+    TArray<AActor*> Enemies;
+    GetCachedEnemies(Enemies);
+    AllUnits.Append(Enemies);
+
+    int32 TotalBefore = 0;
+    int32 TotalAfter = 0;
+
+    for (AActor* Actor : AllUnits)
+    {
+        if (!Actor)
+        {
+            continue;
+        }
+
+        UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Actor);
+        if (!ASC)
+        {
+            continue;
+        }
+
+        const int32 CountBefore = ASC->GetTagCount(InProgressTag);
+        TotalBefore += CountBefore;
+
+        if (CountBefore > 0)
+        {
+            // 残留タグを強制除去
+            for (int32 i = 0; i < CountBefore; ++i)
+            {
+                ASC->RemoveLooseGameplayTag(InProgressTag);
+            }
+
+            const int32 CountAfter = ASC->GetTagCount(InProgressTag);
+            TotalAfter += CountAfter;
+
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[InProgressDiag] %s had InProgress=%d -> force cleared to %d"),
+                *GetNameSafe(Actor), CountBefore, CountAfter);
+        }
+    }
+
+    if (TotalBefore > 0)
+    {
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[InProgressDiag] Total residual InProgress tags: Before=%d, After=%d"),
+            TotalBefore, TotalAfter);
+    }
+}
 
 //------------------------------------------------------------------------------
 // Replication Callbacks
@@ -2936,6 +3239,18 @@ void AGameTurnManagerBase::OpenInputWindow()
     UE_LOG(LogTurnManager, Log,
         TEXT("[WindowId] Opened: Turn=%d WindowId=%d"),
         CurrentTurnIndex, InputWindowId);
+
+    // ★★★ コアシステム: CommandHandler経由でInput Window開始（2025-11-09） ★★★
+    // ★★★ Week 1: UPlayerInputProcessorに委譲（2025-11-09リファクタリング）
+    if (PlayerInputProcessor && TurnFlowCoordinator)
+    {
+        PlayerInputProcessor->OpenInputWindow(TurnFlowCoordinator->GetCurrentTurnId());
+    }
+
+    if (CommandHandler)
+    {
+        CommandHandler->BeginInputWindow(InputWindowId);
+    }
 
     // ☁E�E☁EGate/Phaseタグを付与（既存�EApplyWaitInputGateを流用�E�E
     ApplyWaitInputGate(true);
@@ -3131,8 +3446,14 @@ void AGameTurnManagerBase::WarpPlayerToStairUp(AActor* Player)
     {
         return;
     }
-    // TODO: 階段上りの位置を取得してワーチE
-    UE_LOG(LogTurnManager, Warning, TEXT("WarpPlayerToStairUp: Not implemented yet"));
+
+    // ★★★ 将来的な実装: 階段ワープ機能（2025-11-09） ★★★
+    // RogueDungeonSubsystemから階段の位置を取得してワープ
+    // 実装案：
+    // - URogueDungeonSubsystem::GetStairUpLocation() を追加
+    // - PlayerPawnをその位置にテレポート
+    // - カメラを更新
+    UE_LOG(LogTurnManager, Warning, TEXT("[WarpPlayerToStairUp] Not implemented yet - requires dungeon stair tracking"));
 }
 
 //------------------------------------------------------------------------------
@@ -3176,8 +3497,14 @@ void AGameTurnManagerBase::SetWallRect(int32 MinX, int32 MinY, int32 MaxX, int32
 
 bool AGameTurnManagerBase::HasAnyMoveIntent() const
 {
-    // TODO: 実裁E��忁E��E
-    return false;
+    // CachedPlayerCommandの方向ベクトルが非ゼロなら移動意図あり
+    const FVector Dir = CachedPlayerCommand.Direction;
+    const bool bHasIntent = !Dir.IsNearlyZero(0.01);
+
+    UE_LOG(LogTurnManager, Verbose, TEXT("[HasAnyMoveIntent] Direction=(%.2f,%.2f,%.2f) -> %s"),
+        Dir.X, Dir.Y, Dir.Z, bHasIntent ? TEXT("TRUE") : TEXT("FALSE"));
+
+    return bHasIntent;
 }
 
 void AGameTurnManagerBase::MarkMoveInProgress(bool bInProgress)
@@ -3450,6 +3777,15 @@ bool AGameTurnManagerBase::DispatchResolvedMove(const FResolvedAction& Action)
     Unit->MoveUnit(PathPoints);
 
     RegisterManualMoveDelegate(Unit, bIsPlayerUnit);
+
+    // ★★★ コアシステム: OnActionExecuted配信（2025-11-09） ★★★
+    if (EventDispatcher)
+    {
+        const FGameplayTag MoveActionTag = FGameplayTag::RequestGameplayTag(FName("GameplayEvent.Intent.Move"));
+        const int32 UnitID = Unit->GetUniqueID();
+        EventDispatcher->BroadcastActionExecuted(UnitID, MoveActionTag, true);
+    }
+
     return true;
 }
 
@@ -3490,6 +3826,14 @@ bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Actio
         UE_LOG(LogTurnManager, Log,
             TEXT("[ResolvedMove] Player move ability triggered toward (%d,%d)"),
             Action.NextCell.X, Action.NextCell.Y);
+
+        // ★★★ コアシステム: OnActionExecuted配信（2025-11-09） ★★★
+        if (EventDispatcher)
+        {
+            const int32 UnitID = Unit->GetUniqueID();
+            EventDispatcher->BroadcastActionExecuted(UnitID, EventData.EventTag, true);
+        }
+
         return true;
     }
 

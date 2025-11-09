@@ -26,6 +26,11 @@ class AUnitManager;
 class URogueDungeonSubsystem;
 class UDebugObserverCSV;
 class UTurnCorePhaseManager;
+class UTurnCommandHandler;
+class UTurnEventDispatcher;
+class UTurnDebugSubsystem;
+class UTurnFlowCoordinator;
+class UPlayerInputProcessor;
 struct FGameplayEventData;
 class ULyraExperienceDefinition;
 class ULyraExperienceManagerComponent;
@@ -189,6 +194,22 @@ public:
     //==========================================================================
     // Utilities
     //==========================================================================
+
+    /**
+     * ★★★ Phase 5補完: 残留InProgressタグの強制クリーンアップ（2025-11-09） ★★★
+     *
+     * 全ユニット（プレイヤー + 敵）のState.Action.InProgressタグを強制除去
+     *
+     * 用途:
+     * - Barrier完了後のターン終了時に呼び出し
+     * - タグがスタックしてターン進行が止まるのを防ぐ
+     * - 通常は不要だが、予期しないエラーで残留した場合の保険
+     *
+     * ログ出力:
+     * - Before: クリーンアップ前のInProgressタグ数
+     * - After: クリーンアップ後（通常は0）
+     */
+    void ClearResidualInProgressTags();
 
     UFUNCTION(BlueprintCallable, Category = "Turn|Enemy")
     void BuildAllObservations();
@@ -682,6 +703,30 @@ protected:
 
 private:
     //==========================================================================
+    // ★★★ 新規Subsystem参照（2025-11-09リファクタリング） ★★★
+    //==========================================================================
+
+    /** コマンド処理Subsystem */
+    UPROPERTY(Transient)
+    TObjectPtr<UTurnCommandHandler> CommandHandler = nullptr;
+
+    /** イベント配信Subsystem */
+    UPROPERTY(Transient)
+    TObjectPtr<UTurnEventDispatcher> EventDispatcher = nullptr;
+
+    /** デバッグSubsystem */
+    UPROPERTY(Transient)
+    TObjectPtr<UTurnDebugSubsystem> DebugSubsystem = nullptr;
+
+    /** ★★★ Week 1: ターン進行・AP管理Subsystem（2025-11-09リファクタリング） */
+    UPROPERTY(Transient)
+    TObjectPtr<UTurnFlowCoordinator> TurnFlowCoordinator = nullptr;
+
+    /** ★★★ Week 1: 入力処理Subsystem（2025-11-09リファクタリング） */
+    UPROPERTY(Transient)
+    TObjectPtr<UPlayerInputProcessor> PlayerInputProcessor = nullptr;
+
+    //==========================================================================
     // Phase 2: WindowId讀懁E���E�逕ｨ縺�E�蜀・Κ繝倥Ν繝代・
     //==========================================================================
 
@@ -692,8 +737,20 @@ private:
     //==========================================================================
     // 蜀・Κ迥�E�諷・    //==========================================================================
 
-    UPROPERTY()
-    TArray<TWeakObjectPtr<AActor>> CachedEnemiesWeak;
+    // ★★★ Phase 4: 未使用変数削除（2025-11-09） ★★★
+    // 削除: CachedEnemiesWeak（使用されていない）
+    // 削除: RecollectEnemiesTimerHandle（使用されていない）
+    // 削除: PendingTeamCountLast（使用されていない）
+    // 削除: CollectEnemiesRetryCount（使用されていない）
+
+    // ★★★ Phase 5補完: EndTurnリトライ連打防止（2025-11-09） ★★★
+    /**
+     * EndEnemyTurn のリトライが既にスケジュールされているかを示すフラグ
+     * - true: リトライタイマーが既に設定済み → 追加のリトライは抑止
+     * - false: リトライ未設定 → 新規リトライを許可
+     * AdvanceTurnAndRestart() で false にリセット
+     */
+    bool bEndTurnPosted = false;
 
     UPROPERTY()
     TMap<TWeakObjectPtr<AActor>, FEnemyIntent> CachedIntents;
@@ -701,15 +758,6 @@ private:
     mutable TWeakObjectPtr<AActor> CachedPlayerActor;
 
     FTimerHandle AbilityWaitTimerHandle;
-
-    // CollectEnemies 蜀崎ｩ�E�陦檎畑
-    FTimerHandle RecollectEnemiesTimerHandle;
-    int32 PendingTeamCountLast = 0;
-    int32 CollectEnemiesRetryCount = 0;
-    static constexpr int32 CollectEnemiesMaxRetries = 3;
-
-    // ☁E�E☁EEndEnemyTurn 多重試行抑止用フラグ ☁E�E☁E
-    bool bEndTurnPosted = false;
 
     //==========================================================================
     // 繧�E�繧�E�蛻晁E��蛹夜未謨�E�
@@ -723,8 +771,8 @@ private:
     // 譁E��蜷代・謨�E�謨�E�繝代ャ繧�E�/繧�E�繝ｳ繝代ャ繧�E�・郁E���E�蟾�E�繧�E�繝ｭ驕区成�E・    static int32 PackDirection(const FIntPoint& Dir);
     static FIntPoint UnpackDirection(int32 Magnitude);
 
-    // 笘�E・笘�E莠碁㍾邨らｫ�E�髦�E�豁E��繝輔Λ繧�E� 笘�E・笘�E    UPROPERTY(Transient)
-    bool bEnemyTurnEnding = false;
+    // ★★★ Phase 4: 未使用変数削除（2025-11-09） ★★★
+    // 削除: bEnemyTurnEnding（使用されていない）
 };
 
 

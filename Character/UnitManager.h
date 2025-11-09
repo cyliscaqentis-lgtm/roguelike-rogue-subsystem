@@ -103,7 +103,7 @@ private:
 	int32 Strength=0, Intelligence=0, Dexterity=0, Constitution=0;
 	float Health=0, CurrentHealth=0, Power=0, CurrentPower=0, Speed=0, CurrentSpeed=0;
 	float MaxSightRange=0, CurrentSightRange=0;
-	bool  CanAct=true, HasActed=false, IsDisabled=false, CanMove=true, HasMoved=false, IsRooted=false;
+	bool  bCanAct=true, bHasActed=false, bIsDisabled=false, bCanMove=true, bHasMoved=false, bIsRooted=false;
 	int32 Team=0, MovementRange=0, NumberOfMoves=0, CurrentMovementRange=0;
 	int32 MeleeBaseAttack=0, RangedBaseAttack=0, MagicBaseAttack=0;
 	float MeleeBaseDamage=0, RangedBaseDamage=0, MagicBaseDamage=0;

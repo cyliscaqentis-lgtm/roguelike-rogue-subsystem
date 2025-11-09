@@ -8,12 +8,13 @@
 #include "Kismet/GameplayStatics.h"
 #include "HAL/PlatformStackWalk.h"
 #include "Misc/DateTime.h"
-#include "Grid/GridOccupancySubsystem.h"  // 笘�E・笘�EIsCellWalkable逕ｨ 笘�E・笘�E
+#include "Grid/GridOccupancySubsystem.h"  // 笘�E・笘�EIsCellWalkable逕ｨ 笘�E・笘�E
 #include "Misc/ScopeLock.h"
 #include "Grid/DungeonFloorGenerator.h"
+#include "Utility/GridUtils.h"
 #include "../ProjectDiagnostics.h"
 
-// 笘�E・笘�E逶�E�譟ｻ繝｢繝ｼ繝�E畑繧�E�繝ｭ繝ｼ繝�EΝ螟画焁E笘�E・笘�E
+// 笘�E・笘�E逶�E�譟ｻ繝｢繝ｼ繝�E畑繧�E�繝ｭ繝ｼ繝�EΝ螟画焁E笘�E・笘�E
 namespace
 {
     /** Normalize dungeon-generated cell values for navigation. */
@@ -59,8 +60,8 @@ static bool DoesCellContainBlockingActor(const UGridOccupancySubsystem* Occupanc
     return false;
 }
 
-static bool GGridAuditEnabled = true;   // 蠢・�E�√�E蠢懊§縺�E�荳譎ら┌蜉�E�蛹門庁E
-static FCriticalSection GridAuditCS;    // 荳�E�陦梧嶌縺崎ｾ�E�縺�E�縺後≠繧後�E讀懁E��縺�E�縺溘ａE
+static bool GGridAuditEnabled = true;   // 蠢・�E�√�E蠢懊§縺�E�荳譎ら┌蜉�E�蛹門庁E
+static FCriticalSection GridAuditCS;    // 荳�E�陦梧嶌縺崎ｾ�E�縺�E�縺後≠繧後�E讀懁E��縺�E�縺溘ａE
 
 AGridPathfindingLibrary::AGridPathfindingLibrary()
 {
@@ -72,26 +73,26 @@ void AGridPathfindingLibrary::BeginPlay()
 {
     Super::BeginPlay();
 
-    // 笘�E・笘�E驥崎ｦ・�E�夊�E蜍募・譛溷喧繧堤┌蜉�E�蛹厁E��・ameTurnManager縺梧・遉ｺ逧・↓蛻晁E��蛹悶☁E��具�E�・笘�E・笘�E
-    // BeginPlay縺�E�縺�E�閾�E�蜍募・譛溷喧縺�E�蜑企勁縺励∝､夜Κ縺九ｉ縺�E�InitializeFromParams()蜻�E�縺�E�蜁E��縺励・縺�E�繧定ｨ�E�蜿�E�
+    // 笘�E・笘�E驥崎ｦ・�E�夊�E蜍募・譛溷喧繧堤┌蜉�E�蛹厁E��・ameTurnManager縺梧・遉ｺ逧・↓蛻晁E��蛹悶☁E��具�E�・笘�E・笘�E
+    // BeginPlay縺�E�縺�E�閾�E�蜍募・譛溷喧縺�E�蜑企勁縺励∝､夜Κ縺九ｉ縺�E�InitializeFromParams()蜻�E�縺�E�蜁E��縺励・縺�E�繧定ｨ�E�蜿�E�
     
-    if (GridWidth > 0 && GridHeight > 0 && mGrid.Num() > 0)
+    if (GridWidth > 0 && GridHeight > 0 && GridCells.Num() > 0)
     {
-        // 譌｢縺�E�蛻晁E��蛹匁E��医∩・・ameTurnManager縺九ｉ縺�E�蜻�E�縺�E�蜁E��縺暦�E�・
+        // 譌｢縺�E�蛻晁E��蛹匁E��医∩・・ameTurnManager縺九ｉ縺�E�蜻�E�縺�E�蜁E��縺暦�E�・
         UE_LOG(LogGridPathfinding, Log, 
-            TEXT("[GridPathfinding] BeginPlay: Already initialized (GridWidth=%d, GridHeight=%d, mGrid.Num()=%d, TileSize=%d, Origin=%s)"),
-            GridWidth, GridHeight, mGrid.Num(), TileSize, *Origin.ToCompactString());
+            TEXT("[GridPathfinding] BeginPlay: Already initialized (GridWidth=%d, GridHeight=%d, GridCells.Num()=%d, TileSize=%d, Origin=%s)"),
+            GridWidth, GridHeight, GridCells.Num(), TileSize, *Origin.ToCompactString());
     }
     else
     {
-        // 縺�E�縺�E�蛻晁E��蛹悶�E�E��後※縺・↑縺・�E�・ameTurnManager縺悟ｾ後〒蛻晁E��蛹悶☁E��具�E�・
+        // 縺�E�縺�E�蛻晁E��蛹悶�E�E��後※縺・↑縺・�E�・ameTurnManager縺悟ｾ後〒蛻晁E��蛹悶☁E��具�E�・
         UE_LOG(LogGridPathfinding, Warning, 
             TEXT("[GridPathfinding] BeginPlay: Not initialized yet. Waiting for external initialization (e.g., GameTurnManager)."));
     }
 }
 
 
-// ==================== 蛻晁E��蛹悶・險�E�螳・====================
+// ==================== 蛻晁E��蛹悶・險�E�螳・====================
 
 void AGridPathfindingLibrary::InitializeGrid(const TArray<int32>& InGridCost, const FVector& InMapSize, int32 InTileSizeCM)
 {
@@ -99,26 +100,26 @@ void AGridPathfindingLibrary::InitializeGrid(const TArray<int32>& InGridCost, co
     GridHeight = FMath::Max(0, FMath::RoundToInt(InMapSize.Y));
     TileSize = FMath::Max(1, InTileSizeCM);
 
-    // 笘�E・笘�EOrigin 縺�E�蛻晁E��蛹・笘�E・笘�E
+    // 笘�E・笘�EOrigin 縺�E�蛻晁E��蛹・笘�E・笘�E
     Origin = FVector::ZeroVector;
 
     const int32 Num = GridWidth * GridHeight;
-    mGrid.Reset();
-    mGrid.Reserve(Num);
+    GridCells.Reset();
+    GridCells.Reserve(Num);
 
     if (Num > 0 && InGridCost.Num() == Num)
     {
         for (int32 Value : InGridCost)
         {
-            mGrid.Add(NormalizeDungeonCellValue(Value));
+            GridCells.Add(NormalizeDungeonCellValue(Value));
         }
     }
     else if (Num > 0)
     {
-        mGrid.Init(0, Num);
+        GridCells.Init(0, Num);
     }
 
-    UE_LOG(LogGridPathfinding, Log, TEXT("GridPathfinding蛻晁E��蛹・ %dx%d, 繧�E�繧�E�繝ｫ繧�E�繧�E�繧�E�=%dcm, Origin=%s"),
+    UE_LOG(LogGridPathfinding, Log, TEXT("GridPathfinding蛻晁E��蛹・ %dx%d, 繧�E�繧�E�繝ｫ繧�E�繧�E�繧�E�=%dcm, Origin=%s"),
         GridWidth, GridHeight, TileSize, *Origin.ToCompactString());
 }
 
@@ -126,7 +127,7 @@ void AGridPathfindingLibrary::InitializeFromParams(const FGridInitParams& Params
 {
     InitializeGrid(Params.GridCostArray, Params.MapSize, Params.TileSizeCM);
 
-    // 笘�E・笘�EOrigin險�E�螳・笘�E・笘�E
+    // 笘�E・笘�EOrigin險�E�螳・笘�E・笘�E
     Origin = Params.Origin;
 
     UE_LOG(LogGridPathfinding, Log, TEXT("[GridPathfinding] Origin set to: %s"), *Origin.ToCompactString());
@@ -134,9 +135,9 @@ void AGridPathfindingLibrary::InitializeFromParams(const FGridInitParams& Params
 
 void AGridPathfindingLibrary::SetGridCost(int32 X, int32 Y, int32 Cost)
 {
-    if (!GGridAuditEnabled) { /* 逶�E�譟ｻ繧�E�繝輔�E繧芽�E��E�驥丞喧 */ }
+    if (!GGridAuditEnabled) { /* 逶�E�譟ｻ繧�E�繝輔�E繧芽�E��E�驥丞喧 */ }
 
-    // 笘�E蜈･蜉帙�E遽・峁E���Eぉ繝�EぁE
+    // 笘�E蜈･蜉帙�E遽・峁E���Eぉ繝�EぁE
     if (!InBounds(X, Y, GridWidth, GridHeight))
     {
         UE_LOG(LogGridPathfinding, Error,
@@ -146,24 +147,24 @@ void AGridPathfindingLibrary::SetGridCost(int32 X, int32 Y, int32 Cost)
 
     const int32 Index = ToIndex(X, Y, GridWidth);
 
-    // 笘�E譌｢蟁E���E�繧貞�E縺�E�隱�E�繧・育屮譟ｻ逕ｨ・・
+    // 笘�E譌｢蟁E���E�繧貞�E縺�E�隱�E�繧・育屮譟ｻ逕ｨ・・
     const int32 Before =
-        (mGrid.IsValidIndex(Index) ? mGrid[Index] : INT32_MIN);
+        (GridCells.IsValidIndex(Index) ? GridCells[Index] : INT32_MIN);
 
-    // 笘�E譖ｸ縺崎ｾ�E�縺�E�縺�E�逶�E�蜑阪〒繝ｭ繝�Eけ�E亥�E�夐㍾繧�E�繝ｬ繝�Eラ縺�E�繧峨�E�E��薙〒蜷梧凾譖ｸ縺崎ｾ�E�縺�E�讀懁E���E・
+    // 笘�E譖ｸ縺崎ｾ�E�縺�E�縺�E�逶�E�蜑阪〒繝ｭ繝�Eけ�E亥�E�夐㍾繧�E�繝ｬ繝�Eラ縺�E�繧峨�E�E��薙〒蜷梧凾譖ｸ縺崎ｾ�E�縺�E�讀懁E���E・
     FScopeLock _lock(&GridAuditCS);
 
     UE_LOG(LogGridPathfinding, Warning,
-        TEXT("[SetGridCost] Cell(%d,%d) Index=%d BEFORE=%d 竊�EAFTER=%d  (Time=%s)"),
+        TEXT("[SetGridCost] Cell(%d,%d) Index=%d BEFORE=%d 竊�EAFTER=%d  (Time=%s)"),
         X, Y, Index, Before, Cost,
         *FDateTime::Now().ToString());
 
-    if (mGrid.IsValidIndex(Index))
+    if (GridCells.IsValidIndex(Index))
     {
-        mGrid[Index] = Cost;
+        GridCells[Index] = Cost;
 
-        // 笘�E譖ｸ縺肴綾縺礼�E��E�隱・
-        const int32 ReadBack = mGrid[Index];
+        // 笘�E譖ｸ縺肴綾縺礼�E��E�隱・
+        const int32 ReadBack = GridCells[Index];
         if (ReadBack != Cost)
         {
             UE_LOG(LogGridPathfinding, Error,
@@ -171,21 +172,21 @@ void AGridPathfindingLibrary::SetGridCost(int32 X, int32 Y, int32 Cost)
                 Cost, ReadBack, X, Y, Index);
         }
 
-        // 笘�E螢・�E�・0諠�E�螳夲�E�俁E�E 0 縺�E�荳肴�E��E�荳頑嶌縺阪�E�窶應ｺ倶�E��E�窶昴→縺励※隧�E�邏ｰ蜁E��蜉�E
+        // 笘�E螢・�E�・0諠�E�螳夲�E�俁E�E 0 縺�E�荳肴�E��E�荳頑嶌縺阪�E�窶應ｺ倶�E��E�窶昴→縺励※隧�E�邏ｰ蜁E��蜉�E
         if (Before < 0 && Cost == 0)
         {
             UE_LOG(LogGridPathfinding, Error,
-                TEXT("  ���圷 WALL竊�E DETECTED at Cell(%d,%d) Index=%d"), X, Y, Index);
+                TEXT("  ���圷 WALL竊�E DETECTED at Cell(%d,%d) Index=%d"), X, Y, Index);
 
-            // 繧�E�繝ｼ繝ｫ繧�E�繧�E�繝茨�E�磯未謨�E�/繝輔ぃ繧�E�繝ｫ/陦鯉ｼ・
+            // 繧�E�繝ｼ繝ｫ繧�E�繧�E�繝茨�E�磯未謨�E�/繝輔ぃ繧�E�繝ｫ/陦鯉ｼ・
             UE_LOG(LogGridPathfinding, Error,
                 TEXT("  CallSite: %s (%s:%d)"),
                 ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(__FILE__), __LINE__);
 
-            // 繧�E�繧�E�繝�Eけ繝医Ξ繝ｼ繧�E�繧剁E���E�縺斐�E蜷舌￥
+            // 繧�E�繧�E�繝�Eけ繝医Ξ繝ｼ繧�E�繧剁E���E�縺斐�E蜷舌￥
             FDebug::DumpStackTraceToLog(ELogVerbosity::Error);
 
-            // 縺�E�縺・〒縺�E�繧�E�繝ｪ繝�Eラ竊�EΡ繝ｼ繝ｫ繝峨√Ρ繝ｼ繝ｫ繝俁E�E繧�E�繝ｪ繝�Eラ縺�E�蠕蠕ｩ讀懁E���E�繧貞瑞縺・
+            // 縺�E�縺・〒縺�E�繧�E�繝ｪ繝�Eラ竊�EΡ繝ｼ繝ｫ繝峨√Ρ繝ｼ繝ｫ繝俁E�E繧�E�繝ｪ繝�Eラ縺�E�蠕蠕ｩ讀懁E���E�繧貞瑞縺・
             const FVector TestWorld = GridToWorld(FIntPoint{X, Y});
             const FIntPoint RoundTrip = WorldToGrid(TestWorld);
             UE_LOG(LogGridPathfinding, Error,
@@ -196,8 +197,8 @@ void AGridPathfindingLibrary::SetGridCost(int32 X, int32 Y, int32 Cost)
     else
     {
         UE_LOG(LogGridPathfinding, Error,
-            TEXT("  笶・mGrid.IsValidIndex(%d) = false! Size=%d"),
-            Index, mGrid.Num());
+            TEXT("  笶・GridCells.IsValidIndex(%d) = false! Size=%d"),
+            Index, GridCells.Num());
     }
 }
 
@@ -211,7 +212,7 @@ int32 AGridPathfindingLibrary::GetGridCost(int32 X, int32 Y) const
 {
     if (InBounds(X, Y, GridWidth, GridHeight))
     {
-        return mGrid[ToIndex(X, Y, GridWidth)];
+        return GridCells[ToIndex(X, Y, GridWidth)];
     }
     return -1;
 }
@@ -221,7 +222,7 @@ int32 AGridPathfindingLibrary::ReturnGridStatus(const FVector& InputVector) cons
     FIntPoint GridPos = WorldToGridInternal(InputVector);
     int32 Cost = GetGridCost(GridPos.X, GridPos.Y);
 
-    // 繝ｭ繧�E�繝ｬ繝吶Ν譛驕ｩ蛹・ 騾夊｡悟庁E���E� VeryVerbose縲√ヶ繝ｭ繝�Eけ縺�E� Warning縲∫焚蟶�E�縺�E�縺�E� Error
+    // 繝ｭ繧�E�繝ｬ繝吶Ν譛驕ｩ蛹・ 騾夊｡悟庁E���E� VeryVerbose縲√ヶ繝ｭ繝�Eけ縺�E� Warning縲∫焚蟶�E�縺�E�縺�E� Error
     if (Cost >= 0)
     {
         UE_LOG(LogGridPathfinding, VeryVerbose,
@@ -237,15 +238,15 @@ int32 AGridPathfindingLibrary::ReturnGridStatus(const FVector& InputVector) cons
     else
     {
         UE_LOG(LogGridPathfinding, Error,
-            TEXT("[ReturnGridStatus] INVALID World:%s -> Grid:(%d,%d) Cost:%d (W=%d H=%d mGrid.Num=%d)"),
-            *InputVector.ToCompactString(), GridPos.X, GridPos.Y, Cost, GridWidth, GridHeight, mGrid.Num());
+            TEXT("[ReturnGridStatus] INVALID World:%s -> Grid:(%d,%d) Cost:%d (W=%d H=%d GridCells.Num=%d)"),
+            *InputVector.ToCompactString(), GridPos.X, GridPos.Y, Cost, GridWidth, GridHeight, GridCells.Num());
     }
 
     return Cost;
 }
 
 
-// ==================== 繝代せ繝輔ぃ繧�E�繝ｳ繝�EぁE��ｳ繧�E� ====================
+// ==================== 繝代せ繝輔ぃ繧�E�繝ｳ繝�EぁE��ｳ繧�E� ====================
 
 int32 AGridPathfindingLibrary::CalculateHeuristic(int32 x0, int32 y0, int32 x1, int32 y1, EGridHeuristic Mode)
 {
@@ -308,7 +309,7 @@ bool AGridPathfindingLibrary::FindPath(
     OutWorldPath.Reset();
 
     const int32 Num = GridWidth * GridHeight;
-    if (Num == 0 || mGrid.Num() != Num)
+    if (Num == 0 || GridCells.Num() != Num)
         return false;
 
     const FIntPoint S = WorldToGridInternal(StartWorld);
@@ -321,7 +322,7 @@ bool AGridPathfindingLibrary::FindPath(
     const int32 StartId = ToIndex(S.X, S.Y, GridWidth);
     const int32 EndId = ToIndex(E.X, E.Y, GridWidth);
 
-    if (mGrid[StartId] < 0 || mGrid[EndId] < 0)
+    if (GridCells[StartId] < 0 || GridCells[EndId] < 0)
         return false;
 
     TArray<int32> G;
@@ -355,7 +356,7 @@ bool AGridPathfindingLibrary::FindPath(
         }
 
         const int32 nid = ToIndex(nx, ny, GridWidth);
-        if (mGrid[nid] < 0)
+        if (GridCells[nid] < 0)
         {
             return false;
         }
@@ -364,11 +365,11 @@ bool AGridPathfindingLibrary::FindPath(
         {
             const int32 adjX = ToIndex(X + Delta.X, Y, GridWidth);
             const int32 adjY = ToIndex(X, Y + Delta.Y, GridWidth);
-            if (!InBounds(X + Delta.X, Y, GridWidth, GridHeight) || mGrid[adjX] < 0)
+            if (!InBounds(X + Delta.X, Y, GridWidth, GridHeight) || GridCells[adjX] < 0)
             {
                 return false;
             }
-            if (!InBounds(X, Y + Delta.Y, GridWidth, GridHeight) || mGrid[adjY] < 0)
+            if (!InBounds(X, Y + Delta.Y, GridWidth, GridHeight) || GridCells[adjY] < 0)
             {
                 return false;
             }
@@ -410,7 +411,7 @@ bool AGridPathfindingLibrary::FindPath(
 
         for (const FIntPoint& d : Directions)
         {
-            if (!CanTraverseDelta(GridWidth, GridHeight, mGrid, cx, cy, d))
+            if (!CanTraverseDelta(GridWidth, GridHeight, GridCells, cx, cy, d))
             {
                 continue;
             }
@@ -424,7 +425,7 @@ bool AGridPathfindingLibrary::FindPath(
 
             const bool bDiag = (d.X != 0 && d.Y != 0);
             const int32 step = (bDiag && bHeavyDiagonal) ? 14 : 10;
-            const int32 terrain = FMath::Max(0, mGrid[nid]);
+            const int32 terrain = FMath::Max(0, GridCells[nid]);
             const int32 gNew = (G[Cur] == INT_MAX) ? INT_MAX : (G[Cur] + step + terrain);
 
             if (gNew < G[nid])
@@ -452,7 +453,7 @@ bool AGridPathfindingLibrary::FindPathIgnoreEndpoints(
     OutWorldPath.Reset();
 
     const int32 Num = GridWidth * GridHeight;
-    if (Num == 0 || mGrid.Num() != Num)
+    if (Num == 0 || GridCells.Num() != Num)
         return false;
 
     const FIntPoint S = WorldToGridInternal(StartWorld);
@@ -465,10 +466,10 @@ bool AGridPathfindingLibrary::FindPathIgnoreEndpoints(
     const int32 StartId = ToIndex(S.X, S.Y, GridWidth);
     const int32 EndId = ToIndex(E.X, E.Y, GridWidth);
 
-    const int32 OriginalStartCost = mGrid[StartId];
-    const int32 OriginalEndCost = mGrid[EndId];
+    const int32 OriginalStartCost = GridCells[StartId];
+    const int32 OriginalEndCost = GridCells[EndId];
 
-    TArray<int32>& MutableGrid = const_cast<TArray<int32>&>(mGrid);
+    TArray<int32>& MutableGrid = const_cast<TArray<int32>&>(GridCells);
     MutableGrid[StartId] = 0;
     MutableGrid[EndId] = 0;
 
@@ -542,7 +543,7 @@ bool AGridPathfindingLibrary::FindPathIgnoreEndpoints(
 
             const bool bDiag = (d.X != 0 && d.Y != 0);
             const int32 step = (bDiag && bHeavyDiagonal) ? 14 : 10;
-            const int32 terrain = FMath::Max(0, mGrid[nid]);
+            const int32 terrain = FMath::Max(0, GridCells[nid]);
             const int32 gNew = (G[Cur] == INT_MAX) ? INT_MAX : (G[Cur] + step + terrain);
 
             if (gNew < G[nid])
@@ -561,7 +562,7 @@ bool AGridPathfindingLibrary::FindPathIgnoreEndpoints(
     return bResult;
 }
 
-// ==================== 隕夜㍽讀懁E��E====================
+// ==================== 隕夜㍽讀懁E��E====================
 
 FGridVisionResult AGridPathfindingLibrary::DetectInExpandingVision(
     const FVector& CenterWorld,
@@ -666,7 +667,7 @@ FGridVisionResult AGridPathfindingLibrary::DetectInRadius(
     return Result;
 }
 
-// ==================== 蜻�E�蝗ｲ讀懁E���E� ====================
+// ==================== 蜻�E�蝗ｲ讀懁E���E� ====================
 
 FGridSurroundResult AGridPathfindingLibrary::SearchAdjacentTiles(
     const FVector& CenterWorld,
@@ -693,7 +694,7 @@ FGridSurroundResult AGridPathfindingLibrary::SearchAdjacentTiles(
         if (!InBounds(Target.X, Target.Y, GridWidth, GridHeight))
             continue;
 
-        const int32 Cost = mGrid[ToIndex(Target.X, Target.Y, GridWidth)];
+        const int32 Cost = GridCells[ToIndex(Target.X, Target.Y, GridWidth)];
 
         if (Cost < 0)
         {
@@ -784,7 +785,7 @@ bool AGridPathfindingLibrary::HasLineOfSight(const FVector& StartWorld, const FV
     return IsVisibleFromPoint(Start, End);
 }
 
-// ==================== 繝ｦ繝ｼ繝�EぁE��ｪ繝�EぁE====================
+// ==================== 繝ｦ繝ｼ繝�EぁE��ｪ繝�EぁE====================
 
 FIntPoint AGridPathfindingLibrary::WorldToGrid(const FVector& WorldPos) const
 {
@@ -800,7 +801,8 @@ int32 AGridPathfindingLibrary::GetManhattanDistance(const FVector& PosA, const F
 {
     const FIntPoint A = WorldToGridInternal(PosA);
     const FIntPoint B = WorldToGridInternal(PosB);
-    return FMath::Abs(A.X - B.X) + FMath::Abs(A.Y - B.Y);
+    // ★★★ 最適化: GridUtils使用（重複コード削除 2025-11-09）
+    return FGridUtils::ManhattanDistance(A, B);
 }
 
 // ==================== 蜀・Κ繝倥Ν繝代・ ====================
@@ -841,7 +843,7 @@ bool AGridPathfindingLibrary::IsVisibleFromPoint(const FIntPoint& From, const FI
         if (!InBounds(x0, y0, GridWidth, GridHeight))
             return false;
 
-        const int32 cost = mGrid[ToIndex(x0, y0, GridWidth)];
+        const int32 cost = GridCells[ToIndex(x0, y0, GridWidth)];
         if (cost < 0)
             return false;
 
@@ -916,26 +918,27 @@ void AGridPathfindingLibrary::GetActorsAtGridPosition(const FIntPoint& GridPos, 
     }
 }
 
-// ==================== 霍晞屬險育�E�・====================
+// ==================== 霍晞屬險育�E�・====================
 
 int32 AGridPathfindingLibrary::GetChebyshevDistance(FIntPoint A, FIntPoint B)
 {
-    return FMath::Max(FMath::Abs(A.X - B.X), FMath::Abs(A.Y - B.Y));
+    // ★★★ 最適化: GridUtils使用（重複コード削除 2025-11-09）
+    return FGridUtils::ChebyshevDistance(A, B);
 }
 
 int32 AGridPathfindingLibrary::GetManhattanDistanceGrid(FIntPoint A, FIntPoint B)
 {
-    return FMath::Abs(A.X - B.X) + FMath::Abs(A.Y - B.Y);
+    // ★★★ 最適化: GridUtils使用（重複コード削除 2025-11-09）
+    return FGridUtils::ManhattanDistance(A, B);
 }
 
 int32 AGridPathfindingLibrary::GetEuclideanDistanceGrid(FIntPoint A, FIntPoint B)
 {
-    int32 DX = A.X - B.X;
-    int32 DY = A.Y - B.Y;
-    return FMath::RoundToInt(FMath::Sqrt(static_cast<float>(DX * DX + DY * DY)));
+    // ★★★ 最適化: GridUtils使用（重複コード削除 2025-11-09）
+    return FMath::RoundToInt(FGridUtils::EuclideanDistance(A, B));
 }
 
-// ==================== 譁E��隕城未謨�E� ====================
+// ==================== 譁E��隕城未謨�E� ====================
 
 int32 AGridPathfindingLibrary::ReturnGridStatusIgnoringSelf(const FVector& InputVector, AActor* IgnoreActor) const
 {
@@ -956,13 +959,13 @@ int32 AGridPathfindingLibrary::ReturnGridStatusIgnoringSelf(const FVector& Input
     return Cost;
 }
 
-// ==================== 繝�Eヰ繝�Eげ繝ｻ繧�E�繝｢繝ｼ繧�E�繝�Eせ繝�E====================
+// ==================== 繝�Eヰ繝�Eげ繝ｻ繧�E�繝｢繝ｼ繧�E�繝�Eせ繝�E====================
 
 void AGridPathfindingLibrary::GridSmokeTest()
 {
     const int32 W = GridWidth, H = GridHeight;
-    UE_LOG(LogGridPathfinding, Warning, TEXT("[Smoke] Size=%dx%d mGrid=%d Tile=%d Origin=%s"),
-        W, H, mGrid.Num(), TileSize, *Origin.ToCompactString());
+    UE_LOG(LogGridPathfinding, Warning, TEXT("[Smoke] Size=%dx%d GridCells=%d Tile=%d Origin=%s"),
+        W, H, GridCells.Num(), TileSize, *Origin.ToCompactString());
 
     if (UWorld* World = GetWorld())
     {
@@ -987,7 +990,7 @@ void AGridPathfindingLibrary::GridSmokeTest()
     }
 }
 
-// ==================== 逶�E�譟ｻ繝｢繝ｼ繝�E畑繧�E�繝槭Φ繝�E====================
+// ==================== 逶�E�譟ｻ繝｢繝ｼ繝�E畑繧�E�繝槭Φ繝�E====================
 
 void AGridPathfindingLibrary::GridAuditEnable(int32 bEnable)
 {
@@ -1007,7 +1010,7 @@ void AGridPathfindingLibrary::GridAuditProbe(int32 X, int32 Y)
 }
 
 
-// ==================== 邨�E�蜷・PI・域雰AI遘ｻ蜍輔ヶ繝ｭ繝�Eけ菫�E�豁E��・・====================
+// ==================== 邨�E�蜷・PI・域雰AI遘ｻ蜍輔ヶ繝ｭ繝�Eけ菫�E�豁E��・・====================
 
 bool AGridPathfindingLibrary::IsCellWalkable(const FIntPoint& Cell) const
 {

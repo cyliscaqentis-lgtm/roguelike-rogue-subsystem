@@ -221,7 +221,7 @@ public:
     UFUNCTION(BlueprintPure, Category = "Pathfinding|Utility")
     bool IsInitialized() const
     {
-        return GridWidth > 0 && GridHeight > 0 && mGrid.Num() > 0;
+        return GridWidth > 0 && GridHeight > 0 && GridCells.Num() > 0;
     }
 
     /** グリッド情報取得（Origin付き拡張版） */
@@ -285,7 +285,7 @@ protected:
 
     /** グリッドコスト配列（BP 互換性維持 - 監査は SetGridCost で実装） */
     UPROPERTY(BlueprintReadOnly, Category = "Pathfinding")
-    TArray<int32> mGrid;
+    TArray<int32> GridCells;
 
     // ==================== 監査モード用ヘルパ ====================
 

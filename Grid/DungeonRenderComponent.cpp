@@ -119,7 +119,7 @@ void UDungeonRenderComponent::BuildAllInstances(ADungeonFloorGenerator* FloorGen
 
     const int32 W = FloorGenerator->GridWidth;
     const int32 H = FloorGenerator->GridHeight;
-    const TArray<int32>& Grid = FloorGenerator->mGrid;
+    const TArray<int32>& Grid = FloorGenerator->GridCells;
 
     for (int32 Y = 0; Y < H; ++Y)
     {

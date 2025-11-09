@@ -20,9 +20,9 @@
 DEFINE_LOG_CATEGORY(LogTurnBarrier);
 
 // ============================================================================
-// StatId定義（Tick用）
+// StatId定義（Tick用）- REMOVED: Tickは使用されなくなりました
 // ============================================================================
-DECLARE_CYCLE_STAT(TEXT("TurnBarrier Tick"), STAT_TurnBarrierTick, STATGROUP_Game);
+// DECLARE_CYCLE_STAT(TEXT("TurnBarrier Tick"), STAT_TurnBarrierTick, STATGROUP_Game);
 
 // ============================================================================
 // UTurnActionBarrierSubsystem 実装
@@ -97,6 +97,20 @@ void UTurnActionBarrierSubsystem::BeginTurn(int32 TurnId)
 
     // 古いターンの掃除（2ターン以前は削除）
     RemoveOldTurns(TurnId);
+
+    // ★★★ 最適化: Tick→Timer変換（2025-11-09）
+    // タイムアウトチェックを1秒ごとのタイマーで実行
+    UWorld* World = GetWorld();
+    if (World)
+    {
+        World->GetTimerManager().SetTimer(
+            TimeoutCheckTimer,
+            this,
+            &UTurnActionBarrierSubsystem::CheckTimeouts,
+            1.0f,  // 1秒ごと
+            true   // ループ
+        );
+    }
 }
 
 // ============================================================================
@@ -337,27 +351,21 @@ void UTurnActionBarrierSubsystem::CompleteActionToken(const FGuid& Token)
 
 // ============================================================================
 // Tick: タイムアウト監視（Phase 6で実装）
+// ★★★ 最適化完了: Tick→Timer変換済み（2025-11-09）
 // ============================================================================
-
+/*
+REMOVED: Tick is replaced with timer-based CheckTimeouts()
 void UTurnActionBarrierSubsystem::Tick(float DeltaTime)
 {
     SCOPE_CYCLE_COUNTER(STAT_TurnBarrierTick);
-
-    // サーバー専用
-    if (!IsServer())
-    {
-        return;
-    }
-
-    // タイムアウトチェック
+    if (!IsServer()) return;
     CheckTimeouts();
-
-    // 定期的に無効なWeakPtrを掃除（Phase 8で実装）
-    // CleanupInvalidActors();
 }
+*/
 
 // ============================================================================
 // CheckTimeouts: タイムアウト検出と強制完了
+// ★★★ 最適化: Tickから呼ばれていたが、現在は1秒ごとのタイマーで実行
 // ============================================================================
 
 void UTurnActionBarrierSubsystem::CheckTimeouts()

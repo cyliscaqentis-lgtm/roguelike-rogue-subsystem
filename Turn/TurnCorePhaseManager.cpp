@@ -399,6 +399,7 @@ int32 UTurnCorePhaseManager::ExecuteMovePhaseWithSlots(
     check(GetWorld() && GetWorld()->GetNetMode() != NM_Client);
 
     OutActions.Reset();
+    OutActions.Reserve(AllIntents.Num());
 
     if (AllIntents.Num() == 0)
     {

@@ -105,11 +105,13 @@ public:
 
     //==========================================================================
     // ★★★ Phase 6: Tickable（タイムアウトチェック用）
+    // ★★★ 最適化: Tick→Timerに変換済み（2025-11-09）
     //==========================================================================
 
-    virtual void Tick(float DeltaTime) override;
-    virtual bool IsTickable() const override { return true; }
-    virtual TStatId GetStatId() const override;
+    // Tick is no longer used - replaced with timer-based CheckTimeouts
+    // virtual void Tick(float DeltaTime) override;
+    // virtual bool IsTickable() const override { return true; }
+    // virtual TStatId GetStatId() const override;
 
     //==========================================================================
     // ★★★ Phase 1: ActionID管理
@@ -177,23 +179,26 @@ public:
 
     /**
      * 移動バッチの開始（サーバー専用）
-     * ★★★ 注: Phase 1 では BeginTurn() を使用推奨
+     * ★★★ 非推奨: Phase 1 では BeginTurn() を使用推奨
      */
-    UFUNCTION(BlueprintCallable, Category = "TurnBarrier")
+    UE_DEPRECATED(5.0, "Use BeginTurn() instead of StartMoveBatch()")
+    UFUNCTION(BlueprintCallable, Category = "TurnBarrier", meta = (DeprecatedFunction, DeprecationMessage = "Use BeginTurn() instead"))
     void StartMoveBatch(int32 InCount, int32 InTurnId);
 
     /**
-     * ★★★ レガシー: 移動開始の通知（サーバー専用）
+     * ★★★ 非推奨: 移動開始の通知（サーバー専用）
      * 注: Phase 1 では RegisterAction() を使用推奨
      */
-    UFUNCTION(BlueprintCallable, Category = "TurnBarrier")
+    UE_DEPRECATED(5.0, "Use RegisterAction() instead of NotifyMoveStarted()")
+    UFUNCTION(BlueprintCallable, Category = "TurnBarrier", meta = (DeprecatedFunction, DeprecationMessage = "Use RegisterAction() instead"))
     void NotifyMoveStarted(AActor* Unit, int32 InTurnId);
 
     /**
-     * ★★★ レガシー: 個別アクション完了の通知（サーバー専用）
+     * ★★★ 非推奨: 個別アクション完了の通知（サーバー専用）
      * 注: Phase 1 では CompleteAction() を使用推奨
      */
-    UFUNCTION(BlueprintCallable, Category = "TurnBarrier")
+    UE_DEPRECATED(5.0, "Use CompleteAction() instead of NotifyMoveFinished()")
+    UFUNCTION(BlueprintCallable, Category = "TurnBarrier", meta = (DeprecatedFunction, DeprecationMessage = "Use CompleteAction() instead"))
     void NotifyMoveFinished(AActor* Unit, int32 InTurnId);
 
     /**
@@ -284,6 +289,9 @@ private:
 
     /** セーフティタイムアウトハンドル */
     FTimerHandle SafetyTimeoutHandle;
+
+    /** タイムアウトチェック用タイマー（Tick→Timer最適化） */
+    FTimerHandle TimeoutCheckTimer;
 
     //==========================================================================
     // ★★★ Token方式の状態管理（冪等API用）

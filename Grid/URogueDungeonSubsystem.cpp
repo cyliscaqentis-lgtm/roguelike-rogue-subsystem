@@ -9,6 +9,7 @@
 #include "Grid/AABB.h"
 #include "Components/BoxComponent.h"
 #include "Containers/Queue.h"
+#include "Turn/TurnEventDispatcher.h"
 
 void URogueDungeonSubsystem::StartGenerateFromLevel()
 {
@@ -23,29 +24,21 @@ void URogueDungeonSubsystem::StartGenerateFromLevel()
         return;
     }
 
-    TArray<AActor*> FoundActors;
-    UGameplayStatics::GetAllActorsOfClass(GetWorld(), ADungeonConfigActor::StaticClass(), FoundActors);
+    EnsureConfigActor();
 
     const URogueFloorConfigData* Config = nullptr;
-    ADungeonConfigActor* ConfigActor = nullptr;
-
-    if (FoundActors.Num() > 0)
+    if (CachedConfigActor && CachedConfigActor->DungeonConfigAsset)
     {
-        ConfigActor = Cast<ADungeonConfigActor>(FoundActors[0]);
-        if (ConfigActor && ConfigActor->DungeonConfigAsset)
-        {
-            Config = ConfigActor->DungeonConfigAsset;
-        }
+        Config = CachedConfigActor->DungeonConfigAsset;
     }
 
     if (!Config)
     {
         UE_LOG(LogTemp, Error, TEXT("[RogueSubsystem] No URogueFloorConfigData found in level. Place an ADungeonConfigActor and assign a valid config asset."));
-        // As a fail-safe, we could generate a default/fallback dungeon here, but for now, we stop.
         return;
     }
-    
-    UE_LOG(LogTemp, Warning, TEXT("[RogueSubsystem] ConfigActor=%s, ConfigDA=%s"), *GetNameSafe(ConfigActor), *Config->GetPathName());
+
+    UE_LOG(LogTemp, Warning, TEXT("[RogueSubsystem] ConfigActor=%s, ConfigDA=%s"), *GetNameSafe(CachedConfigActor), *Config->GetPathName());
 
     // Set the flag *before* starting generation
     bDungeonGenerationStarted = true;
@@ -91,6 +84,17 @@ void URogueDungeonSubsystem::StartGenerate(const URogueFloorConfigData* Cfg)
     FloorGenerator->GetGenerationStats(RoomCount, WalkableCount, Reachability);
     UE_LOG(LogTemp, Display, TEXT("[RogueSubsystem] Generate DONE (Rooms=%d, Walkable=%d, Reach=%.1f%%)"), RoomCount, WalkableCount, Reachability * 100.0f);
 
+    // ★★★ コアシステム: OnFloorReady配信（2025-11-09） ★★★
+    // EventDispatcher経由で配信を試みる
+    if (UWorld* World = GetWorld())
+    {
+        if (auto* EventDispatcher = World->GetSubsystem<UTurnEventDispatcher>())
+        {
+            EventDispatcher->BroadcastFloorReady(this);
+        }
+    }
+
+    // 既存のデリゲートも維持（後方互換性）
     OnGridReady.Broadcast(this);
 }
 
@@ -134,19 +138,12 @@ void URogueDungeonSubsystem::TransitionToFloor(int32 FloorIndex)
         return;
     }
 
-    TArray<AActor*> FoundActors;
-    UGameplayStatics::GetAllActorsOfClass(GetWorld(), ADungeonConfigActor::StaticClass(), FoundActors);
+    EnsureConfigActor();
 
     const URogueFloorConfigData* Config = nullptr;
-    ADungeonConfigActor* ConfigActor = nullptr;
-
-    if (FoundActors.Num() > 0)
+    if (CachedConfigActor && CachedConfigActor->DungeonConfigAsset)
     {
-        ConfigActor = Cast<ADungeonConfigActor>(FoundActors[0]);
-        if (ConfigActor && ConfigActor->DungeonConfigAsset)
-        {
-            Config = ConfigActor->DungeonConfigAsset;
-        }
+        Config = CachedConfigActor->DungeonConfigAsset;
     }
 
     if (!Config)
@@ -272,7 +269,7 @@ void URogueDungeonSubsystem::RebuildRoomMarkers()
     const int32 Width = FloorGenerator->GridWidth;
     const int32 Height = FloorGenerator->GridHeight;
     const int32 CellSize = FloorGenerator->CellSize;
-    const TArray<int32>& Grid = FloorGenerator->mGrid;
+    const TArray<int32>& Grid = FloorGenerator->GridCells;
 
     if (Width <= 0 || Height <= 0 || Grid.Num() != Width * Height)
     {
@@ -368,12 +365,30 @@ void URogueDungeonSubsystem::RebuildRoomMarkers()
     }
 }
 
+void URogueDungeonSubsystem::EnsureConfigActor()
+{
+    if (CachedConfigActor && IsValid(CachedConfigActor)) return;
+
+    UWorld* World = GetWorld();
+    if (!World) return;
+
+    TArray<AActor*> FoundActors;
+    FoundActors.Reserve(1);
+    UGameplayStatics::GetAllActorsOfClass(World, ADungeonConfigActor::StaticClass(), FoundActors);
+
+    if (FoundActors.Num() > 0)
+    {
+        CachedConfigActor = Cast<ADungeonConfigActor>(FoundActors[0]);
+    }
+}
+
 void URogueDungeonSubsystem::Deinitialize()
 {
     DestroyRoomMarkers();
     RoomMarkers.Reset();
     FloorGenerator = nullptr;
     RenderComponent = nullptr;
+    CachedConfigActor = nullptr;
 
     Super::Deinitialize();
 }

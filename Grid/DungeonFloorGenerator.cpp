@@ -4,6 +4,7 @@
 #include "Math/RandomStream.h"
 #include "Containers/Queue.h"
 #include "UObject/UObjectGlobals.h"
+#include "Utility/GridUtils.h"
 
 ADungeonFloorGenerator::ADungeonFloorGenerator()
 {
@@ -109,7 +110,7 @@ void ADungeonFloorGenerator::GenerateWithTemplate(UDungeonTemplateAsset* Templat
 
 void ADungeonFloorGenerator::ResetGrid(ECellType Fill)
 {
-    mGrid.Init(static_cast<int32>(Fill), GridWidth * GridHeight);
+    GridCells.Init(static_cast<int32>(Fill), GridWidth * GridHeight);
 }
 
 void ADungeonFloorGenerator::EnsureOuterWall()
@@ -121,13 +122,13 @@ void ADungeonFloorGenerator::EnsureOuterWall()
 void ADungeonFloorGenerator::SetCellXY(int32 X, int32 Y, ECellType Type)
 {
     if (!InBounds(X, Y)) return;
-    mGrid[Index(X, Y)] = static_cast<int32>(Type);
+    GridCells[Index(X, Y)] = static_cast<int32>(Type);
 }
 
 ECellType ADungeonFloorGenerator::GetCellXY(int32 X, int32 Y) const
 {
     if (!InBounds(X, Y)) return ECellType::Wall;
-    return static_cast<ECellType>(mGrid[Index(X, Y)]);
+    return static_cast<ECellType>(GridCells[Index(X, Y)]);
 }
 
 void ADungeonFloorGenerator::CarveLineX(const FIntPoint& A, const FIntPoint& B, ECellType Type)
@@ -232,7 +233,9 @@ void ADungeonFloorGenerator::PlaceStairsFarthestPair()
 
 void ADungeonFloorGenerator::BSP_Split(const FIntRectLite& Root, FRandomStream& RNG, const FDungeonResolvedParams& Params, TArray<FIntRectLite>& OutLeaves)
 {
-    TArray<FIntRectLite> stack; stack.Add(Root);
+    TArray<FIntRectLite> stack;
+    stack.Reserve(64); // Reserve for BSP split operations
+    stack.Add(Root);
     const int32 minLeafW = Params.MinRoomSize + 2 * Params.RoomMargin + 2;
     const int32 minLeafH = Params.MinRoomSize + 2 * Params.RoomMargin + 2;
 
@@ -300,8 +303,15 @@ FIntRectLite ADungeonFloorGenerator::MakeRoomInLeaf(const FIntRectLite& Leaf, FR
 void ADungeonFloorGenerator::ConnectCentersWithMST(const TArray<FIntPoint>& Centers, ECellType CorridorType)
 {
     if (Centers.Num() <= 1) return;
-    TArray<int32> used; used.Add(0);
-    TArray<int32> unused; for (int32 i = 1; i < Centers.Num(); ++i) unused.Add(i);
+
+    TArray<int32> used;
+    used.Reserve(Centers.Num());
+    used.Add(0);
+
+    TArray<int32> unused;
+    unused.Reserve(Centers.Num() - 1);
+    for (int32 i = 1; i < Centers.Num(); ++i)
+        unused.Add(i);
 
     while (unused.Num() > 0)
     {
@@ -311,7 +321,8 @@ void ADungeonFloorGenerator::ConnectCentersWithMST(const TArray<FIntPoint>& Cent
             for (int32 vIdx = 0; vIdx < unused.Num(); ++vIdx)
             {
                 const int32 v = unused[vIdx];
-                const int32 d = FMath::Abs(Centers[u].X - Centers[v].X) + FMath::Abs(Centers[u].Y - Centers[v].Y);
+                // ★★★ 最適化: GridUtils使用（重複コード削除 2025-11-09）
+                const int32 d = FGridUtils::ManhattanDistance(Centers[u], Centers[v]);
                 if (d < bestDist) { bestDist = d; bestU = u; bestV = v; bestIdx = vIdx; }
             }
         if (bestU < 0) break;
@@ -326,10 +337,14 @@ bool ADungeonFloorGenerator::Make_NormalBSP(FRandomStream& RNG, const FDungeonRe
     const FIntRectLite root(Params.OuterMargin, Params.OuterMargin,
         GridWidth - 1 - Params.OuterMargin, GridHeight - 1 - Params.OuterMargin);
 
-    TArray<FIntRectLite> leaves; BSP_Split(root, RNG, Params, leaves);
+    TArray<FIntRectLite> leaves;
+    leaves.Reserve(Params.MaxRooms * 2);
+    BSP_Split(root, RNG, Params, leaves);
 
     TArray<FIntPoint> centers;
+    centers.Reserve(Params.MaxRooms);
     TArray<FIntRectLite> rooms;
+    rooms.Reserve(Params.MaxRooms);
     int32 placed = 0;
 
     for (auto& leaf : leaves)
@@ -373,10 +388,10 @@ bool ADungeonFloorGenerator::Make_LargeHall(FRandomStream& RNG, const FDungeonRe
         for (int x = ox; x < ox + w; ++x)
             SetCellXY(x, y, ECellType::Room);
 
-    TArray<FIntPoint> centers;
-    centers.Add({ ox + w / 2, oy + h / 2 });
-
     const int32 n = FMath::Clamp(Params.MinRooms / 2, 3, 10);
+    TArray<FIntPoint> centers;
+    centers.Reserve(n + 1);
+    centers.Add({ ox + w / 2, oy + h / 2 });
     for (int i = 0; i < n; ++i)
     {
         const int32 rw = RNG.RandRange(Params.MinRoomSize, Params.MinRoomSize + 2);
@@ -423,6 +438,7 @@ bool ADungeonFloorGenerator::Make_FourQuads(FRandomStream& RNG, const FDungeonRe
     };
 
     TArray<FIntPoint> centers;
+    centers.Reserve(4);
     centers.Add(placeRect(1, 1, midX - 1, midY - 1));
     centers.Add(placeRect(midX + 1, 1, GridWidth - 2, midY - 1));
     centers.Add(placeRect(1, midY + 1, midX - 1, GridHeight - 2));
@@ -441,8 +457,11 @@ bool ADungeonFloorGenerator::Make_CentralCrossWithMiniRooms(FRandomStream& RNG, 
     const int32 y0 = GridHeight / 2;
     for (int x = Params.OuterMargin + 1; x < GridWidth - Params.OuterMargin - 1; ++x) SetCellXY(x, y0, ECellType::Corridor);
 
-    TArray<FIntPoint> centers;
     const int interval = FMath::Max(Params.MinRoomSize + 2, 6);
+    const int32 EstimatedRooms = (GridWidth - 2 * Params.OuterMargin) / interval + 2;
+
+    TArray<FIntPoint> centers;
+    centers.Reserve(EstimatedRooms);
 
     for (int x = Params.OuterMargin + 2; x < GridWidth - Params.OuterMargin - 2; x += interval)
     {
@@ -527,14 +546,14 @@ bool ADungeonFloorGenerator::GenerateFallbackLayout(const FDungeonResolvedParams
 
 int32 ADungeonFloorGenerator::ComputeRoomClusterCount() const
 {
-    if (GridWidth <= 0 || GridHeight <= 0 || mGrid.Num() != GridWidth * GridHeight)
+    if (GridWidth <= 0 || GridHeight <= 0 || GridCells.Num() != GridWidth * GridHeight)
     {
         return 0;
     }
 
     const int32 RoomValue = static_cast<int32>(ECellType::Room);
     TArray<uint8> Visited;
-    Visited.Init(0, mGrid.Num());
+    Visited.Init(0, GridCells.Num());
     int32 ClusterCount = 0;
 
     for (int32 Y = 0; Y < GridHeight; ++Y)
@@ -542,7 +561,7 @@ int32 ADungeonFloorGenerator::ComputeRoomClusterCount() const
         for (int32 X = 0; X < GridWidth; ++X)
         {
             const int32 IndexValue = Index(X, Y);
-            if (Visited[IndexValue] || mGrid[IndexValue] != RoomValue)
+            if (Visited[IndexValue] || GridCells[IndexValue] != RoomValue)
             {
                 continue;
             }
@@ -568,7 +587,7 @@ int32 ADungeonFloorGenerator::ComputeRoomClusterCount() const
                     }
 
                     const int32 NeighborIdx = Index(NX, NY);
-                    if (Visited[NeighborIdx] || mGrid[NeighborIdx] != RoomValue)
+                    if (Visited[NeighborIdx] || GridCells[NeighborIdx] != RoomValue)
                     {
                         continue;
                     }
@@ -620,7 +639,7 @@ int32 ADungeonFloorGenerator::ReturnGridStatus(FVector InputVector) const
     const int32 X = FMath::FloorToInt(InputVector.X / float(CellSize));
     const int32 Y = FMath::FloorToInt(InputVector.Y / float(CellSize));
     if (!InBounds(X, Y)) return -999;
-    return mGrid[Index(X, Y)];
+    return GridCells[Index(X, Y)];
 }
 
 void ADungeonFloorGenerator::GridChangeVector(FVector InputVector, int32 Value)
@@ -628,7 +647,7 @@ void ADungeonFloorGenerator::GridChangeVector(FVector InputVector, int32 Value)
     const int32 X = FMath::FloorToInt(InputVector.X / float(CellSize));
     const int32 Y = FMath::FloorToInt(InputVector.Y / float(CellSize));
     if (!InBounds(X, Y)) return;
-    mGrid[Index(X, Y)] = Value;
+    GridCells[Index(X, Y)] = Value;
 }
 
 void ADungeonFloorGenerator::GetGenerationStats(int32& OutRoomCount, int32& OutWalkableCount, float& OutReachability)

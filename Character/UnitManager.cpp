@@ -317,9 +317,9 @@ void AUnitManager::GetUnitStatBlock(int32 Index)
 	Speed=B.MaxSpeed; CurrentSpeed=B.CurrentSpeed;
 	MaxSightRange=B.MaxSightRange; CurrentSightRange=B.CurrentSightRange;
 
-	CanAct=B.bCanAct; HasActed=B.bHasActed; IsDisabled=B.bIsDisabled; CanMove=B.bCanMove; HasMoved=B.bHasMoved; IsRooted=B.bIsRooted;
+	bCanAct=B.bCanAct; bHasActed=B.bHasActed; bIsDisabled=B.bIsDisabled; bCanMove=B.bCanMove; bHasMoved=B.bHasMoved; bIsRooted=B.bIsRooted;
 
-	Team=B.Team; MovementRange=B.RangePerMove; NumberOfMoves=B.NumberOfMoves; CurrentMovementRange=B.CurrentTotalMovementRnage;
+	Team=B.Team; MovementRange=B.RangePerMove; NumberOfMoves=B.NumberOfMoves; CurrentMovementRange=B.CurrentTotalMovementRange;
 
 	MeleeBaseAttack=B.MeleeBaseAttack; RangedBaseAttack=B.RangedBaseAttack; MagicBaseAttack=B.MagicBaseAttack;
 	MeleeBaseDamage=B.MeleeBaseDamage; RangedBaseDamage=B.RangedBaseDamage; MagicBaseDamage=B.MagicBaseDamage;
@@ -344,9 +344,9 @@ void AUnitManager::SetUnitStatBlock(int32 Index)
 
 	Tmp.MaxSightRange=MaxSightRange; Tmp.CurrentSightRange=CurrentSightRange;
 
-	Tmp.bCanAct=CanAct; Tmp.bHasActed=HasActed; Tmp.bIsDisabled=IsDisabled; Tmp.bCanMove=CanMove; Tmp.bHasMoved=HasMoved; Tmp.bIsRooted=IsRooted;
+	Tmp.bCanAct=bCanAct; Tmp.bHasActed=bHasActed; Tmp.bIsDisabled=bIsDisabled; Tmp.bCanMove=bCanMove; Tmp.bHasMoved=bHasMoved; Tmp.bIsRooted=bIsRooted;
 
-	Tmp.Team=Team; Tmp.RangePerMove=MovementRange; Tmp.NumberOfMoves=NumberOfMoves; Tmp.CurrentTotalMovementRnage=CurrentMovementRange;
+	Tmp.Team=Team; Tmp.RangePerMove=MovementRange; Tmp.NumberOfMoves=NumberOfMoves; Tmp.CurrentTotalMovementRange=CurrentMovementRange;
 
 	Tmp.MeleeBaseAttack=MeleeBaseAttack; Tmp.RangedBaseAttack=RangedBaseAttack; Tmp.MagicBaseAttack=MagicBaseAttack;
 

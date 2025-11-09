@@ -16,6 +16,8 @@
 #include "Character/LyraPawnExtensionComponent.h"
 #include "Character/LyraHealthComponent.h"
 #include "Character/LyraPawnData.h"
+#include "Character/UnitMovementComponent.h"
+#include "Character/UnitUIComponent.h"
 
 // 繝ｭ繧ｰ繧ｫ繝・ざ繝ｪ螳夂ｾｩ
 DEFINE_LOG_CATEGORY_STATIC(LogUnitBase, Log, All);
@@ -27,6 +29,16 @@ AUnitBase::AUnitBase(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
 {
     PrimaryActorTick.bCanEverTick = true;
+
+    //==========================================================================
+    // ★★★ 新規: Component初期化（2025-11-09リファクタリング） ★★★
+    //==========================================================================
+
+    // 移動処理Component
+    MovementComp = CreateDefaultSubobject<UUnitMovementComponent>(TEXT("UnitMovementComp"));
+
+    // UI更新Component
+    UIComp = CreateDefaultSubobject<UUnitUIComponent>(TEXT("UnitUIComp"));
 }
 
 //------------------------------------------------------------------------------
@@ -197,6 +209,9 @@ void AUnitBase::MoveUnit(const TArray<FVector>& InPath)
         MoveStatus = EUnitMoveStatus::Idle;
         CurrentVelocity = FVector::ZeroVector;
 
+        // ✅ Tickを無効化
+        SetActorTickEnabled(false);
+
         UE_LOG(LogUnitBase, Verbose,
             TEXT("[MoveComplete] %s finished MoveUnit path"), *GetName());
 
@@ -223,6 +238,9 @@ void AUnitBase::StartNextLeg()
     {
         MoveStatus = EUnitMoveStatus::Idle;
         CurrentVelocity = FVector::ZeroVector;
+
+        // ✅ 移動完了時にTickを無効化
+        SetActorTickEnabled(false);
 
         UE_LOG(LogUnitBase, Verbose,
             TEXT("[MoveComplete] %s finished MoveUnit path"), *GetName());
@@ -558,7 +576,7 @@ void AUnitBase::SetStatVars()
     // StatBlock縺九ｉ蜷・Γ繝ｳ繝仙､画焚縺ｸ繧ｳ繝斐・・・nitManager縺御ｽｿ逕ｨ・・
     // 螳溯｣・・UnitManager縺ｮ隕∵ｱゅ↓蜷医ｏ縺帙※隱ｿ謨ｴ縺励※縺上□縺輔＞
     Team = StatBlock.Team;
-    CurrentMovementRange = FMath::Max(1, StatBlock.CurrentTotalMovementRnage);
+    CurrentMovementRange = FMath::Max(1, StatBlock.CurrentTotalMovementRange);
     
     MeleeBaseAttack = StatBlock.MeleeBaseAttack;
     RangedBaseAttack = StatBlock.RangedBaseAttack;

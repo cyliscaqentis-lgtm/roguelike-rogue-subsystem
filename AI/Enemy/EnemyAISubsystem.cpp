@@ -232,3 +232,107 @@ FEnemyIntent UEnemyAISubsystem::ComputeIntent(
 
     return Intent;
 }
+
+//------------------------------------------------------------------------------
+// ★★★ Phase 4: Enemy収集（2025-11-09） ★★★
+//------------------------------------------------------------------------------
+
+void UEnemyAISubsystem::CollectAllEnemies(
+    AActor* PlayerPawn,
+    TArray<AActor*>& OutEnemies)
+{
+    OutEnemies.Empty();
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        UE_LOG(LogEnemyAI, Error, TEXT("[CollectAllEnemies] World is null"));
+        return;
+    }
+
+    UE_LOG(LogEnemyAI, Log, TEXT("[CollectAllEnemies] ==== START ===="));
+
+    // ★★★ APawnで検索（includeが不要） ★★★
+    TArray<AActor*> Found;
+    UGameplayStatics::GetAllActorsOfClass(World, APawn::StaticClass(), Found);
+
+    UE_LOG(LogEnemyAI, Log, TEXT("[CollectAllEnemies] GetAllActorsOfClass found %d Pawns"), Found.Num());
+
+    static const FName ActorTagEnemy(TEXT("Enemy"));
+    static const FGameplayTag GT_Enemy = FGameplayTag::RequestGameplayTag(TEXT("Faction.Enemy"));
+
+    int32 NumByTag = 0, NumByTeam = 0, NumByActorTag = 0;
+
+    OutEnemies.Reserve(Found.Num());
+
+    for (AActor* A : Found)
+    {
+        // ★★★ Nullチェック ★★★
+        if (!IsValid(A))
+        {
+            continue;
+        }
+
+        // ★★★ プレイヤーを除外 ★★★
+        if (A == PlayerPawn)
+        {
+            UE_LOG(LogEnemyAI, Verbose, TEXT("[CollectAllEnemies] Skipping PlayerPawn: %s"), *A->GetName());
+            continue;
+        }
+
+        // ★★★ TeamID判定 ★★★
+        int32 TeamId = 255; // Default: NoTeam
+        if (const IGenericTeamAgentInterface* TeamAgent = Cast<IGenericTeamAgentInterface>(A))
+        {
+            TeamId = TeamAgent->GetGenericTeamId().GetId();
+        }
+        else if (const IGenericTeamAgentInterface* Controller = Cast<IGenericTeamAgentInterface>(Cast<APawn>(A)->GetController()))
+        {
+            TeamId = Controller->GetGenericTeamId().GetId();
+        }
+
+        const bool bByTeam = (TeamId == 2 || TeamId == 255); // 敵チーム or NoTeam
+
+        // ★★★ GameplayTag判定 ★★★
+        UAbilitySystemComponent* ASC = nullptr;
+        if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(A))
+        {
+            ASC = ASI->GetAbilitySystemComponent();
+        }
+        const bool bByGTag = (ASC && ASC->HasMatchingGameplayTag(GT_Enemy));
+
+        // ★★★ ActorTag判定 ★★★
+        const bool bByActorTag = A->Tags.Contains(ActorTagEnemy);
+
+        // ★★★ いずれかの条件を満たせば敵として認識 ★★★
+        if (bByGTag || bByTeam || bByActorTag)
+        {
+            OutEnemies.Add(A);
+
+            if (bByGTag) ++NumByTag;
+            if (bByTeam) ++NumByTeam;
+            if (bByActorTag) ++NumByActorTag;
+
+            // ★★★ デバッグ：最初の3体のみログ ★★★
+            const int32 Index = OutEnemies.Num() - 1;
+            if (Index < 3)
+            {
+                UE_LOG(LogEnemyAI, Log,
+                    TEXT("[CollectAllEnemies] Added[%d]: %s (TeamId=%d, GTag=%d, ByTeam=%d, ActorTag=%d)"),
+                    Index, *A->GetName(), TeamId, bByGTag, bByTeam, bByActorTag);
+            }
+        }
+    }
+
+    UE_LOG(LogEnemyAI, Log,
+        TEXT("[CollectAllEnemies] ==== RESULT ==== found=%d  collected=%d  byGTag=%d  byTeam=%d  byActorTag=%d"),
+        Found.Num(), OutEnemies.Num(), NumByTag, NumByTeam, NumByActorTag);
+
+    // ★★★ エラー検出：敵が1体も見つからない場合 ★★★
+    if (OutEnemies.Num() == 0 && Found.Num() > 1)
+    {
+        UE_LOG(LogEnemyAI, Warning,
+            TEXT("[CollectAllEnemies] No enemies collected from %d Pawns! Check TeamID/Tags."),
+            Found.Num());
+    }
+}

@@ -53,31 +53,10 @@ void APlayerControllerBase::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
 
-    // CachedTurnManager がない場合のみ再取得
+    // ✅ Tickでは検索しない（BeginPlayとタイマーで処理）
     if (!CachedTurnManager || !IsValid(CachedTurnManager))
     {
-        UE_LOG(LogTemp, Error, TEXT("[Client] Tick: TurnManager is NULL, searching..."));
-
-        // ★★★ 直接GameTurnManagerBaseを検索（統合・最適化） ★★★
-        if (UWorld* World = GetWorld())
-        {
-            for (TActorIterator<AGameTurnManagerBase> It(World); It; ++It)
-            {
-                CachedTurnManager = *It;
-                if (CachedTurnManager)
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("[Client] TurnManager re-cached in Tick: %s"),
-                        *CachedTurnManager->GetName());
-                    break; // 最初に見つかったものを使用
-                }
-            }
-        }
-
-        // 見つからなければ次フレームに期待
-        if (!CachedTurnManager)
-        {
-            return;
-        }
+        return;
     }
 
     //==========================================================================
@@ -108,24 +87,6 @@ void APlayerControllerBase::Tick(float DeltaTime)
     // 現在値を先に取り出す
     const bool bNow = CachedTurnManager->WaitingForPlayerInput;
     const int32 NewWindowId = CachedTurnManager->GetCurrentInputWindowId();  // ★ 新しい値
-
-    // ★ Gate診断ログ: 入力ウィンドウとGateタグの開閉状態を可視化
-    {
-        bool bGateOpen = false;
-        if (APawn* MyPawn = GetPawn())
-        {
-            if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(MyPawn))
-            {
-                if (UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent())
-                {
-                    bGateOpen = ASC->HasMatchingGameplayTag(RogueGameplayTags::Gate_Input_Open);
-                }
-            }
-        }
-        // ★ 削除：Tick毎のWaitingForInput/GateOpenログは不要（エラー時のみ出力）
-        // UE_LOG(LogTemp, Warning, TEXT("[Client_Tick] T%d WaitingForInput=%d, GateOpen=%d"),
-        //     CachedTurnManager->GetCurrentTurnIndex(), bNow, bGateOpen);
-    }
 
     // ★ 状態遷移を詳細にログ可視化
     UE_LOG(LogTemp, Verbose, TEXT("[Client_Tick] WPI: Prev=%d, Now=%d, Sent=%d, WinId=%d->%d"),
@@ -191,31 +152,20 @@ void APlayerControllerBase::BeginPlay()
     SetActorTickEnabled(true);
     UE_LOG(LogTemp, Warning, TEXT("[PlayerController] BeginPlay: Tick enabled"));
 
-    // TurnManagerを先に取得（直接検索）
-    if (UWorld* World = GetWorld())
+    // ★★★ Tick最適化: BeginPlayで確実に取得を試みる
+    EnsureTurnManagerCached();
+
+    // ★★★ 取得できない場合はタイマーで再試行（Tickを汚さない）
+    if (!CachedTurnManager)
     {
-        // ★★★ 直接GameTurnManagerBaseを検索（統合・最適化） ★★★
-        for (TActorIterator<AGameTurnManagerBase> It(World); It; ++It)
-        {
-            CachedTurnManager = *It;
-            if (CachedTurnManager)
-            {
-                break; // 最初に見つかったものを使用
-            }
-        }
-        
-        if (CachedTurnManager)
-        {
-            PathFinder = CachedTurnManager->GetCachedPathFinder();
-            UE_LOG(LogTemp, Warning, TEXT("[PlayerController] TurnManager cached: %s"),
-                *CachedTurnManager->GetName());
-            UE_LOG(LogTemp, Warning, TEXT("[PlayerController] PathFinder: %s"),
-                PathFinder ? *PathFinder->GetName() : TEXT("NULL"));
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("[PlayerController] TurnManager not found"));
-        }
+        FTimerHandle RetryHandle;
+        GetWorld()->GetTimerManager().SetTimer(
+            RetryHandle,
+            this,
+            &APlayerControllerBase::EnsureTurnManagerCached,
+            0.1f, // 0.1秒ごと
+            true  // ループ
+        );
     }
 
     // GameplayTagsの検証
@@ -230,6 +180,41 @@ void APlayerControllerBase::BeginPlay()
     }
 
     UE_LOG(LogTemp, Log, TEXT("[PlayerController] BeginPlay completed"));
+}
+
+//------------------------------------------------------------------------------
+// ★★★ Tick最適化: TurnManager取得ヘルパー（2025-11-09）
+//------------------------------------------------------------------------------
+void APlayerControllerBase::EnsureTurnManagerCached()
+{
+    if (CachedTurnManager && IsValid(CachedTurnManager))
+    {
+        // ✅ 既に取得済みならタイマーをクリア
+        if (UWorld* World = GetWorld())
+        {
+            World->GetTimerManager().ClearAllTimersForObject(this);
+        }
+        return;
+    }
+
+    // ★★★ 直接GameTurnManagerBaseを検索（統合・最適化）
+    if (UWorld* World = GetWorld())
+    {
+        for (TActorIterator<AGameTurnManagerBase> It(World); It; ++It)
+        {
+            CachedTurnManager = *It;
+            if (CachedTurnManager)
+            {
+                PathFinder = CachedTurnManager->GetCachedPathFinder();
+                UE_LOG(LogTemp, Log, TEXT("[Client] TurnManager cached successfully: %s"),
+                    *CachedTurnManager->GetName());
+
+                // タイマーをクリア
+                World->GetTimerManager().ClearAllTimersForObject(this);
+                break;
+            }
+        }
+    }
 }
 
 void APlayerControllerBase::OnPossess(APawn* InPawn)
@@ -388,21 +373,6 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
 
     //=== Step 5: 8方向量子化 ===
     FIntPoint GridOffset = Quantize8Way(CachedInputDirection, AxisThreshold);
-
-    // 送信前診断ログ（WPI/Gate 状態）
-    {
-        bool bGateOpen = false;
-        if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(GetPawn()))
-        {
-            if (UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent())
-            {
-                bGateOpen = ASC->HasMatchingGameplayTag(RogueGameplayTags::Gate_Input_Open);
-            }
-        }
-        UE_LOG(LogTemp, Warning, TEXT("[Client] Move Input: WPI=%d, Gate=%s, Sending..."),
-            CachedTurnManager ? (int32)CachedTurnManager->WaitingForPlayerInput : -1,
-            bGateOpen ? TEXT("OPEN") : TEXT("CLOSED"));
-    }
 
     //=== Step 6: コマンド作成 ===
     FPlayerCommand Command;

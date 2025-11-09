@@ -12,21 +12,6 @@ class AGridPathfindingLibrary;
 class UInputAction;
 class UInputMappingContext;
 
-//------------------------------------------------------------------------------
-// ★★★ 削除: ECmdReject enum（ACK/NACKシステム廃止に伴い削除）
-//------------------------------------------------------------------------------
-/*
-UENUM(BlueprintType)
-enum class ECmdReject : uint8
-{
-    StaleWindow     UMETA(DisplayName = "Stale Window ID"),
-    FutureWindow    UMETA(DisplayName = "Future Window ID"),
-    Throttled       UMETA(DisplayName = "Throttled"),
-    NotAdjacent     UMETA(DisplayName = "Not Adjacent Cell"),
-    NoManager       UMETA(DisplayName = "No Turn Manager"),
-    NoPathFinder    UMETA(DisplayName = "No PathFinder")
-};
-*/
 
 /**
  * APlayerControllerBase
@@ -57,16 +42,6 @@ class LYRAGAME_API APlayerControllerBase : public ALyraPlayerController
 public:
     APlayerControllerBase();
 
-    //--------------------------------------------------------------------------
-    // ★★★ 削除: RPC Functions - Client通知（ACK/NACKシステム）
-    //--------------------------------------------------------------------------
-    /*
-    UFUNCTION(Client, Reliable)
-    void Client_NotifyCommandAccepted(int32 WindowId);
-
-    UFUNCTION(Client, Reliable)
-    void Client_NotifyCommandRejected(int32 WindowId, ECmdReject Reason);
-    */
 
     /** デバッグ用：グリッドシステム動作確認 */
     UFUNCTION(Exec)
@@ -87,13 +62,6 @@ protected:
      * privateセクションに移動
      */
 
-    //--------------------------------------------------------------------------
-    // ★★★ 削除: 入力ゲート関連フラグ
-    //--------------------------------------------------------------------------
-    /*
-    UPROPERTY()
-    bool bSentThisInputWindow = false;
-    */
 
     /** WaitingForPlayerInput の前回値（Tick内での変化検出用） */
     UPROPERTY()
@@ -262,10 +230,6 @@ private:
     /** Server側：TurnFacing重複防止用 */
     FIntPoint ServerLastTurnDirectionQuantized = FIntPoint::ZeroValue;
 
-    ////--------------------------------------------------------------------------
-    //// ★★★ 削除: OnInputWindowOpened（サーバー側管理に移行）
-    ////--------------------------------------------------------------------------
-    /*
-    void OnInputWindowOpened();
-    */
+    /** ★★★ Tick最適化: TurnManagerの取得を確実にする（BeginPlay + Timer） */
+    void EnsureTurnManagerCached();
 };
