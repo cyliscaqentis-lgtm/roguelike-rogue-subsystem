@@ -193,6 +193,22 @@ public:
     // Utilities
     //==========================================================================
 
+    /**
+     * ★★★ Phase 5補完: 残留InProgressタグの強制クリーンアップ（2025-11-09） ★★★
+     *
+     * 全ユニット（プレイヤー + 敵）のState.Action.InProgressタグを強制除去
+     *
+     * 用途:
+     * - Barrier完了後のターン終了時に呼び出し
+     * - タグがスタックしてターン進行が止まるのを防ぐ
+     * - 通常は不要だが、予期しないエラーで残留した場合の保険
+     *
+     * ログ出力:
+     * - Before: クリーンアップ前のInProgressタグ数
+     * - After: クリーンアップ後（通常は0）
+     */
+    void ClearResidualInProgressTags();
+
     UFUNCTION(BlueprintCallable, Category = "Turn|Enemy")
     void BuildAllObservations();
 
@@ -716,7 +732,15 @@ private:
     // 削除: RecollectEnemiesTimerHandle（使用されていない）
     // 削除: PendingTeamCountLast（使用されていない）
     // 削除: CollectEnemiesRetryCount（使用されていない）
-    // 削除: bEndTurnPosted（使用されていない）
+
+    // ★★★ Phase 5補完: EndTurnリトライ連打防止（2025-11-09） ★★★
+    /**
+     * EndEnemyTurn のリトライが既にスケジュールされているかを示すフラグ
+     * - true: リトライタイマーが既に設定済み → 追加のリトライは抑止
+     * - false: リトライ未設定 → 新規リトライを許可
+     * AdvanceTurnAndRestart() で false にリセット
+     */
+    bool bEndTurnPosted = false;
 
     UPROPERTY()
     TMap<TWeakObjectPtr<AActor>, FEnemyIntent> CachedIntents;

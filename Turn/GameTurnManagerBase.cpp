@@ -1698,8 +1698,11 @@ void AGameTurnManagerBase::AdvanceTurnAndRestart()
 
     CurrentTurnIndex++;
 
+    // ★★★ Phase 5補完: EndTurnリトライフラグをリセット（2025-11-09） ★★★
+    bEndTurnPosted = false;
+
     UE_LOG(LogTurnManager, Log,
-        TEXT("[AdvanceTurnAndRestart] Turn advanced: %d → %d"),
+        TEXT("[AdvanceTurnAndRestart] Turn advanced: %d → %d (bEndTurnPosted reset)"),
         PreviousTurn, CurrentTurnIndex);
 
     //==========================================================================
@@ -2990,25 +2993,41 @@ void AGameTurnManagerBase::EndEnemyTurn()
         }
 
         //======================================================================
-        // ☁E�E☁Eリトライ機構（オプション�E�E
-        // 0.5秒後に再チェチE��
+        // ★★★ Phase 5補完: リトライ連打防止（2025-11-09） ★★★
+        // 最初の1回だけリトライをスケジュール、以降は抑止
         //======================================================================
-        if (UWorld* World = GetWorld())
+        if (!bEndTurnPosted)
         {
-            FTimerHandle RetryHandle;
-            World->GetTimerManager().SetTimer(
-                RetryHandle,
-                [this]() { EndEnemyTurn(); },
-                0.5f,
-                false
-            );
+            bEndTurnPosted = true;  // フラグを立てる
 
-            UE_LOG(LogTurnManager, Warning,
-                TEXT("[EndEnemyTurn] Retry scheduled in 0.5s"));
+            if (UWorld* World = GetWorld())
+            {
+                FTimerHandle RetryHandle;
+                World->GetTimerManager().SetTimer(
+                    RetryHandle,
+                    [this]() { EndEnemyTurn(); },
+                    0.5f,
+                    false
+                );
+
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("[EndEnemyTurn] Retry scheduled in 0.5s"));
+            }
+        }
+        else
+        {
+            UE_LOG(LogTurnManager, Log,
+                TEXT("[EndEnemyTurn] Retry suppressed (already posted)"));
         }
 
         return;  // ☁E�E☁E進行を中止
     }
+
+    //==========================================================================
+    // ★★★ Phase 5補完: 残留タグクリーンアップ（2025-11-09） ★★★
+    // Barrier完了後、ターン進行前に残留InProgressタグを掃除
+    //==========================================================================
+    ClearResidualInProgressTags();
 
     //==========================================================================
     // (1) 次のターンへ進む
@@ -3016,9 +3035,76 @@ void AGameTurnManagerBase::EndEnemyTurn()
     AdvanceTurnAndRestart();
 }
 
+//------------------------------------------------------------------------------
+// ★★★ Phase 5補完: 残留InProgressタグの強制クリーンアップ（2025-11-09） ★★★
+//------------------------------------------------------------------------------
+void AGameTurnManagerBase::ClearResidualInProgressTags()
+{
+    static const FGameplayTag InProgressTag = FGameplayTag::RequestGameplayTag(FName("State.Action.InProgress"));
 
+    if (!InProgressTag.IsValid())
+    {
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[InProgressDiag] State.Action.InProgress tag not found"));
+        return;
+    }
 
+    TArray<AActor*> AllUnits;
 
+    // プレイヤー追加
+    if (APawn* PlayerPawn = GetPlayerPawn())
+    {
+        AllUnits.Add(PlayerPawn);
+    }
+
+    // 敵追加
+    TArray<AActor*> Enemies;
+    GetCachedEnemies(Enemies);
+    AllUnits.Append(Enemies);
+
+    int32 TotalBefore = 0;
+    int32 TotalAfter = 0;
+
+    for (AActor* Actor : AllUnits)
+    {
+        if (!Actor)
+        {
+            continue;
+        }
+
+        UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Actor);
+        if (!ASC)
+        {
+            continue;
+        }
+
+        const int32 CountBefore = ASC->GetTagCount(InProgressTag);
+        TotalBefore += CountBefore;
+
+        if (CountBefore > 0)
+        {
+            // 残留タグを強制除去
+            for (int32 i = 0; i < CountBefore; ++i)
+            {
+                ASC->RemoveLooseGameplayTag(InProgressTag);
+            }
+
+            const int32 CountAfter = ASC->GetTagCount(InProgressTag);
+            TotalAfter += CountAfter;
+
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[InProgressDiag] %s had InProgress=%d -> force cleared to %d"),
+                *GetNameSafe(Actor), CountBefore, CountAfter);
+        }
+    }
+
+    if (TotalBefore > 0)
+    {
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[InProgressDiag] Total residual InProgress tags: Before=%d, After=%d"),
+            TotalBefore, TotalAfter);
+    }
+}
 
 //------------------------------------------------------------------------------
 // Replication Callbacks
