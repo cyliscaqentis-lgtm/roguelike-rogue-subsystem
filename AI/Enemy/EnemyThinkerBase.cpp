@@ -7,6 +7,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "../../Grid/GridPathfindingLibrary.h"
 #include "../../Turn/GameTurnManagerBase.h"
+#include "../../Utility/GridCoordinateUtils.h"
+#include "../../Utility/RogueGameplayTags.h"
 #include "EngineUtils.h"
 
 UEnemyThinkerBase::UEnemyThinkerBase()
@@ -67,20 +69,15 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
             Intent.CurrentCell.X, Intent.CurrentCell.Y, bCurrentWalkable ? 1 : 0);
         
         // 周囲4方向の歩行可能性を確認
-        FIntPoint Neighbors[4] = {
-            Intent.CurrentCell + FIntPoint(1, 0),   // Right
-            Intent.CurrentCell + FIntPoint(-1, 0),  // Left
-            Intent.CurrentCell + FIntPoint(0, 1),   // Up
-            Intent.CurrentCell + FIntPoint(0, -1)   // Down
-        };
-        
+        TArray<FIntPoint> Neighbors = RogueGrid::GetAdjacentCells(Intent.CurrentCell);
+
         int32 BlockedCount = 0;
-        for (int i = 0; i < 4; ++i)
+        for (const FIntPoint& N : Neighbors)
         {
-            bool bNeighborWalkable = GridPathfinding->IsCellWalkable(Neighbors[i]);
+            bool bNeighborWalkable = GridPathfinding->IsCellWalkable(N);
             if (!bNeighborWalkable) BlockedCount++;
-            UE_LOG(LogTemp, Warning, TEXT("[PathFinder] Neighbor[%d]=(%d,%d): Walkable=%d"), 
-                i, Neighbors[i].X, Neighbors[i].Y, bNeighborWalkable ? 1 : 0);
+            UE_LOG(LogTemp, Warning, TEXT("[PathFinder] Neighbor=(%d,%d): Walkable=%d"),
+                N.X, N.Y, bNeighborWalkable ? 1 : 0);
         }
         
         UE_LOG(LogTemp, Warning, TEXT("[PathFinder] SUMMARY: %d/4 neighbors are blocked"), BlockedCount);
@@ -198,7 +195,7 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
     
     if (DistanceToPlayer <= AttackRangeInTiles && DistanceToPlayer > 0)
     {
-        Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Attack"));
+        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Attack;
         Intent.NextCell = Intent.CurrentCell;  // 攻撃時は移動しない
 
         UE_LOG(LogTemp, Log, TEXT("[DecideIntent] %s: ★ ATTACK intent (Distance=%d, Range=%d)"),
@@ -206,12 +203,12 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
     }
     else
     {
-        Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Move"));
-        
+        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Move;
+
         // P2対策：現在セル==目的セルならWaitにダウングレード
         if (Intent.NextCell == Intent.CurrentCell)
         {
-        Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"));
+        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Wait;
         UE_LOG(LogTurnManager, Log, TEXT("[Thinker] %s WAIT - NextCell identical to current"),
             *GetNameSafe(GetOwner()));
         }
@@ -240,7 +237,7 @@ FGameplayTag UEnemyThinkerBase::GetAttackAbilityForRange(int32 DistanceInTiles) 
 {
     if (DistanceInTiles <= AttackRangeInTiles)
     {
-        return FGameplayTag::RequestGameplayTag(FName("AI.Intent.Attack"));
+        return RogueGameplayTags::AI_Intent_Attack;
     }
 
     return FGameplayTag();

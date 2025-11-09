@@ -25,9 +25,9 @@ APlayerControllerBase::APlayerControllerBase()
     SetTickableWhenPaused(false);
     bReplicates = false;
 
-    // GameplayTagsの初期化
-    MoveInputTag = FGameplayTag::RequestGameplayTag(TEXT("InputTag.Move"));
-    TurnInputTag = FGameplayTag::RequestGameplayTag(TEXT("InputTag.Turn"));
+    // GameplayTagsの初期化（静的タグを使用）
+    MoveInputTag = RogueGameplayTags::InputTag_Move;
+    TurnInputTag = RogueGameplayTags::InputTag_Turn;
 
     // デフォルト値の初期化
     AxisThreshold = 0.5f;

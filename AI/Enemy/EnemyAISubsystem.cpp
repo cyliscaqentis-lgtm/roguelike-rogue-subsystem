@@ -7,6 +7,7 @@
 #include "Turn/TurnCorePhaseManager.h"
 #include "Kismet/GameplayStatics.h"  // ★★★ PathFinder検索用 ★★★
 #include "../../ProjectDiagnostics.h"
+#include "../../Utility/RogueGameplayTags.h"
 
 void UEnemyAISubsystem::BuildObservations(
     const TArray<AActor*>& Enemies,
@@ -171,7 +172,7 @@ void UEnemyAISubsystem::CollectIntents(
         OutIntents.Add(Intent);
 
         // ★★★ Intent統計 ★★★
-        if (Intent.AbilityTag.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"))))
+        if (Intent.AbilityTag.MatchesTag(RogueGameplayTags::AI_Intent_Wait))
         {
             ++WaitIntents;
         }
@@ -204,7 +205,7 @@ FEnemyIntent UEnemyAISubsystem::ComputeIntent(
     if (!IsValid(Enemy))
     {
         UE_LOG(LogEnemyAI, Warning, TEXT("[ComputeIntent] Enemy is invalid, returning Wait"));
-        Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"));
+        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Wait;
         return Intent;
     }
 
@@ -223,7 +224,7 @@ FEnemyIntent UEnemyAISubsystem::ComputeIntent(
     else
     {
         // ★★★ デフォルト：待機 ★★★
-        Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"));
+        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Wait;
 
         UE_LOG(LogEnemyAI, Warning,
             TEXT("[ComputeIntent] Enemy=%s has NO Thinker component, defaulting to Wait"),

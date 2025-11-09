@@ -4,6 +4,7 @@
 #include "../Grid/GridOccupancySubsystem.h"
 #include "../Grid/GridPathfindingLibrary.h"
 #include "../ProjectDiagnostics.h"  // ★★★ DIAG_LOG用 ★★★
+#include "../Utility/GridCoordinateUtils.h"
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -318,14 +319,9 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(const FIntPoint& Fro
     int32 bestDist = CurrentDist;
     
     // 4方向近傍をチェック
-    FIntPoint Neighbors[4] = {
-        FromCell + FIntPoint(1, 0), FromCell + FIntPoint(-1, 0),
-        FromCell + FIntPoint(0, 1), FromCell + FIntPoint(0, -1)
-    };
-    
-    for (int32 i = 0; i < 4; ++i)
+    for (const FIntPoint& Dir : RogueGrid::CardinalDirections)
     {
-        const FIntPoint& N = Neighbors[i];
+        const FIntPoint N = FromCell + Dir;
         if (!IsWalkable(N)) continue;
         
         const int32 nd = GetDistanceAbs(N);

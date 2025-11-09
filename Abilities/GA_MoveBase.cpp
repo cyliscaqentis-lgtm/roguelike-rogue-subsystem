@@ -15,6 +15,7 @@
 #include "Rogue/Grid/GridPathfindingLibrary.h"
 #include "Rogue/Turn/TurnActionBarrierSubsystem.h"
 #include "Rogue/Utility/RogueGameplayTags.h"
+#include "Rogue/Utility/ActorFinderUtils.h"
 #include "Turn/GameTurnManagerBase.h"
 #include "Utility/TurnCommandEncoding.h"
 
@@ -685,22 +686,7 @@ float UGA_MoveBase::RoundYawTo45Degrees(float Yaw)
 
 const AGridPathfindingLibrary* UGA_MoveBase::GetPathFinder() const
 {
-	if (CachedPathFinder.IsValid())
-	{
-		return CachedPathFinder.Get();
-	}
-
-	if (const UWorld* World = GetWorld())
-	{
-		if (AGridPathfindingLibrary* Found = Cast<AGridPathfindingLibrary>(
-			UGameplayStatics::GetActorOfClass(World, AGridPathfindingLibrary::StaticClass())))
-		{
-			CachedPathFinder = Found;
-			return CachedPathFinder.Get();
-		}
-	}
-
-	return nullptr;
+	return RogueUtils::GetCachedActor(GetWorld(), CachedPathFinder);
 }
 
 UTurnActionBarrierSubsystem* UGA_MoveBase::GetBarrierSubsystem() const
@@ -727,21 +713,7 @@ UTurnActionBarrierSubsystem* UGA_MoveBase::GetBarrierSubsystem() const
 
 AGameTurnManagerBase* UGA_MoveBase::GetTurnManager() const
 {
-	if (CachedTurnManager.IsValid())
-	{
-		return CachedTurnManager.Get();
-	}
-
-	if (UWorld* World = GetWorld())
-	{
-		for (TActorIterator<AGameTurnManagerBase> It(World); It; ++It)
-		{
-			CachedTurnManager = *It;
-			return CachedTurnManager.Get();
-		}
-	}
-
-	return nullptr;
+	return RogueUtils::GetCachedActorByIterator(GetWorld(), CachedTurnManager);
 }
 
 void UGA_MoveBase::BindMoveFinishedDelegate()

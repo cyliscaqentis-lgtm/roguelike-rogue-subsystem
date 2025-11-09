@@ -4,6 +4,7 @@
 #include "UObject/UnrealType.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameplayTagsManager.h"
+#include "../../Utility/RogueGameplayTags.h"
 
 // ログカテゴリ定義
 DEFINE_LOG_CATEGORY(LogEnemyTurnDataSys);
@@ -227,19 +228,10 @@ void UEnemyTurnDataSubsystem::RebuildSortedArray()
 bool UEnemyTurnDataSubsystem::HasAttackIntent() const
 {
     // ────────────────────────────────────────────────────────────────────
-    // Step 1: AI.Intent.Attack タグ取得
+    // Step 1: AI.Intent.Attack タグ取得（静的タグを使用）
     // ────────────────────────────────────────────────────────────────────
 
-    const FGameplayTag AttackTag = FGameplayTag::RequestGameplayTag(
-        TEXT("AI.Intent.Attack"), false
-    );
-
-    if (!AttackTag.IsValid())
-    {
-        UE_LOG(LogEnemyTurnDataSys, Warning,
-            TEXT("[HasAttackIntent] AI.Intent.Attack tag not found"));
-        return false;
-    }
+    const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
 
     // ────────────────────────────────────────────────────────────────────
     // Step 2: Intent配列を走査（1パス処理）
