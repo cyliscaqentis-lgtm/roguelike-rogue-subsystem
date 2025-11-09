@@ -1809,6 +1809,16 @@ void AGameTurnManagerBase::StartFirstTurn()
 {
     UE_LOG(LogTurnManager, Log, TEXT("StartFirstTurn: Starting first turn (Turn %d)"), CurrentTurnIndex);
 
+    bTurnStarted = true;
+
+    // ★ Pawn未確定なら遅延オープン
+    if (!IsValid(CachedPlayerPawn))
+    {
+        UE_LOG(LogTurnManager, Warning, TEXT("[Turn] Player not ready -> defer opening input window"));
+        bDeferOpenOnPossess = true;
+        // Barrierとイベントは継続（入力窓だけ遅延）
+    }
+
     // ☁E�E☁EホットフィチE��ス: Turn 0でのBarrier初期匁E☁E�E☁E
     if (UWorld* World = GetWorld())
     {
@@ -2266,6 +2276,9 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
     {
         UE_LOG(LogTurnManager, Log, TEXT("[GameTurnManager] GAS activated for Move (count=%d)"), TriggeredCount);
         bPlayerMoveInProgress = true;
+
+        // ★ コマンド受理成功 → 入力窓をクローズ（多重入力防止）
+        CloseInputWindowForPlayer();
     }
     else
     {
@@ -3259,6 +3272,62 @@ void AGameTurnManagerBase::OpenInputWindow()
     // ☁E�E☁EStandalone では OnRep が呼ばれなぁE�Eで手動実衁E
     OnRep_WaitingForPlayerInput();
     OnRep_InputWindowId();
+}
+
+//------------------------------------------------------------------------------
+// Possess通知 & 入力窓オープン/クローズ
+//------------------------------------------------------------------------------
+
+void AGameTurnManagerBase::NotifyPlayerPossessed(APawn* NewPawn)
+{
+    CachedPlayerPawn = NewPawn;
+    UE_LOG(LogTurnManager, Log, TEXT("[Turn] NotifyPlayerPossessed: %s"), *GetNameSafe(NewPawn));
+
+    if (bTurnStarted && !WaitingForPlayerInput)
+    {
+        OpenInputWindowForPlayer(); // ← ここで開き直す
+    }
+}
+
+void AGameTurnManagerBase::OpenInputWindowForPlayer()
+{
+    if (!HasAuthority()) return;
+    if (!ensure(CachedPlayerPawn)) return;
+
+    WaitingForPlayerInput = true;
+    ++InputWindowId;
+
+    if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(CachedPlayerPawn))
+    {
+        if (UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent())
+        {
+            // 入力ゲートを"開く"
+            ASC->AddLooseGameplayTag(RogueGameplayTags::Gate_Input_Open);
+        }
+    }
+
+    UE_LOG(LogTurnManager, Warning, TEXT("[Turn] InputWindow OPEN: Turn=%d WinId=%d Gate=OPEN Pawn=%s"),
+        GetCurrentTurnIndex(), InputWindowId, *GetNameSafe(CachedPlayerPawn));
+}
+
+void AGameTurnManagerBase::CloseInputWindowForPlayer()
+{
+    if (!HasAuthority()) return;
+    if (!CachedPlayerPawn) return;
+
+    WaitingForPlayerInput = false;
+
+    if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(CachedPlayerPawn))
+    {
+        if (UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent())
+        {
+            // 入力ゲートを"閉じる"
+            ASC->RemoveLooseGameplayTag(RogueGameplayTags::Gate_Input_Open);
+        }
+    }
+
+    UE_LOG(LogTurnManager, Warning, TEXT("[Turn] InputWindow CLOSE: Turn=%d WinId=%d Gate=CLOSED"),
+        GetCurrentTurnIndex(), InputWindowId);
 }
 
 

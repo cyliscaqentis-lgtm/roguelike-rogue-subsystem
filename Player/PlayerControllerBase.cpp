@@ -26,7 +26,8 @@ APlayerControllerBase::APlayerControllerBase()
     bReplicates = false;
 
     // GameplayTagsの初期化
-    MoveInputTag = FGameplayTag::RequestGameplayTag(TEXT("InputTag.Move"));
+    // ★ タグ整合: InputTag.Move → Ability.Move（サーバー側と統一）
+    MoveInputTag = FGameplayTag::RequestGameplayTag(TEXT("Ability.Move"));
     TurnInputTag = FGameplayTag::RequestGameplayTag(TEXT("InputTag.Turn"));
 
     // デフォルト値の初期化
@@ -171,7 +172,7 @@ void APlayerControllerBase::BeginPlay()
     // GameplayTagsの検証
     if (!MoveInputTag.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("[PlayerController] MoveInputTag (InputTag.Move) is INVALID!"));
+        UE_LOG(LogTemp, Error, TEXT("[PlayerController] MoveInputTag (Ability.Move) is INVALID!"));
     }
 
     if (!TurnInputTag.IsValid())
@@ -223,6 +224,20 @@ void APlayerControllerBase::OnPossess(APawn* InPawn)
 
     UE_LOG(LogTemp, Log, TEXT("[PlayerController] OnPossess called for: %s"),
         InPawn ? *InPawn->GetName() : TEXT("NULL"));
+
+    //==========================================================================
+    // ★ カメラをプレイヤーに切替（確実に）
+    //==========================================================================
+    SetViewTargetWithBlend(InPawn, 0.0f);
+    bAutoManageActiveCameraTarget = true;
+
+    //==========================================================================
+    // ★ TurnManagerにPossess通知（入力窓を開き直すトリガー）
+    //==========================================================================
+    if (CachedTurnManager)
+    {
+        CachedTurnManager->NotifyPlayerPossessed(InPawn);
+    }
 
     //==========================================================================
     // ★★★ 削除: InputGuardのヒステリシス設定（3タグシステムで不要）

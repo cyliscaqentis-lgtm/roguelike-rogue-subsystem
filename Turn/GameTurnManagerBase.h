@@ -481,6 +481,14 @@ public:
     UPROPERTY(BlueprintReadOnly, Replicated, Category = "Turn|State")
     bool bPlayerMoveInProgress = false;
 
+    /** ターン開始済みフラグ */
+    UPROPERTY()
+    bool bTurnStarted = false;
+
+    /** Pawn未確定時の遅延オープンフラグ */
+    UPROPERTY()
+    bool bDeferOpenOnPossess = false;
+
     //==========================================================================
     // 繝代ヵ繧�E�繝ｼ繝槭Φ繧�E�譛驕ｩ蛹・    //==========================================================================
 
@@ -526,6 +534,18 @@ public:
     /** Open input window for player moves */
     UFUNCTION(BlueprintCallable, Category="Turn")
     void OpenInputWindow();
+
+    /** Possess通知 & 入力窓を再オープン */
+    UFUNCTION(BlueprintCallable, Category="Turn|Flow")
+    void NotifyPlayerPossessed(APawn* NewPawn);
+
+    /** 入力窓を開く（プレイヤー用） */
+    UFUNCTION(BlueprintCallable, Category="Turn|Flow")
+    void OpenInputWindowForPlayer();
+
+    /** 入力窓を閉じる（プレイヤー用） */
+    UFUNCTION(BlueprintCallable, Category="Turn|Flow")
+    void CloseInputWindowForPlayer();
 
     /** Apply wait input gate to player ASC */
     void ApplyWaitInputGate(bool bOpen);
