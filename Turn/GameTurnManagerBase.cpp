@@ -2351,6 +2351,32 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
                 TEXT("[MovePrecheck] REJECT: Cell (%d,%d) is BLOCKED by terrain | From=(%d,%d) | Keep window open"),
                 TargetCell.X, TargetCell.Y, CurrentCell.X, CurrentCell.Y);
 
+            // ★★★ DEBUG: 周辺セルの状態を診断 (2025-11-09) ★★★
+            const int32 TargetCost = CachedPathFinder->GetGridCost(TargetCell.X, TargetCell.Y);
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[MovePrecheck] Target cell (%d,%d) GridCost=%d (expected: 3=Walkable, -1=Blocked)"),
+                TargetCell.X, TargetCell.Y, TargetCost);
+
+            // 周辺4方向の状態を出力
+            const FIntPoint Directions[4] = {
+                FIntPoint(1, 0),   // 右
+                FIntPoint(-1, 0),  // 左
+                FIntPoint(0, 1),   // 上
+                FIntPoint(0, -1)   // 下
+            };
+            const TCHAR* DirNames[4] = { TEXT("Right"), TEXT("Left"), TEXT("Up"), TEXT("Down") };
+
+            UE_LOG(LogTurnManager, Warning, TEXT("[MovePrecheck] Surrounding cells from (%d,%d):"), CurrentCell.X, CurrentCell.Y);
+            for (int32 i = 0; i < 4; ++i)
+            {
+                const FIntPoint CheckCell = CurrentCell + Directions[i];
+                const int32 Cost = CachedPathFinder->GetGridCost(CheckCell.X, CheckCell.Y);
+                const bool bWalkable = CachedPathFinder->IsCellWalkableIgnoringActor(CheckCell, PlayerPawn);
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("  %s (%d,%d): Cost=%d Walkable=%d"),
+                    DirNames[i], CheckCell.X, CheckCell.Y, Cost, bWalkable ? 1 : 0);
+            }
+
             // ★ ウィンドウを閉じずに拒否（プレイヤーが再入力可能）
             // WaitingForPlayerInput は true のまま、Gate も開いたまま
             return;
