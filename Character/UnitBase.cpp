@@ -202,6 +202,17 @@ void AUnitBase::GrantAbilitySetsIfNeeded()
         LyraASC->GetSpawnedAttributes().Num(),
         *GetName());
 
+    // デバッグ：Grantされた全Abilityをリスト表示
+    const TArray<FGameplayAbilitySpec>& Abilities = LyraASC->GetActivatableAbilities();
+    for (int32 i = 0; i < Abilities.Num(); ++i)
+    {
+        const FGameplayAbilitySpec& Spec = Abilities[i];
+        if (Spec.Ability)
+        {
+            UE_LOG(LogUnitBase, Warning, TEXT("[GrantAbilitySets]   Ability[%d]: %s"), i, *Spec.Ability->GetName());
+        }
+    }
+
     bGrantedAbilitySets = true;
 }
 
