@@ -6,6 +6,8 @@
 #include "Grid/GridOccupancySubsystem.h"
 #include "Turn/TurnCorePhaseManager.h"
 #include "Kismet/GameplayStatics.h"  // ★★★ PathFinder検索用 ★★★
+#include "AbilitySystemInterface.h"
+#include "GenericTeamAgentInterface.h"
 #include "../../ProjectDiagnostics.h"
 
 void UEnemyAISubsystem::BuildObservations(

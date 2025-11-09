@@ -240,7 +240,9 @@ void AGameTurnManagerBase::InitializeTurnSystem()
     // Step 4: Subsystemチェック
     //==========================================================================
 
-    if (UWorld* World = GetWorld())
+    {
+    UWorld* World = GetWorld();
+    if (World)
     {
         if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
         {
