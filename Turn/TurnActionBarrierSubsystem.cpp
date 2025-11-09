@@ -351,27 +351,21 @@ void UTurnActionBarrierSubsystem::CompleteActionToken(const FGuid& Token)
 
 // ============================================================================
 // Tick: タイムアウト監視（Phase 6で実装）
+// ★★★ 最適化完了: Tick→Timer変換済み（2025-11-09）
 // ============================================================================
-
+/*
+REMOVED: Tick is replaced with timer-based CheckTimeouts()
 void UTurnActionBarrierSubsystem::Tick(float DeltaTime)
 {
     SCOPE_CYCLE_COUNTER(STAT_TurnBarrierTick);
-
-    // サーバー専用
-    if (!IsServer())
-    {
-        return;
-    }
-
-    // タイムアウトチェック
+    if (!IsServer()) return;
     CheckTimeouts();
-
-    // 定期的に無効なWeakPtrを掃除（Phase 8で実装）
-    // CleanupInvalidActors();
 }
+*/
 
 // ============================================================================
 // CheckTimeouts: タイムアウト検出と強制完了
+// ★★★ 最適化: Tickから呼ばれていたが、現在は1秒ごとのタイマーで実行
 // ============================================================================
 
 void UTurnActionBarrierSubsystem::CheckTimeouts()
