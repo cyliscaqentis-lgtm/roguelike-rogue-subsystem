@@ -890,7 +890,11 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
             MoveTurnId);
 
         CachedFirstLoc = SnappedLoc;
-        UpdateGridState(CachedFirstLoc, 1);
+        // ★★★ REMOVED: UpdateGridState(CachedFirstLoc, 1); ← レガシーコード削除 (2025-11-09)
+        // このレガシー呼び出しがWalkable値3を占有値1に上書きし、次ターンで地形ブロック判定を破壊していた。
+        // 占有管理はUpdateOccupancy（OccupancySubsystem）で既に行われているため、この呼び出しは冗長かつ有害。
+        // GridCostはあくまで「地形の通行コスト/Walkable状態」を表し、占有状態とは別チャンネルで管理すべき。
+        // UpdateGridState(CachedFirstLoc, 1);  // ← LEGACY CODE REMOVED
 
         UE_LOG(LogTurnManager, Log,
             TEXT("[MoveComplete] Unit %s reached destination, GA_MoveBase ending (TurnId=%d)"),
