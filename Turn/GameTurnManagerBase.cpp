@@ -13,6 +13,7 @@
 #include "Turn/TurnEventDispatcher.h"
 #include "Turn/TurnDebugSubsystem.h"
 #include "Turn/TurnFlowCoordinator.h"
+#include "Turn/PlayerInputProcessor.h"
 #include "Utility/GridUtils.h"
 #include "Utility/RogueGameplayTags.h"
 #include "Debug/TurnSystemInterfaces.h"
@@ -116,6 +117,7 @@ void AGameTurnManagerBase::InitializeTurnSystem()
         EventDispatcher = World->GetSubsystem<UTurnEventDispatcher>();
         DebugSubsystem = World->GetSubsystem<UTurnDebugSubsystem>();
         TurnFlowCoordinator = World->GetSubsystem<UTurnFlowCoordinator>();
+        PlayerInputProcessor = World->GetSubsystem<UPlayerInputProcessor>();
 
         if (!CommandHandler)
         {
@@ -133,12 +135,17 @@ void AGameTurnManagerBase::InitializeTurnSystem()
         {
             UE_LOG(LogTurnManager, Error, TEXT("Failed to get UTurnFlowCoordinator subsystem"));
         }
+        if (!PlayerInputProcessor)
+        {
+            UE_LOG(LogTurnManager, Error, TEXT("Failed to get UPlayerInputProcessor subsystem"));
+        }
 
-        UE_LOG(LogTurnManager, Log, TEXT("Subsystems initialized: CommandHandler=%s, EventDispatcher=%s, DebugSubsystem=%s, TurnFlowCoordinator=%s"),
+        UE_LOG(LogTurnManager, Log, TEXT("Subsystems initialized: CommandHandler=%s, EventDispatcher=%s, DebugSubsystem=%s, TurnFlowCoordinator=%s, PlayerInputProcessor=%s"),
             CommandHandler ? TEXT("OK") : TEXT("FAIL"),
             EventDispatcher ? TEXT("OK") : TEXT("FAIL"),
             DebugSubsystem ? TEXT("OK") : TEXT("FAIL"),
-            TurnFlowCoordinator ? TEXT("OK") : TEXT("FAIL"));
+            TurnFlowCoordinator ? TEXT("OK") : TEXT("FAIL"),
+            PlayerInputProcessor ? TEXT("OK") : TEXT("FAIL"));
     }
 
     //==========================================================================

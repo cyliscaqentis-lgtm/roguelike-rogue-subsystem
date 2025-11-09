@@ -30,6 +30,7 @@ class UTurnCommandHandler;
 class UTurnEventDispatcher;
 class UTurnDebugSubsystem;
 class UTurnFlowCoordinator;
+class UPlayerInputProcessor;
 struct FGameplayEventData;
 class ULyraExperienceDefinition;
 class ULyraExperienceManagerComponent;
@@ -720,6 +721,10 @@ private:
     /** ★★★ Week 1: ターン進行・AP管理Subsystem（2025-11-09リファクタリング） */
     UPROPERTY(Transient)
     TObjectPtr<UTurnFlowCoordinator> TurnFlowCoordinator = nullptr;
+
+    /** ★★★ Week 1: 入力処理Subsystem（2025-11-09リファクタリング） */
+    UPROPERTY(Transient)
+    TObjectPtr<UPlayerInputProcessor> PlayerInputProcessor = nullptr;
 
     //==========================================================================
     // Phase 2: WindowId讀懁E���E�逕ｨ縺�E�蜀・Κ繝倥Ν繝代・
