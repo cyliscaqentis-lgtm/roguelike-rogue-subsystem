@@ -390,5 +390,8 @@ void URogueDungeonSubsystem::Deinitialize()
     RenderComponent = nullptr;
     CachedConfigActor = nullptr;
 
+    // ★ 再入防止フラグをリセット（PIE再起動時に再生成を可能にする）
+    bDungeonGenerationStarted = false;
+
     Super::Deinitialize();
 }
