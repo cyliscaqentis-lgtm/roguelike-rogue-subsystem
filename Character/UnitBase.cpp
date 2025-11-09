@@ -209,6 +209,9 @@ void AUnitBase::MoveUnit(const TArray<FVector>& InPath)
         MoveStatus = EUnitMoveStatus::Idle;
         CurrentVelocity = FVector::ZeroVector;
 
+        // ✅ Tickを無効化
+        SetActorTickEnabled(false);
+
         UE_LOG(LogUnitBase, Verbose,
             TEXT("[MoveComplete] %s finished MoveUnit path"), *GetName());
 
@@ -235,6 +238,9 @@ void AUnitBase::StartNextLeg()
     {
         MoveStatus = EUnitMoveStatus::Idle;
         CurrentVelocity = FVector::ZeroVector;
+
+        // ✅ 移動完了時にTickを無効化
+        SetActorTickEnabled(false);
 
         UE_LOG(LogUnitBase, Verbose,
             TEXT("[MoveComplete] %s finished MoveUnit path"), *GetName());

@@ -229,4 +229,7 @@ private:
 
     /** Server側：TurnFacing重複防止用 */
     FIntPoint ServerLastTurnDirectionQuantized = FIntPoint::ZeroValue;
+
+    /** ★★★ Tick最適化: TurnManagerの取得を確実にする（BeginPlay + Timer） */
+    void EnsureTurnManagerCached();
 };
