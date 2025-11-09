@@ -570,7 +570,7 @@ void AUnitBase::SetStatVars()
     // StatBlock縺九ｉ蜷・Γ繝ｳ繝仙､画焚縺ｸ繧ｳ繝斐・・・nitManager縺御ｽｿ逕ｨ・・
     // 螳溯｣・・UnitManager縺ｮ隕∵ｱゅ↓蜷医ｏ縺帙※隱ｿ謨ｴ縺励※縺上□縺輔＞
     Team = StatBlock.Team;
-    CurrentMovementRange = FMath::Max(1, StatBlock.CurrentTotalMovementRnage);
+    CurrentMovementRange = FMath::Max(1, StatBlock.CurrentTotalMovementRange);
     
     MeleeBaseAttack = StatBlock.MeleeBaseAttack;
     RangedBaseAttack = StatBlock.RangedBaseAttack;

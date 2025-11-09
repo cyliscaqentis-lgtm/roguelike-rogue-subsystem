@@ -35,7 +35,7 @@ struct LYRAGAME_API FUnitStatBlock
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Team = 0;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 RangePerMove = 3;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 NumberOfMoves = 1;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 CurrentTotalMovementRnage = 3;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 CurrentTotalMovementRange = 3;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 MeleeBaseAttack = 10;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 RangedBaseAttack = 8;

@@ -3,11 +3,6 @@
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 
-#pragma once
-
-#include "CoreMinimal.h"
-#include "Subsystems/WorldSubsystem.h"
-
 class ADungeonFloorGenerator;
 class URogueFloorConfigData; // Use the RogueFloorConfigData Asset
 class UDungeonRenderComponent;
