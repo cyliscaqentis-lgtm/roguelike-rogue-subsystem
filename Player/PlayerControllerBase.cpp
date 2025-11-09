@@ -32,8 +32,8 @@ APlayerControllerBase::APlayerControllerBase()
     bReplicates = false;
 
     // GameplayTagsの初期化
-    // ★ タグ整合: InputTag.Move → Ability.Move（サーバー側と統一）
-    MoveInputTag = FGameplayTag::RequestGameplayTag(TEXT("Ability.Move"));
+    // ★★★ 修正: サーバー側が期待する InputTag.Move を使用（2025-11-09）
+    MoveInputTag = FGameplayTag::RequestGameplayTag(TEXT("InputTag.Move"));
     TurnInputTag = FGameplayTag::RequestGameplayTag(TEXT("InputTag.Turn"));
 
     // デフォルト値の初期化
