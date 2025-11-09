@@ -181,7 +181,7 @@ void UGA_MoveBase::ActivateAbility(
 	}
 
 	// ★★★ TurnId を EventData.OptionalObject から取得（2025-11-09） ★★★
-	if (AGameTurnManagerBase* TurnManager = Cast<AGameTurnManagerBase>(TriggerEventData->OptionalObject.Get()))
+	if (const AGameTurnManagerBase* TurnManager = Cast<AGameTurnManagerBase>(TriggerEventData->OptionalObject.Get()))
 	{
 		MoveTurnId = TurnManager->GetCurrentTurnIndex();
 		UE_LOG(LogTurnManager, Log,
