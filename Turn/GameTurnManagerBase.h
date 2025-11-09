@@ -400,10 +400,6 @@ public:
     UPROPERTY(BlueprintReadOnly, Category="Dungeon|State")
     int32 CurrentFloorIndex = 0;
 
-    /** 繝輔Ο繧�E�逕滓�E螳御�E�・ぁE��吶Φ繝�E*/
-    UPROPERTY(BlueprintAssignable, Category="Dungeon|Events")
-    FOnFloorReady OnFloorReady;
-
     //==========================================================================
     // 笘�EAP System・医ぁE���E�繧�E�繝ｧ繝ｳ繝昴ぁE��ｳ繝亥宛�E・    //==========================================================================
     
@@ -490,12 +486,6 @@ public:
 
     UPROPERTY(Transient)
     TWeakObjectPtr<AGridPathfindingLibrary> CachedPathFinder;
-
-    UPROPERTY(BlueprintAssignable, Category = "Turn|Player")
-    FOnPlayerInputReceived OnPlayerInputReceived;
-
-    UPROPERTY(BlueprintAssignable, Category = "Turn|Flow")
-    FOnTurnStarted OnTurnStarted;
 
     //==========================================================================
     // 繝繝ｳ繧�E�繝ｧ繝ｳ貁E���E�螳御�E�・ぁE��吶Φ繝医ワ繝ｳ繝峨Λ�E育峩蜿ら�E豕ｨ蜈･・・    //==========================================================================

@@ -237,10 +237,8 @@ void AGameTurnManagerBase::InitializeTurnSystem()
     UE_LOG(LogTurnManager, Log, TEXT("InitializeTurnSystem: Subsystems initialized (EnemyAI + EnemyTurnData)"));
 
     //==========================================================================
-    // Step 4: C++ Dynamic チE��ゲートバインド（重褁E��止�E�E
+    // Step 4: Subsystemチェック
     //==========================================================================
-    OnTurnStarted.RemoveDynamic(this, &ThisClass::OnTurnStartedHandler);
-    OnTurnStarted.AddDynamic(this, &ThisClass::OnTurnStartedHandler);
 
     if (UWorld* World = GetWorld())
     {
@@ -707,8 +705,7 @@ void AGameTurnManagerBase::NotifyPlayerInputReceived()
     }
     else
     {
-        // Fallback: 後方互換性
-        OnPlayerInputReceived.Broadcast();
+        UE_LOG(LogTurnManager, Warning, TEXT("UTurnEventDispatcher not available"));
     }
 
     // 二重進行防止�E�ここで征E��ゲートを閉じてから継綁E
@@ -1790,8 +1787,7 @@ void AGameTurnManagerBase::AdvanceTurnAndRestart()
     }
     else
     {
-        // Fallback: 直接Broadcast（後方互換性）
-        OnTurnStarted.Broadcast(CurrentTurnIndex);
+        UE_LOG(LogTurnManager, Warning, TEXT("UTurnEventDispatcher not available"));
     }
 
     UE_LOG(LogTurnManager, Log,
@@ -1834,8 +1830,7 @@ void AGameTurnManagerBase::StartFirstTurn()
     }
     else
     {
-        // Fallback: 直接Broadcast（後方互換性）
-        OnTurnStarted.Broadcast(CurrentTurnIndex);
+        UE_LOG(LogTurnManager, Warning, TEXT("UTurnEventDispatcher not available"));
     }
 
     UE_LOG(LogTurnManager, Log, TEXT("StartFirstTurn: OnTurnStarted broadcasted for turn %d"), CurrentTurnIndex);
