@@ -2229,6 +2229,17 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
         }
 
         //==========================================================================
+        // ★★★ (2.5) WindowId検証（2025-11-09 CRITICAL FIX） ★★★
+        //==========================================================================
+        if (Command.WindowId != InputWindowId && Command.WindowId != INDEX_NONE)
+        {
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[GameTurnManager] Command REJECTED - WindowId mismatch (%d != %d) | Turn=%d"),
+                Command.WindowId, InputWindowId, CurrentTurnIndex);
+            return;
+        }
+
+        //==========================================================================
         // (3) 二重移動チェチE��
         //==========================================================================
         if (bPlayerMoveInProgress)
@@ -2245,9 +2256,9 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
     }
 
     //==========================================================================
-    // (4) 3-Tag System: Gateを閉じる
+    // ★★★ (4) 早期Gate閉鎖を削除（2025-11-09 FIX） ★★★
+    // CloseInputWindowForPlayer() で一括管理
     //==========================================================================
-    ApplyWaitInputGate(false);
 
     //==========================================================================
     // (5) World取征E
@@ -3412,9 +3423,27 @@ void AGameTurnManagerBase::OpenInputWindowForPlayer()
 
 void AGameTurnManagerBase::CloseInputWindowForPlayer()
 {
-    if (!HasAuthority()) return;
-    if (!CachedPlayerPawn) return;
+    if (!HasAuthority())
+    {
+        UE_LOG(LogTurnManager, Warning, TEXT("[CloseInputWindow] REJECT: Not authority"));
+        return;
+    }
 
+    if (!CachedPlayerPawn)
+    {
+        UE_LOG(LogTurnManager, Warning, TEXT("[CloseInputWindow] REJECT: No player pawn"));
+        return;
+    }
+
+    if (!WaitingForPlayerInput)
+    {
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[CloseInputWindow] REJECT: Already closed (WPI=false) | Turn=%d WindowId=%d"),
+            CurrentTurnIndex, InputWindowId);
+        return;
+    }
+
+    // ★★★ フラグとゲートを同時に閉じる（2025-11-09 FIX） ★★★
     WaitingForPlayerInput = false;
 
     // ★★★ TurnCommandHandlerに通知（2025-11-09 修正）
@@ -3423,17 +3452,18 @@ void AGameTurnManagerBase::CloseInputWindowForPlayer()
         CommandHandler->EndInputWindow();
     }
 
+    // ★★★ Gate タグを削除（2025-11-09 FIX）
     if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(CachedPlayerPawn))
     {
         if (UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent())
         {
-            // 入力ゲートを"閉じる"
             ASC->RemoveLooseGameplayTag(RogueGameplayTags::Gate_Input_Open);
         }
     }
 
-    UE_LOG(LogTurnManager, Warning, TEXT("[Turn] InputWindow CLOSE: Turn=%d WinId=%d Gate=CLOSED"),
-        GetCurrentTurnIndex(), InputWindowId);
+    UE_LOG(LogTurnManager, Warning,
+        TEXT("[CloseInputWindow] ✅ SUCCESS: Turn=%d WindowId=%d Reason=AcceptedValidPlayerCmd"),
+        CurrentTurnIndex, InputWindowId);
 }
 
 
