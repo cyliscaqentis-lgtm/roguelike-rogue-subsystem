@@ -9,70 +9,71 @@
 
 ALyraTBSAIController::ALyraTBSAIController()
 {
-    // デフォルトはNoTeam（255）
-    TeamId = FGenericTeamId::NoTeam;
-
-    // ★★★ bWantsPlayerState を true に設定 ★★★
+    // ★★★ AIもPlayerStateを持つ設計（GAS統合のため） ★★★
     bWantsPlayerState = true;
 
-    UE_LOG(LogTemp, Log, TEXT("[LyraTBSAIController] Constructor: bWantsPlayerState=true"));
+    // デフォルトはNoTeam（後でOnPossessで敵チームに設定）
+    TeamId = FGenericTeamId::NoTeam;
+
+    UE_LOG(LogTemp, Log, TEXT("[LyraTBSAIController] Constructor: bWantsPlayerState=true, TeamId=NoTeam"));
 }
 
 void ALyraTBSAIController::BeginPlay()
 {
     Super::BeginPlay();
 
-    // TeamId を早期確定
-    APlayerState* PS = GetPlayerState<APlayerState>(); // 明示テンプレート化
-    SetGenericTeamId(FGenericTeamId(2));
-    UE_LOG(LogTemp, Verbose, TEXT("[LyraTBSAIController] %s BeginPlay: TeamId=%d"),
-        *GetName(), GetGenericTeamId().GetId());
+    UE_LOG(LogTemp, Verbose, TEXT("[LyraTBSAIController] %s BeginPlay: PlayerState=%s, TeamId=%d"),
+        *GetName(),
+        PlayerState ? *PlayerState->GetName() : TEXT("NULL"),
+        GetGenericTeamId().GetId());
 }
 
 void ALyraTBSAIController::OnRep_PlayerState()
 {
     Super::OnRep_PlayerState();
 
-    APawn* P = GetPawn();
-    APlayerState* PS = GetPlayerState<APlayerState>(); // <--- Added template argument
-    if (!P || !PS) { return; }
-
-    if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(PS))
-    {
-        if (UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent())
-        {
-            ASC->InitAbilityActorInfo(PS, P);
-            UE_LOG(LogTemp, Log, TEXT("[AIController] Client-side ASC initialized for %s"), *GetNameSafe(P));
-        }
-    }
-    else if (UAbilitySystemComponent* ASC = PS->FindComponentByClass<UAbilitySystemComponent>())
-    {
-        ASC->InitAbilityActorInfo(PS, P);
-        UE_LOG(LogTemp, Log, TEXT("[AIController] Client-side ASC initialized (fallback) for %s"), *GetNameSafe(P));
-    }
+    // ★★★ クライアント側: PlayerStateレプリケーション完了時にASC初期化 ★★★
+    InitializeAbilitySystemComponent();
 }
 
 void ALyraTBSAIController::OnPossess(APawn* InPawn)
 {
     Super::OnPossess(InPawn);
 
-    UE_LOG(LogTemp, Log, TEXT("[OnPossess] Pawn=%s, PlayerState=%s"),
+    if (!InPawn)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[LyraTBSAIController] OnPossess called with null pawn"));
+        return;
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("[LyraTBSAIController] OnPossess: Pawn=%s, PlayerState=%s"),
         *InPawn->GetName(),
         PlayerState ? *PlayerState->GetName() : TEXT("NULL"));
 
-    // TeamId の BEFORE/AFTER を出力し、未設定(255)なら敵チーム(2)を強制設定
-    uint8 BeforeTeam = GetGenericTeamId().GetId();
-    UE_LOG(LogTemp, Verbose, TEXT("[OnPossess] Pawn=%s, TeamId BEFORE SetGenericTeamId=%d"),
-        *InPawn->GetName(), BeforeTeam);
+    //==========================================================================
+    // (1) TeamId設定: 未設定なら敵チーム(2)に設定
+    //==========================================================================
+    const uint8 BeforeTeam = GetGenericTeamId().GetId();
 
     if (BeforeTeam == FGenericTeamId::NoTeam.GetId())
     {
-        SetGenericTeamId(FGenericTeamId(2));
+        SetGenericTeamId(FGenericTeamId(2)); // 敵チーム
+        UE_LOG(LogTemp, Log, TEXT("[LyraTBSAIController] OnPossess: TeamId set from NoTeam(%d) to Enemy(2)"),
+            BeforeTeam);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[LyraTBSAIController] OnPossess: TeamId already set to %d"),
+            BeforeTeam);
     }
 
-    uint8 AfterTeam = GetGenericTeamId().GetId();
-    UE_LOG(LogTemp, Verbose, TEXT("[OnPossess] Pawn=%s, TeamId AFTER SetGenericTeamId=%d"),
-        *InPawn->GetName(), AfterTeam);
+    //==========================================================================
+    // (2) サーバー側: ASC初期化
+    //==========================================================================
+    if (HasAuthority())
+    {
+        InitializeAbilitySystemComponent();
+    }
 }
 
 FGenericTeamId ALyraTBSAIController::GetGenericTeamId() const
@@ -82,8 +83,61 @@ FGenericTeamId ALyraTBSAIController::GetGenericTeamId() const
 
 void ALyraTBSAIController::SetGenericTeamId(const FGenericTeamId& NewTeamID)
 {
+    if (TeamId == NewTeamID)
+    {
+        return; // 変更なし
+    }
+
+    const uint8 OldId = TeamId.GetId();
     TeamId = NewTeamID;
 
-    UE_LOG(LogTemp, Log, TEXT("[LyraTBSAIController] %s SetGenericTeamId: %d"),
-        *GetName(), TeamId.GetId());
+    UE_LOG(LogTemp, Log, TEXT("[LyraTBSAIController] %s SetGenericTeamId: %d -> %d"),
+        *GetName(), OldId, TeamId.GetId());
+}
+
+//------------------------------------------------------------------------------
+// Internal Helpers
+//------------------------------------------------------------------------------
+
+void ALyraTBSAIController::InitializeAbilitySystemComponent()
+{
+    APawn* P = GetPawn();
+    APlayerState* PS = GetPlayerState<APlayerState>();
+
+    if (!P || !PS)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[LyraTBSAIController] InitializeASC: Pawn=%s, PlayerState=%s - skipping"),
+            P ? TEXT("Valid") : TEXT("NULL"),
+            PS ? TEXT("Valid") : TEXT("NULL"));
+        return;
+    }
+
+    // PlayerStateからASCを取得
+    UAbilitySystemComponent* ASC = nullptr;
+
+    // Method 1: IAbilitySystemInterface経由
+    if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(PS))
+    {
+        ASC = ASI->GetAbilitySystemComponent();
+    }
+
+    // Method 2: FindComponentByClass (Fallback)
+    if (!ASC)
+    {
+        ASC = PS->FindComponentByClass<UAbilitySystemComponent>();
+    }
+
+    if (!ASC)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[LyraTBSAIController] InitializeASC: No ASC found on PlayerState %s"),
+            *PS->GetName());
+        return;
+    }
+
+    // ASC初期化
+    ASC->InitAbilityActorInfo(PS, P);
+
+    const TCHAR* SideStr = HasAuthority() ? TEXT("Server") : TEXT("Client");
+    UE_LOG(LogTemp, Log, TEXT("[LyraTBSAIController] InitializeASC: %s-side ASC initialized for Pawn=%s, PlayerState=%s"),
+        SideStr, *P->GetName(), *PS->GetName());
 }

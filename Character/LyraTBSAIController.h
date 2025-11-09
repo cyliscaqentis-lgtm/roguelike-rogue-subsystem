@@ -30,4 +30,10 @@ protected:
 private:
     // チームID（内部管理用）
     FGenericTeamId TeamId = FGenericTeamId::NoTeam;
+
+    /**
+     * ASCを初期化するヘルパー関数
+     * サーバー(OnPossess)とクライアント(OnRep_PlayerState)で共通使用
+     */
+    void InitializeAbilitySystemComponent();
 };
