@@ -387,7 +387,7 @@ void AGameTurnManagerBase::BeginPlay()
 
     DungeonSys = World->GetSubsystem<URogueDungeonSubsystem>();
 
-    UE_LOG(LogTurnManager, Log, TEXT("TurnManager: DungeonSys acquired from World (Dgn=%p, PFL/UM will be created on HandleDungeonReady)"),
+    UE_LOG(LogTurnManager, Warning, TEXT("★★★ TurnManager: ACQ_WORLD_V3 - DungeonSys=%p (NEW BINARY) ★★★"),
         static_cast<void*>(DungeonSys.Get()));
 
     // 準備完亁E��ベントにサブスクライチE

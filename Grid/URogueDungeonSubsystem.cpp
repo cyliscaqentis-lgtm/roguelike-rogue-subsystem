@@ -16,12 +16,12 @@ DEFINE_LOG_CATEGORY_STATIC(LogRogueDungeon, Log, All);
 void URogueDungeonSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
-	UE_LOG(LogRogueDungeon, Log, TEXT("[URogueDungeonSubsystem] Initialize called - Subsystem ready"));
+	UE_LOG(LogRogueDungeon, Warning, TEXT("★★★ [URogueDungeonSubsystem] INIT_V3 - Subsystem ready (NEW BINARY) ★★★"));
 }
 
 void URogueDungeonSubsystem::StartGenerateFromLevel()
 {
-	UE_LOG(LogRogueDungeon, Log, TEXT("[URogueDungeonSubsystem] StartGenerateFromLevel called"));
+	UE_LOG(LogRogueDungeon, Warning, TEXT("★★★ [URogueDungeonSubsystem] START_GEN_V3 called (NEW BINARY) ★★★"));
 
     // Authority check & Re-entrancy guard
     if (!GetWorld() || !GetWorld()->GetAuthGameMode())
