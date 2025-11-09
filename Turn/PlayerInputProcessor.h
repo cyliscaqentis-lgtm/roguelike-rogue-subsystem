@@ -71,6 +71,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Input")
 	FPlayerCommand GetCachedPlayerCommand() const { return CachedPlayerCommand; }
 
+<<<<<<< HEAD
 	//==========================================================================
 	// デリゲート
 	//==========================================================================
@@ -78,6 +79,8 @@ public:
 	DECLARE_MULTICAST_DELEGATE(FOnPlayerInputReceived);
 	FOnPlayerInputReceived OnPlayerInputReceived;
 
+=======
+>>>>>>> origin/claude/ue5-rogue-refactor-complete-011CUvsUqjPorTXvdbGRGcm4
 protected:
 	//==========================================================================
 	// レプリケーション

@@ -9,7 +9,6 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
-#include "Tickable.h"
 #include "TurnActionBarrierSubsystem.generated.h"
 
 // ============================================================================
@@ -91,7 +90,7 @@ struct FTurnState
  * - Phase 6: タイムアウトとGAキャンセル
  */
 UCLASS(Config = Game)
-class LYRAGAME_API UTurnActionBarrierSubsystem : public UWorldSubsystem, public FTickableGameObject
+class LYRAGAME_API UTurnActionBarrierSubsystem : public UWorldSubsystem
 {
     GENERATED_BODY()
 
@@ -104,6 +103,7 @@ public:
     virtual void Deinitialize() override;
 
     //==========================================================================
+<<<<<<< HEAD
     // ★★★ Phase 6: Tickable（タイムアウトチェック用）
     // ★★★ 最適化: Tick→Timerに変換済み（2025-11-09）
     //==========================================================================
@@ -114,6 +114,8 @@ public:
     // virtual TStatId GetStatId() const override;
 
     //==========================================================================
+=======
+>>>>>>> origin/claude/ue5-rogue-refactor-complete-011CUvsUqjPorTXvdbGRGcm4
     // ★★★ Phase 1: ActionID管理
     //==========================================================================
 
