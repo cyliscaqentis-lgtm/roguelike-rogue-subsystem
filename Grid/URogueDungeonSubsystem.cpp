@@ -11,16 +11,27 @@
 #include "Containers/Queue.h"
 #include "Turn/TurnEventDispatcher.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogRogueDungeon, Log, All);
+
+void URogueDungeonSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Super::Initialize(Collection);
+	UE_LOG(LogRogueDungeon, Log, TEXT("[URogueDungeonSubsystem] Initialize called - Subsystem ready"));
+}
+
 void URogueDungeonSubsystem::StartGenerateFromLevel()
 {
+	UE_LOG(LogRogueDungeon, Log, TEXT("[URogueDungeonSubsystem] StartGenerateFromLevel called"));
+
     // Authority check & Re-entrancy guard
     if (!GetWorld() || !GetWorld()->GetAuthGameMode())
     {
+		UE_LOG(LogRogueDungeon, Warning, TEXT("[URogueDungeonSubsystem] Not on server, skipping generation"));
         return; // Not on server
     }
     if (bDungeonGenerationStarted)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[RogueSubsystem] StartGenerateFromLevel: Generation already started. Ignored."));
+        UE_LOG(LogRogueDungeon, Warning, TEXT("[URogueDungeonSubsystem] StartGenerateFromLevel: Generation already started. Ignored."));
         return;
     }
 
@@ -34,11 +45,11 @@ void URogueDungeonSubsystem::StartGenerateFromLevel()
 
     if (!Config)
     {
-        UE_LOG(LogTemp, Error, TEXT("[RogueSubsystem] No URogueFloorConfigData found in level. Place an ADungeonConfigActor and assign a valid config asset."));
+        UE_LOG(LogRogueDungeon, Error, TEXT("[URogueDungeonSubsystem] No URogueFloorConfigData found in level. Place an ADungeonConfigActor and assign a valid config asset."));
         return;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[RogueSubsystem] ConfigActor=%s, ConfigDA=%s"), *GetNameSafe(CachedConfigActor), *Config->GetPathName());
+    UE_LOG(LogRogueDungeon, Log, TEXT("[URogueDungeonSubsystem] ConfigActor=%s, ConfigDA=%s"), *GetNameSafe(CachedConfigActor), *Config->GetPathName());
 
     // Set the flag *before* starting generation
     bDungeonGenerationStarted = true;
@@ -384,6 +395,8 @@ void URogueDungeonSubsystem::EnsureConfigActor()
 
 void URogueDungeonSubsystem::Deinitialize()
 {
+	UE_LOG(LogRogueDungeon, Log, TEXT("[URogueDungeonSubsystem] Deinitialize called - Cleaning up"));
+
     DestroyRoomMarkers();
     RoomMarkers.Reset();
     FloorGenerator = nullptr;

@@ -45,6 +45,7 @@ public:
     UFUNCTION(BlueprintCallable, Category="Rogue|Dungeon")
     void TransitionToFloor(int32 FloorIndex);
 
+    virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
 
 protected:

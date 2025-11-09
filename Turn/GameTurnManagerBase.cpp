@@ -378,7 +378,14 @@ void AGameTurnManagerBase::BeginPlay()
     }
 
     // WorldSubsystemは必ずWorld初期化時に作成されるため、直接Worldから取得
-    DungeonSys = GetWorld()->GetSubsystem<URogueDungeonSubsystem>();
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        UE_LOG(LogTurnManager, Error, TEXT("TurnManager: World is null!"));
+        return;
+    }
+
+    DungeonSys = World->GetSubsystem<URogueDungeonSubsystem>();
 
     UE_LOG(LogTurnManager, Log, TEXT("TurnManager: DungeonSys acquired from World (Dgn=%p, PFL/UM will be created on HandleDungeonReady)"),
         static_cast<void*>(DungeonSys.Get()));
@@ -395,7 +402,7 @@ void AGameTurnManagerBase::BeginPlay()
     }
     else
     {
-        UE_LOG(LogTurnManager, Error, TEXT("TurnManager: DungeonSys is null, cannot subscribe to OnGridReady"));
+        UE_LOG(LogTurnManager, Error, TEXT("TurnManager: DungeonSys is null! GetSubsystem<URogueDungeonSubsystem>() failed. Check if subsystem is properly registered."));
     }
 
     UE_LOG(LogTurnManager, Log, TEXT("TurnManager: Ready for HandleDungeonReady"));
