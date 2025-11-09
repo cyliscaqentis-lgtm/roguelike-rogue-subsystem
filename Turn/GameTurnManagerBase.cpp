@@ -606,7 +606,7 @@ void AGameTurnManagerBase::InitGameplayTags()
     //==========================================================================
     // RogueGameplayTagsから取征E
     //==========================================================================
-    Tag_AbilityMove = RogueGameplayTags::Ability_Move;               // "Ability.Move"
+    Tag_AbilityMove = RogueGameplayTags::GameplayEvent_Intent_Move;  // "GameplayEvent.Intent.Move"
     Tag_TurnAbilityCompleted = RogueGameplayTags::Gameplay_Event_Turn_Ability_Completed;   // "Gameplay.Event.Turn.Ability.Completed"
     Phase_Turn_Init = RogueGameplayTags::Phase_Turn_Init;            // "Phase.Turn.Init"
     Phase_Player_Wait = RogueGameplayTags::Phase_Player_WaitInput;   // "Phase.Player.WaitInput"
@@ -2290,7 +2290,7 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
     // (8) EventData構築！Eirection をエンコード！E
     //==========================================================================
     FGameplayEventData EventData;
-    EventData.EventTag = Tag_AbilityMove; // Ability.Move
+    EventData.EventTag = Tag_AbilityMove; // GameplayEvent.Intent.Move
     EventData.Instigator = PlayerPawn;
     EventData.Target = PlayerPawn;
 
