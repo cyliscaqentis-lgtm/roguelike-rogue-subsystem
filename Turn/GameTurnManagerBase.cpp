@@ -241,7 +241,7 @@ void AGameTurnManagerBase::InitializeTurnSystem()
     //==========================================================================
 
     {
-    UWorld* World = GetWorld();
+    // 既にline 113で宣言済みのWorldを再利用
     if (World)
     {
         if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
