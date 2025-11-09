@@ -197,3 +197,18 @@ bool UGridOccupancySubsystem::IsReservationOwnedByActor(AActor* Actor, const FIn
 
     return false;
 }
+
+FIntPoint UGridOccupancySubsystem::GetReservedCellForActor(AActor* Actor) const
+{
+    if (!Actor)
+    {
+        return FIntPoint(-1, -1);
+    }
+
+    if (const FIntPoint* CellPtr = ActorToReservation.Find(Actor))
+    {
+        return *CellPtr;
+    }
+
+    return FIntPoint(-1, -1);
+}

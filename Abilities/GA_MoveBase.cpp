@@ -264,6 +264,16 @@ void UGA_MoveBase::ActivateAbility(
 	CachedFirstLoc = CurrentLocation;
 	const FIntPoint CurrentCell = PathFinder->WorldToGrid(CurrentLocation);
 
+	// ★★★ 予約セル取得（SSOT: Single Source of Truth） ★★★
+	FIntPoint ReservedCell(-1, -1);
+	if (UWorld* World = GetWorld())
+	{
+		if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
+		{
+			ReservedCell = Occupancy->GetReservedCellForActor(Avatar);
+		}
+	}
+
 	FVector2D Dir2D(EncodedDirection.X, EncodedDirection.Y);
 	if (!Dir2D.Normalize())
 	{
@@ -293,17 +303,37 @@ void UGA_MoveBase::ActivateAbility(
 			Step.X, Step.Y);
 	}
 
-	const FIntPoint NextCell = CurrentCell + Step;
+	// ★★★ 予約セル優先、なければ計算値を使用（フォールバック） ★★★
+	const FIntPoint CalculatedCell = CurrentCell + Step;
+	const FIntPoint NextCell = (ReservedCell.X >= 0 && ReservedCell.Y >= 0) ? ReservedCell : CalculatedCell;
+
+	// ★★★ デバッグログ：予約 vs 計算 vs 実際の移動先 ★★★
+	UE_LOG(LogTurnManager, Warning,
+		TEXT("[GA_MoveBase] From=%s ReservedCell=%s CalculatedCell=%s NextCell=%s (using %s)"),
+		*CurrentCell.ToString(),
+		*ReservedCell.ToString(),
+		*CalculatedCell.ToString(),
+		*NextCell.ToString(),
+		(ReservedCell.X >= 0 && ReservedCell.Y >= 0) ? TEXT("RESERVED") : TEXT("CALCULATED"));
 
 	if (const AGameTurnManagerBase* TurnManager = GetTurnManager())
 	{
 		if (!TurnManager->IsMoveAuthorized(Unit, NextCell))
 		{
 			UE_LOG(LogTurnManager, Warning,
-				TEXT("[GA_MoveBase] Move to (%d,%d) not authorized for %s"),
-				NextCell.X, NextCell.Y, *GetNameSafe(Unit));
+				TEXT("[GA_MoveBase] ❌ AUTHORIZATION FAILED: %s → (%d,%d) | Reserved=%s Calculated=%s"),
+				*GetNameSafe(Unit),
+				NextCell.X, NextCell.Y,
+				*ReservedCell.ToString(),
+				*CalculatedCell.ToString());
 			EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 			return;
+		}
+		else
+		{
+			UE_LOG(LogTurnManager, Log,
+				TEXT("[GA_MoveBase] ✅ AUTHORIZED: %s → (%d,%d)"),
+				*GetNameSafe(Unit), NextCell.X, NextCell.Y);
 		}
 	}
 
