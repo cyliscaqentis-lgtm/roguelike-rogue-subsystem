@@ -268,6 +268,7 @@ void AGameTurnManagerBase::InitializeTurnSystem()
                 UE_LOG(LogTurnManager, Error, TEXT("InitializeTurnSystem: TurnActionBarrierSubsystem not found after 3 retries"));
             }
         }
+    }
 
         //======================================================================
         // ☁E�E☁E削除�E�UTurnInputGuard参�E�E�EタグシスチE��で不要E��E
