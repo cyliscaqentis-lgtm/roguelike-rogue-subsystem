@@ -2540,12 +2540,16 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
     // ☁E�E☁EPhase 5: AP残量確認とGate再オープン
     //==========================================================================
 
-    // TODO: APシスチE��が実裁E��れたら、以下�Eコメントを解除
+    // ★★★ 将来的な拡張: APシステム統合（2025-11-09） ★★★
+    // APシステムが実装されたら、以下のコードを有効化してください
+    // - PlayerAttributeSetにAPアトリビュートを追加
+    // - AP消費/回復のロジックを実装
+    // - Gate再オープンの条件をAP残量に基づいて制御
     /*
     int32 PlayerAP = 0;
     if (UAbilitySystemComponent* ASC = GetPlayerASC())
     {
-        // APの取得方法（例：AttributeSetから�E�E
+        // APの取得方法（例：AttributeSetから）
         const UPlayerAttributeSet* Attrs = ASC->GetSet<UPlayerAttributeSet>();
         PlayerAP = Attrs ? Attrs->GetActionPoints() : 0;
     }
@@ -2609,8 +2613,8 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
         TEXT("Turn %d: Move completed, ending player phase (AP system not implemented)"),
         CurrentTurnIndex);
 
-    // TODO: APシスチE��実裁E���E削除
-    // 暫定的にフェーズ終亁E��忁E��に応じて次のフェーズへ�E�E
+    // ★★★ 現在はAPシステム未実装のため、フェーズ遷移は別のロジックで制御 ★★★
+    // APシステム実装後は、AP残量に基づいてフェーズ遷移を制御する
 }
 
 
@@ -3246,8 +3250,14 @@ void AGameTurnManagerBase::WarpPlayerToStairUp(AActor* Player)
     {
         return;
     }
-    // TODO: 階段上りの位置を取得してワーチE
-    UE_LOG(LogTurnManager, Warning, TEXT("WarpPlayerToStairUp: Not implemented yet"));
+
+    // ★★★ 将来的な実装: 階段ワープ機能（2025-11-09） ★★★
+    // RogueDungeonSubsystemから階段の位置を取得してワープ
+    // 実装案：
+    // - URogueDungeonSubsystem::GetStairUpLocation() を追加
+    // - PlayerPawnをその位置にテレポート
+    // - カメラを更新
+    UE_LOG(LogTurnManager, Warning, TEXT("[WarpPlayerToStairUp] Not implemented yet - requires dungeon stair tracking"));
 }
 
 //------------------------------------------------------------------------------
@@ -3291,8 +3301,14 @@ void AGameTurnManagerBase::SetWallRect(int32 MinX, int32 MinY, int32 MaxX, int32
 
 bool AGameTurnManagerBase::HasAnyMoveIntent() const
 {
-    // TODO: 実裁E��忁E��E
-    return false;
+    // CachedPlayerCommandの方向ベクトルが非ゼロなら移動意図あり
+    const FVector Dir = CachedPlayerCommand.Direction;
+    const bool bHasIntent = !Dir.IsNearlyZero(0.01);
+
+    UE_LOG(LogTurnManager, Verbose, TEXT("[HasAnyMoveIntent] Direction=(%.2f,%.2f,%.2f) -> %s"),
+        Dir.X, Dir.Y, Dir.Z, bHasIntent ? TEXT("TRUE") : TEXT("FALSE"));
+
+    return bHasIntent;
 }
 
 void AGameTurnManagerBase::MarkMoveInProgress(bool bInProgress)
