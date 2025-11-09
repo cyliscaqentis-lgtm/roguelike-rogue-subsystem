@@ -2,10 +2,7 @@
 
 #include "PlayerInputProcessor.h"
 #include "Turn/TurnFlowCoordinator.h"
-<<<<<<< HEAD
-=======
 #include "Turn/TurnEventDispatcher.h"
->>>>>>> origin/claude/ue5-rogue-refactor-complete-011CUvsUqjPorTXvdbGRGcm4
 #include "Net/UnrealNetwork.h"
 #include "AbilitySystemGlobals.h"
 #include "AbilitySystemComponent.h"
@@ -68,19 +65,11 @@ bool UPlayerInputProcessor::IsInputOpen_Server() const
 
 bool UPlayerInputProcessor::ValidateCommand(const FPlayerCommand& Command, int32 ExpectedWindowId)
 {
-<<<<<<< HEAD
-	if (Command.InputWindowId != ExpectedWindowId)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[PlayerInputProcessor] Command WindowId mismatch: Expected=%d, Got=%d"),
-			ExpectedWindowId, Command.InputWindowId);
-=======
 	if (Command.WindowId != ExpectedWindowId)
 	{
 		UE_LOG(LogTemp, Warning,
 			TEXT("[PlayerInputProcessor] Command WindowId mismatch: Expected=%d, Got=%d"),
 			ExpectedWindowId, Command.WindowId);
->>>>>>> origin/claude/ue5-rogue-refactor-complete-011CUvsUqjPorTXvdbGRGcm4
 		return false;
 	}
 
@@ -100,11 +89,7 @@ void UPlayerInputProcessor::ProcessPlayerCommand(const FPlayerCommand& Command)
 
 	UE_LOG(LogTemp, Log,
 		TEXT("[PlayerInputProcessor] Command processed: WindowId=%d, Tag=%s"),
-<<<<<<< HEAD
-		Command.InputWindowId,
-=======
 		Command.WindowId,
->>>>>>> origin/claude/ue5-rogue-refactor-complete-011CUvsUqjPorTXvdbGRGcm4
 		*Command.CommandTag.ToString());
 
 	// 入力受付通知
@@ -115,10 +100,6 @@ void UPlayerInputProcessor::NotifyPlayerInputReceived()
 {
 	UE_LOG(LogTemp, Log, TEXT("[PlayerInputProcessor] PlayerInputReceived notification"));
 
-<<<<<<< HEAD
-	// デリゲート通知
-	OnPlayerInputReceived.Broadcast();
-=======
 	// デリゲート通知（TurnEventDispatcher経由）
 	UWorld* World = GetWorld();
 	if (World)
@@ -128,7 +109,6 @@ void UPlayerInputProcessor::NotifyPlayerInputReceived()
 			EventDispatcher->BroadcastPlayerInputReceived();
 		}
 	}
->>>>>>> origin/claude/ue5-rogue-refactor-complete-011CUvsUqjPorTXvdbGRGcm4
 
 	// 二重進行防止：入力受付を閉じる
 	if (bWaitingForPlayerInput)

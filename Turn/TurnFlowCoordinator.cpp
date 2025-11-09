@@ -1,10 +1,7 @@
 // TurnFlowCoordinator.cpp
 
 #include "TurnFlowCoordinator.h"
-<<<<<<< HEAD
-=======
 #include "Turn/TurnEventDispatcher.h"
->>>>>>> origin/claude/ue5-rogue-refactor-complete-011CUvsUqjPorTXvdbGRGcm4
 #include "Net/UnrealNetwork.h"
 
 void UTurnFlowCoordinator::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -39,16 +36,11 @@ void UTurnFlowCoordinator::StartFirstTurn()
 
 	UE_LOG(LogTemp, Log, TEXT("[TurnFlowCoordinator] First turn started: TurnId=%d"), CurrentTurnId);
 
-<<<<<<< HEAD
-	// デリゲート通知
-	OnTurnStarted.Broadcast(CurrentTurnIndex);
-=======
 	// デリゲート通知（TurnEventDispatcher経由）
 	if (UTurnEventDispatcher* EventDispatcher = World->GetSubsystem<UTurnEventDispatcher>())
 	{
 		EventDispatcher->BroadcastTurnStarted(CurrentTurnIndex);
 	}
->>>>>>> origin/claude/ue5-rogue-refactor-complete-011CUvsUqjPorTXvdbGRGcm4
 }
 
 void UTurnFlowCoordinator::StartTurn()
@@ -63,16 +55,11 @@ void UTurnFlowCoordinator::StartTurn()
 
 	UE_LOG(LogTemp, Log, TEXT("[TurnFlowCoordinator] Turn started: TurnId=%d, TurnIndex=%d"), CurrentTurnId, CurrentTurnIndex);
 
-<<<<<<< HEAD
-	// デリゲート通知
-	OnTurnStarted.Broadcast(CurrentTurnIndex);
-=======
 	// デリゲート通知（TurnEventDispatcher経由）
 	if (UTurnEventDispatcher* EventDispatcher = World->GetSubsystem<UTurnEventDispatcher>())
 	{
 		EventDispatcher->BroadcastTurnStarted(CurrentTurnIndex);
 	}
->>>>>>> origin/claude/ue5-rogue-refactor-complete-011CUvsUqjPorTXvdbGRGcm4
 }
 
 void UTurnFlowCoordinator::EndTurn()
@@ -85,16 +72,11 @@ void UTurnFlowCoordinator::EndTurn()
 
 	UE_LOG(LogTemp, Log, TEXT("[TurnFlowCoordinator] Turn ended: TurnId=%d"), CurrentTurnId);
 
-<<<<<<< HEAD
-	// デリゲート通知
-	OnTurnEnded.Broadcast(CurrentTurnId);
-=======
 	// デリゲート通知（TurnEventDispatcher経由）
 	if (UTurnEventDispatcher* EventDispatcher = World->GetSubsystem<UTurnEventDispatcher>())
 	{
 		EventDispatcher->BroadcastTurnEnded(CurrentTurnId);
 	}
->>>>>>> origin/claude/ue5-rogue-refactor-complete-011CUvsUqjPorTXvdbGRGcm4
 }
 
 void UTurnFlowCoordinator::AdvanceTurn()

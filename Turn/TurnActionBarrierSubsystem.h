@@ -103,19 +103,6 @@ public:
     virtual void Deinitialize() override;
 
     //==========================================================================
-<<<<<<< HEAD
-    // ★★★ Phase 6: Tickable（タイムアウトチェック用）
-    // ★★★ 最適化: Tick→Timerに変換済み（2025-11-09）
-    //==========================================================================
-
-    // Tick is no longer used - replaced with timer-based CheckTimeouts
-    // virtual void Tick(float DeltaTime) override;
-    // virtual bool IsTickable() const override { return true; }
-    // virtual TStatId GetStatId() const override;
-
-    //==========================================================================
-=======
->>>>>>> origin/claude/ue5-rogue-refactor-complete-011CUvsUqjPorTXvdbGRGcm4
     // ★★★ Phase 1: ActionID管理
     //==========================================================================
 

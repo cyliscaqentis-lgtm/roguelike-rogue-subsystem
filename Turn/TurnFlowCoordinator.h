@@ -106,19 +106,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Turn|Enemy")
 	void ClearEnemyPhaseQueue();
 
-<<<<<<< HEAD
-	//==========================================================================
-	// デリゲート
-	//==========================================================================
-
-	DECLARE_MULTICAST_DELEGATE_OneParam(FOnTurnStarted, int32 /*TurnIndex*/);
-	FOnTurnStarted OnTurnStarted;
-
-	DECLARE_MULTICAST_DELEGATE_OneParam(FOnTurnEnded, int32 /*TurnId*/);
-	FOnTurnEnded OnTurnEnded;
-
-=======
->>>>>>> origin/claude/ue5-rogue-refactor-complete-011CUvsUqjPorTXvdbGRGcm4
 protected:
 	//==========================================================================
 	// レプリケーション設定
