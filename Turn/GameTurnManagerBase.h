@@ -711,8 +711,12 @@ private:
     //==========================================================================
     // 蜀・Κ迥�E�諷・    //==========================================================================
 
-    UPROPERTY()
-    TArray<TWeakObjectPtr<AActor>> CachedEnemiesWeak;
+    // ★★★ Phase 4: 未使用変数削除（2025-11-09） ★★★
+    // 削除: CachedEnemiesWeak（使用されていない）
+    // 削除: RecollectEnemiesTimerHandle（使用されていない）
+    // 削除: PendingTeamCountLast（使用されていない）
+    // 削除: CollectEnemiesRetryCount（使用されていない）
+    // 削除: bEndTurnPosted（使用されていない）
 
     UPROPERTY()
     TMap<TWeakObjectPtr<AActor>, FEnemyIntent> CachedIntents;
@@ -720,15 +724,6 @@ private:
     mutable TWeakObjectPtr<AActor> CachedPlayerActor;
 
     FTimerHandle AbilityWaitTimerHandle;
-
-    // CollectEnemies 蜀崎ｩ�E�陦檎畑
-    FTimerHandle RecollectEnemiesTimerHandle;
-    int32 PendingTeamCountLast = 0;
-    int32 CollectEnemiesRetryCount = 0;
-    static constexpr int32 CollectEnemiesMaxRetries = 3;
-
-    // ☁E�E☁EEndEnemyTurn 多重試行抑止用フラグ ☁E�E☁E
-    bool bEndTurnPosted = false;
 
     //==========================================================================
     // 繧�E�繧�E�蛻晁E��蛹夜未謨�E�
@@ -742,8 +737,8 @@ private:
     // 譁E��蜷代・謨�E�謨�E�繝代ャ繧�E�/繧�E�繝ｳ繝代ャ繧�E�・郁E���E�蟾�E�繧�E�繝ｭ驕区成�E・    static int32 PackDirection(const FIntPoint& Dir);
     static FIntPoint UnpackDirection(int32 Magnitude);
 
-    // 笘�E・笘�E莠碁㍾邨らｫ�E�髦�E�豁E��繝輔Λ繧�E� 笘�E・笘�E    UPROPERTY(Transient)
-    bool bEnemyTurnEnding = false;
+    // ★★★ Phase 4: 未使用変数削除（2025-11-09） ★★★
+    // 削除: bEnemyTurnEnding（使用されていない）
 };
 
 
