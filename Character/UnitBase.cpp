@@ -87,13 +87,21 @@ void AUnitBase::PossessedBy(AController* NewController)
         return;
     }
 
+    // PlayerStateを取得
+    ALyraPlayerState* PS = GetPlayerState<ALyraPlayerState>();
+    if (!PS)
+    {
+        UE_LOG(LogUnitBase, Error, TEXT("[PossessedBy] ❌ PlayerState is NULL (not ready yet): %s"), *GetName());
+        return;
+    }
+
     // PlayerStateのASCを取得してキャスト
-    UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+    UAbilitySystemComponent* ASC = PS->GetAbilitySystemComponent();
     if (ULyraAbilitySystemComponent* LyraASC = Cast<ULyraAbilitySystemComponent>(ASC))
     {
-        // ★★★ 重要: InitializeAbilitySystemを呼ぶことで、OnAbilitySystemInitializedコールバックが発火する ★★★
-        PawnExt->InitializeAbilitySystem(LyraASC, this);
-        UE_LOG(LogUnitBase, Warning, TEXT("[PossessedBy] ✅ ASC initialized via PawnExtension (ASC from PlayerState)"));
+        // ★★★ 重要: OwnerActor=PlayerState にする（Lyra基盤の前提：Owner=PS, Avatar=Pawn） ★★★
+        PawnExt->InitializeAbilitySystem(LyraASC, PS);
+        UE_LOG(LogUnitBase, Warning, TEXT("[PossessedBy] ✅ ASC initialized via PawnExtension (Owner=PS, Avatar=Pawn)"));
     }
     else
     {
@@ -106,6 +114,27 @@ void AUnitBase::PossessedBy(AController* NewController)
     RefreshTeamFromController();
 
     UE_LOG(LogUnitBase, Warning, TEXT("[PossessedBy] ========== END: %s =========="), *GetName());
+}
+
+//------------------------------------------------------------------------------
+// OnRep_PlayerState - クライアント側でPlayerState同期時にASCを再初期化
+//------------------------------------------------------------------------------
+void AUnitBase::OnRep_PlayerState()
+{
+    Super::OnRep_PlayerState();
+
+    // クライアント側の再初期化（重複初期化はPawnExtが防ぐ）
+    if (ULyraPawnExtensionComponent* PawnExt = FindComponentByClass<ULyraPawnExtensionComponent>())
+    {
+        if (ALyraPlayerState* PS = GetPlayerState<ALyraPlayerState>())
+        {
+            if (ULyraAbilitySystemComponent* LyraASC = Cast<ULyraAbilitySystemComponent>(PS->GetAbilitySystemComponent()))
+            {
+                PawnExt->InitializeAbilitySystem(LyraASC, PS);
+                UE_LOG(LogUnitBase, Verbose, TEXT("[OnRep_PlayerState] Re-init ASC (Owner=PS, Avatar=Pawn)"));
+            }
+        }
+    }
 }
 
 //------------------------------------------------------------------------------
