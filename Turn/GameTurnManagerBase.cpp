@@ -15,6 +15,7 @@
 #include "Turn/TurnDebugSubsystem.h"
 #include "Turn/TurnFlowCoordinator.h"
 #include "Turn/PlayerInputProcessor.h"
+#include "Player/PlayerControllerBase.h"  // ★★★ Client RPC用 (2025-11-09) ★★★
 #include "Utility/GridUtils.h"
 #include "Utility/RogueGameplayTags.h"
 #include "Debug/TurnSystemInterfaces.h"
@@ -2353,6 +2354,17 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
                 UE_LOG(LogTurnManager, Warning,
                     TEXT("  %s (%d,%d): Cost=%d Walkable=%d"),
                     DirNames[i], CheckCell.X, CheckCell.Y, Cost, bWalkable ? 1 : 0);
+            }
+
+            // ★★★ Client通知: 入力拒否をクライアントに通知してフラグリセット (2025-11-09) ★★★
+            if (APlayerController* PC = Cast<APlayerController>(PlayerPawn->GetController()))
+            {
+                // PlayerControllerBase にキャストして Client RPC 呼び出し
+                if (APlayerControllerBase* TPCB = Cast<APlayerControllerBase>(PC))
+                {
+                    TPCB->Client_NotifyMoveRejected();
+                    UE_LOG(LogTurnManager, Verbose, TEXT("[MovePrecheck] Sent rejection notification to client"));
+                }
             }
 
             // ★ ウィンドウを閉じずに拒否（プレイヤーが再入力可能）

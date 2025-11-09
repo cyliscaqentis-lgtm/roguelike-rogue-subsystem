@@ -557,22 +557,14 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
     //==========================================================================
     if (APawn* ControlledPawn = GetPawn())
     {
-        // 現在位置とターゲット位置から方向ベクトルを計算
-        FVector CurrentLocation = ControlledPawn->GetActorLocation();
-        FVector TargetDirection = FVector(GridOffset.X, GridOffset.Y, 0.0f);
-        
-        if (!TargetDirection.IsNearlyZero())
-        {
-            // 方向ベクトルから回転を計算
-            FRotator TargetRotation = TargetDirection.Rotation();
-            
-            // ユニットを即座に回転
-            ControlledPawn->SetActorRotation(TargetRotation);
-            
-            UE_LOG(LogTemp, Log,
-                TEXT("[Client] ✅ ROTATION: Input direction=(%d,%d) → Yaw=%.1f (Instant rotation applied)"),
-                GridOffset.X, GridOffset.Y, TargetRotation.Yaw);
-        }
+        // ★★★ DISABLED: プレイヤー回転を無効化（カメラ視点変化を防止） (2025-11-09) ★★★
+        // TBSゲームでは固定視点が望ましい。プレイヤーを回転させるとカメラも追従して視点が変わってしまう。
+        // 以前の実装:
+        //   FVector TargetDirection = FVector(GridOffset.X, GridOffset.Y, 0.0f);
+        //   ControlledPawn->SetActorRotation(TargetDirection.Rotation());
+        //
+        // もし向きを変えたい場合は、GA_MoveBase側でアニメーション中のみ回転させるか、
+        // またはカメラを親の回転に追従させない設定にする必要がある。
     }
 
     //=== Step 7: サーバー送信 ===
@@ -935,4 +927,16 @@ void APlayerControllerBase::GridSmokeTest()
     {
         UE_LOG(LogTemp, Error, TEXT("[PlayerController] World is NULL"));
     }
+}
+
+//==============================================================================
+// ★★★ Client RPC: 移動コマンド拒否通知 (2025-11-09) ★★★
+//==============================================================================
+void APlayerControllerBase::Client_NotifyMoveRejected_Implementation()
+{
+    UE_LOG(LogTemp, Warning, TEXT("[Client] Move command was REJECTED by server - resetting input latch"));
+
+    // クライアント側の送信済みフラグをリセット
+    // これにより、同じ入力ウィンドウ内で再度入力を送信できるようになる
+    bSentThisInputWindow = false;
 }

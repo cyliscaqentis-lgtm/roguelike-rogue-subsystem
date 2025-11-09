@@ -195,6 +195,14 @@ protected:
     UFUNCTION(Server, Reliable)
     void Server_TurnFacing(FVector2D Direction); // そのまま（使うなら）
 
+    /**
+     * ★★★ クライアント通知: 移動コマンドが拒否された (2025-11-09)
+     * サーバー側でMovePrecheck REJECTされた場合に呼ばれ、
+     * クライアント側の bSentThisInputWindow フラグをリセットする。
+     */
+    UFUNCTION(Client, Reliable)
+    void Client_NotifyMoveRejected();
+
 protected:
     /** 最後に入力された向き変更方向 */
     UPROPERTY(BlueprintReadWrite, Category = "TBS|Input")

@@ -405,12 +405,14 @@ void UGA_MoveBase::ActivateAbility(
 		return;
 	}
 
-	const float DesiredRotation = RoundYawTo45Degrees(
-		FMath::RadiansToDegrees(FMath::Atan2(static_cast<float>(Step.Y), static_cast<float>(Step.X))));
-	DesiredYaw = DesiredRotation;
-
-	const FRotator TargetRotator(0.f, DesiredYaw, 0.f);
-	Avatar->SetActorRotation(TargetRotator, ETeleportType::TeleportPhysics);
+	// ★★★ DISABLED: プレイヤー回転を無効化（カメラ視点変化を防止） (2025-11-09) ★★★
+	// TBSゲームでは固定視点が望ましい。プレイヤーを回転させるとカメラも追従して視点が変わる。
+	// 以前の実装:
+	//   const float DesiredRotation = RoundYawTo45Degrees(...);
+	//   Avatar->SetActorRotation(FRotator(0.f, DesiredYaw, 0.f), ETeleportType::TeleportPhysics);
+	//
+	// もし向きを表現したい場合は、アニメーションブループリント側で方向を取得して
+	// メッシュのみを回転させる（アクター本体は回転させない）方式が推奨される。
 
 	// Walkability check
 	if (!IsTileWalkable(NextTileStep, Unit))
