@@ -180,15 +180,48 @@ void UGA_MoveBase::ActivateAbility(
 		return;
 	}
 
-	// ☁E�E☁ESparky修正: 無限ループガーチE- 無効なMagnitudeを即座に拒否 ☁E�E☁E
+	// ★★★ TurnId を EventData.OptionalObject から取得（2025-11-09） ★★★
+	if (AGameTurnManagerBase* TurnManager = Cast<AGameTurnManagerBase>(TriggerEventData->OptionalObject.Get()))
+	{
+		MoveTurnId = TurnManager->GetCurrentTurnIndex();
+		UE_LOG(LogTurnManager, Log,
+			TEXT("[GA_MoveBase] TurnId retrieved from TurnManager: %d (Actor=%s)"),
+			MoveTurnId, *GetNameSafe(Avatar));
+	}
+	else
+	{
+		// フォールバック: BarrierSubsystem から取得
+		if (UTurnActionBarrierSubsystem* Barrier = GetBarrierSubsystem())
+		{
+			MoveTurnId = Barrier->GetCurrentTurnId();
+			UE_LOG(LogTurnManager, Warning,
+				TEXT("[GA_MoveBase] TurnId fallback from Barrier: %d (Actor=%s)"),
+				MoveTurnId, *GetNameSafe(Avatar));
+		}
+		else
+		{
+			UE_LOG(LogTurnManager, Error,
+				TEXT("[GA_MoveBase] Failed to retrieve TurnId - TurnManager and Barrier not available"));
+			MoveTurnId = INDEX_NONE;
+		}
+	}
+
+	// ★★★ Magnitude 検証（TurnCommandEncoding 範囲チェック） ★★★
 	const int32 RawMagnitude = FMath::RoundToInt(TriggerEventData->EventMagnitude);
 	if (RawMagnitude < TurnCommandEncoding::kDirBase)  // 1000未満は無効
 	{
 		UE_LOG(LogTurnManager, Error,
-			TEXT("[GA_MoveBase] ☁E�E☁EINFINITE LOOP GUARD: Invalid magnitude=%d (expected >= %d, got %.2f) - ABORTING ABILITY"),
+			TEXT("[GA_MoveBase] ❌ INVALID MAGNITUDE: %d (expected >= %d, got %.2f) - Check GameTurnManager encoding!"),
 			RawMagnitude, TurnCommandEncoding::kDirBase, TriggerEventData->EventMagnitude);
+		UE_LOG(LogTurnManager, Error,
+			TEXT("[GA_MoveBase] Sender should use TurnCommandEncoding::PackDir() - ABORTING"));
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
+	}
+	else
+	{
+		UE_LOG(LogTurnManager, Log,
+			TEXT("[GA_MoveBase] ✅ Magnitude validated: %d (range OK)"), RawMagnitude);
 	}
 
 	FVector EncodedDirection = FVector::ZeroVector;
@@ -1041,11 +1074,20 @@ bool UGA_MoveBase::RegisterBarrier(AActor* Avatar)
 	{
 		if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
 		{
-			const int32 CurrentTurn = Barrier->GetCurrentTurnId();
-			MoveTurnId = CurrentTurn;
+			// ★★★ TurnId が未設定の場合のみフォールバック取得（2025-11-09） ★★★
+			if (MoveTurnId == INDEX_NONE)
+			{
+				MoveTurnId = Barrier->GetCurrentTurnId();
+				UE_LOG(LogTurnManager, Warning,
+					TEXT("[RegisterBarrier] TurnId fallback: %d (Actor=%s)"),
+					MoveTurnId, *Avatar->GetName());
+			}
+
 			MoveActionId = Barrier->RegisterAction(Avatar, MoveTurnId);
-			bBarrierRegistered = true; // ☁E�E☁E登録完亁E��ラグを立てめE☁E�E☁E
-			// ☁E�E☁EレガシーAPI�E�EotifyMoveStarted�E��E削除 - 新ActionID APIのみ使用 ☁E�E☁E
+			bBarrierRegistered = true;
+			UE_LOG(LogTurnManager, Log,
+				TEXT("[RegisterBarrier] Registered: TurnId=%d, ActionId=%s (Actor=%s)"),
+				MoveTurnId, *MoveActionId.ToString(), *Avatar->GetName());
 			return true;
 		}
 	}

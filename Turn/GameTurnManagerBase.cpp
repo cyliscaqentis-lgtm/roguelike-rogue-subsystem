@@ -2292,11 +2292,12 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
     EventData.EventTag = Tag_AbilityMove; // GameplayEvent.Intent.Move
     EventData.Instigator = PlayerPawn;
     EventData.Target = PlayerPawn;
+    EventData.OptionalObject = this; // TurnId 取得用
 
-    // Direction をエンコーチE 1000 + (X * 100) + Y
-    EventData.EventMagnitude = 1000.0f
-        + (Command.Direction.X * 100.0f)
-        + (Command.Direction.Y * 1.0f);
+    // ★★★ Direction をエンコード（TurnCommandEncoding 統一） ★★★
+    const int32 DirX = FMath::RoundToInt(Command.Direction.X);
+    const int32 DirY = FMath::RoundToInt(Command.Direction.Y);
+    EventData.EventMagnitude = static_cast<float>(TurnCommandEncoding::PackDir(DirX, DirY));
 
     UE_LOG(LogTurnManager, Log,
         TEXT("[GameTurnManager] EventData prepared - Tag=%s, Magnitude=%.2f, Direction=(%.0f,%.0f)"),
@@ -2985,17 +2986,14 @@ void AGameTurnManagerBase::ExecutePlayerMove()
         EventData.EventTag = Tag_AbilityMove;
         EventData.Instigator = PlayerPawnNow;
         EventData.Target = PlayerPawnNow;
+        EventData.OptionalObject = this; // TurnId 取得用
 
         //======================================================================
-        // ☁E�E☁E修正: Direction めEEventMagnitude にエンコーチE
-        // Format: 1000 + (X * 100) + Y
-        // 侁E Direction(0, 1) ↁE1001
-        //     Direction(-1, 0) ↁE900
-        //     Direction(1, -1) ↁE1099
+        // ★★★ Direction をエンコード（TurnCommandEncoding 統一） ★★★
         //======================================================================
-        EventData.EventMagnitude = 1000.0f
-            + (CachedPlayerCommand.Direction.X * 100.0f)
-            + (CachedPlayerCommand.Direction.Y * 1.0f);
+        const int32 DirX = FMath::RoundToInt(CachedPlayerCommand.Direction.X);
+        const int32 DirY = FMath::RoundToInt(CachedPlayerCommand.Direction.Y);
+        EventData.EventMagnitude = static_cast<float>(TurnCommandEncoding::PackDir(DirX, DirY));
 
         UE_LOG(LogTurnManager, Log,
             TEXT("Turn %d: Sending GameplayEvent %s (Magnitude=%.2f, Direction=(%.0f,%.0f))"),
