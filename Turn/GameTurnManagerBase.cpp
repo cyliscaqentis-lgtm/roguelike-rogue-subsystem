@@ -37,7 +37,6 @@
 #include "Player/LyraPlayerController.h"              // ALyraPlayerController
 #include "GameFramework/SpectatorPawn.h"  // ☁Eこれを追加
 #include "EngineUtils.h"
-#include "Data/MoveInputPayloadBase.h"
 #include "Kismet/GameplayStatics.h"
 // ☁E�E☁E追加�E�DistanceFieldSubsystemのinclude ☁E�E☁E
 #include "DistanceFieldSubsystem.h" 
