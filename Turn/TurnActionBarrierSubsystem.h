@@ -105,11 +105,13 @@ public:
 
     //==========================================================================
     // ★★★ Phase 6: Tickable（タイムアウトチェック用）
+    // ★★★ 最適化: Tick→Timerに変換済み（2025-11-09）
     //==========================================================================
 
-    virtual void Tick(float DeltaTime) override;
-    virtual bool IsTickable() const override { return true; }
-    virtual TStatId GetStatId() const override;
+    // Tick is no longer used - replaced with timer-based CheckTimeouts
+    // virtual void Tick(float DeltaTime) override;
+    // virtual bool IsTickable() const override { return true; }
+    // virtual TStatId GetStatId() const override;
 
     //==========================================================================
     // ★★★ Phase 1: ActionID管理
@@ -287,6 +289,9 @@ private:
 
     /** セーフティタイムアウトハンドル */
     FTimerHandle SafetyTimeoutHandle;
+
+    /** タイムアウトチェック用タイマー（Tick→Timer最適化） */
+    FTimerHandle TimeoutCheckTimer;
 
     //==========================================================================
     // ★★★ Token方式の状態管理（冪等API用）

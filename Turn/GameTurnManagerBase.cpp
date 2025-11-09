@@ -997,6 +997,7 @@ void AGameTurnManagerBase::CollectEnemies_Implementation()
 
     // ☁E�E☁E重要E��CachedEnemiesを完�Eにクリアしてから再構篁E☁E�E☁E
     CachedEnemies.Empty();
+    CachedEnemies.Reserve(Found.Num());
 
     for (AActor* A : Found)
     {
