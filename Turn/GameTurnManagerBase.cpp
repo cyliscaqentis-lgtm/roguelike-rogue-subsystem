@@ -2197,6 +2197,30 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
         Command.Direction.X, Command.Direction.Y);
 
     //==========================================================================
+    // ★★★ Phase 5: Register Player Reservation (2025-11-09) ★★★
+    // Calculate target cell and register in reservation system BEFORE movement
+    //==========================================================================
+    if (CachedPathFinder.IsValid())
+    {
+        const FIntPoint CurrentCell = CachedPathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
+        const FIntPoint TargetCell(
+            CurrentCell.X + static_cast<int32>(Command.Direction.X),
+            CurrentCell.Y + static_cast<int32>(Command.Direction.Y));
+
+        // Register player's intended move in reservation system
+        RegisterResolvedMove(PlayerPawn, TargetCell);
+
+        UE_LOG(LogTurnManager, Log,
+            TEXT("[GameTurnManager] Player reservation registered: (%d,%d) → (%d,%d)"),
+            CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y);
+    }
+    else
+    {
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[GameTurnManager] PathFinder not available - Player reservation skipped"));
+    }
+
+    //==========================================================================
     // (9) GAS起動！Ebility.Moveを発動！E
     //==========================================================================
     const int32 TriggeredCount = ASC->HandleGameplayEvent(EventData.EventTag, &EventData);
@@ -2716,20 +2740,25 @@ void AGameTurnManagerBase::OnAttacksFinished(int32 TurnId)
 
 void AGameTurnManagerBase::ExecuteMovePhase()
 {
-    // ☁E�E☁EUActionExecutorSubsystem は存在しなぁE��めコメントアウチE
-    UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] ExecuteMovePhase: ActionExecutor not available (class not found)"), CurrentTurnIndex);
-    return;
-    /*
-    UActionExecutorSubsystem* ActionExec = GetWorld()->GetSubsystem<UActionExecutorSubsystem>();
-    UEnemyTurnDataSubsystem* EnemyData = GetWorld()->GetSubsystem<UEnemyTurnDataSubsystem>();
-    UTurnActionBarrierSubsystem* Barrier = GetWorld()->GetSubsystem<UTurnActionBarrierSubsystem>();
+    // ★★★ Phase 5: ConflictResolver Integration (2025-11-09) ★★★
+    // Use TurnCorePhaseManager instead of non-existent ActionExecutorSubsystem
 
-    if (!ActionExec || !EnemyData)
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] ExecuteMovePhase: World is null"), CurrentTurnIndex);
+        return;
+    }
+
+    UTurnCorePhaseManager* PhaseManager = World->GetSubsystem<UTurnCorePhaseManager>();
+    UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>();
+
+    if (!PhaseManager || !EnemyData)
     {
         UE_LOG(LogTurnManager, Error,
-            TEXT("[Turn %d] ExecuteMovePhase: ActionExecutor=%d or EnemyTurnData=%d not found"),
+            TEXT("[Turn %d] ExecuteMovePhase: PhaseManager=%d or EnemyData=%d not found"),
             CurrentTurnIndex,
-            ActionExec != nullptr,
+            PhaseManager != nullptr,
             EnemyData != nullptr);
 
         EndEnemyTurn();
@@ -2739,14 +2768,37 @@ void AGameTurnManagerBase::ExecuteMovePhase()
     if (EnemyData->Intents.Num() == 0)
     {
         UE_LOG(LogTurnManager, Warning,
-            TEXT("[Turn %d] ExecuteMovePhase: No enemy intents, skipping move phase"),
+            TEXT("[Turn %d] ExecuteMovePhase: No enemy intents, skipping"),
             CurrentTurnIndex);
 
         EndEnemyTurn();
         return;
     }
-    // ... 残りのコーチE...
-    */
+
+    UE_LOG(LogTurnManager, Log,
+        TEXT("[Turn %d] ExecuteMovePhase: Processing %d intents via ConflictResolver"),
+        CurrentTurnIndex, EnemyData->Intents.Num());
+
+    //==========================================================================
+    // (1) Conflict Resolution: Convert Intents → ResolvedActions
+    //==========================================================================
+    TArray<FResolvedAction> ResolvedActions = PhaseManager->CoreResolvePhase(EnemyData->Intents);
+
+    UE_LOG(LogTurnManager, Log,
+        TEXT("[Turn %d] ConflictResolver produced %d resolved actions"),
+        CurrentTurnIndex, ResolvedActions.Num());
+
+    //==========================================================================
+    // (2) Execute Resolved Actions: Trigger GAS abilities
+    //==========================================================================
+    PhaseManager->CoreExecutePhase(ResolvedActions);
+
+    UE_LOG(LogTurnManager, Log,
+        TEXT("[Turn %d] ExecuteMovePhase complete - movements dispatched"),
+        CurrentTurnIndex);
+
+    // Note: Movement completion is handled via Barrier callbacks
+    // EndEnemyTurn() will be called when all movements finish
 }
 
 

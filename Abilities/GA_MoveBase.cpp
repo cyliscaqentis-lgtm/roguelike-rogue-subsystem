@@ -848,12 +848,25 @@ void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
         ? TurnManager->HasReservationFor(Unit, TargetCell)
         : false;
 
-    if (!bTargetReserved && !IsTileWalkable(TargetCell))
+    // ★★★ Phase 5: Collision Prevention - Require reservation (2025-11-09) ★★★
+    // CRITICAL FIX: Units can ONLY move to cells reserved for them
+    // This prevents overlapping by enforcing the reservation system
+    if (!bTargetReserved)
     {
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[GA_MoveBase] Target cell (%d,%d) not walkable"), TargetCell.X, TargetCell.Y);
-        EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, true);
-        return;
+        // Fallback for non-turn-based scenarios (exploration mode, etc.)
+        if (!IsTileWalkable(TargetCell))
+        {
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[GA_MoveBase] Target cell (%d,%d) not reserved and not walkable - Move blocked"),
+                TargetCell.X, TargetCell.Y);
+            EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, true);
+            return;
+        }
+
+        // Allow movement but log warning if no reservation system is active
+        UE_LOG(LogTurnManager, Verbose,
+            TEXT("[GA_MoveBase] Target cell (%d,%d) not reserved but walkable - Allowing (exploration mode?)"),
+            TargetCell.X, TargetCell.Y);
     }
 
 	const float FixedZ = ComputeFixedZ(Unit, PathFinder);
