@@ -381,10 +381,11 @@ void UGA_MoveBase::ActivateAbility(
 		return;
 	}
 
-	const FVector2D StepDir2D(Step.X, Step.Y);
-	const FVector LocalTarget = CalculateNextTilePosition(CurrentLocation, StepDir2D);
-
-	NextTileStep = SnapToCellCenterFixedZ(LocalTarget, FixedZ);
+	// ★★★ FIX: GridToWorld(CachedNextCell)で正しい目的地セル中心を計算 (2025-11-09) ★★★
+	// 従来: CalculateNextTilePosition(CurrentLocation, StepDir2D) → 現在位置ベースで計算（位置ズレの原因）
+	// 修正後: PathFinder->GridToWorld(CachedNextCell) → セル座標から直接計算（OnMoveFinishedと同じ方式）
+	const FVector DestWorldLoc = PathFinder->GridToWorld(CachedNextCell);
+	NextTileStep = SnapToCellCenterFixedZ(DestWorldLoc, FixedZ);
 	NextTileStep.Z = FixedZ;
 
 	const float MoveDistance = FVector::Dist(CurrentLocation, NextTileStep);
