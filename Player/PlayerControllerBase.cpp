@@ -507,9 +507,13 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
         CachedTurnManager->WaitingForPlayerInput, bGateOpenClient);
 
     //==========================================================================
-    // ★ Step 3: 送信済みチェック（削除 - サーバ側で重複検出）
+    // ★ Step 3: 送信済みチェック（クライアント側の多重送信防止）
     //==========================================================================
-    // if (bSentThisInputWindow) { return; } // ← 削除：サーバで判定
+    if (bSentThisInputWindow)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[Client] Command already sent for this window, ignoring"));
+        return;
+    }
 
     //=== Step 2: 入力値を直接使用（修正なし） ===
     const FVector2D RawInput = Value.Get<FVector2D>();
@@ -818,18 +822,21 @@ void APlayerControllerBase::Server_SubmitCommand_Implementation(const FPlayerCom
     }
 
     //=========================================================================
-    // ★★★ 2025-11-09: クライアント値を上書き（同期不要化）
-    // クライアント側の未同期/遅延を無視し、サーバの現在値を採用
+    // ★ WindowId検証（重複検出）
     //=========================================================================
-    const int32 NowTurn  = CachedTurnManager->GetCurrentTurnIndex();
-    const int32 NowWinId = CachedTurnManager->GetCurrentInputWindowId();
+    const int32 CurrentWindowId = CachedTurnManager->GetCurrentInputWindowId();
 
-    FPlayerCommand Command = CommandIn;
-    Command.TurnId = NowTurn;
-    Command.WindowId = NowWinId;
+    if (CommandIn.WindowId != CurrentWindowId)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Server] REJECT: WindowId mismatch (Client=%d, Server=%d)"),
+            CommandIn.WindowId, CurrentWindowId);
+        return;
+    }
 
-    UE_LOG(LogTemp, Warning, TEXT("[Server] Overridden: TurnId=%d, WindowId=%d (Server authoritative)"),
-        Command.TurnId, Command.WindowId);
+    // クライアントから送られたコマンドをそのまま使用（上書きしない）
+    const FPlayerCommand& Command = CommandIn;
+
+    UE_LOG(LogTemp, Log, TEXT("[Server] WindowId validated: %d"), Command.WindowId);
 
     //=========================================================================
     // 検証: 二重鍵（WaitingForPlayerInput && Gate_Input_Open）

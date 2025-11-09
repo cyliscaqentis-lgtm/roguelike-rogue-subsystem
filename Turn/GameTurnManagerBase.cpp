@@ -1859,12 +1859,18 @@ void AGameTurnManagerBase::StartFirstTurn()
 
     bTurnStarted = true;
 
-    // ★ Pawn未確定なら遅延オープン
+    // ★ Pawn確定状態で入力窓を開く
     if (!IsValid(CachedPlayerPawn))
     {
         UE_LOG(LogTurnManager, Warning, TEXT("[Turn] Player not ready -> defer opening input window"));
         bDeferOpenOnPossess = true;
         // Barrierとイベントは継続（入力窓だけ遅延）
+    }
+    else
+    {
+        // Pawnが確定しているので即座に入力窓を開く
+        OpenInputWindowForPlayer();
+        UE_LOG(LogTurnManager, Log, TEXT("[Turn] StartFirstTurn: Input window opened (Pawn ready)"));
     }
 
     // ☁E�E☁EホットフィチE��ス: Turn 0でのBarrier初期匁E☁E�E☁E
