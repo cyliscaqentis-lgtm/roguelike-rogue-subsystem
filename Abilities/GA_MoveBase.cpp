@@ -16,6 +16,7 @@
 #include "Rogue/Turn/TurnActionBarrierSubsystem.h"
 #include "Rogue/Utility/RogueGameplayTags.h"
 #include "Turn/GameTurnManagerBase.h"
+#include "Utility/PathFinderUtils.h"
 #include "Utility/TurnCommandEncoding.h"
 
 #include "../ProjectDiagnostics.h"
@@ -685,19 +686,13 @@ float UGA_MoveBase::RoundYawTo45Degrees(float Yaw)
 
 const AGridPathfindingLibrary* UGA_MoveBase::GetPathFinder() const
 {
-	if (CachedPathFinder.IsValid())
-	{
-		return CachedPathFinder.Get();
-	}
-
+	// ★★★ 最適化: PathFinderUtils使用（重複コード削除）
 	if (const UWorld* World = GetWorld())
 	{
-		if (AGridPathfindingLibrary* Found = Cast<AGridPathfindingLibrary>(
-			UGameplayStatics::GetActorOfClass(World, AGridPathfindingLibrary::StaticClass())))
-		{
-			CachedPathFinder = Found;
-			return CachedPathFinder.Get();
-		}
+		return FPathFinderUtils::GetCachedPathFinder(
+			const_cast<UWorld*>(World),
+			const_cast<TWeakObjectPtr<AGridPathfindingLibrary>*>(&CachedPathFinder)
+		);
 	}
 
 	return nullptr;

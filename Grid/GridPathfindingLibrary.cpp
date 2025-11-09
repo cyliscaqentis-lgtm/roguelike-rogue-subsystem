@@ -11,6 +11,7 @@
 #include "Grid/GridOccupancySubsystem.h"  // 笘�E・笘�EIsCellWalkable逕ｨ 笘�E・笘�E
 #include "Misc/ScopeLock.h"
 #include "Grid/DungeonFloorGenerator.h"
+#include "Utility/GridUtils.h"
 #include "../ProjectDiagnostics.h"
 
 // 笘�E・笘�E逶�E�譟ｻ繝｢繝ｼ繝�E畑繧�E�繝ｭ繝ｼ繝�EΝ螟画焁E笘�E・笘�E
@@ -800,7 +801,8 @@ int32 AGridPathfindingLibrary::GetManhattanDistance(const FVector& PosA, const F
 {
     const FIntPoint A = WorldToGridInternal(PosA);
     const FIntPoint B = WorldToGridInternal(PosB);
-    return FMath::Abs(A.X - B.X) + FMath::Abs(A.Y - B.Y);
+    // ★★★ 最適化: GridUtils使用（重複コード削除 2025-11-09）
+    return FGridUtils::ManhattanDistance(A, B);
 }
 
 // ==================== 蜀・Κ繝倥Ν繝代・ ====================
@@ -920,19 +922,20 @@ void AGridPathfindingLibrary::GetActorsAtGridPosition(const FIntPoint& GridPos, 
 
 int32 AGridPathfindingLibrary::GetChebyshevDistance(FIntPoint A, FIntPoint B)
 {
-    return FMath::Max(FMath::Abs(A.X - B.X), FMath::Abs(A.Y - B.Y));
+    // ★★★ 最適化: GridUtils使用（重複コード削除 2025-11-09）
+    return FGridUtils::ChebyshevDistance(A, B);
 }
 
 int32 AGridPathfindingLibrary::GetManhattanDistanceGrid(FIntPoint A, FIntPoint B)
 {
-    return FMath::Abs(A.X - B.X) + FMath::Abs(A.Y - B.Y);
+    // ★★★ 最適化: GridUtils使用（重複コード削除 2025-11-09）
+    return FGridUtils::ManhattanDistance(A, B);
 }
 
 int32 AGridPathfindingLibrary::GetEuclideanDistanceGrid(FIntPoint A, FIntPoint B)
 {
-    int32 DX = A.X - B.X;
-    int32 DY = A.Y - B.Y;
-    return FMath::RoundToInt(FMath::Sqrt(static_cast<float>(DX * DX + DY * DY)));
+    // ★★★ 最適化: GridUtils使用（重複コード削除 2025-11-09）
+    return FMath::RoundToInt(FGridUtils::EuclideanDistance(A, B));
 }
 
 // ==================== 譁E��隕城未謨�E� ====================

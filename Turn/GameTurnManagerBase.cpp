@@ -9,6 +9,7 @@
 #include "Grid/GridOccupancySubsystem.h"
 #include "AI/Enemy/EnemyTurnDataSubsystem.h"
 #include "Turn/TurnSystemTypes.h"
+#include "Utility/GridUtils.h"
 #include "Utility/RogueGameplayTags.h"
 #include "Debug/TurnSystemInterfaces.h"
 #include "AbilitySystemGlobals.h"
@@ -1848,10 +1849,11 @@ void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnIndex)
                 }
             }
 
-            // ☁E�E☁Eマンハッタン距離計算ラムダ ☁E�E☁E
+            // ★★★ 最適化: GridUtils使用（重複コード削除 2025-11-09）
+            // マンハッタン距離計算はGridUtilsを使用
             auto Manhattan = [](const FIntPoint& A, const FIntPoint& B) -> int32
                 {
-                    return FMath::Abs(A.X - B.X) + FMath::Abs(A.Y - B.Y);
+                    return FGridUtils::ManhattanDistance(A, B);
                 };
 
             // ☁E�E☁E最遠の敵までの距離を計箁E☁E�E☁E

@@ -4,6 +4,7 @@
 #include "Math/RandomStream.h"
 #include "Containers/Queue.h"
 #include "UObject/UObjectGlobals.h"
+#include "Utility/GridUtils.h"
 
 ADungeonFloorGenerator::ADungeonFloorGenerator()
 {
@@ -320,7 +321,8 @@ void ADungeonFloorGenerator::ConnectCentersWithMST(const TArray<FIntPoint>& Cent
             for (int32 vIdx = 0; vIdx < unused.Num(); ++vIdx)
             {
                 const int32 v = unused[vIdx];
-                const int32 d = FMath::Abs(Centers[u].X - Centers[v].X) + FMath::Abs(Centers[u].Y - Centers[v].Y);
+                // ★★★ 最適化: GridUtils使用（重複コード削除 2025-11-09）
+                const int32 d = FGridUtils::ManhattanDistance(Centers[u], Centers[v]);
                 if (d < bestDist) { bestDist = d; bestU = u; bestV = v; bestIdx = vIdx; }
             }
         if (bestU < 0) break;
