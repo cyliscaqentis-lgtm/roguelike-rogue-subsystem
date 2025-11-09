@@ -12,6 +12,12 @@
 #include "EngineUtils.h"  // ★★★ TActorIterator用 ★★★
 #include "AbilitySystemInterface.h"
 #include "AbilitySystemComponent.h"
+#include "Character/UnitManager.h"  // ★★★ UnitManager用 ★★★
+#include "Character/UnitBase.h"    // ★★★ UnitBase用 ★★★
+#include "Camera/LyraCameraComponent.h"  // ★★★ カメラ切り替え用 ★★★
+#include "Camera/LyraCameraMode.h"  // ★★★ カメラモード型定義用 ★★★
+#include "Character/LyraPawnExtensionComponent.h"  // ★★★ PawnData取得用 ★★★
+#include "Character/LyraPawnData.h"  // ★★★ カメラモード確認用 ★★★
 
 //------------------------------------------------------------------------------
 // Constructor
@@ -53,6 +59,20 @@ APlayerControllerBase::APlayerControllerBase()
 void APlayerControllerBase::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
+
+    // ★★★ カメラYaw診断（OnPossess直後1回のみ）
+    static bool bDiagnosticDone = false;
+    if (!bDiagnosticDone && GetPawn() && PlayerCameraManager)
+    {
+        const float CameraYaw = PlayerCameraManager->GetCameraRotation().Yaw;
+        const float ControlYaw = GetControlRotation().Yaw;
+        const float PawnYaw = GetPawn()->GetActorRotation().Yaw;
+
+        UE_LOG(LogTemp, Warning, TEXT("[Camera Diagnostic] CameraYaw=%.1f, ControlYaw=%.1f, PawnYaw=%.1f"),
+            CameraYaw, ControlYaw, PawnYaw);
+
+        bDiagnosticDone = true;
+    }
 
     // ✅ Tickでは検索しない（BeginPlayとタイマーで処理）
     if (!CachedTurnManager || !IsValid(CachedTurnManager))
@@ -226,10 +246,98 @@ void APlayerControllerBase::OnPossess(APawn* InPawn)
         InPawn ? *InPawn->GetName() : TEXT("NULL"));
 
     //==========================================================================
-    // ★ カメラをプレイヤーに切替（確実に）
+    // ★★★ プレイヤー配置と敵スポーンのトリガー（2025-11-09）
     //==========================================================================
+    if (InPawn && InPawn->GetName().Contains(TEXT("PlayerUnit")))
+    {
+        // UnitManagerを直接取得
+        if (UWorld* World = GetWorld())
+        {
+            for (TActorIterator<AUnitManager> It(World); It; ++It)
+            {
+                if (AUnitManager* UnitMgr = *It)
+                {
+                    if (AUnitBase* PlayerUnit = Cast<AUnitBase>(InPawn))
+                    {
+                        UE_LOG(LogTemp, Log, TEXT("[PlayerController] Calling OnTBSCharacterPossessed for: %s"), *InPawn->GetName());
+                        UnitMgr->OnTBSCharacterPossessed(PlayerUnit);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    //==========================================================================
+    // ★★★ カメラをPlayerUnitに切り替え（2025-11-09）
+    // Lyraのカメラシステムを利用してPawnDataで設定されたカメラモードを適用
+    //==========================================================================
+
+    // ViewTargetをPlayerUnitに設定（即座に切り替え）
     SetViewTargetWithBlend(InPawn, 0.0f);
+
+    // ★★★ 初回ControlRotationを強制設定（2025-11-09）
+    // カメラ・ControlRotation・PawnのYawを初期フレームから一致させる
+    if (InPawn)
+    {
+        const FRotator YawOnly(0.f, InPawn->GetActorRotation().Yaw, 0.f);
+        SetControlRotation(YawOnly);
+        UE_LOG(LogTemp, Warning, TEXT("[PlayerController] Initial ControlRotation set to Yaw=%.1f"), YawOnly.Yaw);
+    }
+
+    // ★★★ Lyraの自動管理を有効化（PawnDataのDefaultCameraMode適用のため）
     bAutoManageActiveCameraTarget = true;
+
+    // ★★★ カメラモードを明示的に強制適用（2025-11-09）
+    // TBSプロジェクトではLyraHeroComponentを使用しないため、
+    // DetermineCameraModeDelegate を手動で設定する必要がある
+    if (InPawn)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[PlayerController] Camera setup: ViewTarget=%s, bAutoManage=%d"),
+            *InPawn->GetName(), bAutoManageActiveCameraTarget);
+
+        // PawnDataのDefaultCameraMode確認と強制適用
+        if (AUnitBase* PlayerUnit = Cast<AUnitBase>(InPawn))
+        {
+            if (ULyraPawnExtensionComponent* Ext = PlayerUnit->FindComponentByClass<ULyraPawnExtensionComponent>())
+            {
+                if (const ULyraPawnData* PawnData = Ext->GetPawnData<ULyraPawnData>())
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("[PlayerController] PawnData found: %s, DefaultCameraMode=%s"),
+                        *PawnData->GetName(), *GetNameSafe(PawnData->DefaultCameraMode));
+
+                    // ★★★ DetermineCameraModeDelegate を設定（LyraHeroComponentの代替）
+                    if (PawnData->DefaultCameraMode)
+                    {
+                        if (ULyraCameraComponent* CameraComp = PlayerUnit->FindComponentByClass<ULyraCameraComponent>())
+                        {
+                            // カメラモードを返すデリゲートを設定
+                            TSubclassOf<ULyraCameraMode> CameraMode = PawnData->DefaultCameraMode;
+                            CameraComp->DetermineCameraModeDelegate.BindLambda([CameraMode]()
+                            {
+                                return CameraMode;
+                            });
+
+                            UE_LOG(LogTemp, Warning, TEXT("[PlayerController] DetermineCameraModeDelegate bound to: %s"),
+                                *GetNameSafe(PawnData->DefaultCameraMode));
+                        }
+                        else
+                        {
+                            UE_LOG(LogTemp, Error, TEXT("[PlayerController] NO LyraCameraComponent on PlayerUnit! Cannot set camera mode!"));
+                        }
+                    }
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Error, TEXT("[PlayerController] NO PawnData on PlayerUnit! Camera mode won't apply!"));
+                }
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("[PlayerController] NO PawnExtensionComponent on PlayerUnit!"));
+            }
+        }
+    }
 
     //==========================================================================
     // ★ TurnManagerにPossess通知（入力窓を開き直すトリガー）
@@ -237,22 +345,47 @@ void APlayerControllerBase::OnPossess(APawn* InPawn)
     if (CachedTurnManager)
     {
         CachedTurnManager->NotifyPlayerPossessed(InPawn);
+        UE_LOG(LogTemp, Log, TEXT("[PlayerController] NotifyPlayerPossessed sent"));
     }
-
-    //==========================================================================
-    // ★★★ 削除: InputGuardのヒステリシス設定（3タグシステムで不要）
-    //==========================================================================
-    // if (UTurnInputGuard* Guard = GetWorld()->GetSubsystem<UTurnInputGuard>())
-    // {
-    //     Guard->SetThresholds(0.5f, 0.2f);
-    //     UE_LOG(LogTemp, Log, TEXT("[PlayerController] InputGuard thresholds set"));
-    // }
 
     // EnhancedInput初期化（Possess後に確実に実行）
     InitializeEnhancedInput();
+
+    // ★★★ 最終固定：InitializeEnhancedInput後にControlRotationを再固定（2025-11-09）
+    // SetIgnoreLookInput(true)でLook入力を遮断しても、IMC追加時に既に入力が入っている可能性があるため
+    if (InPawn)
+    {
+        const FRotator YawOnly(0.f, InPawn->GetActorRotation().Yaw, 0.f);
+        SetControlRotation(YawOnly);
+        UE_LOG(LogTemp, Warning, TEXT("[PlayerController] Final ControlRotation re-fixed to Yaw=%.1f (post-IMC)"), YawOnly.Yaw);
+    }
 }
 
+void APlayerControllerBase::UpdateRotation(float DeltaTime)
+{
+    // ★★★ TBSではControlRotationを固定（2025-11-09）
+    // マウス/右スティック等からのAddYawInput/AddPitchInputによる変化を遮断
+    // Super::UpdateRotation(DeltaTime); // 呼ばない
 
+    if (APawn* P = GetPawn())
+    {
+        // PawnのYawに合わせてControlRotationを固定
+        const float Yaw = P->GetActorRotation().Yaw;
+        SetControlRotation(FRotator(0.f, Yaw, 0.f));
+    }
+}
+
+void APlayerControllerBase::AddYawInput(float Val)
+{
+    // ★★★ 診断ログ：誰がYaw入力を送っているか確認（2025-11-09）
+    if (FMath::Abs(Val) > KINDA_SMALL_NUMBER)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[AddYawInput] Val=%.3f (Source: IMC Look/Orbit binding)"), Val);
+    }
+
+    // ★★★ TBSでは無視（SetIgnoreLookInput(true)で既に遮断されているはずだが、念のため）
+    // Super::AddYawInput(Val); // 呼ばない
+}
 
 void APlayerControllerBase::InitializeEnhancedInput()
 {
@@ -282,6 +415,11 @@ void APlayerControllerBase::InitializeEnhancedInput()
         UE_LOG(LogTemp, Error, TEXT("[PlayerController] EnhancedInputLocalPlayerSubsystem not found"));
     }
 
+    // ★★★ Look/Orbit入力を無効化（2025-11-09）
+    // TBSではControlRotationを固定するため、マウス/右スティックからの視点回転を遮断
+    SetIgnoreLookInput(true);
+    UE_LOG(LogTemp, Warning, TEXT("[PlayerController] SetIgnoreLookInput(true) - Look inputs disabled for TBS"));
+
     UE_LOG(LogTemp, Log, TEXT("[PlayerController] InitializeEnhancedInput completed"));
 }
 
@@ -293,9 +431,12 @@ void APlayerControllerBase::SetupInputComponent()
 
     if (UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(InputComponent))
     {
-        // IA_Moveのバインド（3つのイベント）
+        // IA_Moveのバインド（4つのイベント）
+        // ★★★ 2025-11-09: Started も追加（Triggered が走らないケースの救済）
         if (IA_Move)
         {
+            EnhancedInput->BindAction(IA_Move, ETriggerEvent::Started, this,
+                &APlayerControllerBase::Input_Move_Triggered);
             EnhancedInput->BindAction(IA_Move, ETriggerEvent::Triggered, this,
                 &APlayerControllerBase::Input_Move_Triggered);
             EnhancedInput->BindAction(IA_Move, ETriggerEvent::Canceled, this,
@@ -339,6 +480,8 @@ void APlayerControllerBase::SetupInputComponent()
 
 void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
 {
+    UE_LOG(LogTemp, Warning, TEXT("[Client] Input_Move_Triggered fired"));
+
     //==========================================================================
     // Step 1: TurnManager検証
     //==========================================================================
@@ -349,22 +492,24 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
     }
 
     //==========================================================================
-    // Step 2: 入力ウィンドウが開いているか確認
+    // Step 2: 入力ウィンドウチェック（参考ログのみ・ブロックしない）
+    // ★★★ 2025-11-09: サーバ側で最終判定するため、クライアントでは遮断しない
     //==========================================================================
-    if (!CachedTurnManager->WaitingForPlayerInput)
+    bool bGateOpenClient = false;
+    if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(GetPawn()))
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[Client] Input blocked: Not in input window"));
-        return;
+        if (UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent())
+        {
+            bGateOpenClient = ASC->HasMatchingGameplayTag(RogueGameplayTags::Gate_Input_Open);
+        }
     }
+    UE_LOG(LogTemp, Log, TEXT("[Client] WaitingForPlayerInput=%d, Gate(open?)=%d (参考値・送信は継続)"),
+        CachedTurnManager->WaitingForPlayerInput, bGateOpenClient);
 
     //==========================================================================
-    // ★ Step 3: 送信済みチェック（ラッチ確認）
+    // ★ Step 3: 送信済みチェック（削除 - サーバ側で重複検出）
     //==========================================================================
-    if (bSentThisInputWindow)
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("[Client] Input blocked: Already sent in this window (bSentThisInputWindow=true)"));
-        return;  // ★ CRITICAL: ここで早期returnすることを可視化
-    }
+    // if (bSentThisInputWindow) { return; } // ← 削除：サーバで判定
 
     //=== Step 2: 入力値を直接使用（修正なし） ===
     const FVector2D RawInput = Value.Get<FVector2D>();
@@ -659,13 +804,9 @@ void APlayerControllerBase::Server_SubmitCommand_Implementation(const FPlayerCom
     // (1) 診断ログ最優先出力
     //==========================================================================
     UE_LOG(LogTemp, Warning, TEXT("[Server] ★ SubmitCommand RPC RECEIVED"));
-    UE_LOG(LogTemp, Warning, TEXT("[Server] WindowId=%d, TurnId=%d, Tag=%s, Dir=(%.1f, %.1f)"),
+    UE_LOG(LogTemp, Warning, TEXT("[Server] Client sent WindowId=%d, TurnId=%d, Tag=%s, Dir=(%.1f, %.1f)"),
         CommandIn.WindowId, CommandIn.TurnId, *CommandIn.CommandTag.ToString(),
         CommandIn.Direction.X, CommandIn.Direction.Y);
-    
-    UE_LOG(LogTemp, Error, TEXT("[Server] ========== RPC RECEIVED =========="));
-    UE_LOG(LogTemp, Error, TEXT("[Server] TurnId received: %d"), CommandIn.TurnId);
-    UE_LOG(LogTemp, Error, TEXT("[Server] WindowId received: %d"), CommandIn.WindowId);
 
     //=========================================================================
     // 検証: TurnManager
@@ -677,16 +818,18 @@ void APlayerControllerBase::Server_SubmitCommand_Implementation(const FPlayerCom
     }
 
     //=========================================================================
-    // 検証: WindowId/TurnId の整合性（過去/未来コマンドを拒否）
+    // ★★★ 2025-11-09: クライアント値を上書き（同期不要化）
+    // クライアント側の未同期/遅延を無視し、サーバの現在値を採用
     //=========================================================================
     const int32 NowTurn  = CachedTurnManager->GetCurrentTurnIndex();
     const int32 NowWinId = CachedTurnManager->GetCurrentInputWindowId();
-    if (CommandIn.TurnId != NowTurn || CommandIn.WindowId != NowWinId)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[Server] REJECT: stale command (Win %d!=%d, Turn %d!=%d)"),
-            CommandIn.WindowId, NowWinId, CommandIn.TurnId, NowTurn);
-        return;
-    }
+
+    FPlayerCommand Command = CommandIn;
+    Command.TurnId = NowTurn;
+    Command.WindowId = NowWinId;
+
+    UE_LOG(LogTemp, Warning, TEXT("[Server] Overridden: TurnId=%d, WindowId=%d (Server authoritative)"),
+        Command.TurnId, Command.WindowId);
 
     //=========================================================================
     // 検証: 二重鍵（WaitingForPlayerInput && Gate_Input_Open）
@@ -709,8 +852,9 @@ void APlayerControllerBase::Server_SubmitCommand_Implementation(const FPlayerCom
 
     //=========================================================================
     // 入口一本化：TurnManagerのみが状態を動かす
+    // ★★★ 2025-11-09: 上書き後のCommandを渡す
     //=========================================================================
-    CachedTurnManager->OnPlayerCommandAccepted(CommandIn);
+    CachedTurnManager->OnPlayerCommandAccepted(Command);
 }
 
 //------------------------------------------------------------------------------

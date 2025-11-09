@@ -135,6 +135,9 @@ int32 AUnitManager::SpawnEnemyUnits(int32 DesiredEnemyCount)
 {
 	EnsureTeamSize2();
 
+	UE_LOG(LogTemp, Warning, TEXT("[UnitManager::SpawnEnemyUnits] START - DesiredCount=%d, bEnemiesSpawned=%d, BigEnoughRooms=%d"),
+		DesiredEnemyCount, bEnemiesSpawned, BigEnoughRooms.Num());
+
 	if (!PathFinder)
 	{
 		UE_LOG(LogTemp, Error, TEXT("UnitManager::SpawnEnemyUnits: PathFinder not set"));
@@ -143,7 +146,7 @@ int32 AUnitManager::SpawnEnemyUnits(int32 DesiredEnemyCount)
 
 	if (bEnemiesSpawned)
 	{
-		UE_LOG(LogTemp, Verbose, TEXT("UnitManager::SpawnEnemyUnits: Already spawned enemies, skipping"));
+		UE_LOG(LogTemp, Warning, TEXT("UnitManager::SpawnEnemyUnits: Already spawned enemies, skipping (bEnemiesSpawned=%d)"), bEnemiesSpawned);
 		return 0;
 	}
 
@@ -413,7 +416,12 @@ void AUnitManager::BuildUnits(const TArray<AAABB*>& RoomsIn)
 	PlayerStartRooms.Reset();
 	PlayerStartRoom = nullptr;
 
-	UE_LOG(LogTemp, Warning, TEXT("BuildUnits: Received %d rooms."), Rooms.Num());
+	// ★★★ 敵スポーンフラグをリセット（2025-11-09）
+	// 新しいフロアの生成時に敵を再スポーン可能にする
+	bEnemiesSpawned = false;
+	AllUnits.Reset();  // 既存のユニット配列もクリア
+
+	UE_LOG(LogTemp, Warning, TEXT("BuildUnits: Received %d rooms. (bEnemiesSpawned reset to false)"), Rooms.Num());
 
 	// BigEnoughRooms: RoomArea > TeamSize[1] * 1
 	for (AAABB* R : Rooms)

@@ -85,6 +85,17 @@ protected:
      */
     virtual void Tick(float DeltaTime) override;
 
+    /**
+     * ★★★ カメラ固定: UpdateRotationをオーバーライド（2025-11-09）
+     * TBSではControlRotationを固定し、Look/Orbit入力からの変化を遮断
+     */
+    virtual void UpdateRotation(float DeltaTime) override;
+
+    /**
+     * ★★★ 診断: AddYawInputを監視（2025-11-09）
+     */
+    virtual void AddYawInput(float Val) override;
+
     //--------------------------------------------------------------------------
     // EnhancedInput - Input Actions & Mapping Context
     //--------------------------------------------------------------------------

@@ -489,6 +489,18 @@ public:
     UPROPERTY()
     bool bDeferOpenOnPossess = false;
 
+    /** PathFinder初期化完了フラグ */
+    UPROPERTY()
+    bool bPathReady = false;
+
+    /** ユニットスポーン完了フラグ */
+    UPROPERTY()
+    bool bUnitsSpawned = false;
+
+    /** プレイヤー所持完了フラグ */
+    UPROPERTY()
+    bool bPlayerPossessed = false;
+
     //==========================================================================
     // 繝代ヵ繧�E�繝ｼ繝槭Φ繧�E�譛驕ｩ蛹・    //==========================================================================
 
@@ -614,6 +626,9 @@ protected:
     /** ASC貁E���E�繧貞ｾ・▲縺�E�蛻晏屓繧�E�繝ｼ繝ｳ繧帝幕蟋・*/
     UFUNCTION()
     void TryStartFirstTurnAfterASCReady();
+
+    /** 全条件が揃ったら最初のターンを開始 */
+    void TryStartFirstTurn();
 
     //==========================================================================
     // Phase螳溯�E�・    //==========================================================================

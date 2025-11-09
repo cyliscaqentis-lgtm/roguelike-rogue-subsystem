@@ -7,6 +7,7 @@
 #include "Grid/URogueDungeonSubsystem.h"
 #include "Grid/DungeonFloorGenerator.h"
 #include "Grid/GridOccupancySubsystem.h"
+#include "Grid/AABB.h"  // ★★★ PlayerStartRoom診断用 ★★★
 #include "AI/Enemy/EnemyTurnDataSubsystem.h"
 #include "Turn/TurnSystemTypes.h"
 #include "Turn/TurnCommandHandler.h"
@@ -79,7 +80,15 @@ using namespace RogueGameplayTags;
 AGameTurnManagerBase::AGameTurnManagerBase()
 {
     PrimaryActorTick.bCanEverTick = false;
-    Tag_TurnAbilityCompleted = RogueGameplayTags::Gameplay_Event_Turn_Ability_Completed;  // ネイチE��ブタグを使用
+    Tag_TurnAbilityCompleted = RogueGameplayTags::Gameplay_Event_Turn_Ability_Completed;  // ネイティブタグを使用
+
+    // ★★★ 2025-11-09: レプリケーション有効化（必須）
+    // WaitingForPlayerInput/InputWindowId等をクライアントに同期するため
+    bReplicates = true;
+    bAlwaysRelevant = true;         // 全クライアントに常に関連
+    SetReplicateMovement(false);    // 移動しない管理アクタなので不要
+
+    UE_LOG(LogTurnManager, Log, TEXT("[TurnManager] Constructor: Replication enabled (bReplicates=true, bAlwaysRelevant=true)"));
 }
 
 //------------------------------------------------------------------------------
@@ -321,9 +330,9 @@ void AGameTurnManagerBase::InitializeTurnSystem()
     UE_LOG(LogTurnManager, Log, TEXT("InitializeTurnSystem: Initialization completed successfully"));
 
     //==========================================================================
-    // 5. 最初�Eターン開姁E
+    // ★★★ StartFirstTurnは削除: TryStartFirstTurnゲートから呼ぶ（2025-11-09 解析サマリ対応）
     //==========================================================================
-    StartFirstTurn();
+    // StartFirstTurn(); // 削除: 全条件が揃うまで待つ
 }
 
 
@@ -368,11 +377,10 @@ void AGameTurnManagerBase::BeginPlay()
         return;
     }
 
-    // 直参�Eの"注入"�E�EungeonSysのみ。PathFinder/UnitMgrはTurnManagerが所有！E
-    // GameModeからは取得しなぁE��EurnManagerが所有するためE��E
-    DungeonSys = GM->GetDungeonSubsystem();
+    // WorldSubsystemは必ずWorld初期化時に作成されるため、直接Worldから取得
+    DungeonSys = GetWorld()->GetSubsystem<URogueDungeonSubsystem>();
 
-    UE_LOG(LogTurnManager, Log, TEXT("TurnManager: DungeonSys injected (Dgn=%p, PFL/UM will be created on HandleDungeonReady)"),
+    UE_LOG(LogTurnManager, Log, TEXT("TurnManager: DungeonSys acquired from World (Dgn=%p, PFL/UM will be created on HandleDungeonReady)"),
         static_cast<void*>(DungeonSys.Get()));
 
     // 準備完亁E��ベントにサブスクライチE
@@ -425,6 +433,34 @@ void AGameTurnManagerBase::HandleDungeonReady(URogueDungeonSubsystem* InDungeonS
     // CachedPathFinderも更新
     CachedPathFinder = PathFinder;
 
+    // ★★★ PathFinderを初期化（2025-11-09 解析サマリ対応）
+    if (ADungeonFloorGenerator* Floor = DungeonSys->GetFloorGenerator())
+    {
+        FGridInitParams InitParams;
+        InitParams.GridCostArray = Floor->GridCells;
+        InitParams.MapSize = FVector(Floor->GridWidth, Floor->GridHeight, 0.f);
+        InitParams.TileSizeCM = Floor->CellSize;
+        InitParams.Origin = FVector::ZeroVector;
+
+        PathFinder->InitializeFromParams(InitParams);
+
+        UE_LOG(LogTurnManager, Warning, TEXT("[PF.Init] Size=%dx%d Cell=%d Origin=(%.1f,%.1f,%.1f) Walkables=%d"),
+            Floor->GridWidth, Floor->GridHeight, Floor->CellSize,
+            InitParams.Origin.X, InitParams.Origin.Y, InitParams.Origin.Z,
+            Floor->GridCells.Num());
+
+        // 初期化検証: サンプルセルのステータスを確認
+        FVector TestWorld(950.f, 3050.f, 0.f);
+        int32 TestStatus = PathFinder->ReturnGridStatus(TestWorld);
+        UE_LOG(LogTurnManager, Warning, TEXT("[PF.Verify] World(950,3050) -> Status=%d (Expected: 3=Walkable, -1=Blocked/Uninitialized)"), TestStatus);
+
+        bPathReady = true;
+    }
+    else
+    {
+        UE_LOG(LogTurnManager, Error, TEXT("HandleDungeonReady: FloorGenerator not available for PathFinder initialization"));
+    }
+
     if (IsValid(UnitMgr))
     {
         UnitMgr->PathFinder = PathFinder;
@@ -443,12 +479,23 @@ void AGameTurnManagerBase::HandleDungeonReady(URogueDungeonSubsystem* InDungeonS
         }
 
         UnitMgr->BuildUnits(GeneratedRooms);
+
+        // ★★★ 詳細ログ: BuildUnits後のPlayerStartRoomを確認
+        AAABB* PlayerRoom = UnitMgr->PlayerStartRoom.Get();
+        UE_LOG(LogTurnManager, Warning, TEXT("[BuildUnits] Completed. PlayerStartRoom=%s at Location=%s"),
+            PlayerRoom ? *PlayerRoom->GetName() : TEXT("NULL"),
+            PlayerRoom ? *PlayerRoom->GetActorLocation().ToString() : TEXT("N/A"));
+
+        bUnitsSpawned = true; // ★注意: これは部屋選択完了フラグ。実際の敵スポーンはOnTBSCharacterPossessedで行われる
     }
 
     UE_LOG(LogTurnManager, Log, TEXT("TurnManager: HandleDungeonReady completed, initializing turn system..."));
 
     // ☁EInitializeTurnSystem は"ここだぁEで呼ぶ
     InitializeTurnSystem();
+
+    // ★★★ ゲート機構: 全条件が揃ったらStartFirstTurnを試行
+    TryStartFirstTurn();
 }
 
 
@@ -1640,7 +1687,8 @@ void AGameTurnManagerBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 
     DOREPLIFETIME(AGameTurnManagerBase, WaitingForPlayerInput);
     DOREPLIFETIME(AGameTurnManagerBase, CurrentTurnId);
-    DOREPLIFETIME(AGameTurnManagerBase, InputWindowId);  // ☁E�E☁E新規追加
+    DOREPLIFETIME(AGameTurnManagerBase, CurrentTurnIndex);  // ★★★ 2025-11-09: 追加（実際に使用されている変数）
+    DOREPLIFETIME(AGameTurnManagerBase, InputWindowId);
     DOREPLIFETIME(AGameTurnManagerBase, bPlayerMoveInProgress);
 }
 
@@ -3280,12 +3328,54 @@ void AGameTurnManagerBase::OpenInputWindow()
 
 void AGameTurnManagerBase::NotifyPlayerPossessed(APawn* NewPawn)
 {
+    if (!HasAuthority()) return;
+
     CachedPlayerPawn = NewPawn;
     UE_LOG(LogTurnManager, Log, TEXT("[Turn] NotifyPlayerPossessed: %s"), *GetNameSafe(NewPawn));
 
+    // プレイヤー所持完了フラグを立てる
+    bPlayerPossessed = true;
+
+    // すでにターン開始済みで、まだ窓が開いていなければ再オープン
     if (bTurnStarted && !WaitingForPlayerInput)
     {
-        OpenInputWindowForPlayer(); // ← ここで開き直す
+        OpenInputWindowForPlayer();
+        bDeferOpenOnPossess = false; // フラグをクリア
+    }
+    // または、遅延オープンフラグが立っている場合も開く
+    else if (bTurnStarted && bDeferOpenOnPossess)
+    {
+        OpenInputWindowForPlayer();
+        bDeferOpenOnPossess = false; // フラグをクリア
+    }
+    else if (!bTurnStarted)
+    {
+        // ターン未開始なら、ゲート機構で開始を試行
+        bDeferOpenOnPossess = true;
+        UE_LOG(LogTurnManager, Log, TEXT("[Turn] Defer input window open until turn starts"));
+        TryStartFirstTurn(); // ★★★ ゲート機構
+    }
+}
+
+//==========================================================================
+// ★★★ TryStartFirstTurn: 全条件が揃ったらStartFirstTurnを実行（2025-11-09 解析サマリ対応）
+//==========================================================================
+void AGameTurnManagerBase::TryStartFirstTurn()
+{
+    if (!HasAuthority()) return;
+
+    // 全条件チェック
+    if (bPathReady && bUnitsSpawned && bPlayerPossessed && !bTurnStarted)
+    {
+        UE_LOG(LogTurnManager, Warning, TEXT("[TryStartFirstTurn] All conditions met: PathReady=%d UnitsSpawned=%d PlayerPossessed=%d -> Starting Turn 0"),
+            bPathReady, bUnitsSpawned, bPlayerPossessed);
+
+        StartFirstTurn();
+    }
+    else
+    {
+        UE_LOG(LogTurnManager, Log, TEXT("[TryStartFirstTurn] Waiting: PathReady=%d UnitsSpawned=%d PlayerPossessed=%d TurnStarted=%d"),
+            bPathReady, bUnitsSpawned, bPlayerPossessed, bTurnStarted);
     }
 }
 
