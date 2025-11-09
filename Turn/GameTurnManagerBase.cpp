@@ -1850,6 +1850,10 @@ void AGameTurnManagerBase::AdvanceTurnAndRestart()
     UE_LOG(LogTurnManager, Log,
         TEXT("[AdvanceTurnAndRestart] OnTurnStarted broadcasted for turn %d"),
         CurrentTurnIndex);
+
+    // ★★★ CRITICAL FIX (2025-11-09): 入力フェーズを必ず開始 ★★★
+    // Turn 1以降で入力ウィンドウが開かない問題の修正
+    OnTurnStartedHandler(CurrentTurnIndex);
 }
 
 
@@ -1864,20 +1868,6 @@ void AGameTurnManagerBase::StartFirstTurn()
     UE_LOG(LogTurnManager, Log, TEXT("StartFirstTurn: Starting first turn (Turn %d)"), CurrentTurnIndex);
 
     bTurnStarted = true;
-
-    // ★ Pawn確定状態で入力窓を開く
-    if (!IsValid(CachedPlayerPawn))
-    {
-        UE_LOG(LogTurnManager, Warning, TEXT("[Turn] Player not ready -> defer opening input window"));
-        bDeferOpenOnPossess = true;
-        // Barrierとイベントは継続（入力窓だけ遅延）
-    }
-    else
-    {
-        // Pawnが確定しているので即座に入力窓を開く
-        OpenInputWindowForPlayer();
-        UE_LOG(LogTurnManager, Log, TEXT("[Turn] StartFirstTurn: Input window opened (Pawn ready)"));
-    }
 
     // ☁E�E☁EホットフィチE��ス: Turn 0でのBarrier初期匁E☁E�E☁E
     if (UWorld* World = GetWorld())
@@ -1907,6 +1897,10 @@ void AGameTurnManagerBase::StartFirstTurn()
     }
 
     UE_LOG(LogTurnManager, Log, TEXT("StartFirstTurn: OnTurnStarted broadcasted for turn %d"), CurrentTurnIndex);
+
+    // ★★★ CRITICAL FIX (2025-11-09): 統一された入力フェーズ開始 ★★★
+    // OnTurnStartedHandler が BeginPhase(Phase_Player_Wait) を呼ぶ
+    OnTurnStartedHandler(CurrentTurnIndex);
 }
 
 //------------------------------------------------------------------------------
