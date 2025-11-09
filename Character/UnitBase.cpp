@@ -87,17 +87,17 @@ void AUnitBase::PossessedBy(AController* NewController)
         return;
     }
 
-    // PlayerStateのASCを取得
+    // PlayerStateのASCを取得してキャスト
     UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
-    if (ASC)
+    if (ULyraAbilitySystemComponent* LyraASC = Cast<ULyraAbilitySystemComponent>(ASC))
     {
         // ★★★ 重要: InitializeAbilitySystemを呼ぶことで、OnAbilitySystemInitializedコールバックが発火する ★★★
-        PawnExt->InitializeAbilitySystem(ASC, this);
+        PawnExt->InitializeAbilitySystem(LyraASC, this);
         UE_LOG(LogUnitBase, Warning, TEXT("[PossessedBy] ✅ ASC initialized via PawnExtension (ASC from PlayerState)"));
     }
     else
     {
-        UE_LOG(LogUnitBase, Error, TEXT("[PossessedBy] ❌ AbilitySystemComponent is NULL (PlayerState may not be ready yet)"));
+        UE_LOG(LogUnitBase, Error, TEXT("[PossessedBy] ❌ AbilitySystemComponent is NULL or not LyraASC (PlayerState may not be ready yet)"));
     }
 
     PawnExt->HandleControllerChanged();
@@ -218,13 +218,21 @@ void AUnitBase::GrantAbilitySetsIfNeeded()
         return;
     }
 
+    // ASCをLyraASCにキャスト
+    ULyraAbilitySystemComponent* LyraASC = Cast<ULyraAbilitySystemComponent>(ASC);
+    if (!LyraASC)
+    {
+        UE_LOG(LogUnitBase, Error, TEXT("[GrantAbilitySets] ASC is not a LyraASC on %s"), *GetName());
+        return;
+    }
+
     // AbilitySetsを付与
     int32 AbilityCount = 0;
     for (const ULyraAbilitySet* AbilitySet : PawnData->AbilitySets)
     {
         if (AbilitySet)
         {
-            AbilitySet->GiveToAbilitySystem(ASC, nullptr);
+            AbilitySet->GiveToAbilitySystem(LyraASC, nullptr);
             AbilityCount++;
             UE_LOG(LogUnitBase, Log, TEXT("[GrantAbilitySets] AbilitySet granted: %s for %s"),
                 *AbilitySet->GetName(), *GetName());
@@ -232,8 +240,8 @@ void AUnitBase::GrantAbilitySetsIfNeeded()
     }
 
     UE_LOG(LogUnitBase, Warning, TEXT("[GrantAbilitySets] ✅ Abilities=%d AttrSets=%d for %s"),
-        ASC->GetActivatableAbilities().Num(),
-        ASC->GetSpawnedAttributes().Num(),
+        LyraASC->GetActivatableAbilities().Num(),
+        LyraASC->GetSpawnedAttributes().Num(),
         *GetName());
 
     bGrantedAbilitySets = true;
