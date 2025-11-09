@@ -214,6 +214,7 @@ public:
 
 protected:
     virtual void PostInitializeComponents() override;
+    virtual void PossessedBy(AController* NewController) override;
     virtual void BeginPlay() override;
     virtual void Tick(float DeltaSeconds) override;
     virtual void NotifyActorBeginCursorOver() override;

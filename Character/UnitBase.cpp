@@ -67,6 +67,48 @@ void AUnitBase::PostInitializeComponents()
 }
 
 //------------------------------------------------------------------------------
+// PossessedBy - コントローラー取得時にASCを初期化
+//------------------------------------------------------------------------------
+void AUnitBase::PossessedBy(AController* NewController)
+{
+    UE_LOG(LogUnitBase, Warning, TEXT("[PossessedBy] ========== START: %s =========="), *GetName());
+
+    Super::PossessedBy(NewController);
+
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    ULyraPawnExtensionComponent* PawnExt = FindComponentByClass<ULyraPawnExtensionComponent>();
+    if (!PawnExt)
+    {
+        UE_LOG(LogUnitBase, Error, TEXT("[PossessedBy] ❌ PawnExtension not found: %s"), *GetName());
+        return;
+    }
+
+    // PlayerStateのASCを取得
+    UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+    if (ASC)
+    {
+        // ★★★ 重要: InitializeAbilitySystemを呼ぶことで、OnAbilitySystemInitializedコールバックが発火する ★★★
+        PawnExt->InitializeAbilitySystem(ASC, this);
+        UE_LOG(LogUnitBase, Warning, TEXT("[PossessedBy] ✅ ASC initialized via PawnExtension (ASC from PlayerState)"));
+    }
+    else
+    {
+        UE_LOG(LogUnitBase, Error, TEXT("[PossessedBy] ❌ AbilitySystemComponent is NULL (PlayerState may not be ready yet)"));
+    }
+
+    PawnExt->HandleControllerChanged();
+    PawnExt->CheckDefaultInitialization();
+
+    RefreshTeamFromController();
+
+    UE_LOG(LogUnitBase, Warning, TEXT("[PossessedBy] ========== END: %s =========="), *GetName());
+}
+
+//------------------------------------------------------------------------------
 // OnAbilitySystemInitialized - ASC初期化完了時のコールバック
 //------------------------------------------------------------------------------
 void AUnitBase::OnAbilitySystemInitialized()
