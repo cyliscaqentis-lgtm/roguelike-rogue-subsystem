@@ -1733,6 +1733,19 @@ void AGameTurnManagerBase::AdvanceTurnAndRestart()
     UE_LOG(LogTurnManager, Log,
         TEXT("[AdvanceTurnAndRestart] Current Turn: %d"), CurrentTurnIndex);
 
+    // ★★★ DEBUG: Log player position before turn advance (2025-11-09) ★★★
+    if (APawn* PlayerPawn = GetPlayerPawn())
+    {
+        if (CachedPathFinder.IsValid())
+        {
+            const FVector PlayerLoc = PlayerPawn->GetActorLocation();
+            const FIntPoint PlayerGrid = CachedPathFinder->WorldToGrid(PlayerLoc);
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[AdvanceTurn] ★ PLAYER POSITION BEFORE ADVANCE: Turn=%d Grid(%d,%d) World(%s)"),
+                CurrentTurnIndex, PlayerGrid.X, PlayerGrid.Y, *PlayerLoc.ToCompactString());
+        }
+    }
+
     //==========================================================================
     // ☁E�E☁EPhase 4: 二重鍵チェチE���E�EdvanceTurnAndRestartでも実施�E�E
     //==========================================================================
@@ -1989,6 +2002,17 @@ void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnIndex)
     if (APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0))
     {
         CachedPlayerPawn = PC->GetPawn();
+
+        // ★★★ DEBUG: Log player position at turn start (2025-11-09) ★★★
+        if (CachedPlayerPawn && CachedPathFinder.IsValid())
+        {
+            const FVector PlayerLoc = CachedPlayerPawn->GetActorLocation();
+            const FIntPoint PlayerGrid = CachedPathFinder->WorldToGrid(PlayerLoc);
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[Turn %d] ★ PLAYER POSITION AT TURN START: Grid(%d,%d) World(%s)"),
+                TurnIndex, PlayerGrid.X, PlayerGrid.Y, *PlayerLoc.ToCompactString());
+        }
+
         UE_LOG(LogTurnManager, Log,
             TEXT("[Turn %d] CachedPlayerPawn re-cached: %s"),
             TurnIndex, CachedPlayerPawn ? *CachedPlayerPawn->GetName() : TEXT("NULL"));

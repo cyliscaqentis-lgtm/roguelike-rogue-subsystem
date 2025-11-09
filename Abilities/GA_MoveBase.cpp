@@ -736,6 +736,12 @@ void UGA_MoveBase::UpdateOccupancy(AActor* UnitActor, const FIntPoint& NewCell)
 	{
 		if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
 		{
+			// ★★★ DEBUG: Log occupancy update (2025-11-09) ★★★
+			const FIntPoint OldCell = Occupancy->GetCellOfActor(UnitActor);
+			UE_LOG(LogTurnManager, Warning,
+				TEXT("[UpdateOccupancy] ★ Actor=%s | OLD=(%d,%d) → NEW=(%d,%d)"),
+				*GetNameSafe(UnitActor), OldCell.X, OldCell.Y, NewCell.X, NewCell.Y);
+
 			Occupancy->UpdateActorCell(UnitActor, NewCell);
 		}
 	}
@@ -858,9 +864,24 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
     const AGridPathfindingLibrary* PathFinder = GetPathFinder();
     if (Unit)
     {
+        // ★★★ DEBUG: Log position BEFORE setting (2025-11-09) ★★★
+        const FVector LocationBefore = Unit->GetActorLocation();
+        const FIntPoint GridBefore = PathFinder ? PathFinder->WorldToGrid(LocationBefore) : FIntPoint::ZeroValue;
+
         const float FixedZ = ComputeFixedZ(Unit, PathFinder);
         const FVector SnappedLoc = SnapToCellCenterFixedZ(Unit->GetActorLocation(), FixedZ);
         Unit->SetActorLocation(SnappedLoc, false, nullptr, ETeleportType::TeleportPhysics);
+
+        // ★★★ DEBUG: Log position AFTER setting (2025-11-09) ★★★
+        const FVector LocationAfter = Unit->GetActorLocation();
+        const FIntPoint GridAfter = PathFinder ? PathFinder->WorldToGrid(LocationAfter) : FIntPoint::ZeroValue;
+
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[OnMoveFinished] ★ POSITION UPDATE: Actor=%s | BEFORE=Grid(%d,%d) World(%s) | AFTER=Grid(%d,%d) World(%s) | TurnId=%d"),
+            *GetNameSafe(Unit),
+            GridBefore.X, GridBefore.Y, *LocationBefore.ToCompactString(),
+            GridAfter.X, GridAfter.Y, *LocationAfter.ToCompactString(),
+            MoveTurnId);
 
         CachedFirstLoc = SnappedLoc;
         UpdateGridState(CachedFirstLoc, 1);
