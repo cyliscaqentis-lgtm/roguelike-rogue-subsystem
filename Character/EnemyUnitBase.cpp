@@ -319,6 +319,16 @@ void AEnemyUnitBase::GrantAbilitySetsIfNeeded()
         return;
     }
 
+    // ★★★ CRITICAL GUARD: Check if abilities are already granted by another system (2025-11-09) ★★★
+    if (AbilitySystemComponent->GetActivatableAbilities().Num() > 0)
+    {
+        UE_LOG(LogEnemyUnit, Warning,
+            TEXT("[GrantAbilitySets] SKIP: ASC already has %d abilities (granted by another system?) for %s"),
+            AbilitySystemComponent->GetActivatableAbilities().Num(), *GetName());
+        bGrantedAbilitySets = true; // Mark as granted to prevent future attempts
+        return;
+    }
+
     if (!EnemyPawnData)
     {
         UE_LOG(LogEnemyUnit, Warning, TEXT("[GrantAbilitySets] EnemyPawnData missing on %s"), *GetName());

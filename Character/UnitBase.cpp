@@ -163,6 +163,16 @@ void AUnitBase::GrantAbilitySetsIfNeeded()
         return;
     }
 
+    // ★★★ CRITICAL GUARD: Check if abilities are already granted by another system (2025-11-09) ★★★
+    if (ASC->GetActivatableAbilities().Num() > 0)
+    {
+        UE_LOG(LogUnitBase, Warning,
+            TEXT("[GrantAbilitySets] ⚠️ SKIP: ASC already has %d abilities (granted by PawnExtension/HeroComponent?) for %s"),
+            ASC->GetActivatableAbilities().Num(), *GetName());
+        bGrantedAbilitySets = true; // Mark as granted to prevent future attempts
+        return;
+    }
+
     // PawnDataをPawnExtensionから取得
     const ULyraPawnData* PawnData = nullptr;
     if (ULyraPawnExtensionComponent* PawnExt = FindComponentByClass<ULyraPawnExtensionComponent>())

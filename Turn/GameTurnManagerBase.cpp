@@ -2310,8 +2310,8 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
         Command.Direction.X, Command.Direction.Y);
 
     //==========================================================================
-    // ★★★ Phase 5: Register Player Reservation (2025-11-09) ★★★
-    // Calculate target cell and register in reservation system BEFORE movement
+    // ★★★ Phase 5: Register Player Reservation with Pre-Validation (2025-11-09) ★★★
+    // Calculate target cell and VALIDATE BEFORE reservation
     //==========================================================================
     if (CachedPathFinder.IsValid())
     {
@@ -2320,11 +2320,23 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
             CurrentCell.X + static_cast<int32>(Command.Direction.X),
             CurrentCell.Y + static_cast<int32>(Command.Direction.Y));
 
-        // Register player's intended move in reservation system
+        // ★★★ PRE-VALIDATION: Check if target cell is walkable (2025-11-09 FIX) ★★★
+        if (!CachedPathFinder->IsCellWalkableIgnoringActor(TargetCell, PlayerPawn))
+        {
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[MovePrecheck] REJECT: Cell (%d,%d) is BLOCKED by terrain | From=(%d,%d) | Keep window open"),
+                TargetCell.X, TargetCell.Y, CurrentCell.X, CurrentCell.Y);
+
+            // ★ ウィンドウを閉じずに拒否（プレイヤーが再入力可能）
+            // WaitingForPlayerInput は true のまま、Gate も開いたまま
+            return;
+        }
+
+        // ★★★ Validation passed - Register player's intended move
         RegisterResolvedMove(PlayerPawn, TargetCell);
 
         UE_LOG(LogTurnManager, Log,
-            TEXT("[GameTurnManager] Player reservation registered: (%d,%d) → (%d,%d)"),
+            TEXT("[MovePrecheck] OK: (%d,%d) → (%d,%d) | Walkable=true | Reservation registered"),
             CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y);
     }
     else
