@@ -26,6 +26,9 @@ class AUnitManager;
 class URogueDungeonSubsystem;
 class UDebugObserverCSV;
 class UTurnCorePhaseManager;
+class UTurnCommandHandler;
+class UTurnEventDispatcher;
+class UTurnDebugSubsystem;
 struct FGameplayEventData;
 class ULyraExperienceDefinition;
 class ULyraExperienceManagerComponent;
@@ -681,6 +684,22 @@ protected:
     int32 SubsystemRetryCount = 0;
 
 private:
+    //==========================================================================
+    // ★★★ 新規Subsystem参照（2025-11-09リファクタリング） ★★★
+    //==========================================================================
+
+    /** コマンド処理Subsystem */
+    UPROPERTY(Transient)
+    TObjectPtr<UTurnCommandHandler> CommandHandler = nullptr;
+
+    /** イベント配信Subsystem */
+    UPROPERTY(Transient)
+    TObjectPtr<UTurnEventDispatcher> EventDispatcher = nullptr;
+
+    /** デバッグSubsystem */
+    UPROPERTY(Transient)
+    TObjectPtr<UTurnDebugSubsystem> DebugSubsystem = nullptr;
+
     //==========================================================================
     // Phase 2: WindowId讀懁E���E�逕ｨ縺�E�蜀・Κ繝倥Ν繝代・
     //==========================================================================

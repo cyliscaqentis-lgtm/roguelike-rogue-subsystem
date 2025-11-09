@@ -16,6 +16,8 @@
 #include "Character/LyraPawnExtensionComponent.h"
 #include "Character/LyraHealthComponent.h"
 #include "Character/LyraPawnData.h"
+#include "Character/UnitMovementComponent.h"
+#include "Character/UnitUIComponent.h"
 
 // 繝ｭ繧ｰ繧ｫ繝・ざ繝ｪ螳夂ｾｩ
 DEFINE_LOG_CATEGORY_STATIC(LogUnitBase, Log, All);
@@ -27,6 +29,16 @@ AUnitBase::AUnitBase(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
 {
     PrimaryActorTick.bCanEverTick = true;
+
+    //==========================================================================
+    // ★★★ 新規: Component初期化（2025-11-09リファクタリング） ★★★
+    //==========================================================================
+
+    // 移動処理Component
+    MovementComp = CreateDefaultSubobject<UUnitMovementComponent>(TEXT("UnitMovementComp"));
+
+    // UI更新Component
+    UIComp = CreateDefaultSubobject<UUnitUIComponent>(TEXT("UnitUIComp"));
 }
 
 //------------------------------------------------------------------------------

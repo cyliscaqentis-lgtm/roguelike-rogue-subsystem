@@ -9,6 +9,9 @@
 #include "Grid/GridOccupancySubsystem.h"
 #include "AI/Enemy/EnemyTurnDataSubsystem.h"
 #include "Turn/TurnSystemTypes.h"
+#include "Turn/TurnCommandHandler.h"
+#include "Turn/TurnEventDispatcher.h"
+#include "Turn/TurnDebugSubsystem.h"
 #include "Utility/GridUtils.h"
 #include "Utility/RogueGameplayTags.h"
 #include "Debug/TurnSystemInterfaces.h"
@@ -101,6 +104,35 @@ void AGameTurnManagerBase::InitializeTurnSystem()
     }
 
     UE_LOG(LogTurnManager, Log, TEXT("InitializeTurnSystem: Starting..."));
+
+    //==========================================================================
+    // ★★★ 新規: Subsystem初期化（2025-11-09リファクタリング） ★★★
+    //==========================================================================
+    UWorld* World = GetWorld();
+    if (World)
+    {
+        CommandHandler = World->GetSubsystem<UTurnCommandHandler>();
+        EventDispatcher = World->GetSubsystem<UTurnEventDispatcher>();
+        DebugSubsystem = World->GetSubsystem<UTurnDebugSubsystem>();
+
+        if (!CommandHandler)
+        {
+            UE_LOG(LogTurnManager, Error, TEXT("Failed to get UTurnCommandHandler subsystem"));
+        }
+        if (!EventDispatcher)
+        {
+            UE_LOG(LogTurnManager, Error, TEXT("Failed to get UTurnEventDispatcher subsystem"));
+        }
+        if (!DebugSubsystem)
+        {
+            UE_LOG(LogTurnManager, Error, TEXT("Failed to get UTurnDebugSubsystem subsystem"));
+        }
+
+        UE_LOG(LogTurnManager, Log, TEXT("Subsystems initialized: CommandHandler=%s, EventDispatcher=%s, DebugSubsystem=%s"),
+            CommandHandler ? TEXT("OK") : TEXT("FAIL"),
+            EventDispatcher ? TEXT("OK") : TEXT("FAIL"),
+            DebugSubsystem ? TEXT("OK") : TEXT("FAIL"));
+    }
 
     //==========================================================================
     // Step 1: CachedPlayerPawn
@@ -1654,7 +1686,16 @@ void AGameTurnManagerBase::AdvanceTurnAndRestart()
     //==========================================================================
     bTurnContinuing = false;
 
-    OnTurnStarted.Broadcast(CurrentTurnIndex);
+    // ★★★ リファクタリング: EventDispatcher経由でイベント配信（2025-11-09） ★★★
+    if (EventDispatcher)
+    {
+        EventDispatcher->BroadcastTurnStarted(CurrentTurnIndex);
+    }
+    else
+    {
+        // Fallback: 直接Broadcast（後方互換性）
+        OnTurnStarted.Broadcast(CurrentTurnIndex);
+    }
 
     UE_LOG(LogTurnManager, Log,
         TEXT("[AdvanceTurnAndRestart] OnTurnStarted broadcasted for turn %d"),
@@ -1689,8 +1730,16 @@ void AGameTurnManagerBase::StartFirstTurn()
         }
     }
 
-    // 既存�EOnTurnStarted通知
-    OnTurnStarted.Broadcast(CurrentTurnIndex);
+    // ★★★ リファクタリング: EventDispatcher経由でイベント配信（2025-11-09） ★★★
+    if (EventDispatcher)
+    {
+        EventDispatcher->BroadcastTurnStarted(CurrentTurnIndex);
+    }
+    else
+    {
+        // Fallback: 直接Broadcast（後方互換性）
+        OnTurnStarted.Broadcast(CurrentTurnIndex);
+    }
 
     UE_LOG(LogTurnManager, Log, TEXT("StartFirstTurn: OnTurnStarted broadcasted for turn %d"), CurrentTurnIndex);
 }

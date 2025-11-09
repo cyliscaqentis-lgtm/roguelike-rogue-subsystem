@@ -12,6 +12,8 @@
 class UAbilitySystemComponent;
 class ULyraAbilitySystemComponent;
 class ALyraPlayerState;
+class UUnitMovementComponent;
+class UUnitUIComponent;
 
 UENUM(BlueprintType)
 enum class EUnitMoveStatus : uint8
@@ -35,6 +37,18 @@ class LYRAGAME_API AUnitBase : public ALyraCharacter
 
 public:
     AUnitBase(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+    //==========================================================================
+    // ★★★ 新規Component参照（2025-11-09リファクタリング） ★★★
+    //==========================================================================
+
+    /** 移動処理Component */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Unit|Components")
+    TObjectPtr<UUnitMovementComponent> MovementComp = nullptr;
+
+    /** UI更新Component */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Unit|Components")
+    TObjectPtr<UUnitUIComponent> UIComp = nullptr;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ★ TBS専用: PlayerStateのASCを常に返す（重要！）
