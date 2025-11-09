@@ -1052,6 +1052,22 @@ void AGameTurnManagerBase::CollectEnemies_Implementation()
     UE_LOG(LogTurnManager, Warning, TEXT("[CollectEnemies] ==== START ===="));
     UE_LOG(LogTurnManager, Warning, TEXT("[CollectEnemies] Before: CachedEnemies.Num()=%d"), CachedEnemies.Num());
 
+    // ★★★ Phase 4: UEnemyAISubsystem経由でEnemy収集（2025-11-09） ★★★
+    if (EnemyAISubsystem)
+    {
+        TArray<AActor*> CollectedEnemies;
+        EnemyAISubsystem->CollectAllEnemies(CachedPlayerPawn, CollectedEnemies);
+
+        CachedEnemies.Empty();
+        CachedEnemies = CollectedEnemies;
+
+        UE_LOG(LogTurnManager, Warning, TEXT("[CollectEnemies] EnemyAISubsystem collected %d enemies"), CachedEnemies.Num());
+        return;
+    }
+
+    // ★★★ Fallback: 既存のロジック（EnemyAISubsystemがない場合） ★★★
+    UE_LOG(LogTurnManager, Warning, TEXT("[CollectEnemies] EnemyAISubsystem not available, using fallback"));
+
     // ☁E�E☁EAPawnで検索�E�Encludeが不要E��E☁E�E☁E
     TArray<AActor*> Found;
     UGameplayStatics::GetAllActorsOfClass(GetWorld(), APawn::StaticClass(), Found);

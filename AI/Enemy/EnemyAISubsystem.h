@@ -59,4 +59,15 @@ public:
 	FEnemyIntent ComputeIntent(
 		AActor* Enemy,
 		const FEnemyObservation& Observation);
+
+	/**
+	 * ★★★ Phase 4: Enemy収集をSubsystemに統合（2025-11-09） ★★★
+	 * 全ての敵Actorを収集（原子的部品）
+	 * @param PlayerPawn プレイヤーPawn（除外用）
+	 * @param OutEnemies 出力：収集された敵Actor配列
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Turn|Enemy AI")
+	void CollectAllEnemies(
+		AActor* PlayerPawn,
+		TArray<AActor*>& OutEnemies);
 };
