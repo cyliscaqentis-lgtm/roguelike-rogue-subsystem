@@ -695,6 +695,12 @@ void AGameTurnManagerBase::NotifyPlayerInputReceived()
     UE_LOG(LogTurnManager, Log, TEXT("[Turn%d]NotifyPlayerInputReceived"), CurrentTurnIndex);
 
     // ★★★ Phase 1: EventDispatcher経由でイベント配信（2025-11-09） ★★★
+    // ★★★ Week 1: UPlayerInputProcessorに委譲（2025-11-09リファクタリング）
+    if (PlayerInputProcessor)
+    {
+        PlayerInputProcessor->NotifyPlayerInputReceived();
+    }
+
     if (EventDispatcher)
     {
         EventDispatcher->BroadcastPlayerInputReceived();
@@ -844,7 +850,15 @@ void AGameTurnManagerBase::BuildObservations_Implementation()
 
 void AGameTurnManagerBase::StartTurn()
 {
-    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] StartTurn called"), CurrentTurnIndex);
+    // ★★★ Week 1: UTurnFlowCoordinatorに転送（2025-11-09リファクタリング）
+    if (TurnFlowCoordinator)
+    {
+        TurnFlowCoordinator->StartTurn();
+    }
+    else
+    {
+        UE_LOG(LogTurnManager, Error, TEXT("[StartTurn] TurnFlowCoordinator not available!"));
+    }
 }
 
 void AGameTurnManagerBase::RunTurn()
@@ -1703,6 +1717,14 @@ void AGameTurnManagerBase::AdvanceTurnAndRestart()
     // ターンインクリメンチE
     //==========================================================================
     const int32 PreviousTurn = CurrentTurnIndex;
+
+    // ★★★ Week 1: UTurnFlowCoordinatorに委譲（2025-11-09リファクタリング）
+    if (TurnFlowCoordinator)
+    {
+        // ターンを終了してから進める
+        TurnFlowCoordinator->EndTurn();
+        TurnFlowCoordinator->AdvanceTurn();
+    }
 
     // ★★★ コアシステム: OnTurnEnded配信（2025-11-09） ★★★
     if (EventDispatcher)
@@ -3219,6 +3241,12 @@ void AGameTurnManagerBase::OpenInputWindow()
         CurrentTurnIndex, InputWindowId);
 
     // ★★★ コアシステム: CommandHandler経由でInput Window開始（2025-11-09） ★★★
+    // ★★★ Week 1: UPlayerInputProcessorに委譲（2025-11-09リファクタリング）
+    if (PlayerInputProcessor && TurnFlowCoordinator)
+    {
+        PlayerInputProcessor->OpenInputWindow(TurnFlowCoordinator->GetCurrentTurnId());
+    }
+
     if (CommandHandler)
     {
         CommandHandler->BeginInputWindow(InputWindowId);
