@@ -537,20 +537,11 @@ void AGameTurnManagerBase::StartTurnMoves(int32 TurnId)
 
     if (UWorld* World = GetWorld())
     {
-        int32 TotalUnits = 1; // Player
-        TArray<AActor*> Enemies;
-        GetCachedEnemies(Enemies); // Subsystem / EnemyTurnDataSubsystem
-        TotalUnits += Enemies.Num();
-
-        if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
-        {
-            Barrier->StartMoveBatch(TotalUnits, TurnId);
-            UE_LOG(LogTurnManager, Log, TEXT("GameTurnManager: Barrier StartMoveBatch with %d units"), TotalUnits);
-        }
-        else
-        {
-            UE_LOG(LogTurnManager, Error, TEXT("GameTurnManager: Barrier not found"));
-        }
+        // ★★★ REMOVED: StartMoveBatch は非推奨。BeginTurn() を使用 (2025-11-09) ★★★
+        // 以前の実装:
+        //   int32 TotalUnits = 1 + Enemies.Num();
+        //   Barrier->StartMoveBatch(TotalUnits, TurnId);
+        // BeginTurn() がターン開始時に自動的にバリアを初期化するため、この呼び出しは不要。
 
         // Move: Player
         if (APawn* PlayerPawn = GetPlayerPawn())
@@ -1882,22 +1873,9 @@ void AGameTurnManagerBase::StartFirstTurn()
 
     bTurnStarted = true;
 
-    // ☁E�E☁EホットフィチE��ス: Turn 0でのBarrier初期匁E☁E�E☁E
-    if (UWorld* World = GetWorld())
-    {
-        if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
-        {
-            // プレイヤー移動�Eみなので Count=1
-            Barrier->StartMoveBatch(1, CurrentTurnIndex);
-            UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Barrier: StartMoveBatch with 1 move (player only)"),
-                CurrentTurnIndex);
-        }
-        else
-        {
-            UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] TurnActionBarrierSubsystem not found!"),
-                CurrentTurnIndex);
-        }
-    }
+    // ★★★ REMOVED: StartMoveBatch は非推奨。BeginTurn() が AdvanceTurnAndRestart で既に呼ばれている (2025-11-09) ★★★
+    // 以前の実装: Barrier->StartMoveBatch(1, CurrentTurnIndex);
+    // BeginTurn() がターン開始とバリア初期化を一括処理するため、この呼び出しは冗長。
 
     // ★★★ リファクタリング: EventDispatcher経由でイベント配信（2025-11-09） ★★★
     if (EventDispatcher)
