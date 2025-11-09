@@ -99,6 +99,19 @@ public:
     UFUNCTION(BlueprintPure, Category = "Turn|Services")
     AGridPathfindingLibrary* GetCachedPathFinder() const;
 
+    UFUNCTION(BlueprintPure, Category = "Turn|Services")
+    AUnitManager* GetUnitManager() const { return UnitMgr; }
+
+    UFUNCTION(BlueprintCallable, Category = "Turn|Services")
+    void UpdateCachedPlayerPawn(APawn* NewPlayerPawn) { CachedPlayerPawn = NewPlayerPawn; }
+
+    /** Possess後の入力窓再オープン（2025-11-09） */
+    UFUNCTION(BlueprintCallable, Category = "Turn|Services")
+    void NotifyPlayerPossessed(APawn* NewPawn);
+
+    /** 入力窓をオープンする（内部ヘルパー） */
+    void OpenInputWindowForPlayer();
+
     //==========================================================================
     // 繝繝ｳ繧�E�繝ｧ繝ｳ逕滓�E繧�E�繧�E�繝�EΒ邨�E�蜷・PI
     //==========================================================================

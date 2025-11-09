@@ -12,6 +12,9 @@
 #include "EngineUtils.h"  // ★★★ TActorIterator用 ★★★
 #include "AbilitySystemInterface.h"
 #include "AbilitySystemComponent.h"
+#include "Character/UnitManager.h"  // ★★★ UnitManager用 ★★★
+#include "Character/UnitBase.h"    // ★★★ UnitBase用 ★★★
+#include "Camera/LyraCameraComponent.h"  // ★★★ カメラ切り替え用 ★★★
 
 //------------------------------------------------------------------------------
 // Constructor
@@ -25,8 +28,8 @@ APlayerControllerBase::APlayerControllerBase()
     SetTickableWhenPaused(false);
     bReplicates = false;
 
-    // GameplayTagsの初期化
-    MoveInputTag = FGameplayTag::RequestGameplayTag(TEXT("InputTag.Move"));
+    // GameplayTagsの初期化（2025-11-09: InputTag→Abilityに統一）
+    MoveInputTag = FGameplayTag::RequestGameplayTag(TEXT("Ability.Move"));
     TurnInputTag = FGameplayTag::RequestGameplayTag(TEXT("InputTag.Turn"));
 
     // デフォルト値の初期化
@@ -171,7 +174,7 @@ void APlayerControllerBase::BeginPlay()
     // GameplayTagsの検証
     if (!MoveInputTag.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("[PlayerController] MoveInputTag (InputTag.Move) is INVALID!"));
+        UE_LOG(LogTemp, Error, TEXT("[PlayerController] MoveInputTag (Ability.Move) is INVALID!"));
     }
 
     if (!TurnInputTag.IsValid())
@@ -232,6 +235,65 @@ void APlayerControllerBase::OnPossess(APawn* InPawn)
     //     Guard->SetThresholds(0.5f, 0.2f);
     //     UE_LOG(LogTemp, Log, TEXT("[PlayerController] InputGuard thresholds set"));
     // }
+
+    //==========================================================================
+    // ★★★ プレイヤー配置と敵スポーンのトリガー（2025-11-09）
+    //==========================================================================
+    if (InPawn && InPawn->GetName().Contains(TEXT("PlayerUnit")))
+    {
+        // TurnManagerからUnitManagerを取得
+        if (UWorld* World = GetWorld())
+        {
+            for (TActorIterator<AGameTurnManagerBase> It(World); It; ++It)
+            {
+                if (AGameTurnManagerBase* TurnMgr = *It)
+                {
+                    if (AUnitManager* UnitMgr = TurnMgr->GetUnitManager())
+                    {
+                        if (AUnitBase* PlayerUnit = Cast<AUnitBase>(InPawn))
+                        {
+                            UE_LOG(LogTemp, Log, TEXT("[PlayerController] Calling OnTBSCharacterPossessed for: %s"), *InPawn->GetName());
+                            UnitMgr->OnTBSCharacterPossessed(PlayerUnit);
+
+                            // ★★★ TurnManagerのCachedPlayerPawnを更新
+                            TurnMgr->UpdateCachedPlayerPawn(PlayerUnit);
+                            UE_LOG(LogTemp, Log, TEXT("[PlayerController] Updated TurnManager CachedPlayerPawn to: %s"), *InPawn->GetName());
+
+                            // ★★★ Possess後の入力窓再オープン（2025-11-09）
+                            TurnMgr->NotifyPlayerPossessed(PlayerUnit);
+                            UE_LOG(LogTemp, Log, TEXT("[PlayerController] Notified TurnManager of player possession"));
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    //==========================================================================
+    // ★★★ カメラをPlayerUnitに切り替え（2025-11-09）
+    //==========================================================================
+    SetViewTargetWithBlend(InPawn, 0.0f);
+    bAutoManageActiveCameraTarget = true;
+    UE_LOG(LogTemp, Log, TEXT("[PlayerController] Camera view target set to: %s"), InPawn ? *InPawn->GetName() : TEXT("NULL"));
+
+    // ★★★ LyraCameraComponentを明示的にアクティブ化
+    if (ULyraCameraComponent* CameraComp = ULyraCameraComponent::FindCameraComponent(InPawn))
+    {
+        CameraComp->Activate(true);
+        UE_LOG(LogTemp, Log, TEXT("[PlayerController] LyraCameraComponent activated on: %s"), *InPawn->GetName());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[PlayerController] No LyraCameraComponent found on: %s"), *InPawn->GetName());
+    }
+
+    // ★★★ PlayerCameraManagerをリセットして強制的にカメラを更新
+    if (APlayerCameraManager* CameraManager = PlayerCameraManager)
+    {
+        CameraManager->SetViewTarget(InPawn);
+        UE_LOG(LogTemp, Log, TEXT("[PlayerController] PlayerCameraManager view target updated"));
+    }
 
     // EnhancedInput初期化（Possess後に確実に実行）
     InitializeEnhancedInput();
@@ -335,12 +397,16 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
 
     //==========================================================================
     // Step 2: 入力ウィンドウが開いているか確認
+    // ★★★ DISABLED 2025-11-09: WaitingForPlayerInputは非レプリケート変数でクライアント側は常にfalse
+    // サーバー側でのみ検証するため、クライアント側のチェックはコメントアウト
     //==========================================================================
+    /*
     if (!CachedTurnManager->WaitingForPlayerInput)
     {
         UE_LOG(LogTemp, Verbose, TEXT("[Client] Input blocked: Not in input window"));
         return;
     }
+    */
 
     //==========================================================================
     // ★ Step 3: 送信済みチェック（ラッチ確認）

@@ -370,7 +370,8 @@ void AGameTurnManagerBase::BeginPlay()
 
     // 直参�Eの"注入"�E�EungeonSysのみ。PathFinder/UnitMgrはTurnManagerが所有！E
     // GameModeからは取得しなぁE��EurnManagerが所有するためE��E
-    DungeonSys = GM->GetDungeonSubsystem();
+    // WorldSubsystemは必ずWorld初期化時に作成されるため、直接Worldから取得
+    DungeonSys = GetWorld()->GetSubsystem<URogueDungeonSubsystem>();
 
     UE_LOG(LogTurnManager, Log, TEXT("TurnManager: DungeonSys injected (Dgn=%p, PFL/UM will be created on HandleDungeonReady)"),
         static_cast<void*>(DungeonSys.Get()));
@@ -424,6 +425,20 @@ void AGameTurnManagerBase::HandleDungeonReady(URogueDungeonSubsystem* InDungeonS
 
     // CachedPathFinderも更新
     CachedPathFinder = PathFinder;
+
+    // ★★★ PathFinderを初期化（2025-11-09）
+    if (ADungeonFloorGenerator* Floor = DungeonSys->GetFloorGenerator())
+    {
+        FGridInitParams InitParams;
+        InitParams.GridCostArray = Floor->GridCells;
+        InitParams.MapSize = FVector(Floor->GridWidth, Floor->GridHeight, 0.f);
+        InitParams.TileSizeCM = Floor->CellSize;
+        InitParams.Origin = FVector::ZeroVector;
+
+        PathFinder->InitializeFromParams(InitParams);
+        UE_LOG(LogTurnManager, Log, TEXT("HandleDungeonReady: PathFinder initialized with Grid %dx%d, TileSize=%d"),
+            Floor->GridWidth, Floor->GridHeight, Floor->CellSize);
+    }
 
     if (IsValid(UnitMgr))
     {
@@ -3261,6 +3276,59 @@ void AGameTurnManagerBase::OpenInputWindow()
     OnRep_InputWindowId();
 }
 
+//==========================================================================
+// ★★★ Possess後の入力窓再オープン（2025-11-09） ★★★
+//==========================================================================
+
+void AGameTurnManagerBase::NotifyPlayerPossessed(APawn* NewPawn)
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    CachedPlayerPawn = NewPawn;
+
+    // すでにターン開始済み & まだ入力窓が開いていないときだけ再オープン
+    if (bFirstTurnStarted && !WaitingForPlayerInput)
+    {
+        OpenInputWindowForPlayer();
+    }
+}
+
+void AGameTurnManagerBase::OpenInputWindowForPlayer()
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    if (!ensure(CachedPlayerPawn))
+    {
+        UE_LOG(LogTurnManager, Warning, TEXT("[Turn] OpenInputWindowForPlayer: CachedPlayerPawn is null"));
+        return;
+    }
+
+    WaitingForPlayerInput = true;
+    ++InputWindowId;
+
+    // Gate_Input_Openタグを付与
+    if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(CachedPlayerPawn))
+    {
+        if (UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent())
+        {
+            ASC->AddLooseGameplayTag(RogueGameplayTags::Gate_Input_Open);
+        }
+    }
+
+    UE_LOG(LogTurnManager, Warning,
+        TEXT("[Turn] InputWindow OPEN: Turn=%d WinId=%d Gate=OPEN (Pawn=%s)"),
+        GetCurrentTurnIndex(), GetCurrentInputWindowId(), *GetNameSafe(CachedPlayerPawn));
+
+    // Standaloneでは OnRep が呼ばれないので手動実行
+    OnRep_WaitingForPlayerInput();
+    OnRep_InputWindowId();
+}
 
 void AGameTurnManagerBase::OnRep_InputWindowId()
 {

@@ -5,6 +5,7 @@
 #include "Engine/Engine.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Components/CapsuleComponent.h"
+#include "EngineUtils.h"  // TActorIterator用
 
 // ===== あなたのプロジェクト固有のヘッダ =====
 #include "Grid/AABB.h"
@@ -16,6 +17,7 @@
 #include "Debug/DebugObserverCSV.h"
 #include "UObject/UObjectGlobals.h"
 #include "Character/LyraPawnData.h"
+#include "Turn/GameTurnManagerBase.h"  // CollectEnemies用
 
 namespace UnitManager_Private
 {
@@ -522,6 +524,20 @@ void AUnitManager::OnTBSCharacterPossessed(AUnitBase* ControlledPawnAsTBS_Player
 
 	const int32 SpawnedEnemies = SpawnEnemyUnits();
 	UE_LOG(LogTemp, Log, TEXT("UnitManager::OnTBSCharacterPossessed spawned %d enemies"), SpawnedEnemies);
+
+	// ★★★ 敵スポーン後にTurnManagerのCollectEnemiesを再実行（2025-11-09）
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<AGameTurnManagerBase> It(World); It; ++It)
+		{
+			if (AGameTurnManagerBase* TurnMgr = *It)
+			{
+				TurnMgr->CollectEnemies();
+				UE_LOG(LogTemp, Log, TEXT("UnitManager::OnTBSCharacterPossessed - Requested TurnManager to re-collect enemies"));
+				break;
+			}
+		}
+	}
 }
 
 // ========================= Trace: RoomArea(InputAABB) =========================
