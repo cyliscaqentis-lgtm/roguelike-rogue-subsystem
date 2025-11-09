@@ -696,6 +696,12 @@ void AGameTurnManagerBase::NotifyPlayerInputReceived()
     {
         WaitingForPlayerInput = false;
         ApplyWaitInputGate(false);
+
+        // ★★★ コアシステム: CommandHandler経由でInput Window終了（2025-11-09） ★★★
+        if (CommandHandler)
+        {
+            CommandHandler->EndInputWindow();
+        }
     }
     ContinueTurnAfterInput();
 }
@@ -1667,10 +1673,17 @@ void AGameTurnManagerBase::AdvanceTurnAndRestart()
     // ターンインクリメンチE
     //==========================================================================
     const int32 PreviousTurn = CurrentTurnIndex;
+
+    // ★★★ コアシステム: OnTurnEnded配信（2025-11-09） ★★★
+    if (EventDispatcher)
+    {
+        EventDispatcher->BroadcastTurnEnded(PreviousTurn);
+    }
+
     CurrentTurnIndex++;
 
     UE_LOG(LogTurnManager, Log,
-        TEXT("[AdvanceTurnAndRestart] Turn advanced: %d ↁE%d"),
+        TEXT("[AdvanceTurnAndRestart] Turn advanced: %d → %d"),
         PreviousTurn, CurrentTurnIndex);
 
     //==========================================================================
@@ -2071,14 +2084,16 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
         return;
     }
 
-    // ★★★ CommandHandler経由で検証（利用可能な場合） ★★★
+    // ★★★ コアシステム: CommandHandler経由で完全処理（2025-11-09） ★★★
     if (CommandHandler)
     {
-        if (!CommandHandler->ValidateCommand(Command))
+        // ProcessPlayerCommandで検証と受理を一括処理
+        if (!CommandHandler->ProcessPlayerCommand(Command))
         {
-            UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Command validation failed by CommandHandler"));
+            UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Command processing failed by CommandHandler"));
             return;
         }
+        // 検証・受理成功 → 既存のロジックで実際の処理を継続
     }
     else
     {
@@ -3031,6 +3046,12 @@ void AGameTurnManagerBase::OpenInputWindow()
         TEXT("[WindowId] Opened: Turn=%d WindowId=%d"),
         CurrentTurnIndex, InputWindowId);
 
+    // ★★★ コアシステム: CommandHandler経由でInput Window開始（2025-11-09） ★★★
+    if (CommandHandler)
+    {
+        CommandHandler->BeginInputWindow(InputWindowId);
+    }
+
     // ☁E�E☁EGate/Phaseタグを付与（既存�EApplyWaitInputGateを流用�E�E
     ApplyWaitInputGate(true);
 
@@ -3544,6 +3565,15 @@ bool AGameTurnManagerBase::DispatchResolvedMove(const FResolvedAction& Action)
     Unit->MoveUnit(PathPoints);
 
     RegisterManualMoveDelegate(Unit, bIsPlayerUnit);
+
+    // ★★★ コアシステム: OnActionExecuted配信（2025-11-09） ★★★
+    if (EventDispatcher)
+    {
+        const FGameplayTag MoveActionTag = FGameplayTag::RequestGameplayTag(FName("GameplayEvent.Intent.Move"));
+        const int32 UnitID = Unit->GetUniqueID();
+        EventDispatcher->BroadcastActionExecuted(UnitID, MoveActionTag, true);
+    }
+
     return true;
 }
 
@@ -3584,6 +3614,14 @@ bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Actio
         UE_LOG(LogTurnManager, Log,
             TEXT("[ResolvedMove] Player move ability triggered toward (%d,%d)"),
             Action.NextCell.X, Action.NextCell.Y);
+
+        // ★★★ コアシステム: OnActionExecuted配信（2025-11-09） ★★★
+        if (EventDispatcher)
+        {
+            const int32 UnitID = Unit->GetUniqueID();
+            EventDispatcher->BroadcastActionExecuted(UnitID, EventData.EventTag, true);
+        }
+
         return true;
     }
 
