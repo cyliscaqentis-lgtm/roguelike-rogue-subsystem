@@ -66,6 +66,13 @@ bool UTurnCommandHandler::ProcessPlayerCommand(const FPlayerCommand& Command)
 
 bool UTurnCommandHandler::ValidateCommand(const FPlayerCommand& Command) const
 {
+	// コマンドタイプの妥当性チェック
+	if (Command.CommandType == EPlayerCommandType::None)
+	{
+		UE_LOG(LogTurnManager, Warning, TEXT("[TurnCommandHandler] Invalid command type: None"));
+		return false;
+	}
+
 	// タイムアウトチェック
 	if (!IsCommandTimely(Command))
 	{
@@ -80,12 +87,8 @@ bool UTurnCommandHandler::ValidateCommand(const FPlayerCommand& Command) const
 		return false;
 	}
 
-	// コマンドタイプの妥当性チェック
-	if (Command.CommandType == EPlayerCommandType::None)
-	{
-		UE_LOG(LogTurnManager, Warning, TEXT("[TurnCommandHandler] Invalid command type: None"));
-		return false;
-	}
+	UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Command validated: Tag=%s, TurnId=%d, WindowId=%d"),
+		*Command.CommandTag.ToString(), Command.TurnId, Command.WindowId);
 
 	return true;
 }

@@ -679,7 +679,18 @@ void AGameTurnManagerBase::BuildAllObservations()
 void AGameTurnManagerBase::NotifyPlayerInputReceived()
 {
     UE_LOG(LogTurnManager, Log, TEXT("[Turn%d]NotifyPlayerInputReceived"), CurrentTurnIndex);
-    OnPlayerInputReceived.Broadcast();
+
+    // ★★★ Phase 1: EventDispatcher経由でイベント配信（2025-11-09） ★★★
+    if (EventDispatcher)
+    {
+        EventDispatcher->BroadcastPlayerInputReceived();
+    }
+    else
+    {
+        // Fallback: 後方互換性
+        OnPlayerInputReceived.Broadcast();
+    }
+
     // 二重進行防止�E�ここで征E��ゲートを閉じてから継綁E
     if (WaitingForPlayerInput)
     {
@@ -880,9 +891,27 @@ void AGameTurnManagerBase::RunTurn()
 // ========== 修正�E�PhaseManagerに委譲 ==========
 void AGameTurnManagerBase::BeginPhase(FGameplayTag PhaseTag)
 {
+    // ★★★ Phase 1: フェーズ変更イベント配信（2025-11-09） ★★★
+    FGameplayTag OldPhase = CurrentPhase;
     CurrentPhase = PhaseTag;
     PhaseStartTime = FPlatformTime::Seconds();
-    UE_LOG(LogTurnPhase, Log, TEXT("PhaseStart:%s"), *PhaseTag.ToString());
+
+    // EventDispatcher経由でフェーズ変更を通知
+    if (EventDispatcher)
+    {
+        EventDispatcher->BroadcastPhaseChanged(OldPhase, PhaseTag);
+    }
+
+    // DebugSubsystem経由でログ記録
+    if (DebugSubsystem)
+    {
+        DebugSubsystem->LogPhaseTransition(OldPhase, PhaseTag);
+    }
+    else
+    {
+        // Fallback: 直接ログ
+        UE_LOG(LogTurnPhase, Log, TEXT("PhaseStart:%s"), *PhaseTag.ToString());
+    }
 
     if (PhaseTag == Phase_Player_Wait)
     {
@@ -2029,7 +2058,7 @@ void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnIndex)
 void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerCommand& Command)
 {
     //==========================================================================
-    // ☁E�E☁EチE��チE��: 経路確誁E
+    // ★★★ Phase 2: CommandHandler経由でコマンド処理（2025-11-09） ★★★
     //==========================================================================
     UE_LOG(LogTurnManager, Warning, TEXT("[✁EROUTE CHECK] OnPlayerCommandAccepted_Implementation called!"));
 
@@ -2042,32 +2071,45 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
         return;
     }
 
-    UE_LOG(LogTurnManager, Log, TEXT("[GameTurnManager] OnPlayerCommandAccepted: Tag=%s, TurnId=%d, WindowId=%d, TargetCell=(%d,%d)"),
-        *Command.CommandTag.ToString(), Command.TurnId, Command.WindowId, Command.TargetCell.X, Command.TargetCell.Y);
-
-    //==========================================================================
-    // (2) TurnId検証�E��E等化�E�E
-    //==========================================================================
-    if (Command.TurnId != CurrentTurnIndex && Command.TurnId != INDEX_NONE)
+    // ★★★ CommandHandler経由で検証（利用可能な場合） ★★★
+    if (CommandHandler)
     {
-        UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Command rejected - TurnId mismatch or invalid (%d != %d)"),
-            Command.TurnId, CurrentTurnIndex);
-        return;
+        if (!CommandHandler->ValidateCommand(Command))
+        {
+            UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Command validation failed by CommandHandler"));
+            return;
+        }
     }
-
-    //==========================================================================
-    // (3) 二重移動チェチE��
-    //==========================================================================
-    if (bPlayerMoveInProgress)
+    else
     {
-        UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Move in progress, ignoring command"));
-        return;
-    }
+        // Fallback: 既存の検証ロジック
+        UE_LOG(LogTurnManager, Log, TEXT("[GameTurnManager] OnPlayerCommandAccepted: Tag=%s, TurnId=%d, WindowId=%d, TargetCell=(%d,%d)"),
+            *Command.CommandTag.ToString(), Command.TurnId, Command.WindowId, Command.TargetCell.X, Command.TargetCell.Y);
 
-    if (!WaitingForPlayerInput)
-    {
-        UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Not waiting for input"));
-        return;
+        //==========================================================================
+        // (2) TurnId検証�E��E等化�E�E
+        //==========================================================================
+        if (Command.TurnId != CurrentTurnIndex && Command.TurnId != INDEX_NONE)
+        {
+            UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Command rejected - TurnId mismatch or invalid (%d != %d)"),
+                Command.TurnId, CurrentTurnIndex);
+            return;
+        }
+
+        //==========================================================================
+        // (3) 二重移動チェチE��
+        //==========================================================================
+        if (bPlayerMoveInProgress)
+        {
+            UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Move in progress, ignoring command"));
+            return;
+        }
+
+        if (!WaitingForPlayerInput)
+        {
+            UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Not waiting for input"));
+            return;
+        }
     }
 
     //==========================================================================
