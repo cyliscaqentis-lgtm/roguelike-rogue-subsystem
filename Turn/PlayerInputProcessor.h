@@ -71,13 +71,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Input")
 	FPlayerCommand GetCachedPlayerCommand() const { return CachedPlayerCommand; }
 
-	//==========================================================================
-	// デリゲート
-	//==========================================================================
-
-	DECLARE_MULTICAST_DELEGATE(FOnPlayerInputReceived);
-	FOnPlayerInputReceived OnPlayerInputReceived;
-
 protected:
 	//==========================================================================
 	// レプリケーション

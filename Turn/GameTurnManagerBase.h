@@ -42,12 +42,6 @@ class ATBSLyraGameMode;
 
 // 笘�E・笘�E繝薙Ν繝芽�E�伜挨逕ｨ螳壽焁E笘�E・笘�Estatic constexpr int32 kEnemyPhasePatchID = 20251030;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPlayerInputReceived);
-
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTurnStarted, int32, TurnIndex);
-
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnFloorReady, int32, FloorIndex);
-
 /**
  * AGameTurnManagerBase
  *
@@ -637,9 +631,6 @@ protected:
     
     /** 謚ｼ縺怜�E縺怜庁E���E�縺句愛螳・*/
     bool CanPushActor(const FGameplayTagContainer& Pusher, const FGameplayTagContainer& Pushed) const;
-
-    /** Barrier完亁E��にInProgressタグが残留してぁE��ぁE��チェチE��し、忁E��なら強制除去する */
-    void ClearResidualInProgressTags();
 
     //==========================================================================
     // Dynamic 繝�EΜ繧�E�繝ｼ繝医ワ繝ｳ繝峨΁E

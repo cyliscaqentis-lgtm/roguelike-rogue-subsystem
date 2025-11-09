@@ -58,18 +58,18 @@ bool UTurnCommandHandler::ProcessPlayerCommand(const FPlayerCommand& Command)
 	// 履歴に保存
 	LastAcceptedCommands.Add(Command.TurnId, Command);
 
-	UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Command accepted for TurnId=%d, Type=%d"),
-		Command.TurnId, static_cast<int32>(Command.CommandType));
+	UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Command accepted for TurnId=%d, Tag=%s"),
+		Command.TurnId, *Command.CommandTag.ToString());
 
 	return true;
 }
 
 bool UTurnCommandHandler::ValidateCommand(const FPlayerCommand& Command) const
 {
-	// コマンドタイプの妥当性チェック
-	if (Command.CommandType == EPlayerCommandType::None)
+	// コマンドタグの妥当性チェック
+	if (!Command.CommandTag.IsValid())
 	{
-		UE_LOG(LogTurnManager, Warning, TEXT("[TurnCommandHandler] Invalid command type: None"));
+		UE_LOG(LogTurnManager, Warning, TEXT("[TurnCommandHandler] Invalid command tag"));
 		return false;
 	}
 
@@ -97,8 +97,8 @@ void UTurnCommandHandler::ApplyCommand(const FPlayerCommand& Command)
 {
 	// ★★★ コアシステム: コマンド適用完全実装（2025-11-09） ★★★
 
-	UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Applying command TurnId=%d, Type=%d, Tag=%s"),
-		Command.TurnId, static_cast<int32>(Command.CommandType), *Command.CommandTag.ToString());
+	UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Applying command TurnId=%d, Tag=%s"),
+		Command.TurnId, *Command.CommandTag.ToString());
 
 	// コマンドの実行は実際のゲームロジックに委譲
 	// ここではコマンド受理の記録と統計の更新を行う

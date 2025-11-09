@@ -1,6 +1,7 @@
 // TurnFlowCoordinator.cpp
 
 #include "TurnFlowCoordinator.h"
+#include "Turn/TurnEventDispatcher.h"
 #include "Net/UnrealNetwork.h"
 
 void UTurnFlowCoordinator::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -35,8 +36,11 @@ void UTurnFlowCoordinator::StartFirstTurn()
 
 	UE_LOG(LogTemp, Log, TEXT("[TurnFlowCoordinator] First turn started: TurnId=%d"), CurrentTurnId);
 
-	// デリゲート通知
-	OnTurnStarted.Broadcast(CurrentTurnIndex);
+	// デリゲート通知（TurnEventDispatcher経由）
+	if (UTurnEventDispatcher* EventDispatcher = World->GetSubsystem<UTurnEventDispatcher>())
+	{
+		EventDispatcher->BroadcastTurnStarted(CurrentTurnIndex);
+	}
 }
 
 void UTurnFlowCoordinator::StartTurn()
@@ -51,8 +55,11 @@ void UTurnFlowCoordinator::StartTurn()
 
 	UE_LOG(LogTemp, Log, TEXT("[TurnFlowCoordinator] Turn started: TurnId=%d, TurnIndex=%d"), CurrentTurnId, CurrentTurnIndex);
 
-	// デリゲート通知
-	OnTurnStarted.Broadcast(CurrentTurnIndex);
+	// デリゲート通知（TurnEventDispatcher経由）
+	if (UTurnEventDispatcher* EventDispatcher = World->GetSubsystem<UTurnEventDispatcher>())
+	{
+		EventDispatcher->BroadcastTurnStarted(CurrentTurnIndex);
+	}
 }
 
 void UTurnFlowCoordinator::EndTurn()
@@ -65,8 +72,11 @@ void UTurnFlowCoordinator::EndTurn()
 
 	UE_LOG(LogTemp, Log, TEXT("[TurnFlowCoordinator] Turn ended: TurnId=%d"), CurrentTurnId);
 
-	// デリゲート通知
-	OnTurnEnded.Broadcast(CurrentTurnId);
+	// デリゲート通知（TurnEventDispatcher経由）
+	if (UTurnEventDispatcher* EventDispatcher = World->GetSubsystem<UTurnEventDispatcher>())
+	{
+		EventDispatcher->BroadcastTurnEnded(CurrentTurnId);
+	}
 }
 
 void UTurnFlowCoordinator::AdvanceTurn()
