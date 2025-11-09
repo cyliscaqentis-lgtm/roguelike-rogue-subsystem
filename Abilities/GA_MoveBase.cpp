@@ -10,7 +10,6 @@
 #include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Rogue/Character/UnitBase.h"
-#include "Rogue/Data/MoveInputPayloadBase.h"
 #include "Rogue/Grid/GridOccupancySubsystem.h"
 #include "Rogue/Grid/GridPathfindingLibrary.h"
 #include "Rogue/Turn/TurnActionBarrierSubsystem.h"
