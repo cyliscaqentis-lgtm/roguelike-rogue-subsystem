@@ -253,6 +253,9 @@ private:
 
     FVector CachedStartLocWS = FVector::ZeroVector;
 
+    /** 移動先セル（OnMoveFinishedで正しい位置設定に使用） */
+    FIntPoint CachedNextCell = FIntPoint(-1, -1);
+
     //--------------------------------------------------------------------------
     // 繧�E�繝｣繝�Eす繝･螟画焚�E・nMoveFinished 縺�E�菴�E�逕ｨ・・    //--------------------------------------------------------------------------
 

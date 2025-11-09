@@ -339,6 +339,9 @@ void UGA_MoveBase::ActivateAbility(
 	const FIntPoint CalculatedCell = CurrentCell + Step;
 	const FIntPoint NextCell = (ReservedCell.X >= 0 && ReservedCell.Y >= 0) ? ReservedCell : CalculatedCell;
 
+	// ★★★ NextCellをキャッシュ（OnMoveFinishedで使用） ★★★
+	CachedNextCell = NextCell;
+
 	// ★★★ デバッグログ：予約 vs 計算 vs 実際の移動先 ★★★
 	UE_LOG(LogTurnManager, Warning,
 		TEXT("[GA_MoveBase] From=%s ReservedCell=%s CalculatedCell=%s NextCell=%s (using %s)"),
@@ -868,8 +871,10 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
         const FVector LocationBefore = Unit->GetActorLocation();
         const FIntPoint GridBefore = PathFinder ? PathFinder->WorldToGrid(LocationBefore) : FIntPoint::ZeroValue;
 
+        // ★★★ FIX: PathFinder->GridToWorld()で移動先セルの中心座標を計算 ★★★
         const float FixedZ = ComputeFixedZ(Unit, PathFinder);
-        const FVector SnappedLoc = SnapToCellCenterFixedZ(Unit->GetActorLocation(), FixedZ);
+        const FVector DestWorldLoc = PathFinder ? PathFinder->GridToWorld(CachedNextCell) : Unit->GetActorLocation();
+        const FVector SnappedLoc = SnapToCellCenterFixedZ(DestWorldLoc, FixedZ);
         Unit->SetActorLocation(SnappedLoc, false, nullptr, ETeleportType::TeleportPhysics);
 
         // ★★★ DEBUG: Log position AFTER setting (2025-11-09) ★★★
@@ -877,9 +882,10 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
         const FIntPoint GridAfter = PathFinder ? PathFinder->WorldToGrid(LocationAfter) : FIntPoint::ZeroValue;
 
         UE_LOG(LogTurnManager, Warning,
-            TEXT("[OnMoveFinished] ★ POSITION UPDATE: Actor=%s | BEFORE=Grid(%d,%d) World(%s) | AFTER=Grid(%d,%d) World(%s) | TurnId=%d"),
+            TEXT("[OnMoveFinished] ★ POSITION UPDATE: Actor=%s | BEFORE=Grid(%d,%d) World(%s) | DestCell=(%d,%d) | AFTER=Grid(%d,%d) World(%s) | TurnId=%d"),
             *GetNameSafe(Unit),
             GridBefore.X, GridBefore.Y, *LocationBefore.ToCompactString(),
+            CachedNextCell.X, CachedNextCell.Y,
             GridAfter.X, GridAfter.Y, *LocationAfter.ToCompactString(),
             MoveTurnId);
 
