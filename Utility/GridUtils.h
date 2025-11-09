@@ -8,8 +8,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-
-class AGridPathfindingLibrary;
+#include "Rogue/Grid/GridPathfindingLibrary.h"
 
 /**
  * グリッド関連の共通ユーティリティ
