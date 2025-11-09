@@ -108,7 +108,7 @@ UGA_MoveBase::UGA_MoveBase(const FObjectInitializer& ObjectInitializer)
 	ActivationOwnedTags.AddTag(TagStateMoving);
 
 	FAbilityTriggerData Trigger;
-	Trigger.TriggerTag = RogueGameplayTags::GameplayEvent_Intent_Move;
+	Trigger.TriggerTag = RogueGameplayTags::Ability_Move;  // Changed from GameplayEvent_Intent_Move to match GameTurnManager
 	Trigger.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
 	AbilityTriggers.Add(Trigger);
 
