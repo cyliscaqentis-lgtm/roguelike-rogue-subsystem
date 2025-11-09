@@ -3400,6 +3400,12 @@ void AGameTurnManagerBase::OpenInputWindowForPlayer()
     WaitingForPlayerInput = true;
     ++InputWindowId;
 
+    // ★★★ TurnCommandHandlerに通知（2025-11-09 修正）
+    if (CommandHandler)
+    {
+        CommandHandler->BeginInputWindow(InputWindowId);
+    }
+
     if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(CachedPlayerPawn))
     {
         if (UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent())
@@ -3419,6 +3425,12 @@ void AGameTurnManagerBase::CloseInputWindowForPlayer()
     if (!CachedPlayerPawn) return;
 
     WaitingForPlayerInput = false;
+
+    // ★★★ TurnCommandHandlerに通知（2025-11-09 修正）
+    if (CommandHandler)
+    {
+        CommandHandler->EndInputWindow();
+    }
 
     if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(CachedPlayerPawn))
     {
