@@ -157,8 +157,8 @@ void UGA_MoveBase::ActivateAbility(
 	{
 		TeamId = Unit->Team;
 	}
-	UE_LOG(LogTurnManager, Error,
-		TEXT("[GA_MoveBase] ☁E�E☁EABILITY ACTIVATED: Actor=%s, Team=%d"),
+	UE_LOG(LogTurnManager, Log,
+		TEXT("[GA_MoveBase] ABILITY ACTIVATED: Actor=%s, Team=%d"),
 		*GetNameSafe(Avatar), TeamId);
 
 	CachedSpecHandle = Handle;
@@ -504,10 +504,10 @@ void UGA_MoveBase::EndAbility(
 		}
 	}
 
-	// ☁E�E☁ESparky修正: 再�E防止 ☁E�E☁E
+	// Sparky fix: Prevent re-entry
 	if (bIsEnding)
 	{
-		UE_LOG(LogTurnManager, Error, TEXT("[GA_MoveBase] ☁E�E☁EAlready ending, ignoring recursive call"));
+		UE_LOG(LogTurnManager, Warning, TEXT("[GA_MoveBase] Already ending, ignoring recursive call"));
 		return;
 	}
 	bIsEnding = true;
@@ -827,16 +827,16 @@ void UGA_MoveBase::BindMoveFinishedDelegate()
 	{
 		MoveFinishedHandle = Unit->OnMoveFinished.AddUObject(this, &UGA_MoveBase::OnMoveFinished);
 
-		// ☁E�E☁ESparky診断�E�デリゲートバインド�E功確誁E☁E�E☁E
-		UE_LOG(LogTurnManager, Error,
-			TEXT("[BindMoveFinishedDelegate] ☁E�E☁ESUCCESS: Unit %s delegate bound to GA_MoveBase::OnMoveFinished (Handle IsValid=%d)"),
+		// Sparky diagnostic: Delegate bind success
+		UE_LOG(LogTurnManager, Log,
+			TEXT("[BindMoveFinishedDelegate] SUCCESS: Unit %s delegate bound to GA_MoveBase::OnMoveFinished (Handle IsValid=%d)"),
 			*GetNameSafe(Unit), MoveFinishedHandle.IsValid() ? 1 : 0);
 	}
 	else
 	{
-		// ☁E�E☁ESparky診断�E�キャスト失敁E☁E�E☁E
+		// Sparky diagnostic: Cast failed
 		UE_LOG(LogTurnManager, Error,
-			TEXT("[BindMoveFinishedDelegate] ☁E�E☁EFAILED: Avatar is not a UnitBase! Avatar=%s"),
+			TEXT("[BindMoveFinishedDelegate] FAILED: Avatar is not a UnitBase! Avatar=%s"),
 			*GetNameSafe(GetAvatarActorFromActorInfo()));
 	}
 }

@@ -2387,10 +2387,13 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
                 TEXT("[MovePrecheck] Target cell (%d,%d) GridCost=%d (expected: 3=Walkable, -1=Blocked)"),
                 TargetCell.X, TargetCell.Y, TargetCost);
 
-            if (bOccupied && OccupyingActor)
+            // ★★★ 2025-11-10: 占有情報はoccupied/swapの場合のみ出力（terrainの場合は不要） ★★★
+            if (!bTerrainBlocked && bOccupied && OccupyingActor)
             {
                 UE_LOG(LogTurnManager, Warning,
-                    TEXT("[MovePrecheck] Occupied by: %s"), *GetNameSafe(OccupyingActor));
+                    TEXT("[MovePrecheck] Occupied by: %s%s"),
+                    *GetNameSafe(OccupyingActor),
+                    bSwapDetected ? TEXT(" (SWAP detected)") : TEXT(""));
             }
 
             // 周辺4方向の状態を出力
