@@ -19,6 +19,8 @@
 #include "Character/LyraPawnData.h"
 #include "Character/UnitMovementComponent.h"
 #include "Character/UnitUIComponent.h"
+#include "Grid/GridOccupancySubsystem.h"
+#include "Grid/GridPathfindingLibrary.h"
 
 // 繝ｭ繧ｰ繧ｫ繝・ざ繝ｪ螳夂ｾｩ
 DEFINE_LOG_CATEGORY_STATIC(LogUnitBase, Log, All);
@@ -379,6 +381,23 @@ void AUnitBase::MoveUnit(const TArray<FVector>& InPath)
             TEXT("[MoveComplete] 笘・・笘・Unit %s MOVE ANIMATION COMPLETED! (Broadcast OnMoveFinished)"),
             *GetName());
 
+        // ★★★ 2025-11-10: 移動完了後にGridOccupancySubsystemを更新（プレイヤー・敵共通） ★★★
+        if (UWorld* World = GetWorld())
+        {
+            if (AGridPathfindingLibrary* PathFinder = Cast<AGridPathfindingLibrary>(
+                UGameplayStatics::GetActorOfClass(World, AGridPathfindingLibrary::StaticClass())))
+            {
+                if (UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>())
+                {
+                    const FIntPoint CurrentCell = PathFinder->WorldToGrid(GetActorLocation());
+                    OccSys->UpdateActorCell(this, CurrentCell);
+                    UE_LOG(LogUnitBase, Log,
+                        TEXT("[MoveComplete] ★ GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
+                        *GetName(), CurrentCell.X, CurrentCell.Y);
+                }
+            }
+        }
+
         // 笘・・笘・繝・Μ繧ｲ繝ｼ繝・Broadcast・磯㍾隕・ｼ・ｼ・笘・・笘・
         OnMoveFinished.Broadcast(this);
         return;
@@ -408,6 +427,23 @@ void AUnitBase::StartNextLeg()
         UE_LOG(LogUnitBase, Log,
             TEXT("[MoveComplete] 笘・・笘・Unit %s MOVE ANIMATION COMPLETED! (Broadcast OnMoveFinished)"),
             *GetName());
+
+        // ★★★ 2025-11-10: 移動完了後にGridOccupancySubsystemを更新（プレイヤー・敵共通） ★★★
+        if (UWorld* World = GetWorld())
+        {
+            if (AGridPathfindingLibrary* PathFinder = Cast<AGridPathfindingLibrary>(
+                UGameplayStatics::GetActorOfClass(World, AGridPathfindingLibrary::StaticClass())))
+            {
+                if (UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>())
+                {
+                    const FIntPoint CurrentCell = PathFinder->WorldToGrid(GetActorLocation());
+                    OccSys->UpdateActorCell(this, CurrentCell);
+                    UE_LOG(LogUnitBase, Log,
+                        TEXT("[MoveComplete] ★ GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
+                        *GetName(), CurrentCell.X, CurrentCell.Y);
+                }
+            }
+        }
 
         // 笘・・笘・繝・Μ繧ｲ繝ｼ繝・Broadcast・磯㍾隕・ｼ・ｼ・笘・・笘・
         OnMoveFinished.Broadcast(this);
