@@ -2345,6 +2345,7 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
 
         // 占有チェック（自分以外のユニットがいるか）
         bool bOccupied = false;
+        bool bSwapDetected = false;
         AActor* OccupyingActor = nullptr;
         if (UGridOccupancySubsystem* OccSys = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
         {
@@ -2353,13 +2354,29 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
             if (OccupyingActor && OccupyingActor != PlayerPawn)
             {
                 bOccupied = true;
+
+                // ★★★ 2025-11-10: スワップ検出（相手が自分の開始セルに向かっているか） ★★★
+                if (const FEnemyIntent* Intent = CachedIntents.Find(OccupyingActor))
+                {
+                    if (Intent->NextCell == CurrentCell)
+                    {
+                        // 入れ替わり検出！
+                        bSwapDetected = true;
+                        UE_LOG(LogTurnManager, Warning,
+                            TEXT("[MovePrecheck] ★ SWAP DETECTED: Player (%d,%d)→(%d,%d), Enemy %s (%d,%d)→(%d,%d)"),
+                            CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y,
+                            *GetNameSafe(OccupyingActor),
+                            TargetCell.X, TargetCell.Y, Intent->NextCell.X, Intent->NextCell.Y);
+                    }
+                }
             }
         }
 
         // ★★★ 2025-11-10: ブロック時は回転のみ適用（ターン不消費） ★★★
         if (bTerrainBlocked || bOccupied)
         {
-            const TCHAR* BlockReason = bTerrainBlocked ? TEXT("terrain") : TEXT("occupied");
+            const TCHAR* BlockReason = bTerrainBlocked ? TEXT("terrain") :
+                                       bSwapDetected ? TEXT("swap") : TEXT("occupied");
             UE_LOG(LogTurnManager, Warning,
                 TEXT("[MovePrecheck] BLOCKED by %s: Cell (%d,%d) | From=(%d,%d) | Applying FACING ONLY (No Turn)"),
                 BlockReason, TargetCell.X, TargetCell.Y, CurrentCell.X, CurrentCell.Y);
