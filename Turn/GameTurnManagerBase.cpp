@@ -2338,17 +2338,43 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
             CurrentCell.Y + static_cast<int32>(Command.Direction.Y));
 
         // ★★★ PRE-VALIDATION: Check if target cell is walkable (2025-11-09 FIX) ★★★
-        if (!CachedPathFinder->IsCellWalkableIgnoringActor(TargetCell, PlayerPawn))
+        // ★★★ 2025-11-10: 地形チェック + 占有チェックの二層構造 ★★★
+
+        // 地形ブロックチェック
+        const bool bTerrainBlocked = !CachedPathFinder->IsCellWalkableIgnoringActor(TargetCell, PlayerPawn);
+
+        // 占有チェック（自分以外のユニットがいるか）
+        bool bOccupied = false;
+        AActor* OccupyingActor = nullptr;
+        if (UGridOccupancySubsystem* OccSys = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
         {
+            OccupyingActor = OccSys->GetActorAtCell(TargetCell);
+            // 自分自身は除外（予約済みの場合）
+            if (OccupyingActor && OccupyingActor != PlayerPawn)
+            {
+                bOccupied = true;
+            }
+        }
+
+        // ★★★ 2025-11-10: ブロック時は回転のみ適用（ターン不消費） ★★★
+        if (bTerrainBlocked || bOccupied)
+        {
+            const TCHAR* BlockReason = bTerrainBlocked ? TEXT("terrain") : TEXT("occupied");
             UE_LOG(LogTurnManager, Warning,
-                TEXT("[MovePrecheck] REJECT: Cell (%d,%d) is BLOCKED by terrain | From=(%d,%d) | Keep window open"),
-                TargetCell.X, TargetCell.Y, CurrentCell.X, CurrentCell.Y);
+                TEXT("[MovePrecheck] BLOCKED by %s: Cell (%d,%d) | From=(%d,%d) | Applying FACING ONLY (No Turn)"),
+                BlockReason, TargetCell.X, TargetCell.Y, CurrentCell.X, CurrentCell.Y);
 
             // ★★★ DEBUG: 周辺セルの状態を診断 (2025-11-09) ★★★
             const int32 TargetCost = CachedPathFinder->GetGridCost(TargetCell.X, TargetCell.Y);
             UE_LOG(LogTurnManager, Warning,
                 TEXT("[MovePrecheck] Target cell (%d,%d) GridCost=%d (expected: 3=Walkable, -1=Blocked)"),
                 TargetCell.X, TargetCell.Y, TargetCost);
+
+            if (bOccupied && OccupyingActor)
+            {
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("[MovePrecheck] Occupied by: %s"), *GetNameSafe(OccupyingActor));
+            }
 
             // 周辺4方向の状態を出力
             const FIntPoint Directions[4] = {
@@ -2370,33 +2396,38 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
                     DirNames[i], CheckCell.X, CheckCell.Y, Cost, bWalkable ? 1 : 0);
             }
 
-            // ★★★ Client通知: 入力拒否をクライアントに通知してフラグリセット (2025-11-10) ★★★
+            // ★★★ 2025-11-10: サーバー側でプレイヤーを回転 ★★★
+            const float Yaw = FMath::Atan2(Command.Direction.Y, Command.Direction.X) * 180.f / PI;
+            FRotator NewRotation = PlayerPawn->GetActorRotation();
+            NewRotation.Yaw = Yaw;
+            PlayerPawn->SetActorRotation(NewRotation);
+
+            UE_LOG(LogTurnManager, Log,
+                TEXT("[MovePrecheck] ★ SERVER: Applied FACING ONLY - Direction=(%.1f,%.1f), Yaw=%.1f"),
+                Command.Direction.X, Command.Direction.Y, Yaw);
+
+            // ★★★ 2025-11-10: クライアントに回転専用RPCを送信（ACKではない） ★★★
             if (APlayerController* PC = Cast<APlayerController>(PlayerPawn->GetController()))
             {
-                // PlayerControllerBase にキャストして Client RPC 呼び出し
                 if (APlayerControllerBase* TPCB = Cast<APlayerControllerBase>(PC))
                 {
-                    TPCB->Client_NotifyMoveRejected();
-                    UE_LOG(LogTurnManager, Warning, TEXT("[MovePrecheck] ★ Sent Client_NotifyMoveRejected RPC to client"));
+                    // 回転のみ適用（ラッチは変更しない = 入力継続可能）
+                    TPCB->Client_ApplyFacingNoTurn(InputWindowId, FVector2D(Command.Direction.X, Command.Direction.Y));
+                    UE_LOG(LogTurnManager, Log,
+                        TEXT("[MovePrecheck] ★ Sent Client_ApplyFacingNoTurn RPC (WindowId=%d, no turn consumed)"),
+                        InputWindowId);
                 }
-                else
-                {
-                    UE_LOG(LogTurnManager, Error, TEXT("[MovePrecheck] ❌ Failed to cast to PlayerControllerBase!"));
-                }
-            }
-            else
-            {
-                UE_LOG(LogTurnManager, Error, TEXT("[MovePrecheck] ❌ PlayerController not found!"));
             }
 
             // ★★★ サーバー側の状態確認ログ (2025-11-10) ★★★
-            UE_LOG(LogTurnManager, Warning, TEXT("[MovePrecheck] Server state after rejection:"));
-            UE_LOG(LogTurnManager, Warning, TEXT("  - WaitingForPlayerInput: %d (should be TRUE)"), WaitingForPlayerInput);
-            UE_LOG(LogTurnManager, Warning, TEXT("  - bPlayerMoveInProgress: %d (should be FALSE)"), bPlayerMoveInProgress);
-            UE_LOG(LogTurnManager, Warning, TEXT("  - InputWindowId: %d"), InputWindowId);
+            UE_LOG(LogTurnManager, Verbose, TEXT("[MovePrecheck] Server state after FACING ONLY:"));
+            UE_LOG(LogTurnManager, Verbose, TEXT("  - WaitingForPlayerInput: %d (STAYS TRUE - no turn consumed)"), WaitingForPlayerInput);
+            UE_LOG(LogTurnManager, Verbose, TEXT("  - bPlayerMoveInProgress: %d (STAYS FALSE)"), bPlayerMoveInProgress);
+            UE_LOG(LogTurnManager, Verbose, TEXT("  - InputWindowId: %d (unchanged)"), InputWindowId);
 
-            // ★ ウィンドウを閉じずに拒否（プレイヤーが再入力可能）
+            // ★ ウィンドウを閉じずに継続（プレイヤーが再入力可能、ターン不消費）
             // WaitingForPlayerInput は true のまま、Gate も開いたまま
+            // コマンドは"消費"マークしない（MarkCommandAsAccepted()を呼ばない）
             return;
         }
 
