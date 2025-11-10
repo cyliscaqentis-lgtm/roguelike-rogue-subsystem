@@ -259,6 +259,13 @@ void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& Reso
 {
     for (const FResolvedAction& Action : ResolvedActions)
     {
+        // ★★★ CRITICAL FIX (2025-11-10): NULL Actor ガード ★★★
+        if (!Action.SourceActor)
+        {
+            UE_LOG(LogTurnCore, Error, TEXT("[Execute] Skip: SourceActor is None"));
+            continue;
+        }
+
         bool bHandledByTurnManager = false;
         if (AGameTurnManagerBase* TurnManager = ResolveTurnManager())
         {
@@ -272,7 +279,7 @@ void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& Reso
         UAbilitySystemComponent* ASC = ResolveASC(Action.SourceActor);
         if (!ASC)
         {
-            UE_LOG(LogTurnCore, Error, TEXT("[Execute] ❁EASC not found for %s"),
+            UE_LOG(LogTurnCore, Error, TEXT("[Execute] ASC not found for %s"),
                 *GetNameSafe(Action.SourceActor));
             continue;
         }

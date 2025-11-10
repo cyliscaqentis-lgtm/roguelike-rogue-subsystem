@@ -38,17 +38,28 @@ bool UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
         return false;
     }
 
-    // ★★★ CRITICAL FIX (2025-11-10): 二重書き込みガード（最終防壁） ★★★
-    // 新しいセルが他の Actor で占有されている場合は拒否
+    // ★★★ CRITICAL FIX (2025-11-10): 予約優先の占有書き込み ★★★
+    // 新しいセルが他の Actor で占有されている場合でも、予約があれば許可
     if (const TWeakObjectPtr<AActor>* ExistingActorPtr = OccupiedCells.Find(NewCell))
     {
         AActor* ExistingActor = ExistingActorPtr->Get();
         if (ExistingActor && ExistingActor != Actor)
         {
-            UE_LOG(LogTemp, Error,
-                TEXT("[GridOccupancy] ★ REJECT UPDATE: %s cannot move to (%d,%d) - occupied by %s"),
-                *GetNameSafe(Actor), NewCell.X, NewCell.Y, *GetNameSafe(ExistingActor));
-            return false;  // 書き込み拒否
+            // このActorがセルを予約している場合は上書き許可（順序依存を解消）
+            const bool bHasReservation = IsReservationOwnedByActor(Actor, NewCell);
+            if (!bHasReservation)
+            {
+                UE_LOG(LogTemp, Error,
+                    TEXT("[GridOccupancy] REJECT UPDATE: %s cannot move to (%d,%d) - occupied by %s (no reservation)"),
+                    *GetNameSafe(Actor), NewCell.X, NewCell.Y, *GetNameSafe(ExistingActor));
+                return false;  // 予約なし：書き込み拒否
+            }
+            else
+            {
+                UE_LOG(LogTemp, Log,
+                    TEXT("[GridOccupancy] ACCEPT (reserved override): %s -> (%d,%d) - was occupied by %s"),
+                    *GetNameSafe(Actor), NewCell.X, NewCell.Y, *GetNameSafe(ExistingActor));
+            }
         }
     }
 
