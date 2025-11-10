@@ -899,6 +899,18 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
         // GridCostはあくまで「地形の通行コスト/Walkable状態」を表し、占有状態とは別チャンネルで管理すべき。
         // UpdateGridState(CachedFirstLoc, 1);  // ← LEGACY CODE REMOVED
 
+        // ★★★ 2025-11-10: GridOccupancySubsystemを更新（ユニット移動後） ★★★
+        if (UWorld* World = GetWorld())
+        {
+            if (UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>())
+            {
+                OccSys->UpdateActorCell(Unit, GridAfter);
+                UE_LOG(LogTurnManager, Log,
+                    TEXT("[OnMoveFinished] ★ GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
+                    *GetNameSafe(Unit), GridAfter.X, GridAfter.Y);
+            }
+        }
+
         UE_LOG(LogTurnManager, Log,
             TEXT("[MoveComplete] Unit %s reached destination, GA_MoveBase ending (TurnId=%d)"),
             *GetNameSafe(Unit), MoveTurnId);
