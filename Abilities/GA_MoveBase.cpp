@@ -904,10 +904,19 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
         {
             if (UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>())
             {
-                OccSys->UpdateActorCell(Unit, GridAfter);
-                UE_LOG(LogTurnManager, Log,
-                    TEXT("[OnMoveFinished] ★ GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
-                    *GetNameSafe(Unit), GridAfter.X, GridAfter.Y);
+                bool bUpdateSuccess = OccSys->UpdateActorCell(Unit, GridAfter);
+                if (bUpdateSuccess)
+                {
+                    UE_LOG(LogTurnManager, Log,
+                        TEXT("[OnMoveFinished] GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
+                        *GetNameSafe(Unit), GridAfter.X, GridAfter.Y);
+                }
+                else
+                {
+                    UE_LOG(LogTurnManager, Error,
+                        TEXT("[OnMoveFinished] CRITICAL: GridOccupancy update FAILED for %s to (%d,%d) - cell occupied!"),
+                        *GetNameSafe(Unit), GridAfter.X, GridAfter.Y);
+                }
             }
         }
 

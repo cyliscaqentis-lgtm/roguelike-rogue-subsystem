@@ -25,8 +25,9 @@ public:
     FIntPoint GetCellOfActor(AActor* Actor) const;
 
     // ☁E�E☁Eセル位置を更新�E�移動実行後に呼び出す！E☁E�E☁E
+    // ★★★ CRITICAL FIX (2025-11-10): 二重書き込みガード（成功=true, 失敗=false） ★★★
     UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
-    void UpdateActorCell(AActor* Actor, FIntPoint NewCell);
+    bool UpdateActorCell(AActor* Actor, FIntPoint NewCell);
 
     /**
      * 持E��セルが占有されてぁE��か判宁E

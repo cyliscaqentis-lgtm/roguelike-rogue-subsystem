@@ -390,10 +390,19 @@ void AUnitBase::MoveUnit(const TArray<FVector>& InPath)
                 if (UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>())
                 {
                     const FIntPoint CurrentCell = PathFinder->WorldToGrid(GetActorLocation());
-                    OccSys->UpdateActorCell(this, CurrentCell);
-                    UE_LOG(LogUnitBase, Log,
-                        TEXT("[MoveComplete] ★ GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
-                        *GetName(), CurrentCell.X, CurrentCell.Y);
+                    bool bUpdateSuccess = OccSys->UpdateActorCell(this, CurrentCell);
+                    if (bUpdateSuccess)
+                    {
+                        UE_LOG(LogUnitBase, Log,
+                            TEXT("[MoveComplete] GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
+                            *GetName(), CurrentCell.X, CurrentCell.Y);
+                    }
+                    else
+                    {
+                        UE_LOG(LogUnitBase, Error,
+                            TEXT("[MoveComplete] CRITICAL: GridOccupancy update FAILED for %s to (%d,%d) - cell occupied!"),
+                            *GetName(), CurrentCell.X, CurrentCell.Y);
+                    }
                 }
             }
         }
@@ -437,10 +446,19 @@ void AUnitBase::StartNextLeg()
                 if (UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>())
                 {
                     const FIntPoint CurrentCell = PathFinder->WorldToGrid(GetActorLocation());
-                    OccSys->UpdateActorCell(this, CurrentCell);
-                    UE_LOG(LogUnitBase, Log,
-                        TEXT("[MoveComplete] ★ GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
-                        *GetName(), CurrentCell.X, CurrentCell.Y);
+                    bool bUpdateSuccess = OccSys->UpdateActorCell(this, CurrentCell);
+                    if (bUpdateSuccess)
+                    {
+                        UE_LOG(LogUnitBase, Log,
+                            TEXT("[MoveComplete] GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
+                            *GetName(), CurrentCell.X, CurrentCell.Y);
+                    }
+                    else
+                    {
+                        UE_LOG(LogUnitBase, Error,
+                            TEXT("[MoveComplete] CRITICAL: GridOccupancy update FAILED for %s to (%d,%d) - cell occupied!"),
+                            *GetName(), CurrentCell.X, CurrentCell.Y);
+                    }
                 }
             }
         }

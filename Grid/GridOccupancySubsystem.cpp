@@ -31,11 +31,25 @@ FIntPoint UGridOccupancySubsystem::GetCellOfActor(AActor* Actor) const
     return FIntPoint::ZeroValue;
 }
 
-void UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
+bool UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
 {
     if (!Actor)
     {
-        return;
+        return false;
+    }
+
+    // ★★★ CRITICAL FIX (2025-11-10): 二重書き込みガード（最終防壁） ★★★
+    // 新しいセルが他の Actor で占有されている場合は拒否
+    if (const TWeakObjectPtr<AActor>* ExistingActorPtr = OccupiedCells.Find(NewCell))
+    {
+        AActor* ExistingActor = ExistingActorPtr->Get();
+        if (ExistingActor && ExistingActor != Actor)
+        {
+            UE_LOG(LogTemp, Error,
+                TEXT("[GridOccupancy] ★ REJECT UPDATE: %s cannot move to (%d,%d) - occupied by %s"),
+                *GetNameSafe(Actor), NewCell.X, NewCell.Y, *GetNameSafe(ExistingActor));
+            return false;  // 書き込み拒否
+        }
     }
 
     ReleaseReservationForActor(Actor);
@@ -50,6 +64,8 @@ void UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
 
     UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] %s moved to (%d, %d)"),
         *GetNameSafe(Actor), NewCell.X, NewCell.Y);
+
+    return true;  // 成功
 }
 
 bool UGridOccupancySubsystem::IsCellOccupied(const FIntPoint& Cell) const

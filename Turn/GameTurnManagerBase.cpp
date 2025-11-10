@@ -4064,6 +4064,14 @@ bool AGameTurnManagerBase::DispatchResolvedMove(const FResolvedAction& Action)
         return false;
     }
 
+    // ★★★ CRITICAL FIX (2025-11-10): 敗者の移動を完全ブロック ★★★
+    if (Action.bIsWait)
+    {
+        UE_LOG(LogTurnManager, Log, TEXT("[DispatchResolvedMove] Skipping wait action for %s (conflict loser)"),
+            *GetNameSafe(Action.Actor.Get()));
+        return false;
+    }
+
     AActor* SourceActor = Action.SourceActor ? Action.SourceActor.Get() : nullptr;
     if (!SourceActor && Action.Actor.IsValid())
     {
