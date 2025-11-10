@@ -59,6 +59,23 @@ public:
     UFUNCTION(Client, Reliable)
     void Client_NotifyMoveRejected();
 
+    /**
+     * ★★★ クライアント通知: コマンドが受理された (2025-11-10)
+     * サーバー側でコマンド受理確定後に呼ばれ、
+     * クライアント側のラッチを確定する（ACK方式）。
+     * これにより、拒否/遅延/ロス時にも入力が詰まらなくなる。
+     */
+    UFUNCTION(Client, Reliable)
+    void Client_ConfirmCommandAccepted(int32 WindowId);
+
+    /**
+     * ★★★ クライアント通知: 回転のみ適用（ターン不消費） (2025-11-10)
+     * 壁/占有ブロック時に呼ばれ、プレイヤーの向きだけを変更する。
+     * ACKではないため、ラッチは変更せず入力継続可能。
+     */
+    UFUNCTION(Client, Reliable)
+    void Client_ApplyFacingNoTurn(int32 WindowId, FVector2D Direction);
+
 protected:
     //--------------------------------------------------------------------------
     // 入力ウィンドウ制御（WindowId方式）
@@ -235,14 +252,14 @@ protected:
 private:
     /** 現在の入力ウィンドウID */
     int32 CurrentInputWindowId = 0;
-    
+
     /** Input_Move_Completed の冪等化用（マルチ環境対応） */
     UPROPERTY()
     int32 LastProcessedWindowId = INDEX_NONE;
-    
+
     /** クライアント側：入力ウィンドウでの重複送信防止 */
     bool bSentThisInputWindow = false;
-    
+
     // クライアント側ではタグを触らない（OnRepはUI専用）
     void ApplyWaitInputGate_Client(bool bOpen) {} // ダミー/削除可：呼ばれないように
 
@@ -251,4 +268,7 @@ private:
 
     /** ★★★ Tick最適化: TurnManagerの取得を確実にする（BeginPlay + Timer） */
     void EnsureTurnManagerCached();
+
+    /** ★★★ 固定カメラYaw値（OnPossess時に設定、UpdateRotation()で使用） (2025-11-10) */
+    float FixedCameraYaw = TNumericLimits<float>::Max();
 };

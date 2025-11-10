@@ -53,6 +53,15 @@ public:
 	void ApplyCommand(const FPlayerCommand& Command);
 
 	/**
+	 * ★★★ コマンドを"受理済み"としてマーク (2025-11-10) ★★★
+	 * MovePrecheck成功後にのみ呼ばれる。
+	 * これにより、拒否時の再入力がDuplicate扱いされなくなる。
+	 * @param Command 受理するコマンド
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Turn|Command")
+	void MarkCommandAsAccepted(const FPlayerCommand& Command);
+
+	/**
 	 * 入力ウィンドウを開始
 	 * @param WindowId ウィンドウID
 	 */

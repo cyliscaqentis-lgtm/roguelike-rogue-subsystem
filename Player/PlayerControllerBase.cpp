@@ -135,11 +135,17 @@ void APlayerControllerBase::Tick(float DeltaTime)
         //     CurrentInputWindowId, NewWindowId);
     }
     
-    // ★ 立ち下がり（true→false）: クリーンアップ
+    // ★★★ 立ち下がり（true→false）: サーバーが受理してウィンドウを閉じた (2025-11-10) ★★★
     if (bPrevWaitingForPlayerInput && !bNow)
     {
         bSentThisInputWindow = false;
-        UE_LOG(LogTemp, Verbose, TEXT("[Client] Window CLOSE -> cleanup latch"));
+
+        // ★★★ CRITICAL FIX: ここで処理済みマーキング（サーバーが実際に受理した時点）★★★
+        // Input_Move_Completed()ではなく、サーバーの状態遷移に従ってマーキング
+        LastProcessedWindowId = CurrentInputWindowId;
+
+        UE_LOG(LogTemp, Verbose, TEXT("[Client] Window CLOSE -> cleanup latch, mark WindowId=%d as processed"),
+            CurrentInputWindowId);
     }
 
     // ★ WindowIdを毎フレーム同期（最後に実行して常に最新に）
@@ -276,11 +282,19 @@ void APlayerControllerBase::OnPossess(APawn* InPawn)
     // ViewTargetをPlayerUnitに設定（即座に切り替え）
     SetViewTargetWithBlend(InPawn, 0.0f);
 
-    // ★★★ 初回ControlRotationを強制設定（2025-11-09）
-    // カメラ・ControlRotation・PawnのYawを初期フレームから一致させる
+    // ★★★ カメラYaw値の初期化（2025-11-10）
+    // OnPossess時のPawn Yawを記録（この値がカメラの固定Yawとなる）
     if (InPawn)
     {
-        const FRotator YawOnly(0.f, InPawn->GetActorRotation().Yaw, 0.f);
+        FixedCameraYaw = InPawn->GetActorRotation().Yaw;
+        UE_LOG(LogTemp, Warning, TEXT("[PlayerController] FixedCameraYaw initialized to %.1f"), FixedCameraYaw);
+    }
+
+    // ★★★ 初回ControlRotationを強制設定（2025-11-10）
+    // カメラを固定Yaw値に設定
+    if (InPawn)
+    {
+        const FRotator YawOnly(0.f, FixedCameraYaw, 0.f);
         SetControlRotation(YawOnly);
         UE_LOG(LogTemp, Warning, TEXT("[PlayerController] Initial ControlRotation set to Yaw=%.1f"), YawOnly.Yaw);
     }
@@ -351,11 +365,11 @@ void APlayerControllerBase::OnPossess(APawn* InPawn)
     // EnhancedInput初期化（Possess後に確実に実行）
     InitializeEnhancedInput();
 
-    // ★★★ 最終固定：InitializeEnhancedInput後にControlRotationを再固定（2025-11-09）
+    // ★★★ 最終固定：InitializeEnhancedInput後にControlRotationを再固定（2025-11-10）
     // SetIgnoreLookInput(true)でLook入力を遮断しても、IMC追加時に既に入力が入っている可能性があるため
     if (InPawn)
     {
-        const FRotator YawOnly(0.f, InPawn->GetActorRotation().Yaw, 0.f);
+        const FRotator YawOnly(0.f, FixedCameraYaw, 0.f);
         SetControlRotation(YawOnly);
         UE_LOG(LogTemp, Warning, TEXT("[PlayerController] Final ControlRotation re-fixed to Yaw=%.1f (post-IMC)"), YawOnly.Yaw);
     }
@@ -363,15 +377,15 @@ void APlayerControllerBase::OnPossess(APawn* InPawn)
 
 void APlayerControllerBase::UpdateRotation(float DeltaTime)
 {
-    // ★★★ TBSではControlRotationを固定（2025-11-09）
+    // ★★★ TBSではControlRotationを固定（2025-11-10）
     // マウス/右スティック等からのAddYawInput/AddPitchInputによる変化を遮断
     // Super::UpdateRotation(DeltaTime); // 呼ばない
 
-    if (APawn* P = GetPawn())
+    // ★★★ 修正: Pawnの向きに追従せず、初期Yaw値を維持（2025-11-10）
+    // プレイヤー歩行時にPawnが回転してもカメラは固定される
+    if (FixedCameraYaw != TNumericLimits<float>::Max())
     {
-        // PawnのYawに合わせてControlRotationを固定
-        const float Yaw = P->GetActorRotation().Yaw;
-        SetControlRotation(FRotator(0.f, Yaw, 0.f));
+        SetControlRotation(FRotator(0.f, FixedCameraYaw, 0.f));
     }
 }
 
@@ -569,8 +583,12 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
 
     //=== Step 7: サーバー送信 ===
     Server_SubmitCommand(Command);
-    
-    bSentThisInputWindow = true;
+
+    // ★★★ CRITICAL FIX (2025-11-10): ACK方式に変更 ★★★
+    // 送信直後にラッチを立てない。サーバーからのACK（Client_ConfirmCommandAccepted）
+    // 受信時にラッチを確定する。これにより、拒否RPC遅延/ロス時でも入力が詰まらない。
+    //
+    // 削除: bSentThisInputWindow = true;
 }
 
 
@@ -598,16 +616,19 @@ void APlayerControllerBase::Input_Move_Canceled(const FInputActionValue& Value)
 
 void APlayerControllerBase::Input_Move_Completed(const FInputActionValue& Value)
 {
-    // 同一ウィンドウでの複数呼び出しを防止
-    if (LastProcessedWindowId == CurrentInputWindowId)
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("[PlayerController] InputMoveCompleted ignored (duplicate)"));
-        return;  // 同じウィンドウでの重複を無視
-    }
-    
-    LastProcessedWindowId = CurrentInputWindowId;
+    // ★★★ CRITICAL FIX (2025-11-10): Completedでは処理済みマーキングしない ★★★
+    // Input_Move_Completed()は単なる入力イベントの終了（キーを離した等）であり、
+    // サーバーの受理とは無関係。処理済みマーキングはWaitingForPlayerInputの
+    // 立ち下がり（サーバーが実際に受理してウィンドウを閉じた時）で行う。
+    //
+    // 旧実装の問題：
+    // 1. 壁衝突でREJECT → Client_NotifyMoveRejected() → ラッチリセット
+    // 2. 直後にCompleted発火 → LastProcessedWindowId再設定
+    // 3. 次の入力がCompleted重複ガードに引っかかる
+    //
+    // 削除：LastProcessedWindowId = CurrentInputWindowId;
 
-    UE_LOG(LogTemp, Log, TEXT("[PlayerController] Input_Move_Completed (WindowId=%d)"), 
+    UE_LOG(LogTemp, Verbose, TEXT("[PlayerController] Input_Move_Completed (no-op, WindowId=%d)"),
         CurrentInputWindowId);
 }
 
@@ -846,6 +867,10 @@ void APlayerControllerBase::Server_SubmitCommand_Implementation(const FPlayerCom
         UE_LOG(LogTemp, Warning, TEXT("[Server] REJECT: input gate not open (WPI=%s, Gate=%s)"),
             CachedTurnManager->WaitingForPlayerInput ? TEXT("true") : TEXT("false"),
             bGateOpen ? TEXT("open") : TEXT("closed"));
+
+        // ★★★ CRITICAL FIX (2025-11-10): クライアントに拒否を通知してラッチリセット ★★★
+        Client_NotifyMoveRejected();
+
         return;
     }
 
@@ -934,9 +959,70 @@ void APlayerControllerBase::GridSmokeTest()
 //==============================================================================
 void APlayerControllerBase::Client_NotifyMoveRejected_Implementation()
 {
-    UE_LOG(LogTemp, Warning, TEXT("[Client] Move command was REJECTED by server - resetting input latch"));
+    UE_LOG(LogTemp, Warning, TEXT("[Client] ★★★ MOVE REJECTED RPC RECEIVED ★★★"));
+    UE_LOG(LogTemp, Warning, TEXT("[Client] Resetting bSentThisInputWindow: %d -> false, LastProcessedWindowId: %d -> INDEX_NONE"),
+        bSentThisInputWindow, LastProcessedWindowId);
 
-    // クライアント側の送信済みフラグをリセット
-    // これにより、同じ入力ウィンドウ内で再度入力を送信できるようになる
+    // ★★★ CRITICAL FIX (2025-11-10): 両方のラッチをリセット ★★★
+    // bSentThisInputWindow: 同一ウィンドウ内での送信制御
+    // LastProcessedWindowId: Input_Move_Completed()の重複防止ガードをリセット
     bSentThisInputWindow = false;
+    LastProcessedWindowId = INDEX_NONE;
+
+    UE_LOG(LogTemp, Warning, TEXT("[Client] Both latches reset complete. Player can retry input."));
+}
+
+//==============================================================================
+// ★★★ Client RPC: コマンド受理確認（ACK）(2025-11-10) ★★★
+//==============================================================================
+void APlayerControllerBase::Client_ConfirmCommandAccepted_Implementation(int32 WindowId)
+{
+    // 同一ウィンドウのACKのみ有効（古いACKを無視）
+    if (WindowId != CurrentInputWindowId)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Client] ACK IGNORED: WindowId mismatch (ACK=%d, Current=%d)"),
+            WindowId, CurrentInputWindowId);
+        return;
+    }
+
+    // ★★★ サーバー確定後にラッチを確定 ★★★
+    bSentThisInputWindow = true;
+    LastProcessedWindowId = WindowId;
+
+    UE_LOG(LogTemp, Log, TEXT("[Client] ★★★ COMMAND ACCEPTED ACK (WindowId=%d) -> Latches confirmed ★★★"),
+        WindowId);
+    UE_LOG(LogTemp, Log, TEXT("[Client]   bSentThisInputWindow: false -> true"));
+    UE_LOG(LogTemp, Log, TEXT("[Client]   LastProcessedWindowId: %d -> %d"),
+        LastProcessedWindowId == WindowId ? -1 : LastProcessedWindowId, WindowId);
+}
+
+//==============================================================================
+// ★★★ Client RPC: 回転のみ適用（ターン不消費） (2025-11-10) ★★★
+//==============================================================================
+void APlayerControllerBase::Client_ApplyFacingNoTurn_Implementation(int32 WindowId, FVector2D Direction)
+{
+    // 同一ウィンドウのみ有効（古いRPCを無視）
+    if (WindowId != CurrentInputWindowId)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[Client] FacingNoTurn IGNORED: WindowId mismatch (RPC=%d, Current=%d)"),
+            WindowId, CurrentInputWindowId);
+        return;
+    }
+
+    // ★★★ ラッチは変更しない（入力継続可能） ★★★
+    // bSentThisInputWindow / LastProcessedWindowId は触らない
+
+    // プレイヤーの向きを変更
+    if (APawn* ControlledPawn = GetPawn())
+    {
+        const float Yaw = FMath::Atan2(Direction.Y, Direction.X) * 180.f / PI;
+        FRotator NewRotation = ControlledPawn->GetActorRotation();
+        NewRotation.Yaw = Yaw;
+        ControlledPawn->SetActorRotation(NewRotation);
+
+        UE_LOG(LogTemp, Log, TEXT("[Client] ★ FACING ONLY (No Turn): Direction=(%.1f,%.1f), Yaw=%.1f"),
+            Direction.X, Direction.Y, Yaw);
+    }
+
+    // 任意：フェイシング専用のフィードバック（アニメーション、サウンド等）
 }

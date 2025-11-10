@@ -250,7 +250,7 @@ void AUnitBase::BeginPlay()
     // PostInitializeComponents() で登録したコールバックが自動的に呼ばれる
 
     // 笘・・笘・險ｺ譁ｭ・咤eginPlay蜑阪・蛟､繧堤｢ｺ隱・笘・・笘・
-    UE_LOG(LogUnitBase, Error, 
+    UE_LOG(LogUnitBase, Verbose,
         TEXT("[BeginPlay] %s: BEFORE - bSkipMoveAnimation=%d, PixelsPerSec=%.1f, TickEnabled=%d"),
         *GetName(), bSkipMoveAnimation, PixelsPerSec, PrimaryActorTick.bCanEverTick);
 
@@ -258,7 +258,7 @@ void AUnitBase::BeginPlay()
 
     // 笘・・笘・蠑ｷ蛻ｶ・壹い繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ繧ｹ繧ｭ繝・・繧堤┌蜉ｹ蛹・笘・・笘・
     bSkipMoveAnimation = false;
-    UE_LOG(LogUnitBase, Error, 
+    UE_LOG(LogUnitBase, Verbose,
         TEXT("[BeginPlay] %s: AFTER - FORCED bSkipMoveAnimation=FALSE, PixelsPerSec=%.1f, TickEnabled=%d"),
         *GetName(), PixelsPerSec, IsActorTickEnabled());
 
@@ -305,7 +305,7 @@ void AUnitBase::Tick(float DeltaSeconds)
     {
         if (TickCount == 0)
         {
-            UE_LOG(LogUnitBase, Error, TEXT("[Tick] %s: Moving status detected, starting UpdateMove"), *GetName());
+            UE_LOG(LogUnitBase, Verbose, TEXT("[Tick] %s: Moving status detected, starting UpdateMove"), *GetName());
         }
         TickCount++;
         UpdateMove(DeltaSeconds);
@@ -352,7 +352,7 @@ void AUnitBase::MoveUnit(const TArray<FVector>& InPath)
     SetActorTickEnabled(true);
     
     // 笘・・笘・邱頑･險ｺ譁ｭ・哺oveUnit蜻ｼ縺ｳ蜃ｺ縺玲凾縺ｮ迥ｶ諷九ｒ遒ｺ隱・笘・・笘・
-    UE_LOG(LogUnitBase, Error,
+    UE_LOG(LogUnitBase, Log,
         TEXT("[MoveUnit] %s CALLED: PathNum=%d, bSkipMoveAnimation=%d (FORCED TO 0!), PixelsPerSec=%.1f, TickEnabled=%d"),
         *GetName(), PathArray.Num(), bSkipMoveAnimation, PixelsPerSec, IsActorTickEnabled());
 
@@ -444,8 +444,8 @@ void AUnitBase::StartNextLeg()
     // 繧｢繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ繧ｹ繧ｭ繝・・縺ｪ繧牙叉蠎ｧ縺ｫ遘ｻ蜍包ｼ医％縺ｮ繧ｳ繝ｼ繝峨ヱ繧ｹ縺ｯ邨ｶ蟇ｾ縺ｫ螳溯｡後＆繧後↑縺・・縺夲ｼ・
     if (bSkipMoveAnimation)
     {
-        UE_LOG(LogUnitBase, Error, 
-            TEXT("[StartNextLeg] %s: 笶・INSTANT TELEPORT (bSkipMoveAnimation=TRUE) - THIS IS THE PROBLEM!"), 
+        UE_LOG(LogUnitBase, Warning,
+            TEXT("[StartNextLeg] %s: 笶・INSTANT TELEPORT (bSkipMoveAnimation=TRUE) - THIS SHOULD NOT HAPPEN!"),
             *GetName());
         SetActorLocation(LegEnd);
         ++MoveCounter;
@@ -454,8 +454,8 @@ void AUnitBase::StartNextLeg()
     else
     {
         // Verbose: 豁｣蟶ｸ縺ｪ繧｢繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ髢句ｧ九・蜀鈴聞
-        UE_LOG(LogUnitBase, Verbose, 
-            TEXT("[StartNextLeg] %s: 笨・Smooth animation started (bSkipMoveAnimation=FALSE, Dist=%.1f, Speed=%.1f)"), 
+        UE_LOG(LogUnitBase, Verbose,
+            TEXT("[StartNextLeg] %s: 笨・Smooth animation started (bSkipMoveAnimation=FALSE, Dist=%.1f, Speed=%.1f)"),
             *GetName(), Distance, PixelsPerSec);
     }
 }

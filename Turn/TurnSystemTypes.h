@@ -178,6 +178,24 @@ struct FBoardSnapshot
 };
 
 //------------------------------------------------------------------------------
+// ★★★ コマンド適用結果 (2025-11-10) ★★★
+//------------------------------------------------------------------------------
+
+/**
+ * コマンド適用の結果を表す列挙型
+ * - Applied: 移動適用（ターン消費）
+ * - RotatedNoTurn: 回転のみ適用（ターン不消費、ウィンドウ継続）
+ * - RejectedCloseWindow: 不正リクエスト（ウィンドウを閉じる）
+ */
+UENUM(BlueprintType)
+enum class ECommandApplyResult : uint8
+{
+    Applied              UMETA(DisplayName = "Applied (Turn Consumed)"),
+    RotatedNoTurn        UMETA(DisplayName = "Rotated Only (No Turn)"),
+    RejectedCloseWindow  UMETA(DisplayName = "Rejected (Close Window)")
+};
+
+//------------------------------------------------------------------------------
 // プレイヤーコマンド
 //------------------------------------------------------------------------------
 

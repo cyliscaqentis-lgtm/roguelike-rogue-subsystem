@@ -52,13 +52,13 @@ bool UTurnCommandHandler::ProcessPlayerCommand(const FPlayerCommand& Command)
 		return false;
 	}
 
-	// コマンドを適用
-	ApplyCommand(Command);
+	// ★★★ CRITICAL FIX (2025-11-10): 消費登録をPrecheck成功後に移動 ★★★
+	// LastAcceptedCommands.Add() はMovePrecheck成功後にMarkCommandAsAccepted()で行う
+	// ここでは検証のみ行い、"消費"マークはしない
+	//
+	// 削除: LastAcceptedCommands.Add(Command.TurnId, Command);
 
-	// 履歴に保存
-	LastAcceptedCommands.Add(Command.TurnId, Command);
-
-	UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Command accepted for TurnId=%d, Tag=%s"),
+	UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Command validated (not yet marked as accepted): TurnId=%d, Tag=%s"),
 		Command.TurnId, *Command.CommandTag.ToString());
 
 	return true;
@@ -107,6 +107,20 @@ void UTurnCommandHandler::ApplyCommand(const FPlayerCommand& Command)
 	// 現在はGameTurnManagerBaseが実際の処理を行っている
 
 	UE_LOG(LogTurnManager, Verbose, TEXT("[TurnCommandHandler] Command applied successfully"));
+}
+
+//------------------------------------------------------------------------------
+// ★★★ CRITICAL FIX (2025-11-10): Precheck成功後にのみ"消費"マーク ★★★
+//------------------------------------------------------------------------------
+
+void UTurnCommandHandler::MarkCommandAsAccepted(const FPlayerCommand& Command)
+{
+	// MovePrecheck成功後に呼ばれ、コマンドを"受理済み"としてマーク
+	// これにより、以後の同一TurnIdのコマンドはDuplicate扱いされる
+	LastAcceptedCommands.Add(Command.TurnId, Command);
+
+	UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] ★ Command MARKED AS ACCEPTED: TurnId=%d, Tag=%s"),
+		Command.TurnId, *Command.CommandTag.ToString());
 }
 
 //------------------------------------------------------------------------------
