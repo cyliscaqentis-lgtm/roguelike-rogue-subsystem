@@ -35,12 +35,12 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
 
     // ★★★ CRITICAL FIX (2025-11-10): スワップ検出（敵同士のA↔B入れ替わり防止） ★★★
     // 全エントリを収集して Actor→(CurrentCell, NextCell) マップを構築
-    TMap<TWeakObjectPtr<AActor>, TPair<FIntPoint, FIntPoint>> ActorMoves;
+    TMap<AActor*, TPair<FIntPoint, FIntPoint>> ActorMoves;
     for (const auto& [Key, Contenders] : ReservationTable)
     {
         for (const FReservationEntry& Entry : Contenders)
         {
-            if (Entry.Actor.IsValid())
+            if (Entry.Actor != nullptr)
             {
                 ActorMoves.Add(Entry.Actor, TPair<FIntPoint, FIntPoint>(Entry.CurrentCell, Entry.Cell));
             }
@@ -48,7 +48,7 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
     }
 
     // スワップ検出：A→B かつ B→A のペアを見つける
-    TSet<TWeakObjectPtr<AActor>> SwapActors;  // スワップに関与する Actor
+    TSet<AActor*> SwapActors;  // スワップに関与する Actor
     for (const auto& [ActorA, MoveA] : ActorMoves)
     {
         const FIntPoint& CurrentA = MoveA.Key;
@@ -78,8 +78,8 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                 SwapActors.Add(ActorB);
                 UE_LOG(LogConflictResolver, Warning,
                     TEXT("[SWAP DETECTED] %s (%d,%d)→(%d,%d) <=> %s (%d,%d)→(%d,%d)"),
-                    *GetNameSafe(ActorA.Get()), CurrentA.X, CurrentA.Y, NextA.X, NextA.Y,
-                    *GetNameSafe(ActorB.Get()), CurrentB.X, CurrentB.Y, NextB.X, NextB.Y);
+                    *GetNameSafe(ActorA), CurrentA.X, CurrentA.Y, NextA.X, NextA.Y,
+                    *GetNameSafe(ActorB), CurrentB.X, CurrentB.Y, NextB.X, NextB.Y);
             }
         }
     }
@@ -100,7 +100,8 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                 Action.CurrentCell = Winner.CurrentCell;
 
                 // ★★★ スワップに関与している場合は Wait に変換 ★★★
-                if (SwapActors.Contains(Winner.Actor))
+                AActor* WinnerActorPtr = Winner.Actor;
+                if (SwapActors.Contains(WinnerActorPtr))
                 {
                     Action.bIsWait = true;
                     Action.FinalAbilityTag = RogueGameplayTags::AI_Intent_Wait;
@@ -108,7 +109,7 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                     Action.ResolutionReason = TEXT("Blocked by swap detection");
                     UE_LOG(LogConflictResolver, Warning,
                         TEXT("[SWAP BLOCK] %s at (%d,%d) prevented from swapping"),
-                        *GetNameSafe(Winner.Actor.Get()), Winner.CurrentCell.X, Winner.CurrentCell.Y);
+                        *GetNameSafe(WinnerActorPtr), Winner.CurrentCell.X, Winner.CurrentCell.Y);
                 }
                 else
                 {
@@ -135,7 +136,8 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
             WinnerAction.CurrentCell = Winner.CurrentCell;
 
             // ★★★ 勝者でもスワップに関与している場合は Wait に変換 ★★★
-            if (SwapActors.Contains(Winner.Actor))
+            AActor* WinnerActorPtr = Winner.Actor;
+            if (SwapActors.Contains(WinnerActorPtr))
             {
                 WinnerAction.bIsWait = true;
                 WinnerAction.FinalAbilityTag = RogueGameplayTags::AI_Intent_Wait;
@@ -143,7 +145,7 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                 WinnerAction.ResolutionReason = FString::Printf(TEXT("Swap-blocked at cell (%d, %d)"), Cell.X, Cell.Y);
                 UE_LOG(LogConflictResolver, Warning,
                     TEXT("[SWAP BLOCK] Contest winner %s at (%d,%d) blocked by swap"),
-                    *GetNameSafe(Winner.Actor.Get()), Winner.CurrentCell.X, Winner.CurrentCell.Y);
+                    *GetNameSafe(WinnerActorPtr), Winner.CurrentCell.X, Winner.CurrentCell.Y);
             }
             else
             {
@@ -151,7 +153,7 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                 WinnerAction.NextCell = Winner.Cell;
                 WinnerAction.bIsWait = false;
                 WinnerAction.ResolutionReason = FString::Printf(TEXT("Won contest for cell (%d, %d)"), Cell.X, Cell.Y);
-                UE_LOG(LogConflictResolver, Log, TEXT("Winner for (%d, %d) is %s"), Cell.X, Cell.Y, *GetNameSafe(Winner.Actor));
+                UE_LOG(LogConflictResolver, Log, TEXT("Winner for (%d, %d) is %s"), Cell.X, Cell.Y, *GetNameSafe(WinnerActorPtr));
             }
 
             ResolvedActions.Add(WinnerAction);
