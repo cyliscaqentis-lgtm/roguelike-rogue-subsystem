@@ -1984,6 +1984,13 @@ void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnIndex)
             UE_LOG(LogTurnManager, Log,
                 TEXT("[Turn %d] ★ PurgeOutdatedReservations called at turn start (before player input)"),
                 TurnIndex);
+
+            // ★★★ CRITICAL FIX (2025-11-11): 重なり検出＆修復 ★★★
+            // 既存の多重占有を修正（Lumina診断に基づく）
+            GridOccupancy->EnforceUniqueOccupancy();
+            UE_LOG(LogTurnManager, Log,
+                TEXT("[Turn %d] ★ EnforceUniqueOccupancy called - checking for overlaps"),
+                TurnIndex);
         }
     }
 

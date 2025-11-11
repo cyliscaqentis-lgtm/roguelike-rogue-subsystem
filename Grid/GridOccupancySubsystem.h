@@ -185,7 +185,38 @@ public:
     UFUNCTION(BlueprintPure, Category = "Turn|Occupancy")
     int32 GetCurrentTurnId() const { return CurrentTurnId; }
 
+    /**
+     * ★★★ CRITICAL FIX (2025-11-11): 既存の重なりを強制修復 ★★★
+     * ターン開始時に呼び出し、同一セルに複数のActorが占有している場合に修正する
+     * - 1セルに複数Actorがいる場合、1体だけを残して他は最寄りの空セルへ退避
+     * - Cell→Actor の一意性を強制
+     */
+    UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
+    void EnforceUniqueOccupancy();
+
 private:
+    /**
+     * ★★★ CRITICAL FIX (2025-11-11): 整合性チェック用ヘルパー ★★★
+     * 指定セルから最寄りの空セルを BFS で探す
+     * @return 空セル、見つからない場合は (-1, -1)
+     */
+    FIntPoint FindNearestFreeCell(const FIntPoint& Origin, int32 MaxSearchRadius = 10) const;
+
+    /**
+     * ★★★ CRITICAL FIX (2025-11-11): 整合性チェック用ヘルパー ★★★
+     * Actorを強制的に指定セルへ移動（予約なしの直接書き込み）
+     * - ActorToCell と OccupiedCells の両方を更新
+     * - Actor側の座標も同期（SetActorLocation）
+     */
+    void ForceRelocate(AActor* Actor, const FIntPoint& NewCell);
+
+    /**
+     * ★★★ CRITICAL FIX (2025-11-11): 整合性チェック用ヘルパー ★★★
+     * 重なりが発生した場合、どのActorを残すか決定
+     * 優先順位：OriginHold所有者 > Team優先度 > ランダム
+     */
+    AActor* ChooseKeeperActor(const FIntPoint& Cell, const TArray<TWeakObjectPtr<AActor>>& Actors) const;
+
     /**
      * Check if an actor will leave its current cell this tick
      * Returns true if the actor has a reservation for a different cell

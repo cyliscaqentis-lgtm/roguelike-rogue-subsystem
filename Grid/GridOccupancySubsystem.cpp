@@ -531,3 +531,222 @@ void UGridOccupancySubsystem::SetCurrentTurnId(int32 TurnId)
     CurrentTurnId = TurnId;
     UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] SetCurrentTurnId: %d"), CurrentTurnId);
 }
+
+// ★★★ CRITICAL FIX (2025-11-11): 整合性チェック - 重なり検出＆修復 ★★★
+
+void UGridOccupancySubsystem::EnforceUniqueOccupancy()
+{
+    // Step 1: Cell→Actors[] マップを構築（ActorToCell から逆引き）
+    TMap<FIntPoint, TArray<TWeakObjectPtr<AActor>>> CellToActors;
+    for (const auto& [Actor, Cell] : ActorToCell)
+    {
+        if (Actor && Actor->IsValidLowLevel())
+        {
+            CellToActors.FindOrAdd(Cell).Add(Actor);
+        }
+    }
+
+    // Step 2: 重なり（複数Actorが同一セル）を検出
+    int32 FixedCount = 0;
+    for (const auto& [Cell, Actors] : CellToActors)
+    {
+        if (Actors.Num() <= 1)
+        {
+            continue;  // 正常：1セルに1Actor以下
+        }
+
+        // ★★★ 重なり発見！ ★★★
+        UE_LOG(LogTemp, Error,
+            TEXT("[GridOccupancy] OVERLAP DETECTED at (%d,%d): %d actors stacked!"),
+            Cell.X, Cell.Y, Actors.Num());
+
+        // Step 3: Keeper（残すActor）を決定
+        AActor* Keeper = ChooseKeeperActor(Cell, Actors);
+        if (!Keeper)
+        {
+            UE_LOG(LogTemp, Error,
+                TEXT("[GridOccupancy] Failed to choose keeper for (%d,%d) - skipping"),
+                Cell.X, Cell.Y);
+            continue;
+        }
+
+        UE_LOG(LogTemp, Warning,
+            TEXT("[GridOccupancy] Keeper for (%d,%d): %s"),
+            Cell.X, Cell.Y, *GetNameSafe(Keeper));
+
+        // Step 4: Keeper 以外を退避
+        for (const TWeakObjectPtr<AActor>& ActorPtr : Actors)
+        {
+            AActor* Actor = ActorPtr.Get();
+            if (!Actor || Actor == Keeper)
+            {
+                continue;
+            }
+
+            // 最寄りの空セルを探す
+            const FIntPoint SafeCell = FindNearestFreeCell(Cell, 10);
+            if (SafeCell == FIntPoint(-1, -1))
+            {
+                UE_LOG(LogTemp, Error,
+                    TEXT("[GridOccupancy] No free cell found for %s - keeping stacked (WARN)"),
+                    *GetNameSafe(Actor));
+                continue;  // 退避先がない場合はスキップ（重なりのまま）
+            }
+
+            // 強制移動
+            ForceRelocate(Actor, SafeCell);
+            FixedCount++;
+
+            UE_LOG(LogTemp, Warning,
+                TEXT("[GridOccupancy] [OCC FIX] Split stack: keep=%s at (%d,%d) | move %s -> (%d,%d)"),
+                *GetNameSafe(Keeper), Cell.X, Cell.Y, *GetNameSafe(Actor), SafeCell.X, SafeCell.Y);
+        }
+    }
+
+    if (FixedCount > 0)
+    {
+        UE_LOG(LogTemp, Warning,
+            TEXT("[GridOccupancy] EnforceUniqueOccupancy: Fixed %d overlapping actors"),
+            FixedCount);
+    }
+}
+
+FIntPoint UGridOccupancySubsystem::FindNearestFreeCell(const FIntPoint& Origin, int32 MaxSearchRadius) const
+{
+    // BFS で最寄りの空セルを探す
+    TQueue<FIntPoint> Queue;
+    TSet<FIntPoint> Visited;
+
+    Queue.Enqueue(Origin);
+    Visited.Add(Origin);
+
+    // 8方向（上下左右＋斜め）
+    static const TArray<FIntPoint> Directions = {
+        FIntPoint(1, 0), FIntPoint(-1, 0), FIntPoint(0, 1), FIntPoint(0, -1),
+        FIntPoint(1, 1), FIntPoint(1, -1), FIntPoint(-1, 1), FIntPoint(-1, -1)
+    };
+
+    while (!Queue.IsEmpty())
+    {
+        FIntPoint Current;
+        Queue.Dequeue(Current);
+
+        // 距離チェック
+        const int32 Distance = FMath::Abs(Current.X - Origin.X) + FMath::Abs(Current.Y - Origin.Y);
+        if (Distance > MaxSearchRadius)
+        {
+            continue;
+        }
+
+        // Origin 自身はスキップ
+        if (Current != Origin)
+        {
+            // セルが占有されていない＆予約されていないか確認
+            const bool bOccupied = OccupiedCells.Contains(Current);
+            const bool bReserved = ReservedCells.Contains(Current);
+
+            if (!bOccupied && !bReserved)
+            {
+                // 空セル発見！
+                return Current;
+            }
+        }
+
+        // 隣接セルを探索
+        for (const FIntPoint& Dir : Directions)
+        {
+            const FIntPoint Next = Current + Dir;
+            if (!Visited.Contains(Next))
+            {
+                Visited.Add(Next);
+                Queue.Enqueue(Next);
+            }
+        }
+    }
+
+    // 見つからなかった
+    return FIntPoint(-1, -1);
+}
+
+void UGridOccupancySubsystem::ForceRelocate(AActor* Actor, const FIntPoint& NewCell)
+{
+    if (!Actor)
+    {
+        return;
+    }
+
+    // 旧セルから削除
+    if (const FIntPoint* OldCellPtr = ActorToCell.Find(Actor))
+    {
+        OccupiedCells.Remove(*OldCellPtr);
+        UE_LOG(LogTemp, Verbose,
+            TEXT("[GridOccupancy] ForceRelocate: %s released old cell (%d,%d)"),
+            *GetNameSafe(Actor), OldCellPtr->X, OldCellPtr->Y);
+    }
+
+    // 新セルへ配置
+    ActorToCell.Add(Actor, NewCell);
+    OccupiedCells.Add(NewCell, Actor);
+
+    // ★★★ Actor 側の座標も同期（World座標へ変換が必要） ★★★
+    // 注：GridPathFinder を使用して Grid→World 変換が必要
+    // ここでは簡易的に、セルサイズを 100 と仮定（プロジェクトに合わせて調整）
+    const float CellSize = 100.0f;
+    const FVector NewWorldLocation(
+        NewCell.X * CellSize,
+        NewCell.Y * CellSize,
+        Actor->GetActorLocation().Z  // Z座標は保持
+    );
+    Actor->SetActorLocation(NewWorldLocation, false, nullptr, ETeleportType::TeleportPhysics);
+
+    UE_LOG(LogTemp, Log,
+        TEXT("[GridOccupancy] ForceRelocate: %s -> (%d,%d) at World=(%f,%f,%f)"),
+        *GetNameSafe(Actor), NewCell.X, NewCell.Y,
+        NewWorldLocation.X, NewWorldLocation.Y, NewWorldLocation.Z);
+}
+
+AActor* UGridOccupancySubsystem::ChooseKeeperActor(const FIntPoint& Cell, const TArray<TWeakObjectPtr<AActor>>& Actors) const
+{
+    if (Actors.Num() == 0)
+    {
+        return nullptr;
+    }
+
+    // 優先順位1: OriginHold を持っているActorを優先
+    // （移動元セルを保護しているActorは、そのセルに留まる権利がある）
+    for (const TWeakObjectPtr<AActor>& ActorPtr : Actors)
+    {
+        AActor* Actor = ActorPtr.Get();
+        if (!Actor)
+        {
+            continue;
+        }
+
+        // OriginHold チェック（ReservedCells に bIsOriginHold=true でこのセルを保持しているか）
+        if (const FReservationInfo* Info = ReservedCells.Find(Cell))
+        {
+            if (Info->bIsOriginHold && Info->Owner.Get() == Actor)
+            {
+                UE_LOG(LogTemp, Verbose,
+                    TEXT("[GridOccupancy] ChooseKeeper: %s has OriginHold at (%d,%d)"),
+                    *GetNameSafe(Actor), Cell.X, Cell.Y);
+                return Actor;
+            }
+        }
+    }
+
+    // 優先順位2: 最初の有効なActorを選ぶ（TODO: Team優先度などを実装可能）
+    for (const TWeakObjectPtr<AActor>& ActorPtr : Actors)
+    {
+        AActor* Actor = ActorPtr.Get();
+        if (Actor)
+        {
+            UE_LOG(LogTemp, Verbose,
+                TEXT("[GridOccupancy] ChooseKeeper: %s (first valid)"),
+                *GetNameSafe(Actor));
+            return Actor;
+        }
+    }
+
+    return nullptr;
+}
