@@ -4351,10 +4351,15 @@ bool AGameTurnManagerBase::DispatchResolvedMove(const FResolvedAction& Action)
     RegisterManualMoveDelegate(Unit, bIsPlayerUnit);
 
     // ★★★ コアシステム: OnActionExecuted配信（2025-11-09） ★★★
+    // NOTE: This notification is sent when move STARTS, not when it completes
+    // Listeners should not expect the unit to be at the final position yet
     if (EventDispatcher)
     {
         const FGameplayTag MoveActionTag = FGameplayTag::RequestGameplayTag(FName("GameplayEvent.Intent.Move"));
         const int32 UnitID = Unit->GetUniqueID();
+        UE_LOG(LogTurnManager, Verbose,
+            TEXT("[DispatchResolvedMove] Broadcasting move start notification for Unit %d at (%d,%d) → (%d,%d)"),
+            UnitID, Action.CurrentCell.X, Action.CurrentCell.Y, Action.NextCell.X, Action.NextCell.Y);
         EventDispatcher->BroadcastActionExecuted(UnitID, MoveActionTag, true);
     }
 
@@ -4439,13 +4444,18 @@ bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Actio
     {
         CachedPlayerCommand.Direction = FVector(static_cast<double>(DirX), static_cast<double>(DirY), 0.0);
         UE_LOG(LogTurnManager, Log,
-            TEXT("[ResolvedMove] Player move ability triggered toward (%d,%d)"),
+            TEXT("[TriggerPlayerMove] Player move ability triggered toward (%d,%d)"),
             Action.NextCell.X, Action.NextCell.Y);
 
         // ★★★ コアシステム: OnActionExecuted配信（2025-11-09） ★★★
+        // NOTE: This notification is sent when ability triggers, not when move completes
+        // Listeners should not expect the unit to be at the final position yet
         if (EventDispatcher)
         {
             const int32 UnitID = Unit->GetUniqueID();
+            UE_LOG(LogTurnManager, Verbose,
+                TEXT("[TriggerPlayerMove] Broadcasting move start notification for Unit %d at (%d,%d) → (%d,%d)"),
+                UnitID, Action.CurrentCell.X, Action.CurrentCell.Y, Action.NextCell.X, Action.NextCell.Y);
             EventDispatcher->BroadcastActionExecuted(UnitID, EventData.EventTag, true);
         }
 
