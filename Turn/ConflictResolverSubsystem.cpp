@@ -49,9 +49,16 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
     {
         for (const FReservationEntry& Entry : Contenders)
         {
-            if (Entry.Actor != nullptr)
+            // ★★★ CRITICAL FIX (2025-11-11): nullptr チェック追加 ★★★
+            if (Entry.Actor != nullptr && IsValid(Entry.Actor))
             {
                 ActorMoves.Add(Entry.Actor, TPair<FIntPoint, FIntPoint>(Entry.CurrentCell, Entry.Cell));
+            }
+            else
+            {
+                UE_LOG(LogConflictResolver, Error,
+                    TEXT("[ResolveAllConflicts] SKIP invalid Entry.Actor (nullptr or destroyed) at Cell=(%d,%d)"),
+                    Entry.Cell.X, Entry.Cell.Y);
             }
         }
     }
@@ -104,6 +111,16 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
             if (Contenders.Num() == 1)
             {
                 const FReservationEntry& Winner = Contenders[0];
+
+                // ★★★ CRITICAL FIX (2025-11-11): nullptr/無効 Actor をスキップ ★★★
+                if (Winner.Actor == nullptr || !IsValid(Winner.Actor))
+                {
+                    UE_LOG(LogConflictResolver, Error,
+                        TEXT("[ResolveAllConflicts] SKIP invalid Winner.Actor at Cell=(%d,%d)"),
+                        Cell.X, Cell.Y);
+                    continue;  // 次のセルへ
+                }
+
                 FResolvedAction Action;
                 Action.Actor = Winner.Actor;
                 Action.SourceActor = Winner.Actor;  // ★★★ CRITICAL FIX (2025-11-11): SourceActor を設定
@@ -146,6 +163,15 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
             const int32 WinnerIndex = FMath::RandRange(0, Contenders.Num() - 1);
             const FReservationEntry& Winner = Contenders[WinnerIndex];
 
+            // ★★★ CRITICAL FIX (2025-11-11): nullptr/無効 Winner をスキップ ★★★
+            if (Winner.Actor == nullptr || !IsValid(Winner.Actor))
+            {
+                UE_LOG(LogConflictResolver, Error,
+                    TEXT("[ResolveAllConflicts] SKIP invalid Winner.Actor (conflict) at Cell=(%d,%d)"),
+                    Cell.X, Cell.Y);
+                continue;  // 次のセルへ
+            }
+
             // Add the winner's action
             FResolvedAction WinnerAction;
             WinnerAction.Actor = Winner.Actor;
@@ -187,6 +213,16 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                 if (i == WinnerIndex) continue;
 
                 const FReservationEntry& Loser = Contenders[i];
+
+                // ★★★ CRITICAL FIX (2025-11-11): nullptr/無効 Loser をスキップ ★★★
+                if (Loser.Actor == nullptr || !IsValid(Loser.Actor))
+                {
+                    UE_LOG(LogConflictResolver, Error,
+                        TEXT("[ResolveAllConflicts] SKIP invalid Loser.Actor at Cell=(%d,%d)"),
+                        Cell.X, Cell.Y);
+                    continue;  // 次の Loser へ
+                }
+
                 FResolvedAction LoserAction;
                 LoserAction.Actor = Loser.Actor;
                 LoserAction.SourceActor = Loser.Actor;  // ★★★ CRITICAL FIX (2025-11-11): SourceActor を設定

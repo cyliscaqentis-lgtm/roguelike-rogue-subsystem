@@ -269,7 +269,19 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
     {
         for (const FResolvedAction& Action : Resolved)
         {
-            TurnManager->RegisterResolvedMove(Action.SourceActor.Get(), Action.NextCell);
+            // ★★★ CRITICAL FIX (2025-11-11): 敗者（bIsWait=true）の予約を作成しない ★★★
+            // 理由: 敗者は移動しないため、予約は不要。
+            //       残った予約が他Actorの移動を妨げる可能性がある。
+            if (!Action.bIsWait)
+            {
+                TurnManager->RegisterResolvedMove(Action.SourceActor.Get(), Action.NextCell);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Verbose,
+                    TEXT("[TurnCore] Skip reservation for loser: %s (bIsWait=true)"),
+                    *GetNameSafe(Action.SourceActor.Get()));
+            }
         }
     }
 
