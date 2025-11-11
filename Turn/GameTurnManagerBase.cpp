@@ -3142,7 +3142,7 @@ void AGameTurnManagerBase::ExecuteMovePhase()
         // ResolvedActions内でPlayerがbIsWait=trueにマークされているかチェック
         for (const FResolvedAction& Action : ResolvedActions)
         {
-            if (Action.SourceActor.IsValid() && Action.SourceActor.Get() == CachedPlayerPawn)
+            if (IsValid(Action.SourceActor.Get()) && Action.SourceActor.Get() == CachedPlayerPawn)
             {
                 if (Action.bIsWait)
                 {
