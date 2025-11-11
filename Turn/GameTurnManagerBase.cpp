@@ -4481,11 +4481,13 @@ bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Actio
     }
 
     // ★★★ FIX: Better diagnostic when trigger fails (2025-11-11) ★★★
+    FGameplayTagContainer CurrentTags;
+    ASC->GetOwnedGameplayTags(CurrentTags);
     UE_LOG(LogTurnManager, Error,
         TEXT("[TriggerPlayerMove] ❌ HandleGameplayEvent returned 0 for %s (AbilityCount=%d, OwnedTags=%s)"),
         *GetNameSafe(Unit),
         AbilityCount,
-        *OwnedTags.ToStringSimple());
+        *CurrentTags.ToStringSimple());
 
     return false;
 }
