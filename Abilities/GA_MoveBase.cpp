@@ -240,23 +240,8 @@ void UGA_MoveBase::ActivateAbility(
 		return;
 	}
 
-	if (!RegisterBarrier(Avatar))
-	{
-		UE_LOG(LogTurnManager, Warning, TEXT("[GA_MoveBase] Barrier subsystem not found"));
-	}
-
-	// ★★★ Token方式: 一度だけ登録（冪等） ★★★
-	if (HasAuthority(&ActivationInfo))
-	{
-		if (UTurnActionBarrierSubsystem* Barrier = GetBarrierSubsystem())
-		{
-			// bBarrierRegistered は既存の RegisterBarrier() で設定されるため、
-			// Token登録は常に実行する（別トラッキング）
-			Barrier->RegisterActionOnce(GetAvatarActorFromActorInfo(), /*out*/BarrierToken);
-			UE_LOG(LogTurnManager, Verbose,
-				TEXT("[GA_MoveBase] Token registered: %s"), *BarrierToken.ToString());
-		}
-	}
+	// ★★★ DEFERRED: Barrier登録は移動検証成功後に実行（早期終了時の登録漏れ対策）★★★
+	// RegisterBarrier と RegisterActionOnce は Line 382 以降に移動
 
 	UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
 	if (ASC)
@@ -379,6 +364,26 @@ void UGA_MoveBase::ActivateAbility(
 			NextCell.X, NextCell.Y);
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
+	}
+
+	// ★★★ FIX: 移動検証が成功したので、ここで Barrier に登録（2025-11-11）★★★
+	// 早期終了（検証失敗）時には Barrier に登録されないため、未完了アクションが残らない
+	if (!RegisterBarrier(Avatar))
+	{
+		UE_LOG(LogTurnManager, Warning, TEXT("[GA_MoveBase] Barrier subsystem not found"));
+	}
+
+	// ★★★ Token方式: 一度だけ登録（冪等） ★★★
+	if (HasAuthority(&ActivationInfo))
+	{
+		if (UTurnActionBarrierSubsystem* Barrier = GetBarrierSubsystem())
+		{
+			// bBarrierRegistered は既存の RegisterBarrier() で設定されるため、
+			// Token登録は常に実行する（別トラッキング）
+			Barrier->RegisterActionOnce(GetAvatarActorFromActorInfo(), /*out*/BarrierToken);
+			UE_LOG(LogTurnManager, Verbose,
+				TEXT("[GA_MoveBase] Token registered: %s"), *BarrierToken.ToString());
+		}
 	}
 
 	// ★★★ FIX: GridToWorld(CachedNextCell)で正しい目的地セル中心を計算 (2025-11-09) ★★★
@@ -541,28 +546,38 @@ void UGA_MoveBase::EndAbility(
 	const FGuid SavedActionId = MoveActionId;
 	AActor* SavedAvatar = GetAvatarActorFromActorInfo();
 
-	// ☁E�E☁E修正: Barrierに通知�E�新ActionID APIのみ使用�E�E☁E�E☁E
-	if (UWorld* World = GetWorld())
+	// ★★★FIX: bBarrierRegistered チェックを追加して確実に CompleteAction を呼ぶ（2025-11-11）★★★
+	// Barrier登録済みの場合は必ず完了通知を送る（ターン進行停止の防止）
+	if (bBarrierRegistered)
 	{
-		if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
+		if (UWorld* World = GetWorld())
 		{
-			if (SavedAvatar && SavedTurnId != INDEX_NONE && SavedActionId.IsValid())
+			if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
 			{
-				Barrier->CompleteAction(SavedAvatar, SavedTurnId, SavedActionId);
-				// ☁E�E☁EレガシーAPI�E�EotifyMoveFinished�E��E削除 - 二重通知を防止 ☁E�E☁E
+				// ActionID方式での完了通知
+				if (SavedAvatar && SavedTurnId != INDEX_NONE && SavedActionId.IsValid())
+				{
+					Barrier->CompleteAction(SavedAvatar, SavedTurnId, SavedActionId);
+					UE_LOG(LogTurnManager, Log,
+						TEXT("[GA_MoveBase] Barrier notified: Actor=%s, TurnId=%d, ActionId=%s"),
+						*GetNameSafe(SavedAvatar), SavedTurnId, *SavedActionId.ToString());
+				}
+				else
+				{
+					// 万が一 ActionID が無効な場合でも警告を出す
+					UE_LOG(LogTurnManager, Warning,
+						TEXT("[GA_MoveBase] ⚠ Barrier registered but ActionID invalid: Actor=%s, TurnId=%d, ActionId=%s"),
+						*GetNameSafe(SavedAvatar), SavedTurnId, *SavedActionId.ToString());
+				}
 
-				UE_LOG(LogTurnManager, Log,
-					TEXT("[GA_MoveBase] Barrier notified: Actor=%s, TurnId=%d, ActionId=%s"),
-					*GetNameSafe(SavedAvatar), SavedTurnId, *SavedActionId.ToString());
-			}
-
-			// ★★★ Token方式: 冪等Complete ★★★
-			if (HasAuthority(&ActivationInfo) && BarrierToken.IsValid())
-			{
-				Barrier->CompleteActionToken(BarrierToken);
-				UE_LOG(LogTurnManager, Verbose,
-					TEXT("[GA_MoveBase] Token completed: %s"), *BarrierToken.ToString());
-				BarrierToken.Invalidate();
+				// ★★★ Token方式: 冪等Complete ★★★
+				if (HasAuthority(&ActivationInfo) && BarrierToken.IsValid())
+				{
+					Barrier->CompleteActionToken(BarrierToken);
+					UE_LOG(LogTurnManager, Verbose,
+						TEXT("[GA_MoveBase] Token completed: %s"), *BarrierToken.ToString());
+					BarrierToken.Invalidate();
+				}
 			}
 		}
 	}
