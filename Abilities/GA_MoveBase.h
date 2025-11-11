@@ -289,7 +289,7 @@ private:
 
     /** Wait Event Task - イベント待機用 */
     UPROPERTY()
-    class UAbilityTask_WaitGameplayEvent* WaitEventTask;
+    TObjectPtr<class UAbilityTask_WaitGameplayEvent> WaitEventTask;
 
     /** イベント受信時のコールバック */
     UFUNCTION()
