@@ -204,10 +204,10 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
         Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Attack"));
         Intent.NextCell = Intent.CurrentCell;  // 攻撃時は移動しない
 
-        // ★ Distance=0 の場合は警告ログを出力（通常は起こらないはず）
+        // ★★★ FIX: Distance=0 は正常な動作（隣接攻撃）のため、警告ではなく情報ログに変更（2025-11-11）★★★
         if (DistanceToPlayer == 0)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[DecideIntent] %s: ⚠ ATTACK with Distance=0 (same cell or adjacent?), Range=%d"),
+            UE_LOG(LogTemp, Log, TEXT("[DecideIntent] %s: ★ ATTACK intent (Distance=0, adjacent melee attack, Range=%d)"),
                 *GetNameSafe(GetOwner()), AttackRangeInTiles);
         }
         else

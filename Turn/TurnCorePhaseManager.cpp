@@ -367,14 +367,14 @@ void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& Reso
             const int32 EncodedCell = TurnCommandEncoding::PackCell(Action.NextCell.X, Action.NextCell.Y);
             EventData.EventMagnitude = static_cast<float>(EncodedCell);
 
-            UE_LOG(LogTurnCore, Error,
-                TEXT("[Execute] ☁E�E�E�E�E☁EEncoded NextCell: (%d,%d) ↁEMagnitude=%.0f"),
+            UE_LOG(LogTurnCore, Log,
+                TEXT("[Execute] Encoded NextCell: (%d,%d) -> Magnitude=%.0f"),
                 Action.NextCell.X, Action.NextCell.Y, EventData.EventMagnitude);
         }
 
-        // ☁E�E�E�E�E☁ESparky診断�E�E�E�E�E�E�E�アビリチE�E�E�E��E�E�E�発動ログ ☁E�E�E�E�E☁E
-        UE_LOG(LogTurnCore, Error,
-            TEXT("[Execute] ☁E�E�E�E�E☁ESending ability event: Intent=%s, Event=%s, Actor=%s, Cell=(%d,%d)"),
+        // ★★★ FIX: Sending ability event log（2025-11-11）★★★
+        UE_LOG(LogTurnCore, Log,
+            TEXT("[Execute] Sending ability event: Intent=%s, Event=%s, Actor=%s, Cell=(%d,%d)"),
             *Action.FinalAbilityTag.ToString(),
             *EventTag.ToString(),
             *GetNameSafe(Action.SourceActor),
@@ -382,8 +382,8 @@ void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& Reso
 
         int32 NumActivated = ASC->HandleGameplayEvent(EventTag, &EventData);
 
-        UE_LOG(LogTurnCore, Error,
-            TEXT("[Execute] ☁E�E�E�E�E☁EAbility activation result: NumActivated=%d"),
+        UE_LOG(LogTurnCore, Log,
+            TEXT("[Execute] Ability activation result: NumActivated=%d"),
             NumActivated);
     }
 
@@ -584,9 +584,19 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
 
         for (const FEnemyIntent& Intent : Attacks)
         {
+            // ★★★ FIX: 無効なアクターをスキップ（2025-11-11）★★★
+            AActor* IntentActor = Intent.Actor.Get();
+            if (!IntentActor || !IsValid(IntentActor))
+            {
+                UE_LOG(LogTemp, Warning,
+                    TEXT("[Attack Slot %d] Skipping invalid Intent.Actor (nullptr or destroyed)"),
+                    Slot);
+                continue;
+            }
+
             FResolvedAction Action;
-            Action.ActorID = ActorRegistry ? ActorRegistry->GetStableID(Intent.Actor.Get()) : FStableActorID{};
-            Action.SourceActor = Intent.Actor.Get();
+            Action.ActorID = ActorRegistry ? ActorRegistry->GetStableID(IntentActor) : FStableActorID{};
+            Action.SourceActor = IntentActor;
             Action.FinalAbilityTag = AttackTag;
             Action.NextCell = Intent.NextCell;
             Action.TimeSlot = Slot;
