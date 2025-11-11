@@ -785,6 +785,20 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
         return;
     }
 
+    // ★★★ DIAGNOSTIC (2025-11-11): 再構築前の論理状態を保存＆ログ出力（Gemini診断） ★★★
+    TMap<TObjectPtr<AActor>, FIntPoint> OldActorToCell = ActorToCell;  // コピーを保存
+
+    UE_LOG(LogTemp, Warning, TEXT("[GridOccupancy] ===== BEFORE REBUILD (Logical State) ====="));
+    for (const auto& [Actor, Cell] : ActorToCell)
+    {
+        if (Actor && Actor->IsValidLowLevel())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("  Logical: %s at (%d,%d)"),
+                *GetNameSafe(Actor.Get()), Cell.X, Cell.Y);
+        }
+    }
+    UE_LOG(LogTemp, Warning, TEXT("[GridOccupancy] ===== Total: %d actors in logical map ====="), ActorToCell.Num());
+
     // ★★★ 占有マップをクリア（論理状態を完全リセット） ★★★
     ActorToCell.Empty();
     OccupiedCells.Empty();
@@ -884,5 +898,64 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
     {
         UE_LOG(LogTemp, Log,
             TEXT("[GridOccupancy] RebuildFromWorldPositions: ✅ No physical overlaps detected - occupancy map rebuilt successfully"));
+    }
+
+    // ★★★ DIAGNOSTIC (2025-11-11): 差分検出（論理 vs 物理）★★★
+    UE_LOG(LogTemp, Warning, TEXT("[GridOccupancy] ===== DIFF (Logical -> Physical) ====="));
+    int32 DiffCount = 0;
+    int32 MissingCount = 0;
+    int32 NewCount = 0;
+
+    // 1. 論理状態にあったActorをチェック（位置変更 or 消失）
+    for (const auto& [OldActor, OldCell] : OldActorToCell)
+    {
+        if (!OldActor || !OldActor->IsValidLowLevel())
+        {
+            continue;
+        }
+
+        const FIntPoint* NewCellPtr = ActorToCell.Find(OldActor);
+        if (!NewCellPtr)
+        {
+            // 論理状態にあったが物理状態にない（消失 or AllUnitsに含まれていない）
+            UE_LOG(LogTemp, Error, TEXT("  [MISSING] %s was at (%d,%d) logically, but NOT FOUND in physical rebuild!"),
+                *GetNameSafe(OldActor.Get()), OldCell.X, OldCell.Y);
+            MissingCount++;
+        }
+        else if (*NewCellPtr != OldCell)
+        {
+            // セル位置が変わった（論理と物理でズレていた！）
+            UE_LOG(LogTemp, Error, TEXT("  [MOVED] %s: (%d,%d) -> (%d,%d) | DESYNC DETECTED!"),
+                *GetNameSafe(OldActor.Get()), OldCell.X, OldCell.Y, NewCellPtr->X, NewCellPtr->Y);
+            DiffCount++;
+        }
+    }
+
+    // 2. 物理状態で新しく追加されたActorをチェック
+    for (const auto& [NewActor, NewCell] : ActorToCell)
+    {
+        if (!NewActor || !NewActor->IsValidLowLevel())
+        {
+            continue;
+        }
+
+        if (!OldActorToCell.Contains(NewActor))
+        {
+            // 物理状態で新しく見つかった（論理状態になかった）
+            UE_LOG(LogTemp, Warning, TEXT("  [NEW] %s at (%d,%d) | Was not in logical map before rebuild"),
+                *GetNameSafe(NewActor.Get()), NewCell.X, NewCell.Y);
+            NewCount++;
+        }
+    }
+
+    if (DiffCount == 0 && MissingCount == 0 && NewCount == 0)
+    {
+        UE_LOG(LogTemp, Log, TEXT("[GridOccupancy] ✅ No differences detected - logical and physical maps were already in sync"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error,
+            TEXT("[GridOccupancy] ⚠️ DESYNC DETECTED: %d moved, %d missing, %d new actors"),
+            DiffCount, MissingCount, NewCount);
     }
 }
