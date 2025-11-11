@@ -133,6 +133,60 @@ bool UGA_MoveBase::CanActivateAbility(
 	return ActorInfo && ActorInfo->AvatarActor.IsValid();
 }
 
+bool UGA_MoveBase::ShouldRespondToEvent(
+	const FGameplayAbilityActorInfo* ActorInfo,
+	const FGameplayEventData* Payload) const
+{
+	// ★★★ ChatGPT提案: イベント応答の軽量チェック (2025-11-11) ★★★
+	// HandleGameplayEvent returned 0 問題を解決するため、
+	// イベントに応答する前に軽量な検証を行う。
+	// 重い検証（目的地、経路、壁衝突など）はActivateAbilityで実行される。
+
+	if (!Payload)
+	{
+		UE_LOG(LogMoveVerbose, Verbose, TEXT("[GA_MoveBase] ShouldRespondToEvent: Payload is null"));
+		return false;
+	}
+
+	// ★★★ EventTag検証: GameplayEvent.Intent.Move のみ応答 ★★★
+	// AbilityTriggersに登録されているタグとPayloadのEventTagが一致するか確認
+	if (!Payload->EventTag.MatchesTagExact(RogueGameplayTags::GameplayEvent_Intent_Move))
+	{
+		UE_LOG(LogMoveVerbose, Verbose,
+			TEXT("[GA_MoveBase] ShouldRespondToEvent: EventTag mismatch (Expected=%s, Got=%s)"),
+			*RogueGameplayTags::GameplayEvent_Intent_Move.ToString(),
+			*Payload->EventTag.ToString());
+		return false;
+	}
+
+	// EventMagnitudeが有効範囲内かチェック（TurnCommandEncoding形式）
+	const int32 RawMagnitude = FMath::RoundToInt(Payload->EventMagnitude);
+	if (RawMagnitude < TurnCommandEncoding::kDirBase)
+	{
+		UE_LOG(LogMoveVerbose, Verbose,
+			TEXT("[GA_MoveBase] ShouldRespondToEvent: Invalid magnitude %d (expected >= %d)"),
+			RawMagnitude, TurnCommandEncoding::kDirBase);
+		return false;
+	}
+
+	// ActorInfoの有効性チェック
+	if (!ActorInfo || !ActorInfo->AvatarActor.IsValid())
+	{
+		UE_LOG(LogMoveVerbose, Verbose, TEXT("[GA_MoveBase] ShouldRespondToEvent: Invalid ActorInfo"));
+		return false;
+	}
+
+	// ★★★ 目的地の詳細検証は起動後に実施するため、ここではtrueを返す ★★★
+	// Payload->TargetData / Misc に何もなくても、ActivateAbilityで解決できる設計
+	UE_LOG(LogMoveVerbose, Verbose,
+		TEXT("[GA_MoveBase] ShouldRespondToEvent: ✅ Passed all checks (Actor=%s, EventTag=%s, Magnitude=%d)"),
+		*GetNameSafe(ActorInfo->AvatarActor.Get()),
+		*Payload->EventTag.ToString(),
+		RawMagnitude);
+
+	return true;
+}
+
 void UGA_MoveBase::ActivateAbility(
 	const FGameplayAbilitySpecHandle Handle,
 	const FGameplayAbilityActorInfo* ActorInfo,

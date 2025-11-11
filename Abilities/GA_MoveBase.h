@@ -62,6 +62,17 @@ public:
         const FGameplayEventData* EventData
     );
 
+    /**
+     * ★★★ ChatGPT提案: イベント応答の軽量チェック (2025-11-11) ★★★
+     * HandleGameplayEvent returned 0 問題を解決するため、
+     * イベントに応答する前に軽量な検証を行う。
+     * 重い検証はActivateAbilityで実行される。
+     */
+    virtual bool ShouldRespondToEvent(
+        const FGameplayAbilityActorInfo* ActorInfo,
+        const FGameplayEventData* Payload
+    ) const;
+
     virtual void EndAbility(
         const FGameplayAbilitySpecHandle Handle,
         const FGameplayAbilityActorInfo* ActorInfo,
