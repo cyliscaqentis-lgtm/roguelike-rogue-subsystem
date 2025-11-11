@@ -53,6 +53,7 @@ namespace RogueGameplayTags
     LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Move_Finished);
     LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Attack_Finished);
     LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Dungeon_Step);
+    LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Turn_ExecuteMove);
 
     // Action tags ------------------------------------------------------------
     LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Action_Move);

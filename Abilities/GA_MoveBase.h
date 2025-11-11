@@ -282,5 +282,20 @@ private:
 
     // ★★★ REMOVED: InProgressStack (2025-11-11) ★★★
     // ActivationOwnedTags を使用するため、手動カウントは不要
+
+    //--------------------------------------------------------------------------
+    // ★★★ Phase 2 (2025-11-11): Wait Gameplay Event Support ★★★
+    //--------------------------------------------------------------------------
+
+    /** Wait Event Task - イベント待機用 */
+    UPROPERTY()
+    class UAbilityTask_WaitGameplayEvent* WaitEventTask;
+
+    /** イベント受信時のコールバック */
+    UFUNCTION()
+    void OnExecuteMoveEventReceived(FGameplayEventData Payload);
+
+    /** 移動実行を開始（イベント受信後に呼ばれる） */
+    void BeginMoveExecution();
 };
 

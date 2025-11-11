@@ -49,6 +49,7 @@ namespace RogueGameplayTags
     UE_DEFINE_GAMEPLAY_TAG(Event_Move_Finished, "Event.Move.Finished");
     UE_DEFINE_GAMEPLAY_TAG(Event_Attack_Finished, "Event.Attack.Finished");
     UE_DEFINE_GAMEPLAY_TAG(Event_Dungeon_Step, "Event.Dungeon.Step");
+    UE_DEFINE_GAMEPLAY_TAG(Event_Turn_ExecuteMove, "Event.Turn.ExecuteMove");
 
     // Action tags ------------------------------------------------------------
     UE_DEFINE_GAMEPLAY_TAG(Action_Move, "Action.Move");
