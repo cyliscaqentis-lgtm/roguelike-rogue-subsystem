@@ -605,6 +605,9 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
     }
 
     //=== Step 7: サーバー送信 ===
+    UE_LOG(LogTemp, Warning, TEXT("[Client] 📤 BEFORE Server_SubmitCommand: bSentThisInputWindow=%s, WindowId=%d"),
+        bSentThisInputWindow ? TEXT("TRUE") : TEXT("FALSE"), Command.WindowId);
+
     Server_SubmitCommand(Command);
 
     // ★★★ CRITICAL FIX (2025-11-11): 送信直後に即座にラッチを立てる ★★★
@@ -614,7 +617,8 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
     // これにより、サーバー応答が届くまでの間に複数のコマンドが送信されることを防ぐ。
     bSentThisInputWindow = true;
 
-    UE_LOG(LogTemp, Verbose, TEXT("[Client] Command sent, latch SET (WindowId=%d)"), Command.WindowId);
+    UE_LOG(LogTemp, Warning, TEXT("[Client] 📤 AFTER Server_SubmitCommand: bSentThisInputWindow=%s (latch SET, WindowId=%d)"),
+        bSentThisInputWindow ? TEXT("TRUE") : TEXT("FALSE"), Command.WindowId);
 }
 
 
@@ -986,14 +990,18 @@ void APlayerControllerBase::GridSmokeTest()
 void APlayerControllerBase::Client_NotifyMoveRejected_Implementation()
 {
     UE_LOG(LogTemp, Warning, TEXT("[Client] ★★★ MOVE REJECTED RPC RECEIVED ★★★"));
-    UE_LOG(LogTemp, Warning, TEXT("[Client] Resetting bSentThisInputWindow: %d -> false, LastProcessedWindowId: %d -> INDEX_NONE"),
-        bSentThisInputWindow, LastProcessedWindowId);
+    UE_LOG(LogTemp, Warning, TEXT("[Client] BEFORE reset: bSentThisInputWindow=%d, LastProcessedWindowId=%d, WindowId=%d"),
+        bSentThisInputWindow, LastProcessedWindowId, CurrentInputWindowId);
 
     // ★★★ CRITICAL FIX (2025-11-10): 両方のラッチをリセット ★★★
     // bSentThisInputWindow: 同一ウィンドウ内での送信制御
     // LastProcessedWindowId: Input_Move_Completed()の重複防止ガードをリセット
     bSentThisInputWindow = false;
     LastProcessedWindowId = INDEX_NONE;
+
+    // ★★★ Gemini提案: リセット直後の実際の値を確認（2025-11-11）★★★
+    UE_LOG(LogTemp, Warning, TEXT("[Client] AFTER reset: bSentThisInputWindow=%s, LastProcessedWindowId=%d"),
+        bSentThisInputWindow ? TEXT("TRUE") : TEXT("FALSE"), LastProcessedWindowId);
 
     // ★★★ CRITICAL FIX (2025-11-11): Gemini分析により判明 ★★★
     // 問題: サーバー側でWaitingForPlayerInputがtrueのままの場合、
@@ -1011,7 +1019,7 @@ void APlayerControllerBase::Client_NotifyMoveRejected_Implementation()
         UE_LOG(LogTemp, Warning, TEXT("[Client] ★ Gate_Input_Open tag explicitly re-applied via TurnManager"));
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[Client] All state reset complete. Player can retry input."));
+    UE_LOG(LogTemp, Warning, TEXT("[Client] ✅ All state reset complete. Player can retry input."));
 }
 
 //==============================================================================
