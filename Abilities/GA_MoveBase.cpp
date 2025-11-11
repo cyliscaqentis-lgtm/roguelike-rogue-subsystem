@@ -154,7 +154,7 @@ bool UGA_MoveBase::ShouldRespondToEvent(
 	{
 		UE_LOG(LogMoveVerbose, Verbose,
 			TEXT("[GA_MoveBase] ShouldRespondToEvent: EventTag mismatch (Expected=%s, Got=%s)"),
-			*RogueGameplayTags::GameplayEvent_Intent_Move.ToString(),
+			*RogueGameplayTags::GameplayEvent_Intent_Move.GetTag().ToString(),
 			*Payload->EventTag.ToString());
 		return false;
 	}
@@ -178,7 +178,7 @@ bool UGA_MoveBase::ShouldRespondToEvent(
 
 	// ★★★ 目的地の詳細検証は起動後に実施するため、ここではtrueを返す ★★★
 	// Payload->TargetData / Misc に何もなくても、ActivateAbilityで解決できる設計
-	UE_LOG(LogMoveVerbose, Verbose,
+	UE_LOG(LogMoveVerbose, Log,
 		TEXT("[GA_MoveBase] ShouldRespondToEvent: ✅ Passed all checks (Actor=%s, EventTag=%s, Magnitude=%d)"),
 		*GetNameSafe(ActorInfo->AvatarActor.Get()),
 		*Payload->EventTag.ToString(),
