@@ -175,23 +175,42 @@ void UGA_MeleeAttack::OnMontageCompleted()
             *GetNameSafe(GetAvatarActorFromActorInfo()));
     }
 
-    FTimerHandle DelayHandle;
-    if (UWorld* World = GetWorld())
-    {
-        World->GetTimerManager().SetTimer(
-            DelayHandle,
-            [this]()
-            {
-                EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
-            },
-            0.2f,
-            false);
-    }
+    //==========================================================================
+    // ★★★ CRITICAL FIX (2025-11-11): 遅延を削除して即座にEndAbilityを呼ぶ ★★★
+    // 理由: 0.2秒の遅延がターンをまたいで完了通知が届く原因だった
+    //       OnMontageCompletedが呼ばれた時点でモンタージュは完了済みなので遅延不要
+    //==========================================================================
+    UE_LOG(LogTemp, Log, TEXT("[GA_MeleeAttack] %s: Montage completed, ending ability immediately"),
+        *GetNameSafe(GetAvatarActorFromActorInfo()));
+    EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+
+    // ★★★ 削除: 0.2秒遅延タイマー（ターンブロック問題の原因）
+    // FTimerHandle DelayHandle;
+    // if (UWorld* World = GetWorld())
+    // {
+    //     World->GetTimerManager().SetTimer(
+    //         DelayHandle,
+    //         [this]()
+    //         {
+    //             EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+    //         },
+    //         0.2f,
+    //         false);
+    // }
 }
 
 void UGA_MeleeAttack::OnMontageBlendOut()
 {
-    // 必要なら追従処理
+    //==========================================================================
+    // ★★★ FIX (2025-11-11): BlendOut時も適切に処理 ★★★
+    // OnCompletedで既にEndAbilityが呼ばれているはずだが、
+    // 念のためBlendOutでも呼ぶ（二重呼び出しは内部で防御される）
+    //==========================================================================
+    UE_LOG(LogTemp, Verbose, TEXT("[GA_MeleeAttack] %s: Montage blend out"),
+        *GetNameSafe(GetAvatarActorFromActorInfo()));
+
+    // OnCompletedが先に呼ばれている可能性が高いため、
+    // ここでは何もしない（OnCompletedで即座にEndAbilityを呼ぶようになった）
 }
 
 void UGA_MeleeAttack::OnMontageCancelled()
