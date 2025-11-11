@@ -118,9 +118,27 @@ bool UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
         }
     }
 
+    // ★★★ CRITICAL FIX (2025-11-11): キャンセルされた移動を拒否 ★★★
+    // ターンシステム動作中（CurrentTurnId >= 0）に予約がない移動は拒否
+    // ConflictResolverでキャンセルされた移動がCOMMITされるのを防ぐ
+    const bool bIHaveReservation = IsReservationOwnedByActor(Actor, NewCell);
+    if (!bIHaveReservation && CurrentTurnId >= 0)
+    {
+        // 実際に移動しようとしているか確認（同じセルへの「移動」は許可）
+        const FIntPoint* CurrentCellPtr = ActorToCell.Find(Actor);
+        const bool bIsActualMove = !CurrentCellPtr || *CurrentCellPtr != NewCell;
+
+        if (bIsActualMove)
+        {
+            UE_LOG(LogTemp, Error,
+                TEXT("[GridOccupancy] REJECT UPDATE: %s has NO RESERVATION for (%d,%d) - move cancelled by ConflictResolver or unauthorized (TurnId=%d)"),
+                *GetNameSafe(Actor), NewCell.X, NewCell.Y, CurrentTurnId);
+            return false;  // キャンセルされた移動を拒否
+        }
+    }
+
     // ★★★ CRITICAL FIX (2025-11-11): 他者予約の尊重 ★★★
     // セルが他のActorに予約されている場合、原則拒否（完全スワップは例外）
-    const bool bIHaveReservation = IsReservationOwnedByActor(Actor, NewCell);
     if (!bIHaveReservation)
     {
         if (AActor* ForeignReserver = GetReservationOwner(NewCell))
