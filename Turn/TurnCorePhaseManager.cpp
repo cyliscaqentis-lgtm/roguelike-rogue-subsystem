@@ -598,6 +598,9 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
             Action.ActorID = ActorRegistry ? ActorRegistry->GetStableID(IntentActor) : FStableActorID{};
             Action.SourceActor = IntentActor;
             Action.FinalAbilityTag = AttackTag;
+            // ★★★ FIX: AbilityTag にも正しい EventTag を設定（2025-11-11）★★★
+            // AttackPhaseExecutorSubsystem は AbilityTag を使用するため
+            Action.AbilityTag = RogueGameplayTags::GameplayEvent_Intent_Attack;
             Action.NextCell = Intent.NextCell;
             Action.TimeSlot = Slot;
             SlotActions.Add(Action);
@@ -615,19 +618,40 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
                 continue;
             }
 
+            // ★★★ FIX: 正しい EventTag（GameplayEvent_Intent_Attack）を使用（2025-11-11）★★★
+            // AI.Intent.Attack ではなく、GameplayEvent.Intent.Attack が必要
+            const FGameplayTag AttackEventTag = RogueGameplayTags::GameplayEvent_Intent_Attack;
             FGameplayEventData Evt;
-            Evt.EventTag = AttackTag;
+            Evt.EventTag = AttackEventTag;
             Evt.Instigator = A.SourceActor;
 
             UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
-                ASC->GetOwner(), AttackTag, Evt);
+                ASC->GetOwner(), AttackEventTag, Evt);
 
             // ☁E変更: Verbose ↁELog
             UE_LOG(LogTemp, Log, TEXT("[Attack] %s attacked"),
                 *GetNameSafe(A.SourceActor));
         }
 
-        OutActions.Append(SlotActions);
+        // ★★★ FIX: OutActions に追加する前に無効アクターを再度フィルタリング（2025-11-11）★★★
+        // FResolvedAction.Actor は TWeakObjectPtr であり、生成後に無効になる可能性がある
+        TArray<FResolvedAction> ValidActions;
+        ValidActions.Reserve(SlotActions.Num());
+        for (const FResolvedAction& Action : SlotActions)
+        {
+            if (Action.Actor.IsValid() && Action.SourceActor != nullptr && IsValid(Action.SourceActor))
+            {
+                ValidActions.Add(Action);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning,
+                    TEXT("[Attack Slot %d] Filtered out invalid action: Actor=%s"),
+                    Slot, *GetNameSafe(Action.SourceActor));
+            }
+        }
+
+        OutActions.Append(ValidActions);
     }
 
     UE_LOG(LogTemp, Log, TEXT("[ExecuteAttackPhaseWithSlots] Complete. Total = %d"),
