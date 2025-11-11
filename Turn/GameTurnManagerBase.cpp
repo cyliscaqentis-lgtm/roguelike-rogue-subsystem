@@ -3086,18 +3086,93 @@ void AGameTurnManagerBase::ExecuteMovePhase()
         return;
     }
 
+    //==========================================================================
+    // ★★★ CRITICAL FIX (2025-11-11): Playerの移動もConflictResolverに追加 ★★★
+    // Swap検出を機能させるため、PlayerとEnemyの移動情報を統合する
+    //==========================================================================
+    TArray<FEnemyIntent> AllIntents = EnemyData->Intents;
+
+    // Playerが移動している場合、Intentリストに追加
+    if (CachedPlayerPawn && CachedPathFinder.IsValid())
+    {
+        const FVector PlayerLoc = CachedPlayerPawn->GetActorLocation();
+        const FIntPoint PlayerCurrentCell = CachedPathFinder->WorldToGrid(PlayerLoc);
+
+        // PendingMoveReservationsからPlayerの移動先を取得
+        TWeakObjectPtr<AActor> PlayerKey(CachedPlayerPawn);
+        if (const FIntPoint* PlayerNextCell = PendingMoveReservations.Find(PlayerKey))
+        {
+            if (PlayerCurrentCell != *PlayerNextCell)
+            {
+                FEnemyIntent PlayerIntent;
+                PlayerIntent.Actor = CachedPlayerPawn;
+                PlayerIntent.CurrentCell = PlayerCurrentCell;
+                PlayerIntent.NextCell = *PlayerNextCell;
+                PlayerIntent.AbilityTag = RogueGameplayTags::AI_Intent_Move;
+                PlayerIntent.BasePriority = 200;  // Playerの優先度を高く設定
+
+                AllIntents.Add(PlayerIntent);
+
+                UE_LOG(LogTurnManager, Log,
+                    TEXT("[Turn %d] ★ Added Player intent to ConflictResolver: (%d,%d) → (%d,%d)"),
+                    CurrentTurnIndex, PlayerCurrentCell.X, PlayerCurrentCell.Y,
+                    PlayerNextCell->X, PlayerNextCell->Y);
+            }
+        }
+    }
+
     UE_LOG(LogTurnManager, Log,
-        TEXT("[Turn %d] ExecuteMovePhase: Processing %d intents via ConflictResolver"),
-        CurrentTurnIndex, EnemyData->Intents.Num());
+        TEXT("[Turn %d] ExecuteMovePhase: Processing %d intents (%d enemies + Player) via ConflictResolver"),
+        CurrentTurnIndex, AllIntents.Num(), EnemyData->Intents.Num());
 
     //==========================================================================
     // (1) Conflict Resolution: Convert Intents → ResolvedActions
     //==========================================================================
-    TArray<FResolvedAction> ResolvedActions = PhaseManager->CoreResolvePhase(EnemyData->Intents);
+    TArray<FResolvedAction> ResolvedActions = PhaseManager->CoreResolvePhase(AllIntents);
 
     UE_LOG(LogTurnManager, Log,
         TEXT("[Turn %d] ConflictResolver produced %d resolved actions"),
         CurrentTurnIndex, ResolvedActions.Num());
+
+    //==========================================================================
+    // ★★★ CRITICAL FIX (2025-11-11): Playerの移動がSwap検出でキャンセルされた場合の処理 ★★★
+    //==========================================================================
+    if (CachedPlayerPawn)
+    {
+        // ResolvedActions内でPlayerがbIsWait=trueにマークされているかチェック
+        for (const FResolvedAction& Action : ResolvedActions)
+        {
+            if (Action.SourceActor.IsValid() && Action.SourceActor.Get() == CachedPlayerPawn)
+            {
+                if (Action.bIsWait)
+                {
+                    // PlayerのIntentがSwap検出で拒否された
+                    UE_LOG(LogTurnManager, Warning,
+                        TEXT("[Turn %d] ★ Player movement CANCELLED by ConflictResolver (Swap detected or other conflict)"),
+                        CurrentTurnIndex);
+
+                    // Playerの予約を解放
+                    TWeakObjectPtr<AActor> PlayerKey(CachedPlayerPawn);
+                    PendingMoveReservations.Remove(PlayerKey);
+
+                    // Playerのアビリティをキャンセル（実行中なら中止）
+                    if (UAbilitySystemComponent* ASC = CachedPlayerPawn->FindComponentByClass<UAbilitySystemComponent>())
+                    {
+                        // 移動アビリティをキャンセル
+                        ASC->CancelAllAbilities();
+                        UE_LOG(LogTurnManager, Log,
+                            TEXT("[Turn %d] Player abilities cancelled due to Swap conflict"),
+                            CurrentTurnIndex);
+                    }
+
+                    // ターン終了処理に進む（Enemyの移動は実行しない）
+                    EndEnemyTurn();
+                    return;
+                }
+                break;
+            }
+        }
+    }
 
     //==========================================================================
     // (2) Execute Resolved Actions: Trigger GAS abilities
