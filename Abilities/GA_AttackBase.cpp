@@ -20,7 +20,28 @@ UGA_AttackBase::UGA_AttackBase(const FObjectInitializer& ObjectInitializer)
     Tags.AddTag(RogueGameplayTags::Ability_Category_Attack);  // ネイティブタグを使用
     SetAssetTags(Tags);
 
+    // ★★★ CRITICAL FIX (2025-11-11): GA_MoveBaseパターンに合わせて設定 ★★★
+
+    // ActivationBlockedTags: アビリティ起動をブロックするタグ
+    ActivationBlockedTags.AddTag(RogueGameplayTags::State_Action_InProgress);
     ActivationBlockedTags.AddTag(RogueGameplayTags::State_Ability_Executing);
+
+    // ActivationOwnedTags: アビリティ起動時に自動追加されるタグ
+    // これにより、ActivateAbility で自動追加、EndAbility で自動削除される
+    ActivationOwnedTags.AddTag(RogueGameplayTags::State_Action_InProgress);
+
+    // AbilityTriggers: このアビリティを起動するGameplayEventを登録
+    // ★★★ これがないと、GameplayEvent.Intent.Attack が来ても起動しない！ ★★★
+    FAbilityTriggerData Trigger;
+    Trigger.TriggerTag = RogueGameplayTags::GameplayEvent_Intent_Attack;
+    Trigger.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
+    AbilityTriggers.Add(Trigger);
+
+    UE_LOG(LogTemp, Log,
+        TEXT("[GA_AttackBase] Constructor: Registered trigger %s, ActivationBlocked=%d, ActivationOwned=%d"),
+        *Trigger.TriggerTag.ToString(),
+        ActivationBlockedTags.Num(),
+        ActivationOwnedTags.Num());
 }
 
 void UGA_AttackBase::ExecuteAttack_Implementation(AActor* Target)

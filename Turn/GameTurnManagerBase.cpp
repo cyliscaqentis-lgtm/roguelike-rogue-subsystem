@@ -4425,7 +4425,7 @@ bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Actio
             *GetNameSafe(Unit));
     }
 
-    // ★★★ DIAGNOSTIC: Log ASC ability count (2025-11-11) ★★★
+    // ★★★ DIAGNOSTIC: Log ASC ability count and triggers (2025-11-11) ★★★
     const int32 AbilityCount = ASC->GetActivatableAbilities().Num();
     if (AbilityCount == 0)
     {
@@ -4435,9 +4435,28 @@ bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Actio
     }
     else
     {
-        UE_LOG(LogTurnManager, Verbose,
+        UE_LOG(LogTurnManager, Log,
             TEXT("[TriggerPlayerMove] %s has %d abilities in ASC (cleared %d blocking tags)"),
             *GetNameSafe(Unit), AbilityCount, ClearedCount);
+
+        // ★★★ DIAGNOSTIC: List all ability triggers (2025-11-11) ★★★
+        const TArray<FGameplayAbilitySpec>& Specs = ASC->GetActivatableAbilities();
+        for (int32 i = 0; i < Specs.Num(); ++i)
+        {
+            const FGameplayAbilitySpec& Spec = Specs[i];
+            if (Spec.Ability)
+            {
+                FString TriggerTags;
+                for (const FAbilityTriggerData& Trigger : Spec.Ability->AbilityTriggers)
+                {
+                    if (!TriggerTags.IsEmpty()) TriggerTags += TEXT(", ");
+                    TriggerTags += Trigger.TriggerTag.ToString();
+                }
+                UE_LOG(LogTurnManager, Verbose,
+                    TEXT("[TriggerPlayerMove]   Ability[%d]: %s (Triggers: %s)"),
+                    i, *Spec.Ability->GetName(), TriggerTags.IsEmpty() ? TEXT("NONE") : *TriggerTags);
+            }
+        }
     }
 
     const FIntPoint Delta = Action.NextCell - Action.CurrentCell;
