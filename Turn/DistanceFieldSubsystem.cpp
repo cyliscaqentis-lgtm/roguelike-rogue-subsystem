@@ -372,10 +372,13 @@ bool UDistanceFieldSubsystem::IsWalkable(const FIntPoint& Cell, AActor* IgnoreAc
 bool UDistanceFieldSubsystem::CanMoveDiagonal(const FIntPoint& From, const FIntPoint& To) const
 {
     const FIntPoint Delta = To - From;
-    const FIntPoint Side1 = From + FIntPoint(Delta.X, 0);
-    const FIntPoint Side2 = From + FIntPoint(0, Delta.Y);
+    const FIntPoint Side1 = From + FIntPoint(Delta.X, 0);  // 横の肩
+    const FIntPoint Side2 = From + FIntPoint(0, Delta.Y);  // 縦の肩
 
-    return IsWalkable(Side1) && IsWalkable(Side2);
+    // ★★★ 修正 (2025-11-11): 角抜け禁止ルール修正 ★★★
+    // 両肩が塞がっている場合のみ禁止 → どちらか一方が通行可能なら許可
+    // 元のロジック（AND）は厳しすぎて、片方の肩だけが空いている場合も禁止していた
+    return IsWalkable(Side1) || IsWalkable(Side2);  // どちらか一方が通行可能なら許可
 }
 
 //------------------------------------------------------------------------------

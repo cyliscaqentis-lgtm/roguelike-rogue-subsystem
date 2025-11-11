@@ -2384,6 +2384,28 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
         // 地形ブロックチェック
         const bool bTerrainBlocked = !CachedPathFinder->IsCellWalkableIgnoringActor(TargetCell, PlayerPawn);
 
+        // ★★★ 2025-11-11: 角抜け禁止チェック（斜め移動時） ★★★
+        bool bCornerCutting = false;
+        const bool bIsDiagonalMove = (FMath::Abs(Command.Direction.X) == 1 && FMath::Abs(Command.Direction.Y) == 1);
+        if (bIsDiagonalMove && !bTerrainBlocked)
+        {
+            // 斜め移動の場合、両肩が塞がっていないかチェック
+            const FIntPoint Side1 = CurrentCell + FIntPoint(static_cast<int32>(Command.Direction.X), 0);  // 横の肩
+            const FIntPoint Side2 = CurrentCell + FIntPoint(0, static_cast<int32>(Command.Direction.Y));  // 縦の肩
+            const bool bSide1Walkable = CachedPathFinder->IsCellWalkableIgnoringActor(Side1, PlayerPawn);
+            const bool bSide2Walkable = CachedPathFinder->IsCellWalkableIgnoringActor(Side2, PlayerPawn);
+
+            // 両肩が塞がっている場合は角抜け禁止
+            if (!bSide1Walkable && !bSide2Walkable)
+            {
+                bCornerCutting = true;
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("[MovePrecheck] CORNER CUTTING BLOCKED: (%d,%d)→(%d,%d) - both shoulders blocked [Side1=(%d,%d) Side2=(%d,%d)]"),
+                    CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y,
+                    Side1.X, Side1.Y, Side2.X, Side2.Y);
+            }
+        }
+
         // 占有チェック（自分以外のユニットがいるか）
         bool bOccupied = false;
         bool bSwapDetected = false;
@@ -2414,9 +2436,11 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
         }
 
         // ★★★ 2025-11-10: ブロック時は回転のみ適用（ターン不消費） ★★★
-        if (bTerrainBlocked || bOccupied)
+        // ★★★ 2025-11-11: 角抜けチェックも追加 ★★★
+        if (bTerrainBlocked || bOccupied || bCornerCutting)
         {
-            const TCHAR* BlockReason = bTerrainBlocked ? TEXT("terrain") :
+            const TCHAR* BlockReason = bCornerCutting ? TEXT("corner_cutting") :
+                                       bTerrainBlocked ? TEXT("terrain") :
                                        bSwapDetected ? TEXT("swap") : TEXT("occupied");
             UE_LOG(LogTurnManager, Warning,
                 TEXT("[MovePrecheck] BLOCKED by %s: Cell (%d,%d) | From=(%d,%d) | Applying FACING ONLY (No Turn)"),
