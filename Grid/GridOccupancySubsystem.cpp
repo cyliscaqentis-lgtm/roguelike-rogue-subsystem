@@ -267,6 +267,19 @@ void UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
         return;
     }
 
+    // ★★★ CRITICAL FIX (2025-11-11): 既存の予約を保護 ★★★
+    // セルが既に他の Actor に予約されている場合、上書きしない
+    if (const FReservationInfo* ExistingInfo = ReservedCells.Find(Cell))
+    {
+        if (ExistingInfo->Owner.IsValid() && ExistingInfo->Owner.Get() != Actor)
+        {
+            UE_LOG(LogTemp, Error,
+                TEXT("[GridOccupancy] REJECT RESERVATION: %s cannot reserve (%d,%d) - already reserved by %s (TurnId=%d)"),
+                *GetNameSafe(Actor), Cell.X, Cell.Y, *GetNameSafe(ExistingInfo->Owner.Get()), ExistingInfo->TurnId);
+            return;  // 予約拒否
+        }
+    }
+
     // ★★★ CRITICAL FIX (2025-11-11): FReservationInfo 形式に変更 ★★★
     ReleaseReservationForActor(Actor);
     FReservationInfo Info(Actor, Cell, CurrentTurnId);
