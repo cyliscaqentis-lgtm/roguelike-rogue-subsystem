@@ -1985,12 +1985,31 @@ void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnIndex)
                 TEXT("[Turn %d] ★ PurgeOutdatedReservations called at turn start (before player input)"),
                 TurnIndex);
 
-            // ★★★ CRITICAL FIX (2025-11-11): 重なり検出＆修復 ★★★
-            // 既存の多重占有を修正（Lumina診断に基づく）
-            GridOccupancy->EnforceUniqueOccupancy();
-            UE_LOG(LogTurnManager, Log,
-                TEXT("[Turn %d] ★ EnforceUniqueOccupancy called - checking for overlaps"),
-                TurnIndex);
+            // ★★★ CRITICAL FIX (2025-11-11): 物理座標ベースの占有マップ再構築（Gemini診断より） ★★★
+            // 論理マップ（ActorToCell）ではなく、物理座標から占有マップを完全再構築
+            // これにより、コミット失敗等で発生した論理/物理の不整合を強制修正
+            TArray<AActor*> AllUnits;
+            if (CachedPlayerPawn)
+            {
+                AllUnits.Add(CachedPlayerPawn);
+            }
+            AllUnits.Append(CachedEnemies);
+
+            if (AllUnits.Num() > 0)
+            {
+                GridOccupancy->RebuildFromWorldPositions(AllUnits);
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("[Turn %d] ★ RebuildFromWorldPositions called - rebuilding occupancy from physical positions (%d units)"),
+                    TurnIndex, AllUnits.Num());
+            }
+            else
+            {
+                // フォールバック：ユニットリストが空の場合は論理マップベースのチェック
+                GridOccupancy->EnforceUniqueOccupancy();
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("[Turn %d] ★ EnforceUniqueOccupancy called (fallback - no units cached yet)"),
+                    TurnIndex);
+            }
         }
     }
 

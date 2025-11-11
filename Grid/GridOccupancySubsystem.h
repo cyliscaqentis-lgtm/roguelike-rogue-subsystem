@@ -194,6 +194,17 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
     void EnforceUniqueOccupancy();
 
+    /**
+     * ★★★ CRITICAL FIX (2025-11-11): 物理座標ベースの占有マップ再構築 ★★★
+     * 全ユニットの物理座標から占有マップを再構築し、論理/物理の不整合を修正
+     * - ActorToCell と OccupiedCells を完全にクリアして再構築
+     * - 物理的に重なっている場合、1体を残して他は最寄りの空セルへ退避
+     * - ターン開始時に呼び出すことで、あらゆる不整合をリセット
+     * @param AllUnits すべてのユニット（Player + Enemies）
+     */
+    UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
+    void RebuildFromWorldPositions(const TArray<AActor*>& AllUnits);
+
 private:
     /**
      * ★★★ CRITICAL FIX (2025-11-11): 整合性チェック用ヘルパー ★★★

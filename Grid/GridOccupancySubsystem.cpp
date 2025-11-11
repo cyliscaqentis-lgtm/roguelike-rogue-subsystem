@@ -1,4 +1,6 @@
 #include "GridOccupancySubsystem.h"
+#include "Grid/GridPathfindingLibrary.h"
+#include "Kismet/GameplayStatics.h"
 
 void UGridOccupancySubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -749,4 +751,138 @@ AActor* UGridOccupancySubsystem::ChooseKeeperActor(const FIntPoint& Cell, const 
     }
 
     return nullptr;
+}
+
+// ★★★ CRITICAL FIX (2025-11-11): 物理座標ベースの占有マップ再構築（Gemini診断より） ★★★
+
+void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& AllUnits)
+{
+    UE_LOG(LogTemp, Warning,
+        TEXT("[GridOccupancy] RebuildFromWorldPositions: Rebuilding occupancy map from physical positions for %d units"),
+        AllUnits.Num());
+
+    // PathFinder を取得（Grid↔World 変換に必要）
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[GridOccupancy] RebuildFromWorldPositions: No World!"));
+        return;
+    }
+
+    // PathFinder を取得（FPathFinderUtils を想定）
+    // 注：プロジェクトの PathFinder 取得方法に合わせて調整
+    AGridPathfindingLibrary* PathFinder = nullptr;
+    TArray<AActor*> PathFinders;
+    UGameplayStatics::GetAllActorsOfClass(World, AGridPathfindingLibrary::StaticClass(), PathFinders);
+    if (PathFinders.Num() > 0)
+    {
+        PathFinder = Cast<AGridPathfindingLibrary>(PathFinders[0]);
+    }
+
+    if (!PathFinder)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[GridOccupancy] RebuildFromWorldPositions: No PathFinder found!"));
+        return;
+    }
+
+    // ★★★ 占有マップをクリア（論理状態を完全リセット） ★★★
+    ActorToCell.Empty();
+    OccupiedCells.Empty();
+
+    // ★★★ 物理座標から Cell→Actors[] マップを構築 ★★★
+    TMap<FIntPoint, TArray<AActor*>> CellToActors;
+    for (AActor* Unit : AllUnits)
+    {
+        if (!Unit || !Unit->IsValidLowLevel())
+        {
+            continue;
+        }
+
+        const FVector WorldPos = Unit->GetActorLocation();
+        const FIntPoint CurrentCell = PathFinder->WorldToGrid(WorldPos);
+
+        CellToActors.FindOrAdd(CurrentCell).Add(Unit);
+
+        UE_LOG(LogTemp, Verbose,
+            TEXT("[GridOccupancy] RebuildFromWorldPositions: %s at World=(%s) → Cell=(%d,%d)"),
+            *GetNameSafe(Unit), *WorldPos.ToCompactString(), CurrentCell.X, CurrentCell.Y);
+    }
+
+    // ★★★ セルごとに占有を再登録、重なりがあれば解決 ★★★
+    int32 OverlapCount = 0;
+    int32 RelocatedCount = 0;
+
+    for (const auto& [Cell, Actors] : CellToActors)
+    {
+        if (Actors.Num() == 1)
+        {
+            // 正常：1セルに1Actor
+            AActor* Actor = Actors[0];
+            ActorToCell.Add(Actor, Cell);
+            OccupiedCells.Add(Cell, Actor);
+            UE_LOG(LogTemp, Verbose,
+                TEXT("[GridOccupancy] RebuildFromWorldPositions: Registered %s at (%d,%d)"),
+                *GetNameSafe(Actor), Cell.X, Cell.Y);
+        }
+        else if (Actors.Num() > 1)
+        {
+            // ★★★ 物理的な重なり発見！ ★★★
+            OverlapCount++;
+            UE_LOG(LogTemp, Error,
+                TEXT("[GridOccupancy] RebuildFromWorldPositions: PHYSICAL OVERLAP at (%d,%d) with %d actors!"),
+                Cell.X, Cell.Y, Actors.Num());
+
+            // Keeper（残すActor）を決定（最初の1体）
+            AActor* Keeper = Actors[0];
+            ActorToCell.Add(Keeper, Cell);
+            OccupiedCells.Add(Cell, Keeper);
+
+            UE_LOG(LogTemp, Warning,
+                TEXT("[GridOccupancy] RebuildFromWorldPositions: Keeper=%s at (%d,%d)"),
+                *GetNameSafe(Keeper), Cell.X, Cell.Y);
+
+            // 残りのActorを最寄りの空セルへ強制退避
+            for (int32 i = 1; i < Actors.Num(); ++i)
+            {
+                AActor* Evictee = Actors[i];
+                const FIntPoint FreeCell = FindNearestFreeCell(Cell, 10);
+
+                if (FreeCell != FIntPoint(-1, -1))
+                {
+                    // 空セル発見 → 強制移動
+                    const FVector NewWorldPos = PathFinder->GridToWorld(FreeCell, Evictee->GetActorLocation().Z);
+                    Evictee->SetActorLocation(NewWorldPos, false, nullptr, ETeleportType::TeleportPhysics);
+
+                    // 占有マップに登録
+                    ActorToCell.Add(Evictee, FreeCell);
+                    OccupiedCells.Add(FreeCell, Evictee);
+                    RelocatedCount++;
+
+                    UE_LOG(LogTemp, Warning,
+                        TEXT("[GridOccupancy] RebuildFromWorldPositions: RELOCATED %s from (%d,%d) → (%d,%d)"),
+                        *GetNameSafe(Evictee), Cell.X, Cell.Y, FreeCell.X, FreeCell.Y);
+                }
+                else
+                {
+                    // 空セルが見つからない → 仕方なく重なったまま登録
+                    UE_LOG(LogTemp, Error,
+                        TEXT("[GridOccupancy] RebuildFromWorldPositions: NO FREE CELL for %s - remains overlapped at (%d,%d)!"),
+                        *GetNameSafe(Evictee), Cell.X, Cell.Y);
+                    // 占有マップには登録しない（論理的には存在しないことにする）
+                }
+            }
+        }
+    }
+
+    if (OverlapCount > 0)
+    {
+        UE_LOG(LogTemp, Error,
+            TEXT("[GridOccupancy] RebuildFromWorldPositions: ✅ Fixed %d physical overlaps, relocated %d actors"),
+            OverlapCount, RelocatedCount);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log,
+            TEXT("[GridOccupancy] RebuildFromWorldPositions: ✅ No physical overlaps detected - occupancy map rebuilt successfully"));
+    }
 }
