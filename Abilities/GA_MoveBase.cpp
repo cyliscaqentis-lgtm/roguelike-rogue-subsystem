@@ -611,6 +611,28 @@ void UGA_MoveBase::EndAbility(
 		}
 	}
 
+	//==========================================================================
+	// ★★★ CRITICAL FIX (2025-11-11): 即座にInProgressタグを削除 ★★★
+	// 理由: Super::EndAbility()内での自動削除は非同期的に処理されるため、
+	//       Barrier通知とタグ削除の間にタイムラグが発生していた。
+	//       CanAdvanceTurn()がBarrier完了を検知しても、InProgressタグが残っており、
+	//       ターン進行がブロックされる問題を引き起こしていた。
+	//
+	// 解決策: Barrier通知の直後に手動でタグを削除し、同期的に処理する。
+	//==========================================================================
+	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
+	{
+		// State_Action_InProgress を手動で削除
+		ASC->RemoveLooseGameplayTag(RogueGameplayTags::State_Action_InProgress.GetTag());
+
+		// State_Moving も手動で削除
+		ASC->RemoveLooseGameplayTag(TagStateMoving);
+
+		UE_LOG(LogTurnManager, Log,
+			TEXT("[GA_MoveBase] ★ InProgress tags manually removed BEFORE Super::EndAbility (Actor=%s, TurnId=%d)"),
+			*GetNameSafe(SavedAvatar), SavedTurnId);
+	}
+
 	// ☁E�E☁ESparky修正: CompletedTurnIdForEventを設定！EendCompletionEventで使用�E�E☁E�E☁E
 	CompletedTurnIdForEvent = SavedTurnId;
 
