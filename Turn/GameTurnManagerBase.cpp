@@ -4380,30 +4380,19 @@ bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Actio
         return false;
     }
 
-    // ★★★ DIAGNOSTIC: Check if move ability is granted (2025-11-11) ★★★
-    const FGameplayTag MoveTag = RogueGameplayTags::GameplayEvent_Intent_Move;
-    bool bHasMoveAbility = false;
-    for (const FGameplayAbilitySpec& Spec : ASC->GetActivatableAbilities())
-    {
-        if (Spec.Ability && Spec.Ability->AbilityTriggers.Num() > 0)
-        {
-            for (const FAbilityTriggerData& Trigger : Spec.Ability->AbilityTriggers)
-            {
-                if (Trigger.TriggerTag == MoveTag)
-                {
-                    bHasMoveAbility = true;
-                    break;
-                }
-            }
-        }
-        if (bHasMoveAbility) break;
-    }
-
-    if (!bHasMoveAbility)
+    // ★★★ DIAGNOSTIC: Log ASC ability count (2025-11-11) ★★★
+    const int32 AbilityCount = ASC->GetActivatableAbilities().Num();
+    if (AbilityCount == 0)
     {
         UE_LOG(LogTurnManager, Warning,
-            TEXT("[TriggerPlayerMove] ⚠️ Move ability not granted to %s - abilities in ASC: %d"),
-            *GetNameSafe(Unit), ASC->GetActivatableAbilities().Num());
+            TEXT("[TriggerPlayerMove] ⚠️ No abilities granted to %s - ASC may not be initialized"),
+            *GetNameSafe(Unit));
+    }
+    else
+    {
+        UE_LOG(LogTurnManager, Verbose,
+            TEXT("[TriggerPlayerMove] %s has %d abilities in ASC"),
+            *GetNameSafe(Unit), AbilityCount);
     }
 
     // ★★★ DIAGNOSTIC: Check blocking tags (2025-11-11) ★★★
@@ -4464,9 +4453,9 @@ bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Actio
 
     // ★★★ FIX: Better diagnostic when trigger fails (2025-11-11) ★★★
     UE_LOG(LogTurnManager, Error,
-        TEXT("[TriggerPlayerMove] ❌ HandleGameplayEvent returned 0 for %s (HasAbility=%s, OwnedTags=%s)"),
+        TEXT("[TriggerPlayerMove] ❌ HandleGameplayEvent returned 0 for %s (AbilityCount=%d, OwnedTags=%s)"),
         *GetNameSafe(Unit),
-        bHasMoveAbility ? TEXT("Yes") : TEXT("No"),
+        AbilityCount,
         *OwnedTags.ToStringSimple());
 
     return false;
