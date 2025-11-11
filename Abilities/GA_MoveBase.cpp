@@ -103,8 +103,8 @@ UGA_MoveBase::UGA_MoveBase(const FObjectInitializer& ObjectInitializer)
 	ActivationBlockedTags.AddTag(RogueGameplayTags::State_Action_InProgress.GetTag());
 	ActivationBlockedTags.AddTag(RogueGameplayTags::State_Ability_Executing.GetTag());
 
-	// ★★★ FIX: Use ActivationOwnedTags for automatic GAS management (2025-11-11) ★★★
-	// これにより、ActivateAbility で自動追加、EndAbility で自動削除される
+	// ★★★ ActivationOwnedTags: GASが自動的にタグを管理 ★★★
+	// ActivateAbility で自動追加、EndAbility で自動削除される
 	ActivationOwnedTags.AddTag(RogueGameplayTags::State_Action_InProgress.GetTag());
 	ActivationOwnedTags.AddTag(TagStateMoving);
 
@@ -195,8 +195,7 @@ void UGA_MoveBase::ActivateAbility(
 {
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
-	// ★★★ REMOVED: Manual tag management (2025-11-11) ★★★
-	// ActivationOwnedTags を使用するため、GASが自動でタグを管理する
+	// ★★★ ActivationOwnedTags を使用するため、GASが自動でタグを管理する ★★★
 	// Super::ActivateAbility() の中で State_Action_InProgress が自動追加される
 
 	// ☁E�E☁ESparky診断�E�アビリチE��起動確誁E☁E�E☁E
@@ -520,8 +519,7 @@ void UGA_MoveBase::CancelAbility(
 {
 	UE_LOG(LogMoveVerbose, Verbose, TEXT("[GA_MoveBase] Ability cancelled"));
 
-	// ★★★ REMOVED: Manual tag removal (2025-11-11) ★★★
-	// ActivationOwnedTags を使用するため、GASが自動でタグを削除する
+	// ★★★ ActivationOwnedTags を使用するため、GASが自動でタグを削除する ★★★
 	// Super::CancelAbility() の中で State_Action_InProgress が自動削除される
 
 	Super::CancelAbility(Handle, ActorInfo, ActivationInfo, bReplicateCancelAbility);
@@ -534,10 +532,6 @@ void UGA_MoveBase::EndAbility(
 	bool bReplicateEndAbility,
 	bool bWasCancelled)
 {
-	// ★★★ REMOVED: Manual tag removal (2025-11-11) ★★★
-	// ActivationOwnedTags を使用するため、GASが自動でタグを削除する
-	// Super::EndAbility() の中で State_Action_InProgress が自動削除される
-
 	// Sparky fix: Prevent re-entry
 	if (bIsEnding)
 	{
@@ -611,27 +605,8 @@ void UGA_MoveBase::EndAbility(
 		}
 	}
 
-	//==========================================================================
-	// ★★★ CRITICAL FIX (2025-11-11): 即座にInProgressタグを削除 ★★★
-	// 理由: Super::EndAbility()内での自動削除は非同期的に処理されるため、
-	//       Barrier通知とタグ削除の間にタイムラグが発生していた。
-	//       CanAdvanceTurn()がBarrier完了を検知しても、InProgressタグが残っており、
-	//       ターン進行がブロックされる問題を引き起こしていた。
-	//
-	// 解決策: Barrier通知の直後に手動でタグを削除し、同期的に処理する。
-	//==========================================================================
-	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
-	{
-		// State_Action_InProgress を手動で削除
-		ASC->RemoveLooseGameplayTag(RogueGameplayTags::State_Action_InProgress.GetTag());
-
-		// State_Moving も手動で削除
-		ASC->RemoveLooseGameplayTag(TagStateMoving);
-
-		UE_LOG(LogTurnManager, Log,
-			TEXT("[GA_MoveBase] ★ InProgress tags manually removed BEFORE Super::EndAbility (Actor=%s, TurnId=%d)"),
-			*GetNameSafe(SavedAvatar), SavedTurnId);
-	}
+	// ★★★ ActivationOwnedTags を使用するため、GASが自動でタグを削除する ★★★
+	// Super::EndAbility() の中で State_Action_InProgress が自動削除される
 
 	// ☁E�E☁ESparky修正: CompletedTurnIdForEventを設定！EendCompletionEventで使用�E�E☁E�E☁E
 	CompletedTurnIdForEvent = SavedTurnId;
