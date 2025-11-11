@@ -375,10 +375,10 @@ bool UDistanceFieldSubsystem::CanMoveDiagonal(const FIntPoint& From, const FIntP
     const FIntPoint Side1 = From + FIntPoint(Delta.X, 0);  // 横の肩
     const FIntPoint Side2 = From + FIntPoint(0, Delta.Y);  // 縦の肩
 
-    // ★★★ 修正 (2025-11-11): 角抜け禁止ルール修正 ★★★
-    // 両肩が塞がっている場合のみ禁止 → どちらか一方が通行可能なら許可
-    // 元のロジック（AND）は厳しすぎて、片方の肩だけが空いている場合も禁止していた
-    return IsWalkable(Side1) || IsWalkable(Side2);  // どちらか一方が通行可能なら許可
+    // ★★★ FIX (2025-11-11): 正しい角抜け禁止ルール ★★★
+    // 角をすり抜けて移動することを防ぐため、両方の肩が通行可能な場合のみ許可
+    // 片方の肩でも壁があれば、その斜め移動は禁止
+    return IsWalkable(Side1) && IsWalkable(Side2);  // 両方が通行可能な場合のみ許可
 }
 
 //------------------------------------------------------------------------------

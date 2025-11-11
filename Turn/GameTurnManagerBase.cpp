@@ -2399,19 +2399,20 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
             const bool bSide1Walkable = CachedPathFinder->IsCellWalkableIgnoringActor(Side1, PlayerPawn);
             const bool bSide2Walkable = CachedPathFinder->IsCellWalkableIgnoringActor(Side2, PlayerPawn);
 
-            // 両肩が塞がっている場合は角抜け禁止
-            if (!bSide1Walkable && !bSide2Walkable)
+            // ★★★ FIX (2025-11-11): 正しいルール - 片方の肩でも壁なら禁止 ★★★
+            // 角をすり抜けて移動することを防ぐため、両方の肩が通行可能な場合のみ許可
+            if (!bSide1Walkable || !bSide2Walkable)
             {
                 bCornerCutting = true;
                 UE_LOG(LogTurnManager, Warning,
-                    TEXT("[MovePrecheck] CORNER CUTTING BLOCKED: (%d,%d)→(%d,%d) - both shoulders blocked [Side1=(%d,%d) Walkable=%d, Side2=(%d,%d) Walkable=%d]"),
+                    TEXT("[MovePrecheck] CORNER CUTTING BLOCKED: (%d,%d)→(%d,%d) - at least one shoulder blocked [Side1=(%d,%d) Walkable=%d, Side2=(%d,%d) Walkable=%d]"),
                     CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y,
                     Side1.X, Side1.Y, bSide1Walkable, Side2.X, Side2.Y, bSide2Walkable);
             }
             else
             {
                 UE_LOG(LogTurnManager, Verbose,
-                    TEXT("[MovePrecheck] Diagonal move OK: (%d,%d)→(%d,%d) [Side1=(%d,%d) Walkable=%d, Side2=(%d,%d) Walkable=%d]"),
+                    TEXT("[MovePrecheck] Diagonal move OK: (%d,%d)→(%d,%d) - both shoulders clear [Side1=(%d,%d) Walkable=%d, Side2=(%d,%d) Walkable=%d]"),
                     CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y,
                     Side1.X, Side1.Y, bSide1Walkable, Side2.X, Side2.Y, bSide2Walkable);
             }
