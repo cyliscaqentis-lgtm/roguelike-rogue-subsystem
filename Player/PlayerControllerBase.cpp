@@ -506,9 +506,16 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
     }
 
     //==========================================================================
-    // Step 2: 入力ウィンドウチェック（参考ログのみ・ブロックしない）
-    // ★★★ 2025-11-09: サーバ側で最終判定するため、クライアントでは遮断しない
+    // Step 2: 入力ウィンドウチェック（クライアント側で事前検証）
+    // ★★★ CRITICAL FIX (2025-11-11): Gemini分析により判明
+    // 問題: ターン開始直後、レプリケーション完了前に入力を送信していた
+    // 修正: クライアント側でも WaitingForPlayerInput と Gate をチェック
     //==========================================================================
+
+    // レプリケートされた WaitingForPlayerInput をチェック
+    const bool bWaitingReplicated = CachedTurnManager->WaitingForPlayerInput;
+
+    // Gate_Input_Open タグをチェック
     bool bGateOpenClient = false;
     if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(GetPawn()))
     {
@@ -517,8 +524,19 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
             bGateOpenClient = ASC->HasMatchingGameplayTag(RogueGameplayTags::Gate_Input_Open);
         }
     }
-    UE_LOG(LogTemp, Log, TEXT("[Client] WaitingForPlayerInput=%d, Gate(open?)=%d (参考値・送信は継続)"),
-        CachedTurnManager->WaitingForPlayerInput, bGateOpenClient);
+
+    // 両方が true の場合のみ送信可能
+    if (!bWaitingReplicated || !bGateOpenClient)
+    {
+        UE_LOG(LogTemp, Verbose,
+            TEXT("[Client] Input blocked: WaitingForPlayerInput=%d, Gate=%d (レプリケーション待ち)"),
+            bWaitingReplicated, bGateOpenClient);
+        return;
+    }
+
+    UE_LOG(LogTemp, Verbose,
+        TEXT("[Client] Input accepted: WaitingForPlayerInput=%d, Gate=%d"),
+        bWaitingReplicated, bGateOpenClient);
 
     //==========================================================================
     // ★ Step 3: 送信済みチェック（クライアント側の多重送信防止）
