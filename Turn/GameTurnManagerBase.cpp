@@ -3507,9 +3507,11 @@ void AGameTurnManagerBase::EndEnemyTurn()
 void AGameTurnManagerBase::ClearResidualInProgressTags()
 {
     // ★★★ CRITICAL FIX (2025-11-11): 全てのブロッキングタグをクリア ★★★
+    // ★★★ EXTENDED FIX (2025-11-11): Movement.Mode.Fallingも追加 ★★★
     static const FGameplayTag InProgressTag = FGameplayTag::RequestGameplayTag(FName("State.Action.InProgress"));
     static const FGameplayTag ExecutingTag = FGameplayTag::RequestGameplayTag(FName("State.Ability.Executing"));
     static const FGameplayTag MovingTag = FGameplayTag::RequestGameplayTag(FName("State.Moving"));
+    static const FGameplayTag FallingTag = FGameplayTag::RequestGameplayTag(FName("Movement.Mode.Falling"));
 
     if (!InProgressTag.IsValid() || !ExecutingTag.IsValid() || !MovingTag.IsValid())
     {
@@ -3534,6 +3536,7 @@ void AGameTurnManagerBase::ClearResidualInProgressTags()
     int32 TotalInProgress = 0;
     int32 TotalExecuting = 0;
     int32 TotalMoving = 0;
+    int32 TotalFalling = 0;
 
     for (AActor* Actor : AllUnits)
     {
@@ -3572,19 +3575,31 @@ void AGameTurnManagerBase::ClearResidualInProgressTags()
         }
         TotalMoving += MovingCount;
 
-        if (InProgressCount > 0 || ExecutingCount > 0 || MovingCount > 0)
+        // ★★★ CRITICAL FIX (2025-11-11): Movement.Mode.Falling をクリア ★★★
+        int32 FallingCount = 0;
+        if (FallingTag.IsValid())
+        {
+            FallingCount = ASC->GetTagCount(FallingTag);
+            for (int32 i = 0; i < FallingCount; ++i)
+            {
+                ASC->RemoveLooseGameplayTag(FallingTag);
+            }
+            TotalFalling += FallingCount;
+        }
+
+        if (InProgressCount > 0 || ExecutingCount > 0 || MovingCount > 0 || FallingCount > 0)
         {
             UE_LOG(LogTurnManager, Warning,
-                TEXT("[TagCleanup] %s cleared: InProgress=%d, Executing=%d, Moving=%d"),
-                *GetNameSafe(Actor), InProgressCount, ExecutingCount, MovingCount);
+                TEXT("[TagCleanup] %s cleared: InProgress=%d, Executing=%d, Moving=%d, Falling=%d"),
+                *GetNameSafe(Actor), InProgressCount, ExecutingCount, MovingCount, FallingCount);
         }
     }
 
-    if (TotalInProgress > 0 || TotalExecuting > 0 || TotalMoving > 0)
+    if (TotalInProgress > 0 || TotalExecuting > 0 || TotalMoving > 0 || TotalFalling > 0)
     {
         UE_LOG(LogTurnManager, Warning,
-            TEXT("[TagCleanup] Total residual tags cleared: InProgress=%d, Executing=%d, Moving=%d"),
-            TotalInProgress, TotalExecuting, TotalMoving);
+            TEXT("[TagCleanup] Total residual tags cleared: InProgress=%d, Executing=%d, Moving=%d, Falling=%d"),
+            TotalInProgress, TotalExecuting, TotalMoving, TotalFalling);
     }
 }
 
@@ -4411,8 +4426,12 @@ bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Actio
     }
 
     // ★★★ CRITICAL FIX (2025-11-11): アビリティ起動前に古いブロックタグを強制削除 ★★★
+    // ★★★ EXTENDED FIX (2025-11-11): State.MovingとMovement.Mode.Fallingも追加 ★★★
     // ターン開始時のクリーンアップが間に合わなかった場合の保険
     // これにより、前のターンで残ったタグによるアビリティブロックを回避
+    //
+    // Gemini分析により判明：OwnedTagsに State.Moving が残留していると
+    // ActivationOwnedTags に State.Moving が含まれるGA_MoveBaseは二重起動防止で拒否される
     int32 ClearedCount = 0;
     if (ASC->HasMatchingGameplayTag(RogueGameplayTags::State_Ability_Executing))
     {
@@ -4428,6 +4447,27 @@ bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Actio
         ClearedCount++;
         UE_LOG(LogTurnManager, Warning,
             TEXT("[TriggerPlayerMove] ⚠️ Cleared blocking State.Action.InProgress tag from %s"),
+            *GetNameSafe(Unit));
+    }
+
+    // ★★★ CRITICAL FIX (2025-11-11): State.Moving 残留対策 ★★★
+    if (ASC->HasMatchingGameplayTag(RogueGameplayTags::State_Moving))
+    {
+        ASC->RemoveLooseGameplayTag(RogueGameplayTags::State_Moving);
+        ClearedCount++;
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[TriggerPlayerMove] ⚠️ Cleared residual State.Moving tag from %s (Gemini分析)"),
+            *GetNameSafe(Unit));
+    }
+
+    // ★★★ CRITICAL FIX (2025-11-11): Movement.Mode.Falling 残留対策 ★★★
+    static const FGameplayTag FallingTag = FGameplayTag::RequestGameplayTag(FName("Movement.Mode.Falling"));
+    if (FallingTag.IsValid() && ASC->HasMatchingGameplayTag(FallingTag))
+    {
+        ASC->RemoveLooseGameplayTag(FallingTag);
+        ClearedCount++;
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[TriggerPlayerMove] ⚠️ Cleared residual Movement.Mode.Falling tag from %s (Gemini分析)"),
             *GetNameSafe(Unit));
     }
 
