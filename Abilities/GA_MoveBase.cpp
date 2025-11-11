@@ -466,19 +466,9 @@ void UGA_MoveBase::CancelAbility(
 {
 	UE_LOG(LogMoveVerbose, Verbose, TEXT("[GA_MoveBase] Ability cancelled"));
 
-	if (ActorInfo && ActorInfo->IsNetAuthority())
-	{
-		if (UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get())
-		{
-			const FGameplayTag Tag = RogueGameplayTags::State_Action_InProgress;
-			while (InProgressStack > 0)
-			{
-				ASC->RemoveLooseGameplayTag(Tag);
-				--InProgressStack;
-			}
-			UE_LOG(LogTurnManager, Verbose, TEXT("[InProgress] %s -- (Cancelled, ThisAbility=0, Total=%d)"), *GetNameSafe(ActorInfo->AvatarActor.Get()), ASC->GetTagCount(Tag));
-		}
-	}
+	// ★★★ REMOVED: Manual tag removal (2025-11-11) ★★★
+	// ActivationOwnedTags を使用するため、GASが自動でタグを削除する
+	// Super::CancelAbility() の中で State_Action_InProgress が自動削除される
 
 	Super::CancelAbility(Handle, ActorInfo, ActivationInfo, bReplicateCancelAbility);
 }
