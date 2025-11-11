@@ -92,8 +92,22 @@ void UPlayerInputProcessor::ProcessPlayerCommand(const FPlayerCommand& Command)
 		Command.WindowId,
 		*Command.CommandTag.ToString());
 
-	// 入力受付通知
-	NotifyPlayerInputReceived();
+	// ★★★ CRITICAL FIX (2025-11-11): Gemini分析により判明 ★★★
+	// 問題: ProcessPlayerCommand時点で入力ウィンドウを閉じていたが、
+	//       これはMovePrecheck前なので、拒否される可能性がある。
+	//       拒否されても入力ウィンドウは既に閉じられているため、再入力できない。
+	//
+	// 修正: 入力ウィンドウを閉じるタイミングをMovePrecheck成功後に移動
+	//       - MovePrecheck成功時: GameTurnManagerBase::MovePrecheck()内で閉じる
+	//       - MovePrecheck失敗時: 閉じない（再入力を許可）
+	//
+	// 削除: NotifyPlayerInputReceived();
+	//
+	// Note: デリゲート通知（BroadcastPlayerInputReceived）も不要になった。
+	//       ターン進行はMovePrecheck成功時のバリア機構で管理される。
+
+	UE_LOG(LogTemp, Log,
+		TEXT("[PlayerInputProcessor] Command cached (window still open for retry)"));
 }
 
 void UPlayerInputProcessor::NotifyPlayerInputReceived()
