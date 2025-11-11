@@ -3492,33 +3492,30 @@ void AGameTurnManagerBase::EndEnemyTurn()
 //------------------------------------------------------------------------------
 void AGameTurnManagerBase::ClearResidualInProgressTags()
 {
+    // ★★★ IMPROVED: Clear both InProgress and Ability_Executing tags (2025-11-11) ★★★
     static const FGameplayTag InProgressTag = FGameplayTag::RequestGameplayTag(FName("State.Action.InProgress"));
+    static const FGameplayTag ExecutingTag = FGameplayTag::RequestGameplayTag(FName("State.Ability.Executing"));
 
-    if (!InProgressTag.IsValid())
+    if (!InProgressTag.IsValid() || !ExecutingTag.IsValid())
     {
         UE_LOG(LogTurnManager, Warning,
-            TEXT("[InProgressDiag] State.Action.InProgress tag not found"));
+            TEXT("[ClearResidualInProgressTags] Required tags not found (InProgress=%d, Executing=%d)"),
+            InProgressTag.IsValid() ? 1 : 0, ExecutingTag.IsValid() ? 1 : 0);
         return;
     }
 
-    TArray<AActor*> AllUnits;
-
-    // プレイヤー追加
-    if (APawn* PlayerPawn = GetPlayerPawn())
+    UWorld* World = GetWorld();
+    if (!World)
     {
-        AllUnits.Add(PlayerPawn);
+        return;
     }
 
-    // 敵追加
-    TArray<AActor*> Enemies;
-    GetCachedEnemies(Enemies);
-    AllUnits.Append(Enemies);
+    int32 TotalCleared = 0;
 
-    int32 TotalBefore = 0;
-    int32 TotalAfter = 0;
-
-    for (AActor* Actor : AllUnits)
+    // ★★★ Use TActorIterator to ensure ALL actors are checked (2025-11-11) ★★★
+    for (TActorIterator<AActor> It(World); It; ++It)
     {
+        AActor* Actor = *It;
         if (!Actor)
         {
             continue;
@@ -3530,31 +3527,40 @@ void AGameTurnManagerBase::ClearResidualInProgressTags()
             continue;
         }
 
-        const int32 CountBefore = ASC->GetTagCount(InProgressTag);
-        TotalBefore += CountBefore;
+        // Check and clear State.Action.InProgress
+        int32 InProgressCount = ASC->GetTagCount(InProgressTag);
+        int32 ExecutingCount = ASC->GetTagCount(ExecutingTag);
 
-        if (CountBefore > 0)
+        if (InProgressCount > 0 || ExecutingCount > 0)
         {
-            // 残留タグを強制除去
-            for (int32 i = 0; i < CountBefore; ++i)
+            // Clear InProgress tags
+            while (ASC->HasMatchingGameplayTag(InProgressTag))
             {
                 ASC->RemoveLooseGameplayTag(InProgressTag);
+                ++TotalCleared;
             }
 
-            const int32 CountAfter = ASC->GetTagCount(InProgressTag);
-            TotalAfter += CountAfter;
+            // Clear Executing tags
+            while (ASC->HasMatchingGameplayTag(ExecutingTag))
+            {
+                ASC->RemoveLooseGameplayTag(ExecutingTag);
+                ++TotalCleared;
+            }
+
+            const int32 InProgressAfter = ASC->GetTagCount(InProgressTag);
+            const int32 ExecutingAfter = ASC->GetTagCount(ExecutingTag);
 
             UE_LOG(LogTurnManager, Warning,
-                TEXT("[InProgressDiag] %s had InProgress=%d -> force cleared to %d"),
-                *GetNameSafe(Actor), CountBefore, CountAfter);
+                TEXT("[ClearResidualInProgressTags] %s: InProgress %d->%d, Executing %d->%d (TotalCleared=%d)"),
+                *GetNameSafe(Actor), InProgressCount, InProgressAfter, ExecutingCount, ExecutingAfter, TotalCleared);
         }
     }
 
-    if (TotalBefore > 0)
+    if (TotalCleared > 0)
     {
         UE_LOG(LogTurnManager, Warning,
-            TEXT("[InProgressDiag] Total residual InProgress tags: Before=%d, After=%d"),
-            TotalBefore, TotalAfter);
+            TEXT("[ClearResidualInProgressTags] ⚠️ Cleaned up %d residual tags across all actors"),
+            TotalCleared);
     }
 }
 
