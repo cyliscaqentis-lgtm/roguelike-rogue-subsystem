@@ -596,6 +596,7 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
 
             FResolvedAction Action;
             Action.ActorID = ActorRegistry ? ActorRegistry->GetStableID(IntentActor) : FStableActorID{};
+            Action.Actor = IntentActor;  // ★★★ FIX: TWeakObjectPtr を設定（AttackPhaseExecutorSubsystem が使用）
             Action.SourceActor = IntentActor;
             Action.FinalAbilityTag = AttackTag;
             // ★★★ FIX: AbilityTag にも正しい EventTag を設定（2025-11-11）★★★
@@ -606,32 +607,9 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
             SlotActions.Add(Action);
         }
 
-        for (const FResolvedAction& A : SlotActions)
-        {
-            if (!A.SourceActor) { continue; }
-
-            UAbilitySystemComponent* ASC = ResolveASC(A.SourceActor);
-            if (!ASC)
-            {
-                UE_LOG(LogTemp, Warning, TEXT("[Attack] %s has no ASC"),
-                    *GetNameSafe(A.SourceActor));
-                continue;
-            }
-
-            // ★★★ FIX: 正しい EventTag（GameplayEvent_Intent_Attack）を使用（2025-11-11）★★★
-            // AI.Intent.Attack ではなく、GameplayEvent.Intent.Attack が必要
-            const FGameplayTag AttackEventTag = RogueGameplayTags::GameplayEvent_Intent_Attack;
-            FGameplayEventData Evt;
-            Evt.EventTag = AttackEventTag;
-            Evt.Instigator = A.SourceActor;
-
-            UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
-                ASC->GetOwner(), AttackEventTag, Evt);
-
-            // ☁E変更: Verbose ↁELog
-            UE_LOG(LogTemp, Log, TEXT("[Attack] %s attacked"),
-                *GetNameSafe(A.SourceActor));
-        }
+        // ★★★ REMOVED: 即座のイベント送出を削除（2025-11-11）★★★
+        // AttackPhaseExecutorSubsystem が逐次実行を担当するため、ここでの送出は不要
+        // 二重トリガーによる NumActivated=0 エラーを防ぐ
 
         // ★★★ FIX: OutActions に追加する前に無効アクターを再度フィルタリング（2025-11-11）★★★
         // FResolvedAction.Actor は TWeakObjectPtr であり、生成後に無効になる可能性がある
