@@ -584,11 +584,14 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
     //=== Step 7: サーバー送信 ===
     Server_SubmitCommand(Command);
 
-    // ★★★ CRITICAL FIX (2025-11-10): ACK方式に変更 ★★★
-    // 送信直後にラッチを立てない。サーバーからのACK（Client_ConfirmCommandAccepted）
-    // 受信時にラッチを確定する。これにより、拒否RPC遅延/ロス時でも入力が詰まらない。
-    //
-    // 削除: bSentThisInputWindow = true;
+    // ★★★ CRITICAL FIX (2025-11-11): 送信直後に即座にラッチを立てる ★★★
+    // 急速連打防止のため、送信と同時にラッチを確定する。
+    // - ACK受信時: ラッチを維持（既にtrue）
+    // - REJECT受信時: ラッチをリセット（Client_NotifyMoveRejected内で false に戻す）
+    // これにより、サーバー応答が届くまでの間に複数のコマンドが送信されることを防ぐ。
+    bSentThisInputWindow = true;
+
+    UE_LOG(LogTemp, Verbose, TEXT("[Client] Command sent, latch SET (WindowId=%d)"), Command.WindowId);
 }
 
 
