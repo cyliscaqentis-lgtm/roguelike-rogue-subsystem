@@ -1036,23 +1036,15 @@ bool AGridPathfindingLibrary::IsCellWalkable(const FIntPoint& Cell) const
 
 bool AGridPathfindingLibrary::IsCellWalkableIgnoringActor(const FIntPoint& Cell, AActor* IgnoreActor) const
 {
+    // ★★★ CRITICAL FIX (2025-11-11): 本当に Actor を無視（地形のみチェック） ★★★
+    // このメソッドの名前通り、占有状態はチェックせず、地形のみをチェックする
     const int32 TerrainCost = GetGridCost(Cell.X, Cell.Y);
     if (TerrainCost < 0)
     {
-        return false;
+        return false;  // 地形が通行不可
     }
 
-    if (UWorld* World = GetWorld())
-    {
-        if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
-        {
-            if (DoesCellContainBlockingActor(Occupancy, Cell, IgnoreActor))
-            {
-                return false;
-            }
-        }
-    }
-
+    // 占有状態はチェックしない（呼び出し側で別途チェックする）
     return true;
 }
 
