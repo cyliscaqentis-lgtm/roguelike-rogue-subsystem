@@ -7,9 +7,10 @@
 #include "GridOccupancySubsystem.generated.h"
 
 /**
- * ★★★ CRITICAL FIX (2025-11-11): 予約情報構造体（TurnId + bCommitted） ★★★
+ * ★★★ CRITICAL FIX (2025-11-11): 予約情報構造体（TurnId + bCommitted + bIsOriginHold） ★★★
  * - TurnId: 予約が作成されたターン番号（古い予約の検出用）
  * - bCommitted: ConflictResolver で勝者が決まり、確定した予約かどうか
+ * - bIsOriginHold: 移動元セルの保護用予約（backstab防止）
  */
 USTRUCT()
 struct FReservationInfo
@@ -28,18 +29,23 @@ struct FReservationInfo
     UPROPERTY()
     bool bCommitted;
 
+    UPROPERTY()
+    bool bIsOriginHold;
+
     FReservationInfo()
         : Owner(nullptr)
         , Cell(-1, -1)
         , TurnId(-1)
         , bCommitted(false)
+        , bIsOriginHold(false)
     {}
 
-    FReservationInfo(AActor* InOwner, FIntPoint InCell, int32 InTurnId)
+    FReservationInfo(AActor* InOwner, FIntPoint InCell, int32 InTurnId, bool bInIsOriginHold = false)
         : Owner(InOwner)
         , Cell(InCell)
         , TurnId(InTurnId)
         , bCommitted(false)
+        , bIsOriginHold(bInIsOriginHold)
     {}
 };
 

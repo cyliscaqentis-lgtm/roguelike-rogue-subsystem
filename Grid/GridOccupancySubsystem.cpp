@@ -267,27 +267,55 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
         return false;  // Actor が null の場合は失敗
     }
 
-    // ★★★ CRITICAL FIX (2025-11-11): 既存の予約を保護 ★★★
+    // ★★★ CRITICAL FIX (2025-11-11): 既存の予約を保護（OriginHold対応） ★★★
     // セルが既に他の Actor に予約されている場合、上書きしない
     if (const FReservationInfo* ExistingInfo = ReservedCells.Find(Cell))
     {
         if (ExistingInfo->Owner.IsValid() && ExistingInfo->Owner.Get() != Actor)
         {
-            UE_LOG(LogTemp, Error,
-                TEXT("[GridOccupancy] REJECT RESERVATION: %s cannot reserve (%d,%d) - already reserved by %s (TurnId=%d)"),
-                *GetNameSafe(Actor), Cell.X, Cell.Y, *GetNameSafe(ExistingInfo->Owner.Get()), ExistingInfo->TurnId);
-            return false;  // 予約拒否 - 他のActorが既に予約済み
+            // OriginHold の場合、owner が移動中なので destination として予約できない（backstab防止）
+            if (ExistingInfo->bIsOriginHold)
+            {
+                UE_LOG(LogTemp, Error,
+                    TEXT("[GridOccupancy] REJECT RESERVATION: %s cannot reserve (%d,%d) - OriginHold by %s (TurnId=%d) [BACKSTAB BLOCKED]"),
+                    *GetNameSafe(Actor), Cell.X, Cell.Y, *GetNameSafe(ExistingInfo->Owner.Get()), ExistingInfo->TurnId);
+                return false;  // OriginHold により予約拒否（backstab防止）
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error,
+                    TEXT("[GridOccupancy] REJECT RESERVATION: %s cannot reserve (%d,%d) - already reserved by %s (TurnId=%d)"),
+                    *GetNameSafe(Actor), Cell.X, Cell.Y, *GetNameSafe(ExistingInfo->Owner.Get()), ExistingInfo->TurnId);
+                return false;  // 予約拒否 - 他のActorが既に予約済み
+            }
         }
     }
 
-    // ★★★ CRITICAL FIX (2025-11-11): FReservationInfo 形式に変更 ★★★
-    ReleaseReservationForActor(Actor);
-    FReservationInfo Info(Actor, Cell, CurrentTurnId);
-    ReservedCells.Add(Cell, Info);
-    ActorToReservation.Add(Actor, Info);
+    // ★★★ OriginHold実装: 移動元セルを取得 ★★★
+    const FIntPoint* CurrentCellPtr = ActorToCell.Find(Actor);
+    const FIntPoint CurrentCell = CurrentCellPtr ? *CurrentCellPtr : FIntPoint(-1, -1);
 
-    UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] Cell (%d, %d) reserved by %s (TurnId=%d)"),
-        Cell.X, Cell.Y, *GetNameSafe(Actor), CurrentTurnId);
+    // ★★★ CRITICAL FIX (2025-11-11): FReservationInfo 形式に変更 + OriginHold追加 ★★★
+    ReleaseReservationForActor(Actor);  // 既存の予約（destination + originHold）を全解放
+
+    // Destination cell に通常の予約を作成
+    FReservationInfo DestInfo(Actor, Cell, CurrentTurnId, false);
+    ReservedCells.Add(Cell, DestInfo);
+    ActorToReservation.Add(Actor, DestInfo);
+
+    UE_LOG(LogTemp, Log, TEXT("[GridOccupancy] RESERVE DEST: %s -> (%d, %d) (TurnId=%d)"),
+        *GetNameSafe(Actor), Cell.X, Cell.Y, CurrentTurnId);
+
+    // ★★★ OriginHold実装: 移動元セルにOriginHold予約を配置（backstab防止） ★★★
+    if (CurrentCell != FIntPoint(-1, -1) && CurrentCell != Cell)
+    {
+        // Origin cell に OriginHold を作成（他のActorが入ってこないようにする）
+        FReservationInfo OriginHoldInfo(Actor, CurrentCell, CurrentTurnId, true);
+        ReservedCells.Add(CurrentCell, OriginHoldInfo);
+
+        UE_LOG(LogTemp, Log, TEXT("[GridOccupancy] RESERVE ORIGIN-HOLD: %s protects origin (%d, %d) (TurnId=%d) [BACKSTAB PROTECTION]"),
+            *GetNameSafe(Actor), CurrentCell.X, CurrentCell.Y, CurrentTurnId);
+    }
 
     return true;  // 予約成功
 }
@@ -299,13 +327,26 @@ void UGridOccupancySubsystem::ReleaseReservationForActor(AActor* Actor)
         return;
     }
 
-    // ★★★ CRITICAL FIX (2025-11-11): FReservationInfo から Cell を取得 ★★★
+    // ★★★ CRITICAL FIX (2025-11-11): OriginHold対応 - Actor が owner の全ての予約を解放 ★★★
+    // Destination reservation を解放
     if (const FReservationInfo* InfoPtr = ActorToReservation.Find(Actor))
     {
         ReservedCells.Remove(InfoPtr->Cell);
-        ActorToReservation.Remove(Actor);
-        UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] Reservation cleared for %s"),
-            *GetNameSafe(Actor));
+        UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] Reservation cleared for %s (destination: %d,%d)"),
+            *GetNameSafe(Actor), InfoPtr->Cell.X, InfoPtr->Cell.Y);
+    }
+    ActorToReservation.Remove(Actor);
+
+    // OriginHold reservation を解放（ReservedCells から Actor が owner の OriginHold を検索して削除）
+    for (auto It = ReservedCells.CreateIterator(); It; ++It)
+    {
+        const FReservationInfo& Info = It.Value();
+        if (Info.bIsOriginHold && Info.Owner.IsValid() && Info.Owner.Get() == Actor)
+        {
+            UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] OriginHold cleared for %s (origin: %d,%d)"),
+                *GetNameSafe(Actor), It.Key().X, It.Key().Y);
+            It.RemoveCurrent();
+        }
     }
 }
 
