@@ -4355,6 +4355,23 @@ bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Actio
     EventData.EventMagnitude = static_cast<float>(TurnCommandEncoding::PackDir(DirX, DirY));
     EventData.OptionalObject = this;
 
+    // ★★★ DIAGNOSTIC (2025-11-11): GA trigger failure 診断ログ追加 ★★★
+    UE_LOG(LogTurnManager, Log,
+        TEXT("[TriggerGA] Attempting to trigger GA_MoveBase: Unit=%s, EventTag=%s, Dir=(%d,%d)"),
+        *GetNameSafe(Unit), *EventData.EventTag.ToString(), DirX, DirY);
+
+    // ASC の状態を診断
+    FGameplayTagContainer OwnedTags;
+    ASC->GetOwnedGameplayTags(OwnedTags);
+    UE_LOG(LogTurnManager, Verbose,
+        TEXT("[TriggerGA] ASC owned tags: %s"), *OwnedTags.ToStringSimple());
+
+    // 登録されているアビリティ数を確認
+    const TArray<FGameplayAbilitySpec>& ActivatableAbilities = ASC->GetActivatableAbilities();
+    UE_LOG(LogTurnManager, Verbose,
+        TEXT("[TriggerGA] ASC has %d activatable abilities"), ActivatableAbilities.Num());
+
+    // トリガー試行
     const int32 TriggeredCount = ASC->HandleGameplayEvent(EventData.EventTag, &EventData);
     if (TriggeredCount > 0)
     {
@@ -4372,6 +4389,21 @@ bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Actio
 
         return true;
     }
+
+    // ★★★ DIAGNOSTIC (2025-11-11): GA trigger failure の詳細ログ ★★★
+    UE_LOG(LogTurnManager, Error,
+        TEXT("[TriggerGA] FAILED: NumActivated=%d - No GA_MoveBase triggered!"), TriggeredCount);
+    UE_LOG(LogTurnManager, Error,
+        TEXT("[TriggerGA] Possible causes:"));
+    UE_LOG(LogTurnManager, Error,
+        TEXT("  1. GA_MoveBase not granted to ASC (check Blueprint AbilitySet)"));
+    UE_LOG(LogTurnManager, Error,
+        TEXT("  2. AbilityTrigger not bound to tag '%s' (check GA_MoveBase Blueprint)"),
+        *EventData.EventTag.ToString());
+    UE_LOG(LogTurnManager, Error,
+        TEXT("  3. ActivationBlockedTags preventing activation (e.g., State.Moving, State.Action.InProgress)"));
+    UE_LOG(LogTurnManager, Error,
+        TEXT("  4. CanActivateAbility returning false (check GA_MoveBase conditions)"));
 
     return false;
 }
