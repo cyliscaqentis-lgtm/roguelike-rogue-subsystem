@@ -1972,6 +1972,14 @@ void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnIndex)
 
     UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] ==== OnTurnStartedHandler START ===="), TurnIndex);
 
+    // ★★★ CRITICAL FIX (2025-11-11): ターン開始時に残留タグをクリア ★★★
+    // 前のターンでアビリティが正しく終了していない場合、ブロッキングタグが残り続ける
+    // ターン開始直後に強制クリーンアップして、新しいアビリティが起動できるようにする
+    ClearResidualInProgressTags();
+    UE_LOG(LogTurnManager, Log,
+        TEXT("[Turn %d] ★ ClearResidualInProgressTags called at turn start"),
+        TurnIndex);
+
     // ★★★ CRITICAL FIX (2025-11-11): ターン開始時に古い予約を即座にパージ ★★★
     // プレイヤー入力がExecuteMovePhaseより先に来る可能性があるため、
     // ターン開始直後にクリーンアップしてPlayerの予約を確実に受け入れる
@@ -3492,12 +3500,15 @@ void AGameTurnManagerBase::EndEnemyTurn()
 //------------------------------------------------------------------------------
 void AGameTurnManagerBase::ClearResidualInProgressTags()
 {
+    // ★★★ CRITICAL FIX (2025-11-11): 全てのブロッキングタグをクリア ★★★
     static const FGameplayTag InProgressTag = FGameplayTag::RequestGameplayTag(FName("State.Action.InProgress"));
+    static const FGameplayTag ExecutingTag = FGameplayTag::RequestGameplayTag(FName("State.Ability.Executing"));
+    static const FGameplayTag MovingTag = FGameplayTag::RequestGameplayTag(FName("State.Moving"));
 
-    if (!InProgressTag.IsValid())
+    if (!InProgressTag.IsValid() || !ExecutingTag.IsValid() || !MovingTag.IsValid())
     {
         UE_LOG(LogTurnManager, Warning,
-            TEXT("[InProgressDiag] State.Action.InProgress tag not found"));
+            TEXT("[TagCleanup] One or more state tags not found"));
         return;
     }
 
@@ -3514,8 +3525,9 @@ void AGameTurnManagerBase::ClearResidualInProgressTags()
     GetCachedEnemies(Enemies);
     AllUnits.Append(Enemies);
 
-    int32 TotalBefore = 0;
-    int32 TotalAfter = 0;
+    int32 TotalInProgress = 0;
+    int32 TotalExecuting = 0;
+    int32 TotalMoving = 0;
 
     for (AActor* Actor : AllUnits)
     {
@@ -3530,31 +3542,43 @@ void AGameTurnManagerBase::ClearResidualInProgressTags()
             continue;
         }
 
-        const int32 CountBefore = ASC->GetTagCount(InProgressTag);
-        TotalBefore += CountBefore;
-
-        if (CountBefore > 0)
+        // State.Action.InProgress をクリア
+        const int32 InProgressCount = ASC->GetTagCount(InProgressTag);
+        for (int32 i = 0; i < InProgressCount; ++i)
         {
-            // 残留タグを強制除去
-            for (int32 i = 0; i < CountBefore; ++i)
-            {
-                ASC->RemoveLooseGameplayTag(InProgressTag);
-            }
+            ASC->RemoveLooseGameplayTag(InProgressTag);
+        }
+        TotalInProgress += InProgressCount;
 
-            const int32 CountAfter = ASC->GetTagCount(InProgressTag);
-            TotalAfter += CountAfter;
+        // State.Ability.Executing をクリア
+        const int32 ExecutingCount = ASC->GetTagCount(ExecutingTag);
+        for (int32 i = 0; i < ExecutingCount; ++i)
+        {
+            ASC->RemoveLooseGameplayTag(ExecutingTag);
+        }
+        TotalExecuting += ExecutingCount;
 
+        // State.Moving をクリア
+        const int32 MovingCount = ASC->GetTagCount(MovingTag);
+        for (int32 i = 0; i < MovingCount; ++i)
+        {
+            ASC->RemoveLooseGameplayTag(MovingTag);
+        }
+        TotalMoving += MovingCount;
+
+        if (InProgressCount > 0 || ExecutingCount > 0 || MovingCount > 0)
+        {
             UE_LOG(LogTurnManager, Warning,
-                TEXT("[InProgressDiag] %s had InProgress=%d -> force cleared to %d"),
-                *GetNameSafe(Actor), CountBefore, CountAfter);
+                TEXT("[TagCleanup] %s cleared: InProgress=%d, Executing=%d, Moving=%d"),
+                *GetNameSafe(Actor), InProgressCount, ExecutingCount, MovingCount);
         }
     }
 
-    if (TotalBefore > 0)
+    if (TotalInProgress > 0 || TotalExecuting > 0 || TotalMoving > 0)
     {
         UE_LOG(LogTurnManager, Warning,
-            TEXT("[InProgressDiag] Total residual InProgress tags: Before=%d, After=%d"),
-            TotalBefore, TotalAfter);
+            TEXT("[TagCleanup] Total residual tags cleared: InProgress=%d, Executing=%d, Moving=%d"),
+            TotalInProgress, TotalExecuting, TotalMoving);
     }
 }
 
@@ -4380,6 +4404,27 @@ bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Actio
         return false;
     }
 
+    // ★★★ CRITICAL FIX (2025-11-11): アビリティ起動前に古いブロックタグを強制削除 ★★★
+    // ターン開始時のクリーンアップが間に合わなかった場合の保険
+    // これにより、前のターンで残ったタグによるアビリティブロックを回避
+    int32 ClearedCount = 0;
+    if (ASC->HasMatchingGameplayTag(RogueGameplayTags::State_Ability_Executing))
+    {
+        ASC->RemoveLooseGameplayTag(RogueGameplayTags::State_Ability_Executing);
+        ClearedCount++;
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[TriggerPlayerMove] ⚠️ Cleared blocking State.Ability.Executing tag from %s"),
+            *GetNameSafe(Unit));
+    }
+    if (ASC->HasMatchingGameplayTag(RogueGameplayTags::State_Action_InProgress))
+    {
+        ASC->RemoveLooseGameplayTag(RogueGameplayTags::State_Action_InProgress);
+        ClearedCount++;
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[TriggerPlayerMove] ⚠️ Cleared blocking State.Action.InProgress tag from %s"),
+            *GetNameSafe(Unit));
+    }
+
     // ★★★ DIAGNOSTIC: Log ASC ability count (2025-11-11) ★★★
     const int32 AbilityCount = ASC->GetActivatableAbilities().Num();
     if (AbilityCount == 0)
@@ -4391,24 +4436,8 @@ bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Actio
     else
     {
         UE_LOG(LogTurnManager, Verbose,
-            TEXT("[TriggerPlayerMove] %s has %d abilities in ASC"),
-            *GetNameSafe(Unit), AbilityCount);
-    }
-
-    // ★★★ DIAGNOSTIC: Check blocking tags (2025-11-11) ★★★
-    FGameplayTagContainer OwnedTags;
-    ASC->GetOwnedGameplayTags(OwnedTags);
-    if (OwnedTags.HasTag(RogueGameplayTags::State_Ability_Executing))
-    {
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[TriggerPlayerMove] ⚠️ %s blocked by State.Ability.Executing tag"),
-            *GetNameSafe(Unit));
-    }
-    if (OwnedTags.HasTag(RogueGameplayTags::State_Action_InProgress))
-    {
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[TriggerPlayerMove] ⚠️ %s blocked by State.Action.InProgress tag"),
-            *GetNameSafe(Unit));
+            TEXT("[TriggerPlayerMove] %s has %d abilities in ASC (cleared %d blocking tags)"),
+            *GetNameSafe(Unit), AbilityCount, ClearedCount);
     }
 
     const FIntPoint Delta = Action.NextCell - Action.CurrentCell;
