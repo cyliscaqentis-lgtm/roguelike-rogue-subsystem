@@ -2467,15 +2467,21 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
                 TEXT("[MovePrecheck] ★ SERVER: Applied FACING ONLY - Direction=(%.1f,%.1f), Yaw=%.1f"),
                 Command.Direction.X, Command.Direction.Y, Yaw);
 
-            // ★★★ 2025-11-10: クライアントに回転専用RPCを送信（ACKではない） ★★★
+            // ★★★ 2025-11-10: クライアントに回転専用RPCを送信 + ACK ★★★
             if (APlayerController* PC = Cast<APlayerController>(PlayerPawn->GetController()))
             {
                 if (APlayerControllerBase* TPCB = Cast<APlayerControllerBase>(PC))
                 {
-                    // 回転のみ適用（ラッチは変更しない = 入力継続可能）
+                    // 回転のみ適用
                     TPCB->Client_ApplyFacingNoTurn(InputWindowId, FVector2D(Command.Direction.X, Command.Direction.Y));
                     UE_LOG(LogTurnManager, Log,
                         TEXT("[MovePrecheck] ★ Sent Client_ApplyFacingNoTurn RPC (WindowId=%d, no turn consumed)"),
+                        InputWindowId);
+
+                    // ★★★ CRITICAL FIX (2025-11-11): ACK送信でコマンド再送信を停止（スケート現象防止） ★★★
+                    TPCB->Client_ConfirmCommandAccepted(InputWindowId);
+                    UE_LOG(LogTurnManager, Log,
+                        TEXT("[MovePrecheck] ★ Sent Client_ConfirmCommandAccepted (WindowId=%d) to stop resend loop"),
                         InputWindowId);
                 }
             }
@@ -2519,6 +2525,12 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
                     TPCB->Client_ApplyFacingNoTurn(InputWindowId, FVector2D(Command.Direction.X, Command.Direction.Y));
                     UE_LOG(LogTurnManager, Log,
                         TEXT("[MovePrecheck] Sent Client_ApplyFacingNoTurn RPC (WindowId=%d, reservation failed)"),
+                        InputWindowId);
+
+                    // ★★★ CRITICAL FIX (2025-11-11): ACK送信でコマンド再送信を停止（スケート現象防止） ★★★
+                    TPCB->Client_ConfirmCommandAccepted(InputWindowId);
+                    UE_LOG(LogTurnManager, Log,
+                        TEXT("[MovePrecheck] ★ Sent Client_ConfirmCommandAccepted (WindowId=%d) to stop resend loop"),
                         InputWindowId);
                 }
             }
