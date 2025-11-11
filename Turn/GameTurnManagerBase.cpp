@@ -2478,11 +2478,10 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
                         TEXT("[MovePrecheck] ★ Sent Client_ApplyFacingNoTurn RPC (WindowId=%d, no turn consumed)"),
                         InputWindowId);
 
-                    // ★★★ CRITICAL FIX (2025-11-11): ACK送信でコマンド再送信を停止（スケート現象防止） ★★★
-                    TPCB->Client_ConfirmCommandAccepted(InputWindowId);
-                    UE_LOG(LogTurnManager, Log,
-                        TEXT("[MovePrecheck] ★ Sent Client_ConfirmCommandAccepted (WindowId=%d) to stop resend loop"),
-                        InputWindowId);
+                    // ★★★ CRITICAL FIX (2025-11-11): ACK送信を削除（ターン不消費の場合はACK不要） ★★★
+                    // Client_ConfirmCommandAccepted を呼ぶと bSentThisInputWindow=true になり、
+                    // ウィンドウが進まないため次の入力がブロックされる。
+                    // ACKはターンを消費する実際の移動時のみ送信する。
                 }
             }
 
@@ -2527,11 +2526,10 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
                         TEXT("[MovePrecheck] Sent Client_ApplyFacingNoTurn RPC (WindowId=%d, reservation failed)"),
                         InputWindowId);
 
-                    // ★★★ CRITICAL FIX (2025-11-11): ACK送信でコマンド再送信を停止（スケート現象防止） ★★★
-                    TPCB->Client_ConfirmCommandAccepted(InputWindowId);
-                    UE_LOG(LogTurnManager, Log,
-                        TEXT("[MovePrecheck] ★ Sent Client_ConfirmCommandAccepted (WindowId=%d) to stop resend loop"),
-                        InputWindowId);
+                    // ★★★ CRITICAL FIX (2025-11-11): ACK送信を削除（ターン不消費の場合はACK不要） ★★★
+                    // Client_ConfirmCommandAccepted を呼ぶと bSentThisInputWindow=true になり、
+                    // ウィンドウが進まないため次の入力がブロックされる。
+                    // ACKはターンを消費する実際の移動時のみ送信する。
                 }
             }
 
