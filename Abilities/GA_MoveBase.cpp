@@ -103,7 +103,9 @@ UGA_MoveBase::UGA_MoveBase(const FObjectInitializer& ObjectInitializer)
 	ActivationBlockedTags.AddTag(RogueGameplayTags::State_Action_InProgress.GetTag());
 	ActivationBlockedTags.AddTag(RogueGameplayTags::State_Ability_Executing.GetTag());
 
-	// ActivationOwnedTags.AddTag(RogueGameplayTags::State_Action_InProgress.GetTag()); // Manually managed now
+	// ★★★ FIX: Use ActivationOwnedTags for automatic GAS management (2025-11-11) ★★★
+	// これにより、ActivateAbility で自動追加、EndAbility で自動削除される
+	ActivationOwnedTags.AddTag(RogueGameplayTags::State_Action_InProgress.GetTag());
 	ActivationOwnedTags.AddTag(TagStateMoving);
 
 	FAbilityTriggerData Trigger;
@@ -139,16 +141,9 @@ void UGA_MoveBase::ActivateAbility(
 {
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
-	if (ActorInfo && ActorInfo->IsNetAuthority())
-	{
-		if (UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get())
-		{
-			const FGameplayTag Tag = RogueGameplayTags::State_Action_InProgress;
-			ASC->AddLooseGameplayTag(Tag);
-			++InProgressStack;
-			UE_LOG(LogTurnManager, Verbose, TEXT("[InProgress] %s ++ (ThisAbility=%d, Total=%d)"), *GetNameSafe(ActorInfo->AvatarActor.Get()), InProgressStack, ASC->GetTagCount(Tag));
-		}
-	}
+	// ★★★ REMOVED: Manual tag management (2025-11-11) ★★★
+	// ActivationOwnedTags を使用するため、GASが自動でタグを管理する
+	// Super::ActivateAbility() の中で State_Action_InProgress が自動追加される
 
 	// ☁E�E☁ESparky診断�E�アビリチE��起動確誁E☁E�E☁E
 	AActor* Avatar = GetAvatarActorFromActorInfo();
@@ -495,19 +490,9 @@ void UGA_MoveBase::EndAbility(
 	bool bReplicateEndAbility,
 	bool bWasCancelled)
 {
-	if (ActorInfo && ActorInfo->IsNetAuthority())
-	{
-		if (UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get())
-		{
-			const FGameplayTag Tag = RogueGameplayTags::State_Action_InProgress;
-			while (InProgressStack > 0)
-			{
-				ASC->RemoveLooseGameplayTag(Tag);
-				--InProgressStack;
-			}
-			UE_LOG(LogTurnManager, Verbose, TEXT("[InProgress] %s -- (ThisAbility=0, Total=%d)"), *GetNameSafe(ActorInfo->AvatarActor.Get()), ASC->GetTagCount(Tag));
-		}
-	}
+	// ★★★ REMOVED: Manual tag removal (2025-11-11) ★★★
+	// ActivationOwnedTags を使用するため、GASが自動でタグを削除する
+	// Super::EndAbility() の中で State_Action_InProgress が自動削除される
 
 	// Sparky fix: Prevent re-entry
 	if (bIsEnding)

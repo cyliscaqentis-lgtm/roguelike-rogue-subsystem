@@ -269,8 +269,7 @@ private:
 
     bool RegisterBarrier(AActor* Avatar);
 
-    /** こ�EアビリチE��インスタンスが積んだInProgressタグの数 */
-    UPROPERTY(Transient)
-    int32 InProgressStack = 0;
+    // ★★★ REMOVED: InProgressStack (2025-11-11) ★★★
+    // ActivationOwnedTags を使用するため、手動カウントは不要
 };
 
