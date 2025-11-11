@@ -9,6 +9,9 @@ UGA_TurnActionBase::UGA_TurnActionBase()
     TimeoutTag = RogueGameplayTags::Effect_Turn_AbilityTimeout;
     StartEventTag = RogueGameplayTags::Gameplay_Event_Turn_Ability_Started;
     CompletionEventTag = RogueGameplayTags::Gameplay_Event_Turn_Ability_Completed;
+
+    // ★★★ FIX: Use ActivationOwnedTags for automatic GAS management (2025-11-11) ★★★
+    ActivationOwnedTags.AddTag(RogueGameplayTags::State_Ability_Executing);
 }
 
 UGA_TurnActionBase::UGA_TurnActionBase(const FObjectInitializer& ObjectInitializer)
@@ -17,6 +20,9 @@ UGA_TurnActionBase::UGA_TurnActionBase(const FObjectInitializer& ObjectInitializ
     TimeoutTag = RogueGameplayTags::Effect_Turn_AbilityTimeout;
     StartEventTag = RogueGameplayTags::Gameplay_Event_Turn_Ability_Started;
     CompletionEventTag = RogueGameplayTags::Gameplay_Event_Turn_Ability_Completed;
+
+    // ★★★ FIX: Use ActivationOwnedTags for automatic GAS management (2025-11-11) ★★★
+    ActivationOwnedTags.AddTag(RogueGameplayTags::State_Ability_Executing);
 }
 
 void UGA_TurnActionBase::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
@@ -28,7 +34,10 @@ void UGA_TurnActionBase::ActivateAbility(const FGameplayAbilitySpecHandle Handle
 
     Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
-    GetAbilitySystemComponentFromActorInfo()->AddLooseGameplayTag(RogueGameplayTags::State_Ability_Executing);
+    // ★★★ REMOVED: Manual tag management (2025-11-11) ★★★
+    // ActivationOwnedTags を使用するため、GASが自動でタグを管理する
+    // Super::ActivateAbility() の中で State_Ability_Executing が自動追加される
+
     SendStartEvent();
 
     if (MaxExecutionTime > 0.0f)
@@ -56,7 +65,9 @@ void UGA_TurnActionBase::EndAbility(const FGameplayAbilitySpecHandle Handle,
         TimeoutHandle.Invalidate();
     }
 
-    GetAbilitySystemComponentFromActorInfo()->RemoveLooseGameplayTag(RogueGameplayTags::State_Ability_Executing);
+    // ★★★ REMOVED: Manual tag removal (2025-11-11) ★★★
+    // ActivationOwnedTags を使用するため、GASが自動でタグを削除する
+    // Super::EndAbility() の中で State_Ability_Executing が自動削除される
 
     Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 
