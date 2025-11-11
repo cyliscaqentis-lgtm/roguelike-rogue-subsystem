@@ -267,7 +267,7 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
 
     if (AGameTurnManagerBase* TurnManager = ResolveTurnManager())
     {
-        for (const FResolvedAction& Action : Resolved)
+        for (FResolvedAction& Action : Resolved)  // ★ const 削除（修正可能にする）
         {
             // ★★★ CRITICAL FIX (2025-11-11): 敗者（bIsWait=true）の予約を作成しない ★★★
             // 理由: 敗者は移動しないため、予約は不要。
@@ -277,9 +277,13 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
                 const bool bReserved = TurnManager->RegisterResolvedMove(Action.SourceActor.Get(), Action.NextCell);
                 if (!bReserved)
                 {
+                    // ★★★ CRITICAL FIX (2025-11-11): 予約失敗 → 移動をキャンセル ★★★
                     UE_LOG(LogTemp, Error,
-                        TEXT("[TurnCore] RegisterResolvedMove FAILED for %s -> (%d,%d) - reservation rejected"),
+                        TEXT("[TurnCore] RegisterResolvedMove FAILED for %s -> (%d,%d) - MARKING AS WAIT (no movement)"),
                         *GetNameSafe(Action.SourceActor.Get()), Action.NextCell.X, Action.NextCell.Y);
+
+                    // 予約失敗したActorは移動させない（敗者扱い）
+                    Action.bIsWait = true;
                 }
             }
             else
@@ -305,6 +309,15 @@ void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& Reso
         if (!Action.SourceActor)
         {
             UE_LOG(LogTurnCore, Error, TEXT("[Execute] Skip: SourceActor is None"));
+            continue;
+        }
+
+        // ★★★ CRITICAL FIX (2025-11-11): bIsWait=true（敗者/予約失敗）はスキップ ★★★
+        if (Action.bIsWait)
+        {
+            UE_LOG(LogTurnCore, Verbose,
+                TEXT("[Execute] Skip: Actor=%s marked as bIsWait=true (loser or reservation failed)"),
+                *GetNameSafe(Action.SourceActor.Get()));
             continue;
         }
 
