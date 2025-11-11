@@ -287,13 +287,21 @@ private:
     // ★★★ Phase 2 (2025-11-11): Wait Gameplay Event Support ★★★
     //--------------------------------------------------------------------------
 
-    /** Wait Event Task - イベント待機用 */
+    /** Wait Event Task - 実行イベント待機用 */
     UPROPERTY()
-    TObjectPtr<class UAbilityTask_WaitGameplayEvent> WaitEventTask;
+    TObjectPtr<class UAbilityTask_WaitGameplayEvent> WaitExecuteEventTask;
 
-    /** イベント受信時のコールバック */
+    /** Wait Event Task - キャンセルイベント待機用 */
+    UPROPERTY()
+    TObjectPtr<class UAbilityTask_WaitGameplayEvent> WaitCancelEventTask;
+
+    /** 実行イベント受信時のコールバック */
     UFUNCTION()
     void OnExecuteMoveEventReceived(FGameplayEventData Payload);
+
+    /** キャンセルイベント受信時のコールバック */
+    UFUNCTION()
+    void OnActionCancelledEventReceived(FGameplayEventData Payload);
 
     /** 移動実行を開始（イベント受信後に呼ばれる） */
     void BeginMoveExecution();

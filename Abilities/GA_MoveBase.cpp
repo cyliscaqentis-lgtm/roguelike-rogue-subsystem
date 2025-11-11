@@ -1230,3 +1230,25 @@ void UGA_MoveBase::BeginMoveExecution()
 	UE_LOG(LogTurnManager, Warning,
 		TEXT("[GA_MoveBase] BeginMoveExecution called but not implemented yet (stub)"));
 }
+
+void UGA_MoveBase::OnActionCancelledEventReceived(FGameplayEventData Payload)
+{
+	// ★★★ TODO: Phase 2.4 で実装予定 ★★★
+	// Event.Turn.ActionCancelled を受信したときの処理
+	// アビリティを即座にキャンセル終了し、Barrierから登録を解除する
+	UE_LOG(LogTurnManager, Warning,
+		TEXT("[GA_MoveBase] OnActionCancelledEventReceived called but not implemented yet (stub)"));
+
+	// 【将来の実装例】
+	// if (WaitExecuteEventTask)
+	// {
+	//     WaitExecuteEventTask->EndTask();
+	//     WaitExecuteEventTask = nullptr;
+	// }
+	// if (WaitCancelEventTask)
+	// {
+	//     WaitCancelEventTask->EndTask();
+	//     WaitCancelEventTask = nullptr;
+	// }
+	// CancelAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true);
+}

@@ -364,3 +364,254 @@ virtual void EndAbility(...)
 **作成日**: 2025-11-11
 **作成者**: ClaudeCode
 **ステータス**: Phase 1 完了、Phase 2-4 未実装
+
+---
+
+## Phase 2.4: キャンセルイベントサポート（2025-11-11 追加）
+
+### 背景: 競合解決時のアビリティ終了問題
+
+**発見された問題** (Turn 80 ログより):
+
+```
+LogTurnManager: Warning: [Turn 80] ★ Player movement CANCELLED by ConflictResolver
+LogTurnManager: Warning: [CanAdvanceTurn] Barrier NOT quiescent: Turn=80 PendingActions=1
+LogTurnManager: Error: [EndEnemyTurn] ABORT: Cannot end turn 80 (actions still in progress)
+```
+
+**原因**:
+1. プレイヤーと敵が同じセルを予約（衝突）
+2. ConflictResolverが両者の移動をキャンセル
+3. **問題**: キャンセルされたGA_MoveBaseに終了通知が送られない
+4. Barrierにアクションが残り続け、ターン終了がブロックされる
+
+### 解決策: Event.Turn.ActionCancelled の導入
+
+#### 2.4.1 新しいイベントタグ ✅ 完了
+
+**ファイル**: `Utility/RogueGameplayTags.h`, `Utility/RogueGameplayTags.cpp`
+
+```cpp
+// Event.Turn.ActionCancelled - 競合解決によりアクションがキャンセルされた
+LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Turn_ActionCancelled);
+```
+
+#### 2.4.2 GA_MoveBase のキャンセルイベント待機 ✅ 基盤完了
+
+**ファイル**: `Abilities/GA_MoveBase.h`
+
+```cpp
+/** Wait Event Task - キャンセルイベント待機用 */
+UPROPERTY()
+TObjectPtr<class UAbilityTask_WaitGameplayEvent> WaitCancelEventTask;
+
+/** キャンセルイベント受信時のコールバック */
+UFUNCTION()
+void OnActionCancelledEventReceived(FGameplayEventData Payload);
+```
+
+**実装** (Phase 2.3と並行):
+
+```cpp
+// ActivateAbility 内で2つのイベントを並列待機
+void UGA_MoveBase::ActivateAbility(...)
+{
+    // ... 検証処理 ...
+
+    if (ShouldWaitForExecuteEvent())  // プレイヤーの場合
+    {
+        // 実行イベントを待機
+        WaitExecuteEventTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
+            this,
+            RogueGameplayTags::Event_Turn_ExecuteMove,
+            nullptr, true, true
+        );
+        WaitExecuteEventTask->EventReceived.AddDynamic(
+            this, &UGA_MoveBase::OnExecuteMoveEventReceived
+        );
+        WaitExecuteEventTask->ReadyForActivation();
+
+        // キャンセルイベントを並列待機
+        WaitCancelEventTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(
+            this,
+            RogueGameplayTags::Event_Turn_ActionCancelled,
+            nullptr, true, true
+        );
+        WaitCancelEventTask->EventReceived.AddDynamic(
+            this, &UGA_MoveBase::OnActionCancelledEventReceived
+        );
+        WaitCancelEventTask->ReadyForActivation();
+
+        UE_LOG(LogTurnManager, Log,
+            TEXT("[GA_MoveBase] Waiting for Execute or Cancel event"));
+        return;
+    }
+
+    // 敵は即時実行
+    BeginMoveExecution();
+}
+```
+
+**キャンセルコールバックの実装**:
+
+```cpp
+void UGA_MoveBase::OnActionCancelledEventReceived(FGameplayEventData Payload)
+{
+    AActor* Avatar = GetAvatarActorFromActorInfo();
+    UE_LOG(LogTurnManager, Warning,
+        TEXT("[GA_MoveBase] %s: Action CANCELLED by ConflictResolver"),
+        *GetNameSafe(Avatar));
+
+    // Wait Event タスクをクリーンアップ
+    if (WaitExecuteEventTask)
+    {
+        WaitExecuteEventTask->EndTask();
+        WaitExecuteEventTask = nullptr;
+    }
+    if (WaitCancelEventTask)
+    {
+        WaitCancelEventTask->EndTask();
+        WaitCancelEventTask = nullptr;
+    }
+
+    // Barrierから登録を解除
+    if (UTurnActionBarrierSubsystem* Barrier = GetBarrierSubsystem())
+    {
+        Barrier->CompleteAction(Avatar, MoveTurnId, MoveActionId);
+        UE_LOG(LogTurnManager, Log,
+            TEXT("[GA_MoveBase] Barrier action completed (cancelled): ActionId=%s"),
+            *MoveActionId.ToString());
+    }
+
+    // アビリティをキャンセル終了
+    CancelAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true);
+}
+```
+
+#### 2.4.3 ConflictResolver の修正 ⏳ 未実装
+
+**ファイル**: `Turn/GameTurnManagerBase.cpp` または `Turn/TurnCorePhaseManager.cpp`
+
+**変更箇所**: ConflictResolverが移動をキャンセルした際の処理
+
+**変更前**:
+```cpp
+// 競合検出 → アクターの移動をWAITに変更
+LogTemp: Error: [TurnCore] ... MARKING AS WAIT (no movement)
+```
+
+**変更後**:
+```cpp
+// 競合検出 → アクターの移動をキャンセル + イベント送信
+if (bConflictDetected)
+{
+    UE_LOG(LogTurnManager, Warning,
+        TEXT("[ConflictResolver] Cancelling action for %s due to conflict"),
+        *GetNameSafe(Actor));
+
+    // アビリティにキャンセルを通知
+    if (UAbilitySystemComponent* ASC = GetASCForActor(Actor))
+    {
+        FGameplayEventData EventData;
+        EventData.EventTag = RogueGameplayTags::Event_Turn_ActionCancelled;
+        EventData.Instigator = Actor;
+        EventData.Target = Actor;
+        EventData.OptionalObject = this;
+
+        ASC->HandleGameplayEvent(EventData.EventTag, &EventData);
+        UE_LOG(LogTurnManager, Log,
+            TEXT("[ConflictResolver] Sent Event.Turn.ActionCancelled to %s"),
+            *GetNameSafe(Actor));
+    }
+}
+```
+
+### テスト計画（Phase 2.4）
+
+#### 1. 同一セル予約の競合
+
+**シナリオ**: プレイヤーと敵が同じセルに移動しようとする
+
+**期待動作**:
+- ConflictResolverが衝突を検出
+- 両者に`Event.Turn.ActionCancelled`を送信
+- GA_MoveBaseが即座にキャンセル終了
+- Barrierから登録が解除される
+- ターンが正常に終了する
+
+**確認ログ**:
+```
+[ConflictResolver] Cancelling action for BP_PlayerUnit_C_0 due to conflict
+[ConflictResolver] Sent Event.Turn.ActionCancelled to BP_PlayerUnit_C_0
+[GA_MoveBase] BP_PlayerUnit_C_0: Action CANCELLED by ConflictResolver
+[GA_MoveBase] Barrier action completed (cancelled): ActionId=...
+[CanAdvanceTurn] ✅OK: Turn=XX (Barrier=Quiet, InProgress=0)
+```
+
+#### 2. スワップ（入れ替わり）の検出
+
+**シナリオ**: プレイヤーと敵が互いの位置に移動しようとする
+
+**期待動作**:
+- スワップ検出
+- 両者の移動をキャンセル
+- 両者がその場で待機
+- ターンが正常に終了
+
+#### 3. キャンセル後の再入力
+
+**シナリオ**: Turn 80でキャンセル → Turn 81で別の方向に移動
+
+**期待動作**:
+- Turn 80: キャンセル完了、ターン終了
+- Turn 81: 新しい入力窓が開く
+- プレイヤーが正常に別方向に移動できる
+
+### 実装の効果
+
+#### Before (現状)
+```
+1. プレイヤー移動承認 → GA_MoveBase起動 → 即座に移動開始
+2. ConflictResolver → 移動をキャンセル
+3. 問題: GA_MoveBaseがBarrierに残り続ける
+4. ターン終了がブロックされる
+5. 最終的に移動完了後にターン進行（意図しない動作）
+```
+
+#### After (実装後)
+```
+1. プレイヤー移動承認 → GA_MoveBase起動 → Wait Event状態
+2. ConflictResolver → Event.Turn.ActionCancelled送信
+3. GA_MoveBase → キャンセルイベント受信 → 即座に終了
+4. Barrierから登録解除
+5. ターンが正常に終了
+```
+
+### 関連する問題
+
+この修正により、以下の関連問題も解決されます：
+
+1. **プレイヤー移動のキャンセル通知欠如**: 現在はキャンセルされてもクライアントに通知されない
+2. **Barrier の不整合**: アクションがキャンセルされてもBarrierに残る
+3. **ターン進行のブロック**: 未完了アクションがターン終了を妨げる
+
+### 実装優先度
+
+**Critical**: Phase 2.4はPhase 2.3と同時実装が推奨されます。
+
+理由：
+- Wait Event パターンを導入すると、キャンセル処理がないと重大な問題が発生
+- ConflictResolverは既に実装されており、頻繁に発動する
+- ターン進行がブロックされるとゲームが停止する
+
+### 注意事項
+
+1. **ネットワーク同期**: キャンセルイベントもサーバー/クライアント間で同期が必要
+2. **アニメーションの停止**: 移動アニメーション開始後のキャンセルには追加処理が必要
+3. **GridOccupancy の更新**: 予約のキャンセル時には占有情報も正しく更新する
+
+---
+
+**更新日**: 2025-11-11
+**追加理由**: Turn 80 ログ解析により発見された競合解決時のアビリティ終了問題に対処
+**ステータス**: Phase 2.4 基盤完了、実装は Phase 2.3 と並行実施予定
