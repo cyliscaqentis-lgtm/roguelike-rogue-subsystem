@@ -50,6 +50,39 @@ void UGA_MeleeAttack::ActivateAbility(
         return;
     }
 
+    // ★★★ FIX (2025-11-11): EventDataからターゲットを抽出 ★★★
+    // AI決定時に保存されたターゲットを使用（実行時検索を回避）
+    if (TriggerEventData && TriggerEventData->TargetData.IsValid(0))
+    {
+        const FGameplayAbilityTargetData* TargetData = TriggerEventData->TargetData.Get(0);
+        if (const FGameplayAbilityTargetData_SingleTargetHit* SingleTarget =
+            static_cast<const FGameplayAbilityTargetData_SingleTargetHit*>(TargetData))
+        {
+            if (AActor* Target = SingleTarget->HitResult.GetActor())
+            {
+                TargetUnit = Target;
+                UE_LOG(LogTemp, Log, TEXT("[GA_MeleeAttack] %s: Target from EventData: %s"),
+                    *GetNameSafe(GetAvatarActorFromActorInfo()), *GetNameSafe(Target));
+            }
+        }
+    }
+
+    // フォールバック：EventDataにターゲットがない場合は従来の検索方式
+    if (!TargetUnit)
+    {
+        TargetUnit = FindAdjacentTarget();
+        if (TargetUnit)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] %s: Using fallback adjacent search, found: %s"),
+                *GetNameSafe(GetAvatarActorFromActorInfo()), *GetNameSafe(TargetUnit));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] %s: No target found (neither EventData nor adjacent)"),
+                *GetNameSafe(GetAvatarActorFromActorInfo()));
+        }
+    }
+
     // 入力を一時無効化（プレイヤー操作のみ）
     if (ActorInfo && ActorInfo->AvatarActor.IsValid())
     {
@@ -95,9 +128,18 @@ void UGA_MeleeAttack::PlayAttackMontage_Implementation()
 
 void UGA_MeleeAttack::OnMontageCompleted()
 {
-    if (AActor* Target = FindAdjacentTarget())
+    // ★★★ FIX (2025-11-11): ActivateAbilityで保存されたターゲットを使用 ★★★
+    // 実行時に再検索せず、AI決定時に保存されたターゲットを攻撃
+    if (TargetUnit && IsValid(TargetUnit))
     {
-        ApplyDamageToTarget(Target);
+        UE_LOG(LogTemp, Log, TEXT("[GA_MeleeAttack] %s: Attacking stored target: %s"),
+            *GetNameSafe(GetAvatarActorFromActorInfo()), *GetNameSafe(TargetUnit));
+        ApplyDamageToTarget(TargetUnit);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] %s: No valid target to attack (TargetUnit is null or invalid)"),
+            *GetNameSafe(GetAvatarActorFromActorInfo()));
     }
 
     FTimerHandle DelayHandle;

@@ -204,15 +204,20 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
         Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Attack"));
         Intent.NextCell = Intent.CurrentCell;  // 攻撃時は移動しない
 
-        // ★★★ FIX: Distance=0 は正常な動作（隣接攻撃）のため、警告ではなく情報ログに変更（2025-11-11）★★★
-        if (DistanceToPlayer == 0)
+        // ★★★ FIX (2025-11-11): プレイヤーをターゲットとして保存 ★★★
+        // GA_MeleeAttackが実行時に隣接検索するのではなく、
+        // 決定時のターゲットを使用するように変更
+        if (AActor* PlayerActor = UGameplayStatics::GetPlayerPawn(World, 0))
         {
-            UE_LOG(LogTemp, Log, TEXT("[DecideIntent] %s: ★ ATTACK intent (Distance=0, adjacent melee attack, Range=%d)"),
-                *GetNameSafe(GetOwner()), AttackRangeInTiles);
+            Intent.Target = PlayerActor;
+            Intent.TargetActor = PlayerActor;  // 互換性のため両方設定
+
+            UE_LOG(LogTemp, Log, TEXT("[DecideIntent] %s: ★ ATTACK intent (Distance=%d, Range=%d, Target=%s)"),
+                *GetNameSafe(GetOwner()), DistanceToPlayer, AttackRangeInTiles, *GetNameSafe(PlayerActor));
         }
         else
         {
-            UE_LOG(LogTemp, Log, TEXT("[DecideIntent] %s: ★ ATTACK intent (Distance=%d, Range=%d)"),
+            UE_LOG(LogTemp, Warning, TEXT("[DecideIntent] %s: ★ ATTACK intent (Distance=%d, Range=%d) but Player not found!"),
                 *GetNameSafe(GetOwner()), DistanceToPlayer, AttackRangeInTiles);
         }
     }

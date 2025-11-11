@@ -16,6 +16,7 @@
 #include "AbilitySystemInterface.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemGlobals.h"
+#include "Abilities/GameplayAbilityTargetTypes.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/Controller.h"
@@ -604,6 +605,35 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
             Action.AbilityTag = RogueGameplayTags::GameplayEvent_Intent_Attack;
             Action.NextCell = Intent.NextCell;
             Action.TimeSlot = Slot;
+
+            // ★★★ FIX (2025-11-11): Intent.Target を TargetData に変換 ★★★
+            // AI決定時に保存されたターゲットをGA_MeleeAttackに渡す
+            if (AActor* TargetActor = Intent.Target.Get())
+            {
+                FGameplayAbilityTargetData_SingleTargetHit* TargetData = new FGameplayAbilityTargetData_SingleTargetHit();
+                TargetData->HitResult.Actor = TargetActor;
+                TargetData->HitResult.Location = TargetActor->GetActorLocation();
+                Action.TargetData.Add(TargetData);
+
+                UE_LOG(LogTemp, Log, TEXT("[Attack Slot %d] %s -> Target: %s"),
+                    Slot, *GetNameSafe(IntentActor), *GetNameSafe(TargetActor));
+            }
+            else if (AActor* TargetActorAlt = Intent.TargetActor)  // 互換性のため
+            {
+                FGameplayAbilityTargetData_SingleTargetHit* TargetData = new FGameplayAbilityTargetData_SingleTargetHit();
+                TargetData->HitResult.Actor = TargetActorAlt;
+                TargetData->HitResult.Location = TargetActorAlt->GetActorLocation();
+                Action.TargetData.Add(TargetData);
+
+                UE_LOG(LogTemp, Log, TEXT("[Attack Slot %d] %s -> Target (Alt): %s"),
+                    Slot, *GetNameSafe(IntentActor), *GetNameSafe(TargetActorAlt));
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[Attack Slot %d] %s has no target!"),
+                    Slot, *GetNameSafe(IntentActor));
+            }
+
             SlotActions.Add(Action);
         }
 
