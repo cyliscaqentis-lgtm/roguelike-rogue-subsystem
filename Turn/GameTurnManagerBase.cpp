@@ -2384,10 +2384,14 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
         // 地形ブロックチェック
         const bool bTerrainBlocked = !CachedPathFinder->IsCellWalkableIgnoringActor(TargetCell, PlayerPawn);
 
-        // ★★★ 2025-11-11: 角抜け禁止チェック（斜め移動時） ★★★
+        // ★★★ FIX (2025-11-11): 角抜け禁止チェック（斜め移動時）★★★
+        // 重要：目的地の地形に関係なく、斜め移動の場合は常にチェックする
         bool bCornerCutting = false;
-        const bool bIsDiagonalMove = (FMath::Abs(Command.Direction.X) == 1 && FMath::Abs(Command.Direction.Y) == 1);
-        if (bIsDiagonalMove && !bTerrainBlocked)
+        const int32 AbsDirX = FMath::Abs(FMath::RoundToInt(Command.Direction.X));
+        const int32 AbsDirY = FMath::Abs(FMath::RoundToInt(Command.Direction.Y));
+        const bool bIsDiagonalMove = (AbsDirX == 1 && AbsDirY == 1);
+
+        if (bIsDiagonalMove)
         {
             // 斜め移動の場合、両肩が塞がっていないかチェック
             const FIntPoint Side1 = CurrentCell + FIntPoint(static_cast<int32>(Command.Direction.X), 0);  // 横の肩
@@ -2400,9 +2404,16 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
             {
                 bCornerCutting = true;
                 UE_LOG(LogTurnManager, Warning,
-                    TEXT("[MovePrecheck] CORNER CUTTING BLOCKED: (%d,%d)→(%d,%d) - both shoulders blocked [Side1=(%d,%d) Side2=(%d,%d)]"),
+                    TEXT("[MovePrecheck] CORNER CUTTING BLOCKED: (%d,%d)→(%d,%d) - both shoulders blocked [Side1=(%d,%d) Walkable=%d, Side2=(%d,%d) Walkable=%d]"),
                     CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y,
-                    Side1.X, Side1.Y, Side2.X, Side2.Y);
+                    Side1.X, Side1.Y, bSide1Walkable, Side2.X, Side2.Y, bSide2Walkable);
+            }
+            else
+            {
+                UE_LOG(LogTurnManager, Verbose,
+                    TEXT("[MovePrecheck] Diagonal move OK: (%d,%d)→(%d,%d) [Side1=(%d,%d) Walkable=%d, Side2=(%d,%d) Walkable=%d]"),
+                    CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y,
+                    Side1.X, Side1.Y, bSide1Walkable, Side2.X, Side2.Y, bSide2Walkable);
             }
         }
 
