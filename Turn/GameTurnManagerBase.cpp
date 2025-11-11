@@ -2186,29 +2186,33 @@ void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnIndex)
             EnemyTurnDataSys->Observations = Observations;
             UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Observations assigned to EnemyTurnDataSubsystem"), TurnIndex);
 
-            CollectIntents();
+            // ★★★ CRITICAL FIX (2025-11-11): CollectIntents をプレイヤー行動後に移動 ★★★
+            // 理由: 不思議のダンジョン型の交互ターン制では、プレイヤーが行動してから敵が判断する
+            // CollectIntents は ContinueTurnAfterInput() で呼ぶように変更
+            // CollectIntents(); ← ★削除：プレイヤー行動後に移動
 
             UE_LOG(LogTurnManager, Warning,
-                TEXT("[Turn %d] CollectIntents completed: %d intents generated"),
-                TurnIndex, EnemyTurnDataSys->Intents.Num());
+                TEXT("[Turn %d] CollectIntents SKIPPED - will be called after player move"),
+                TurnIndex);
 
-            int32 AttackCount = 0, MoveCount = 0, OtherCount = 0;
-            static const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;  // ネイティブタグを使用
-            static const FGameplayTag MoveTag = RogueGameplayTags::AI_Intent_Move;  // ネイティブタグを使用
-
-            for (const FEnemyIntent& Intent : EnemyTurnDataSys->Intents)
-            {
-                if (Intent.AbilityTag.MatchesTag(AttackTag))
-                    ++AttackCount;
-                else if (Intent.AbilityTag.MatchesTag(MoveTag))
-                    ++MoveCount;
-                else
-                    ++OtherCount;
-            }
-
-            UE_LOG(LogTurnManager, Warning,
-                TEXT("[Turn %d] Intent breakdown: Attack=%d, Move=%d, Other=%d"),
-                TurnIndex, AttackCount, MoveCount, OtherCount);
+            // ★★★ Intent統計もプレイヤー行動後に実行するためスキップ ★★★
+            // int32 AttackCount = 0, MoveCount = 0, OtherCount = 0;
+            // static const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;  // ネイティブタグを使用
+            // static const FGameplayTag MoveTag = RogueGameplayTags::AI_Intent_Move;  // ネイティブタグを使用
+            //
+            // for (const FEnemyIntent& Intent : EnemyTurnDataSys->Intents)
+            // {
+            //     if (Intent.AbilityTag.MatchesTag(AttackTag))
+            //         ++AttackCount;
+            //     else if (Intent.AbilityTag.MatchesTag(MoveTag))
+            //         ++MoveCount;
+            //     else
+            //         ++OtherCount;
+            // }
+            //
+            // UE_LOG(LogTurnManager, Warning,
+            //     TEXT("[Turn %d] Intent breakdown: Attack=%d, Move=%d, Other=%d"),
+            //     TurnIndex, AttackCount, MoveCount, OtherCount);
         }
         else
         {
@@ -2847,6 +2851,23 @@ void AGameTurnManagerBase::ContinueTurnAfterInput()
     bPlayerMoveInProgress = true;
 
     UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] ContinueTurnAfterInput: Starting phase"), CurrentTurnIndex);
+
+    //==========================================================================
+    // ★★★ CRITICAL FIX (2025-11-11): プレイヤー行動後に敵の意思決定を実行 ★★★
+    // 理由: 不思議のダンジョン型の交互ターン制では、プレイヤーが行動してから敵が判断する
+    //==========================================================================
+    UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] ★ Collecting enemy intents AFTER player move ★"), CurrentTurnIndex);
+
+    // 敵リストを更新
+    CollectEnemies();
+
+    // プレイヤーの新しい位置を元に観測データを構築
+    BuildObservations();
+
+    // 敵の意図を収集（この時点の盤面で判断）
+    CollectIntents();
+
+    UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] ★ Enemy intent collection complete ★"), CurrentTurnIndex);
 
     // ★★★ 攻撃判定 ★★★
     const bool bHasAttack = HasAnyAttackIntent();

@@ -96,6 +96,39 @@ void UGA_MeleeAttack::ActivateAbility(
         }
     }
 
+    //==========================================================================
+    // ★★★ CRITICAL FIX (2025-11-11): ターゲットの方を向く ★★★
+    // 理由: 敵がプレイヤーを攻撃する際、ターゲットの方向を向いていなかった
+    //==========================================================================
+    if (TargetUnit && ActorInfo && ActorInfo->AvatarActor.IsValid())
+    {
+        AActor* Avatar = ActorInfo->AvatarActor.Get();
+        if (Avatar && IsValid(TargetUnit))
+        {
+            FVector ToTarget = TargetUnit->GetActorLocation() - Avatar->GetActorLocation();
+            ToTarget.Z = 0.0f;  // 水平方向のみ（Z軸は無視）
+
+            if (!ToTarget.IsNearlyZero())
+            {
+                FRotator NewRotation = ToTarget.Rotation();
+                Avatar->SetActorRotation(NewRotation);
+
+                UE_LOG(LogTemp, Log, TEXT("[GA_MeleeAttack] %s: Rotated to face target %s (Yaw=%.1f)"),
+                    *GetNameSafe(Avatar), *GetNameSafe(TargetUnit), NewRotation.Yaw);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] %s: Cannot rotate - target is at same location"),
+                    *GetNameSafe(Avatar));
+            }
+        }
+    }
+    else if (!TargetUnit)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] %s: Cannot rotate - no target"),
+            *GetNameSafe(GetAvatarActorFromActorInfo()));
+    }
+
     // 攻撃モンタージュを再生
     PlayAttackMontage();
 }
