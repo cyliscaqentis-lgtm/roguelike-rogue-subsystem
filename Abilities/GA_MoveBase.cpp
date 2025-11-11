@@ -1204,3 +1204,29 @@ bool UGA_MoveBase::RegisterBarrier(AActor* Avatar)
 	return false;
 }
 
+//==============================================================================
+// ★★★ Phase 2 (2025-11-11): Wait Gameplay Event Support - Stub Implementation ★★★
+//==============================================================================
+// 【注意】これらはスタブ実装です。実際のWait Eventロジックは未実装です。
+// 詳細な実装計画は WAIT_EVENT_REFACTORING_PLAN.md を参照してください。
+//==============================================================================
+
+void UGA_MoveBase::OnExecuteMoveEventReceived(FGameplayEventData Payload)
+{
+	// ★★★ TODO: Phase 2.3 で実装予定 ★★★
+	// Event.Turn.ExecuteMove を受信したときの処理
+	// BeginMoveExecution() を呼び出して移動を開始する
+	UE_LOG(LogTurnManager, Warning,
+		TEXT("[GA_MoveBase] OnExecuteMoveEventReceived called but not implemented yet (stub)"));
+}
+
+void UGA_MoveBase::BeginMoveExecution()
+{
+	// ★★★ TODO: Phase 2.3 で実装予定 ★★★
+	// ActivateAbility の移動処理部分をここに移動する
+	// - NextTileStep の計算
+	// - Walkability check
+	// - MoveToLocation 呼び出し
+	UE_LOG(LogTurnManager, Warning,
+		TEXT("[GA_MoveBase] BeginMoveExecution called but not implemented yet (stub)"));
+}
