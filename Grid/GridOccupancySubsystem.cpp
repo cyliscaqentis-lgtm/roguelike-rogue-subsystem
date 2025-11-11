@@ -278,10 +278,34 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
             // OriginHold の場合、owner が移動中なので destination として予約できない（backstab防止）
             if (ExistingInfo->bIsOriginHold)
             {
-                UE_LOG(LogTemp, Error,
-                    TEXT("[GridOccupancy] REJECT RESERVATION: %s cannot reserve (%d,%d) - OriginHold by %s (TurnId=%d) [BACKSTAB BLOCKED]"),
-                    *GetNameSafe(Actor), Cell.X, Cell.Y, *GetNameSafe(ExistingInfo->Owner.Get()), ExistingInfo->TurnId);
-                return false;  // OriginHold により予約拒否（backstab防止）
+                // ★★★ 修正 (2025-11-11): 追従詰めパターンを許可（SoftHold実装） ★★★
+                // A が Origin から Destination へ移動中、B が A の Origin へ移動する「追従」パターンを許可
+                AActor* OriginOwner = ExistingInfo->Owner.Get();
+                const FReservationInfo* OriginOwnerDestReservation = ActorToReservation.Find(OriginOwner);
+
+                // 追従詰めパターンの条件：
+                // 1. OriginOwner が destination 予約を持っている
+                // 2. OriginOwner の destination が現在のセルと異なる（実際に移動している）
+                // 3. OriginOwner の destination 予約が通常予約（OriginHold ではない）
+                if (OriginOwnerDestReservation &&
+                    OriginOwnerDestReservation->Cell != Cell &&
+                    !OriginOwnerDestReservation->bIsOriginHold)
+                {
+                    // 追従詰めパターン：許可（SoftHold）
+                    UE_LOG(LogTemp, Log,
+                        TEXT("[GridOccupancy] ALLOW FOLLOW-UP: %s -> (%d,%d) following %s who moves to (%d,%d) [SOFTHOLD → ALLOW]"),
+                        *GetNameSafe(Actor), Cell.X, Cell.Y, *GetNameSafe(OriginOwner),
+                        OriginOwnerDestReservation->Cell.X, OriginOwnerDestReservation->Cell.Y);
+                    // 続行して予約を許可（OriginHold を上書き）
+                }
+                else
+                {
+                    // 従来どおり拒否（HardHold）
+                    UE_LOG(LogTemp, Error,
+                        TEXT("[GridOccupancy] REJECT RESERVATION: %s cannot reserve (%d,%d) - OriginHold by %s (TurnId=%d) [HARDHOLD → BLOCKED]"),
+                        *GetNameSafe(Actor), Cell.X, Cell.Y, *GetNameSafe(OriginOwner), ExistingInfo->TurnId);
+                    return false;  // OriginHold により予約拒否（backstab防止）
+                }
             }
             else
             {
