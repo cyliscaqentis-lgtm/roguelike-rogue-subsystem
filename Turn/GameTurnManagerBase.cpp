@@ -2044,6 +2044,16 @@ void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnIndex)
         UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] PlayerController not found!"), TurnIndex);
     }
 
+    //==========================================================================
+    // ★★★ CRITICAL FIX (2025-11-11): ゲート開放を早期に実行（最適化） ★★★
+    // 理由: DistanceField更新は重い処理だが、プレイヤー入力前には不要
+    //       （敵AI判断にのみ必要で、それはプレイヤー行動後に実行される）
+    //       ゲートを先に開くことで、入力受付までの遅延を最小化
+    //==========================================================================
+    BeginPhase(Phase_Turn_Init);
+    BeginPhase(Phase_Player_Wait);
+    UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] ★ INPUT GATE OPENED EARLY (before DistanceField update)"), TurnIndex);
+
     UE_LOG(LogTurnManager, Warning,
         TEXT("[Turn %d] CachedEnemies.Num() BEFORE CollectEnemies = %d"),
         TurnIndex, CachedEnemies.Num());
@@ -2168,71 +2178,60 @@ void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnIndex)
             UE_LOG(LogTurnManager, Error, TEXT("  - CachedPathFinder is Invalid"));
     }
 
-    // ★★★ 既存のObservation・Intent処理は変更なし ★★★
-    UEnemyAISubsystem* EnemyAISys = GetWorld()->GetSubsystem<UEnemyAISubsystem>();
-    UEnemyTurnDataSubsystem* EnemyTurnDataSys = GetWorld()->GetSubsystem<UEnemyTurnDataSubsystem>();
+    //==========================================================================
+    // ★★★ CRITICAL FIX (2025-11-11): BuildObservations を削除（二重実行の防止） ★★★
+    // 理由: プレイヤー移動前の観測は意味がない
+    //       ContinueTurnAfterInput() でプレイヤー移動後に実行するため、ここでは不要
+    //       これにより、ターン開始時の処理が軽量化され、入力受付が早くなる
+    //==========================================================================
 
-    if (EnemyAISys && CachedPathFinder.IsValid() && CachedPlayerPawn)
-    {
-        TArray<FEnemyObservation> Observations;
-        EnemyAISys->BuildObservations(CachedEnemies, CachedPlayerPawn, CachedPathFinder.Get(), Observations);
+    UE_LOG(LogTurnManager, Warning,
+        TEXT("[Turn %d] BuildObservations SKIPPED - will be called after player move"),
+        TurnIndex);
 
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[Turn %d] BuildObservations completed: %d observations (input enemies=%d)"),
-            TurnIndex, Observations.Num(), CachedEnemies.Num());
-
-        if (EnemyTurnDataSys)
-        {
-            EnemyTurnDataSys->Observations = Observations;
-            UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Observations assigned to EnemyTurnDataSubsystem"), TurnIndex);
-
-            // ★★★ CRITICAL FIX (2025-11-11): CollectIntents をプレイヤー行動後に移動 ★★★
-            // 理由: 不思議のダンジョン型の交互ターン制では、プレイヤーが行動してから敵が判断する
-            // CollectIntents は ContinueTurnAfterInput() で呼ぶように変更
-            // CollectIntents(); ← ★削除：プレイヤー行動後に移動
-
-            UE_LOG(LogTurnManager, Warning,
-                TEXT("[Turn %d] CollectIntents SKIPPED - will be called after player move"),
-                TurnIndex);
-
-            // ★★★ Intent統計もプレイヤー行動後に実行するためスキップ ★★★
-            // int32 AttackCount = 0, MoveCount = 0, OtherCount = 0;
-            // static const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;  // ネイティブタグを使用
-            // static const FGameplayTag MoveTag = RogueGameplayTags::AI_Intent_Move;  // ネイティブタグを使用
-            //
-            // for (const FEnemyIntent& Intent : EnemyTurnDataSys->Intents)
-            // {
-            //     if (Intent.AbilityTag.MatchesTag(AttackTag))
-            //         ++AttackCount;
-            //     else if (Intent.AbilityTag.MatchesTag(MoveTag))
-            //         ++MoveCount;
-            //     else
-            //         ++OtherCount;
-            // }
-            //
-            // UE_LOG(LogTurnManager, Warning,
-            //     TEXT("[Turn %d] Intent breakdown: Attack=%d, Move=%d, Other=%d"),
-            //     TurnIndex, AttackCount, MoveCount, OtherCount);
-        }
-        else
-        {
-            UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] EnemyTurnDataSubsystem is NULL!"), TurnIndex);
-        }
-    }
-    else
-    {
-        if (!EnemyAISys)
-            UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] EnemyAISubsystem is NULL!"), TurnIndex);
-        if (!CachedPathFinder.IsValid())
-            UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] CachedPathFinder is invalid!"), TurnIndex);
-        if (!CachedPlayerPawn)
-            UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] CachedPlayerPawn is NULL!"), TurnIndex);
-    }
+    // ★★★ 削除: BuildObservations の実行（プレイヤー行動後に移動）
+    // UEnemyAISubsystem* EnemyAISys = GetWorld()->GetSubsystem<UEnemyAISubsystem>();
+    // UEnemyTurnDataSubsystem* EnemyTurnDataSys = GetWorld()->GetSubsystem<UEnemyTurnDataSubsystem>();
+    //
+    // if (EnemyAISys && CachedPathFinder.IsValid() && CachedPlayerPawn)
+    // {
+    //     TArray<FEnemyObservation> Observations;
+    //     EnemyAISys->BuildObservations(CachedEnemies, CachedPlayerPawn, CachedPathFinder.Get(), Observations);
+    //
+    //     UE_LOG(LogTurnManager, Warning,
+    //         TEXT("[Turn %d] BuildObservations completed: %d observations (input enemies=%d)"),
+    //         TurnIndex, Observations.Num(), CachedEnemies.Num());
+    //
+    //     if (EnemyTurnDataSys)
+    //     {
+    //         EnemyTurnDataSys->Observations = Observations;
+    //         UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Observations assigned to EnemyTurnDataSubsystem"), TurnIndex);
+    //
+    //         // CollectIntents は ContinueTurnAfterInput() で呼ぶ
+    //         UE_LOG(LogTurnManager, Warning,
+    //             TEXT("[Turn %d] CollectIntents SKIPPED - will be called after player move"),
+    //             TurnIndex);
+    //     }
+    //     else
+    //     {
+    //         UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] EnemyTurnDataSubsystem is NULL!"), TurnIndex);
+    //     }
+    // }
+    // else
+    // {
+    //     if (!EnemyAISys)
+    //         UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] EnemyAISubsystem is NULL!"), TurnIndex);
+    //     if (!CachedPathFinder.IsValid())
+    //         UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] CachedPathFinder is invalid!"), TurnIndex);
+    //     if (!CachedPlayerPawn)
+    //         UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] CachedPlayerPawn is NULL!"), TurnIndex);
+    // }
 
     UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] ==== OnTurnStartedHandler END ===="), TurnIndex);
 
-    BeginPhase(Phase_Turn_Init);
-    BeginPhase(Phase_Player_Wait);
+    // ★★★ 削除: BeginPhase は早期実行済み（ゲート開放の最適化）
+    // BeginPhase(Phase_Turn_Init);
+    // BeginPhase(Phase_Player_Wait);
 }
 
 void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerCommand& Command)
