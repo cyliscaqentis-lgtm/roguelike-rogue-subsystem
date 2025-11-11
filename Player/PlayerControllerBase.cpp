@@ -525,27 +525,32 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
         }
     }
 
+    // ★★★ DEBUG (2025-11-11): ガード条件の詳細を常に出力 ★★★
+    UE_LOG(LogTemp, Warning,
+        TEXT("[Client] Input_Move_Triggered: bWaitingReplicated=%d, bGateOpenClient=%d, bSentThisInputWindow=%d, WindowId=%d"),
+        bWaitingReplicated, bGateOpenClient, bSentThisInputWindow, CurrentInputWindowId);
+
     // 両方が true の場合のみ送信可能
     if (!bWaitingReplicated || !bGateOpenClient)
     {
-        UE_LOG(LogTemp, Verbose,
-            TEXT("[Client] Input blocked: WaitingForPlayerInput=%d, Gate=%d (レプリケーション待ち)"),
+        UE_LOG(LogTemp, Warning,
+            TEXT("[Client] ❌ Input BLOCKED by gate check: WaitingForPlayerInput=%d, Gate=%d"),
             bWaitingReplicated, bGateOpenClient);
         return;
     }
-
-    UE_LOG(LogTemp, Verbose,
-        TEXT("[Client] Input accepted: WaitingForPlayerInput=%d, Gate=%d"),
-        bWaitingReplicated, bGateOpenClient);
 
     //==========================================================================
     // ★ Step 3: 送信済みチェック（クライアント側の多重送信防止）
     //==========================================================================
     if (bSentThisInputWindow)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[Client] Command already sent for this window, ignoring"));
+        UE_LOG(LogTemp, Warning, TEXT("[Client] ❌ Input BLOCKED by latch: bSentThisInputWindow=true, WindowId=%d"),
+            CurrentInputWindowId);
         return;
     }
+
+    UE_LOG(LogTemp, Warning, TEXT("[Client] ✅ Input PASSED all guards, preparing to send command"));
+
 
     //=== Step 2: 入力値を直接使用（修正なし） ===
     const FVector2D RawInput = Value.Get<FVector2D>();
@@ -990,7 +995,23 @@ void APlayerControllerBase::Client_NotifyMoveRejected_Implementation()
     bSentThisInputWindow = false;
     LastProcessedWindowId = INDEX_NONE;
 
-    UE_LOG(LogTemp, Warning, TEXT("[Client] Both latches reset complete. Player can retry input."));
+    // ★★★ CRITICAL FIX (2025-11-11): Gemini分析により判明 ★★★
+    // 問題: サーバー側でWaitingForPlayerInputがtrueのままの場合、
+    // OnRep_WaitingForPlayerInputが呼ばれず、Gate_Input_Openタグが復元されない
+    // 修正: Client_NotifyMoveRejectedで明示的にGateを再開放する
+    if (!IsValid(CachedTurnManager))
+    {
+        UE_LOG(LogTemp, Error, TEXT("[Client] Client_NotifyMoveRejected: TurnManager invalid, cannot ensure Gate state"));
+    }
+    else
+    {
+        // TurnManagerのApplyWaitInputGateを呼び出してクライアント側のGateを確実に開く
+        // これにより、レプリケーション遅延があってもクライアント側のGate状態が保証される
+        CachedTurnManager->ApplyWaitInputGate(true);
+        UE_LOG(LogTemp, Warning, TEXT("[Client] ★ Gate_Input_Open tag explicitly re-applied via TurnManager"));
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[Client] All state reset complete. Player can retry input."));
 }
 
 //==============================================================================
