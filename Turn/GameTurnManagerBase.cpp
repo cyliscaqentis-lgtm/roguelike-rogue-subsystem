@@ -2598,7 +2598,17 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
     }
 
     //==========================================================================
-    // (9) GAS起動！Ebility.Moveを発動！E
+    // ★★★ (9) TEMPORARY: 承認フェーズで即時起動（2025-11-11 DOCUMENTED） ★★★
+    //==========================================================================
+    // 【現状】承認フェーズ(OnPlayerCommandAccepted)でアビリティを即時起動している。
+    // 【問題点】本来の2フェーズ設計では：
+    //   - 承認フェーズ: アビリティを起動し、Wait Gameplay Event 状態に入る
+    //   - 実行フェーズ: イベントを送信して、待機中のアビリティを再開させる
+    // 【TODO - Future Refactoring】:
+    //   1. GA_MoveBase に UAbilityTask_WaitGameplayEvent を追加
+    //   2. ここでは即時起動せず、予約とフラグ設定のみ行う
+    //   3. ExecutePlayerMove() でイベント送信によりアビリティを再開
+    // 【理由】同時移動の実現、競合状態の防止、拡張性の確保
     //==========================================================================
     const int32 TriggeredCount = ASC->HandleGameplayEvent(EventData.EventTag, &EventData);
 
@@ -2874,9 +2884,12 @@ void AGameTurnManagerBase::ExecuteSimultaneousPhase()
     UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] ==== Simultaneous Move Phase (No Attacks) ===="), CurrentTurnIndex);
 
     //==========================================================================
-    // ★★★ プレイヤーの移動は既に OnPlayerCommandAccepted_Implementation で実行済み
+    // ★★★ DISABLED (2025-11-11): プレイヤーの移動は OnPlayerCommandAccepted で実行済み ★★★
     //==========================================================================
-    // ExecutePlayerMove();  // ★★★ 削除: 二重実行を防ぐ
+    // ExecutePlayerMove();
+    // 【理由】二重実行を防ぐため無効化。OnPlayerCommandAccepted で即時起動している。
+    // 【TODO】Wait Gameplay Event パターン実装後に、この呼び出しを復活させる。
+    //        その際、HandleGameplayEvent()ではなく、イベント送信方式に変更する。
 
     //==========================================================================
     // (1) 敵の移動フェーズ。同時実行
@@ -3276,14 +3289,25 @@ void AGameTurnManagerBase::ExecuteMovePhase()
 
 
 
-//------------------------------------------------------------------------------
-// ExecutePlayerMoveの修正版
-//------------------------------------------------------------------------------
-//------------------------------------------------------------------------------
-// ExecutePlayerMoveの完全修正版
-//------------------------------------------------------------------------------
-// GameTurnManagerBase.cpp - line 1170の既存実装
-// ★★★ 変更なし（参照のため全文掲載） ★★★
+//==============================================================================
+// ExecutePlayerMove - 将来のリファクタリング用スケルトン
+//==============================================================================
+// ★★★ DEPRECATED (2025-11-11): 現在は呼ばれていません ★★★
+//==============================================================================
+// 【現状】この関数は ExecuteSimultaneousPhase / ExecuteSequentialPhase から
+//        呼ばれていません（コメントアウト済み）。
+//        プレイヤーの移動は OnPlayerCommandAccepted で即時起動されています。
+//
+// 【将来の実装計画】Wait Gameplay Event パターンへのリファクタリング:
+//   1. OnPlayerCommandAccepted: アビリティを起動し、Wait Event 状態に入れる
+//   2. ExecutePlayerMove: イベントを送信して待機中のアビリティを再開
+//   3. GA_MoveBase: UAbilityTask_WaitGameplayEvent でイベントを待機
+//
+// 【変更内容】:
+//   - HandleGameplayEvent() による起動は削除
+//   - 代わりに、既に起動済みのアビリティに Event.Turn.ExecuteMove を送信
+//   - これにより、承認/実行の2フェーズが正しく分離される
+//==============================================================================
 
 void AGameTurnManagerBase::ExecutePlayerMove()
 {
