@@ -605,20 +605,25 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
     }
 
     //=== Step 7: サーバー送信 ===
-    UE_LOG(LogTemp, Warning, TEXT("[Client] 📤 BEFORE Server_SubmitCommand: bSentThisInputWindow=%s, WindowId=%d"),
-        bSentThisInputWindow ? TEXT("TRUE") : TEXT("FALSE"), Command.WindowId);
+    // ★★★ CRITICAL FIX (2025-11-11): Gemini分析により判明した Race Condition 修正 ★★★
+    // 問題: RPC呼び出しは非同期のため、サーバー応答が先に返ってくることがある
+    // 1. Server_SubmitCommand(Command) - RPC送信
+    // 2. サーバーが即座に応答 → Client_NotifyMoveRejected RPC送信
+    // 3. Client_NotifyMoveRejected受信 → bSentThisInputWindow = false（リセット）
+    // 4. Input_Move_Triggeredの続きが実行 → bSentThisInputWindow = true（上書き！）
+    // 5. 結果: 入力が永久にブロックされる
+    //
+    // 修正: ラッチをRPC呼び出しの**前**に設定し、処理を不可分（atomic）にする
+    // これにより、サーバー応答がどのタイミングで返ってきても状態が矛盾しない
+    bSentThisInputWindow = true;
+
+    UE_LOG(LogTemp, Warning, TEXT("[Client] 📤 Latch SET (before RPC): bSentThisInputWindow=TRUE, WindowId=%d"),
+        Command.WindowId);
 
     Server_SubmitCommand(Command);
 
-    // ★★★ CRITICAL FIX (2025-11-11): 送信直後に即座にラッチを立てる ★★★
-    // 急速連打防止のため、送信と同時にラッチを確定する。
-    // - ACK受信時: ラッチを維持（既にtrue）
-    // - REJECT受信時: ラッチをリセット（Client_NotifyMoveRejected内で false に戻す）
-    // これにより、サーバー応答が届くまでの間に複数のコマンドが送信されることを防ぐ。
-    bSentThisInputWindow = true;
-
-    UE_LOG(LogTemp, Warning, TEXT("[Client] 📤 AFTER Server_SubmitCommand: bSentThisInputWindow=%s (latch SET, WindowId=%d)"),
-        bSentThisInputWindow ? TEXT("TRUE") : TEXT("FALSE"), Command.WindowId);
+    UE_LOG(LogTemp, Warning, TEXT("[Client] 📤 RPC sent: Server_SubmitCommand(WindowId=%d)"),
+        Command.WindowId);
 }
 
 
