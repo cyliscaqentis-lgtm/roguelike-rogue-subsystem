@@ -101,6 +101,23 @@ bool UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
         return false;
     }
 
+    // ★★★ CRITICAL FIX (2025-11-11): OriginHold チェック追加（backstab防止） ★★★
+    // 他者が移動元として保護しているセルには移動完了できない
+    // これにより、予約段階だけでなく移動完了段階でも OriginHold を保護する
+    if (const FReservationInfo* ReservationInfo = ReservedCells.Find(NewCell))
+    {
+        if (ReservationInfo->bIsOriginHold &&
+            ReservationInfo->Owner.IsValid() &&
+            ReservationInfo->Owner.Get() != Actor)
+        {
+            UE_LOG(LogTemp, Error,
+                TEXT("[GridOccupancy] REJECT UPDATE: %s cannot move to (%d,%d) - OriginHold by %s (TurnId=%d) [BACKSTAB BLOCKED IN UPDATE]"),
+                *GetNameSafe(Actor), NewCell.X, NewCell.Y,
+                *GetNameSafe(ReservationInfo->Owner.Get()), ReservationInfo->TurnId);
+            return false;  // OriginHold により更新拒否（backstab完全防止）
+        }
+    }
+
     // ★★★ CRITICAL FIX (2025-11-11): 他者予約の尊重 ★★★
     // セルが他のActorに予約されている場合、原則拒否（完全スワップは例外）
     const bool bIHaveReservation = IsReservationOwnedByActor(Actor, NewCell);
