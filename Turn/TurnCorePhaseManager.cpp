@@ -274,7 +274,13 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
             //       残った予約が他Actorの移動を妨げる可能性がある。
             if (!Action.bIsWait)
             {
-                TurnManager->RegisterResolvedMove(Action.SourceActor.Get(), Action.NextCell);
+                const bool bReserved = TurnManager->RegisterResolvedMove(Action.SourceActor.Get(), Action.NextCell);
+                if (!bReserved)
+                {
+                    UE_LOG(LogTemp, Error,
+                        TEXT("[TurnCore] RegisterResolvedMove FAILED for %s -> (%d,%d) - reservation rejected"),
+                        *GetNameSafe(Action.SourceActor.Get()), Action.NextCell.X, Action.NextCell.Y);
+                }
             }
             else
             {

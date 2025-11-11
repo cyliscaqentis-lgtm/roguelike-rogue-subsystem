@@ -534,7 +534,12 @@ public:
     void ClearResolvedMoves();
 
     /** 解決済み移動を登録 */
-    void RegisterResolvedMove(AActor* Actor, const FIntPoint& Cell);
+    /**
+     * ★★★ CRITICAL FIX (2025-11-11): bool型に変更（予約成功/失敗を返す） ★★★
+     * Register a resolved move for an actor.
+     * @return true if reservation succeeded, false if failed
+     */
+    bool RegisterResolvedMove(AActor* Actor, const FIntPoint& Cell);
 
     /** 持E��セルへの移動が予紁E��れてぁE��ぁE*/
     bool IsMoveAuthorized(AActor* Actor, const FIntPoint& Cell) const;

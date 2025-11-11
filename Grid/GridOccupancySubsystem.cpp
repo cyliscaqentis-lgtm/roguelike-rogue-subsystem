@@ -260,11 +260,11 @@ void UGridOccupancySubsystem::UnregisterActor(AActor* Actor)
         *GetNameSafe(Actor));
 }
 
-void UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint& Cell)
+bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint& Cell)
 {
     if (!Actor)
     {
-        return;
+        return false;  // Actor が null の場合は失敗
     }
 
     // ★★★ CRITICAL FIX (2025-11-11): 既存の予約を保護 ★★★
@@ -276,7 +276,7 @@ void UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
             UE_LOG(LogTemp, Error,
                 TEXT("[GridOccupancy] REJECT RESERVATION: %s cannot reserve (%d,%d) - already reserved by %s (TurnId=%d)"),
                 *GetNameSafe(Actor), Cell.X, Cell.Y, *GetNameSafe(ExistingInfo->Owner.Get()), ExistingInfo->TurnId);
-            return;  // 予約拒否
+            return false;  // 予約拒否 - 他のActorが既に予約済み
         }
     }
 
@@ -288,6 +288,8 @@ void UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
 
     UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] Cell (%d, %d) reserved by %s (TurnId=%d)"),
         Cell.X, Cell.Y, *GetNameSafe(Actor), CurrentTurnId);
+
+    return true;  // 予約成功
 }
 
 void UGridOccupancySubsystem::ReleaseReservationForActor(AActor* Actor)

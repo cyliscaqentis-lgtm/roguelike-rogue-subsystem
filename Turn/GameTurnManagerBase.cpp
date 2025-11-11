@@ -1972,6 +1972,21 @@ void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnIndex)
 
     UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] ==== OnTurnStartedHandler START ===="), TurnIndex);
 
+    // ★★★ CRITICAL FIX (2025-11-11): ターン開始時に古い予約を即座にパージ ★★★
+    // プレイヤー入力がExecuteMovePhaseより先に来る可能性があるため、
+    // ターン開始直後にクリーンアップしてPlayerの予約を確実に受け入れる
+    if (UWorld* World = GetWorld())
+    {
+        if (UGridOccupancySubsystem* GridOccupancy = World->GetSubsystem<UGridOccupancySubsystem>())
+        {
+            GridOccupancy->SetCurrentTurnId(TurnIndex);
+            GridOccupancy->PurgeOutdatedReservations(TurnIndex);
+            UE_LOG(LogTurnManager, Log,
+                TEXT("[Turn %d] ★ PurgeOutdatedReservations called at turn start (before player input)"),
+                TurnIndex);
+        }
+    }
+
     if (APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0))
     {
         CachedPlayerPawn = PC->GetPawn();
@@ -2451,11 +2466,43 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
             return;
         }
 
-        // ★★★ Validation passed - Register player's intended move
-        RegisterResolvedMove(PlayerPawn, TargetCell);
+        // ★★★ CRITICAL FIX (2025-11-11): 予約成功/失敗をチェック ★★★
+        const bool bReserved = RegisterResolvedMove(PlayerPawn, TargetCell);
+
+        if (!bReserved)
+        {
+            // 予約失敗 - 他のActorが既に予約済み（通常はPurgeで削除されるはずだが、万一の場合）
+            UE_LOG(LogTurnManager, Error,
+                TEXT("[MovePrecheck] RESERVATION FAILED: (%d,%d) → (%d,%d) - Cell already reserved by another actor"),
+                CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y);
+
+            // 回転のみ適用（ターン不消費）
+            const float Yaw = FMath::Atan2(Command.Direction.Y, Command.Direction.X) * 180.f / PI;
+            FRotator NewRotation = PlayerPawn->GetActorRotation();
+            NewRotation.Yaw = Yaw;
+            PlayerPawn->SetActorRotation(NewRotation);
+
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[MovePrecheck] Reservation failed - Applied FACING ONLY - Direction=(%.1f,%.1f), Yaw=%.1f"),
+                Command.Direction.X, Command.Direction.Y, Yaw);
+
+            if (APlayerController* PC = Cast<APlayerController>(PlayerPawn->GetController()))
+            {
+                if (APlayerControllerBase* TPCB = Cast<APlayerControllerBase>(PC))
+                {
+                    TPCB->Client_ApplyFacingNoTurn(InputWindowId, FVector2D(Command.Direction.X, Command.Direction.Y));
+                    UE_LOG(LogTurnManager, Log,
+                        TEXT("[MovePrecheck] Sent Client_ApplyFacingNoTurn RPC (WindowId=%d, reservation failed)"),
+                        InputWindowId);
+                }
+            }
+
+            // ターン不消費で継続
+            return;
+        }
 
         UE_LOG(LogTurnManager, Log,
-            TEXT("[MovePrecheck] OK: (%d,%d) → (%d,%d) | Walkable=true | Reservation registered"),
+            TEXT("[MovePrecheck] OK: (%d,%d) → (%d,%d) | Walkable=true | Reservation SUCCESS"),
             CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y);
     }
     else
@@ -3982,23 +4029,42 @@ void AGameTurnManagerBase::ClearResolvedMoves()
     }
 }
 
-void AGameTurnManagerBase::RegisterResolvedMove(AActor* Actor, const FIntPoint& Cell)
+bool AGameTurnManagerBase::RegisterResolvedMove(AActor* Actor, const FIntPoint& Cell)
 {
     if (!Actor)
     {
-        return;
+        UE_LOG(LogTurnManager, Error,
+            TEXT("[RegisterResolvedMove] FAILED: Actor is null"));
+        return false;
     }
 
     TWeakObjectPtr<AActor> ActorKey(Actor);
     PendingMoveReservations.FindOrAdd(ActorKey) = Cell;
 
+    // ★★★ CRITICAL FIX (2025-11-11): 予約成功/失敗をチェック ★★★
     if (UWorld* World = GetWorld())
     {
         if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
         {
-            Occupancy->ReserveCellForActor(Actor, Cell);
+            const bool bReserved = Occupancy->ReserveCellForActor(Actor, Cell);
+            if (!bReserved)
+            {
+                UE_LOG(LogTurnManager, Error,
+                    TEXT("[RegisterResolvedMove] FAILED: %s cannot reserve (%d,%d) - already reserved by another actor"),
+                    *GetNameSafe(Actor), Cell.X, Cell.Y);
+                return false;  // 予約失敗
+            }
+
+            UE_LOG(LogTurnManager, Verbose,
+                TEXT("[RegisterResolvedMove] SUCCESS: %s reserved (%d,%d)"),
+                *GetNameSafe(Actor), Cell.X, Cell.Y);
+            return true;  // 予約成功
         }
     }
+
+    UE_LOG(LogTurnManager, Error,
+        TEXT("[RegisterResolvedMove] FAILED: GridOccupancySubsystem not available"));
+    return false;
 }
 
 bool AGameTurnManagerBase::IsMoveAuthorized(AActor* Actor, const FIntPoint& Cell) const

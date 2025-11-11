@@ -112,8 +112,16 @@ public:
      */
     UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
     void UnregisterActor(AActor* Actor);
+
+    /**
+     * ★★★ CRITICAL FIX (2025-11-11): bool型に変更（成功/失敗を返す） ★★★
+     * Reserve a cell for an actor. Returns false if the cell is already reserved by another actor.
+     * @param Actor - The actor requesting the reservation
+     * @param Cell - The grid cell to reserve
+     * @return true if reservation succeeded, false if already reserved by another actor
+     */
     UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
-    void ReserveCellForActor(AActor* Actor, const FIntPoint& Cell);
+    bool ReserveCellForActor(AActor* Actor, const FIntPoint& Cell);
 
     UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
     void ReleaseReservationForActor(AActor* Actor);
