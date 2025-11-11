@@ -28,7 +28,7 @@ public:
     int32 GetDistance(const FIntPoint& Cell) const;
 
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Turn|DistanceField")
-    FIntPoint GetNextStepTowardsPlayer(const FIntPoint& FromCell) const;
+    FIntPoint GetNextStepTowardsPlayer(const FIntPoint& FromCell, AActor* IgnoreActor = nullptr) const;  // ★★★ 修正 (2025-11-11): AI待機問題修正のためIgnoreActor追加
 
     // ★★★ デバッグ用 ★★★
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Turn|DistanceField")
@@ -52,7 +52,7 @@ public:
     bool EnsureCoverage(const FIntPoint& Abs);
 
 private:
-    bool IsWalkable(const FIntPoint& Cell) const;
+    bool IsWalkable(const FIntPoint& Cell, AActor* IgnoreActor = nullptr) const;  // ★★★ 修正 (2025-11-11): AI待機問題修正のためIgnoreActor追加
     bool CanMoveDiagonal(const FIntPoint& From, const FIntPoint& To) const;
     
     // ★★★ PathFinderのキャッシュ（初期化時に取得） ★★★

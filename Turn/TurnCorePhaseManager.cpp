@@ -125,6 +125,21 @@ void UTurnCorePhaseManager::CoreObservationPhase(const FIntPoint& PlayerCell)
         return;
     }
 
+    // ★★★ 修正 (2025-11-11): 距離場更新前に古い予約をクリア（AI待機問題修正） ★★★
+    if (UWorld* World = GetWorld())
+    {
+        if (UGridOccupancySubsystem* GridOccupancy = World->GetSubsystem<UGridOccupancySubsystem>())
+        {
+            if (TurnManager)
+            {
+                int32 CurrentTurnId = TurnManager->GetCurrentTurnIndex();
+                GridOccupancy->SetCurrentTurnId(CurrentTurnId);
+                GridOccupancy->PurgeOutdatedReservations(CurrentTurnId);
+                UE_LOG(LogTemp, Log, TEXT("[TurnCore] ObservationPhase: Purged outdated reservations for turn %d"), CurrentTurnId);
+            }
+        }
+    }
+
     DistanceField->UpdateDistanceField(PlayerCell);
     UE_LOG(LogTemp, Log, TEXT("[TurnCore] ObservationPhase: Complete"));
 }

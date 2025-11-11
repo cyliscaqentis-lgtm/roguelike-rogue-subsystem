@@ -283,7 +283,7 @@ int32 UDistanceFieldSubsystem::GetDistance(const FIntPoint& Cell) const
     return DistPtr ? *DistPtr : -1;
 }
 
-FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(const FIntPoint& FromCell) const
+FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(const FIntPoint& FromCell, AActor* IgnoreActor) const
 {
     // ★★★ 絶対座標APIで距離チェック + EnsureCoverage対応 ★★★
     int32 d0 = GetDistanceAbs(FromCell);
@@ -297,9 +297,9 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(const FIntPoint& Fro
         //              FromCell.X, FromCell.Y, PlayerPosition.X, PlayerPosition.Y);
         //     return FromCell;  // 現在地に留まる
         // }
-        
+
         // ★★★ 暫定：距離場外の場合はその場待機（軽量） ★★★
-        DIAG_LOG(Warning, TEXT("[GetNextStep] Enemy out of bounds (%d,%d) - staying put"), 
+        DIAG_LOG(Warning, TEXT("[GetNextStep] Enemy out of bounds (%d,%d) - staying put"),
                  FromCell.X, FromCell.Y);
         return FromCell;
     }
@@ -316,17 +316,17 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(const FIntPoint& Fro
     // ★★★ 近傍選定：絶対座標で距離を取得 ★★★
     FIntPoint Best = FromCell;
     int32 bestDist = CurrentDist;
-    
+
     // 4方向近傍をチェック
     FIntPoint Neighbors[4] = {
         FromCell + FIntPoint(1, 0), FromCell + FIntPoint(-1, 0),
         FromCell + FIntPoint(0, 1), FromCell + FIntPoint(0, -1)
     };
-    
+
     for (int32 i = 0; i < 4; ++i)
     {
         const FIntPoint& N = Neighbors[i];
-        if (!IsWalkable(N)) continue;
+        if (!IsWalkable(N, IgnoreActor)) continue;  // ★★★ 修正 (2025-11-11): IgnoreActorを渡して自分のOriginHoldを無視
         
         const int32 nd = GetDistanceAbs(N);
         if (nd >= 0 && nd < bestDist) 
@@ -348,7 +348,7 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(const FIntPoint& Fro
     return Best;
 }
 
-bool UDistanceFieldSubsystem::IsWalkable(const FIntPoint& Cell) const
+bool UDistanceFieldSubsystem::IsWalkable(const FIntPoint& Cell, AActor* IgnoreActor) const
 {
     // ★★★ キャッシュからPathFinderを取得 ★★★
     const AGridPathfindingLibrary* GridPathfinding = GetPathFinder();
@@ -357,9 +357,16 @@ bool UDistanceFieldSubsystem::IsWalkable(const FIntPoint& Cell) const
         UE_LOG(LogTemp, Error, TEXT("[IsWalkable] GridPathfindingLibrary not found, returning false"));
         return false;
     }
-    
-    // ★★★ PathFinderの統合API IsCellWalkable を使用 ★★★
-    return GridPathfinding->IsCellWalkable(Cell);
+
+    // ★★★ 修正 (2025-11-11): IgnoreActorを考慮した歩行可能性判定（AI待機問題修正） ★★★
+    if (IgnoreActor)
+    {
+        return GridPathfinding->IsCellWalkableIgnoringActor(Cell, IgnoreActor);
+    }
+    else
+    {
+        return GridPathfinding->IsCellWalkable(Cell);
+    }
 }
 
 bool UDistanceFieldSubsystem::CanMoveDiagonal(const FIntPoint& From, const FIntPoint& To) const

@@ -96,7 +96,7 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
 
     // ★★★ Geminiが指摘した診断：DistanceFieldの返り値を確認 ★★★
     const FIntPoint BeforeNextCell = Intent.NextCell;
-    Intent.NextCell = DistanceField->GetNextStepTowardsPlayer(Intent.CurrentCell);
+    Intent.NextCell = DistanceField->GetNextStepTowardsPlayer(Intent.CurrentCell, GetOwner());  // ★★★ 修正 (2025-11-11): 自分自身のOriginHoldを無視（AI待機問題修正）
     int32 Distance = DistanceField->GetDistance(Intent.CurrentCell);
 
     const int32 CurrentDF = Distance;

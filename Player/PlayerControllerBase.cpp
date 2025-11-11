@@ -38,7 +38,7 @@ APlayerControllerBase::APlayerControllerBase()
 
     // デフォルト値の初期化
     AxisThreshold = 0.5f;
-    DeadzoneThreshold = 0.1f;
+    DeadzoneThreshold = 0.5f;  // ★★★ 修正 (2025-11-11): "ちょい押し"誤移動防止のため0.1→0.5に変更
     LastTurnDirection = FVector2D::ZeroVector;
     CachedInputDirection = FVector2D::ZeroVector;
     ServerLastTurnDirectionQuantized = FIntPoint(0, 0);
