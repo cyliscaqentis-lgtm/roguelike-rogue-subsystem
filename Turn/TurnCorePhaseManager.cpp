@@ -130,9 +130,9 @@ void UTurnCorePhaseManager::CoreObservationPhase(const FIntPoint& PlayerCell)
     {
         if (UGridOccupancySubsystem* GridOccupancy = World->GetSubsystem<UGridOccupancySubsystem>())
         {
-            if (TurnManager)
+            if (AGameTurnManagerBase* TurnMgr = ResolveTurnManager())
             {
-                int32 CurrentTurnId = TurnManager->GetCurrentTurnIndex();
+                int32 CurrentTurnId = TurnMgr->GetCurrentTurnIndex();
                 GridOccupancy->SetCurrentTurnId(CurrentTurnId);
                 GridOccupancy->PurgeOutdatedReservations(CurrentTurnId);
                 UE_LOG(LogTemp, Log, TEXT("[TurnCore] ObservationPhase: Purged outdated reservations for turn %d"), CurrentTurnId);
