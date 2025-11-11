@@ -611,8 +611,10 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
             if (AActor* TargetActor = Intent.Target.Get())
             {
                 FGameplayAbilityTargetData_SingleTargetHit* TargetData = new FGameplayAbilityTargetData_SingleTargetHit();
-                TargetData->HitResult.Actor = TargetActor;
-                TargetData->HitResult.Location = TargetActor->GetActorLocation();
+                FHitResult HitResult;
+                HitResult.HitObjectHandle = FActorInstanceHandle(TargetActor);
+                HitResult.Location = TargetActor->GetActorLocation();
+                TargetData->HitResult = HitResult;
                 Action.TargetData.Add(TargetData);
 
                 UE_LOG(LogTemp, Log, TEXT("[Attack Slot %d] %s -> Target: %s"),
@@ -621,8 +623,10 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
             else if (AActor* TargetActorAlt = Intent.TargetActor)  // 互換性のため
             {
                 FGameplayAbilityTargetData_SingleTargetHit* TargetData = new FGameplayAbilityTargetData_SingleTargetHit();
-                TargetData->HitResult.Actor = TargetActorAlt;
-                TargetData->HitResult.Location = TargetActorAlt->GetActorLocation();
+                FHitResult HitResult;
+                HitResult.HitObjectHandle = FActorInstanceHandle(TargetActorAlt);
+                HitResult.Location = TargetActorAlt->GetActorLocation();
+                TargetData->HitResult = HitResult;
                 Action.TargetData.Add(TargetData);
 
                 UE_LOG(LogTemp, Log, TEXT("[Attack Slot %d] %s -> Target (Alt): %s"),
