@@ -4425,7 +4425,7 @@ bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Actio
             *GetNameSafe(Unit));
     }
 
-    // ★★★ DIAGNOSTIC: Log ASC ability count and triggers (2025-11-11) ★★★
+    // ★★★ DIAGNOSTIC: Log ASC ability count (2025-11-11) ★★★
     const int32 AbilityCount = ASC->GetActivatableAbilities().Num();
     if (AbilityCount == 0)
     {
@@ -4439,22 +4439,17 @@ bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Actio
             TEXT("[TriggerPlayerMove] %s has %d abilities in ASC (cleared %d blocking tags)"),
             *GetNameSafe(Unit), AbilityCount, ClearedCount);
 
-        // ★★★ DIAGNOSTIC: List all ability triggers (2025-11-11) ★★★
+        // ★★★ DIAGNOSTIC: List all granted abilities (2025-11-11) ★★★
+        // Note: AbilityTriggers is protected, so we can only log ability names
         const TArray<FGameplayAbilitySpec>& Specs = ASC->GetActivatableAbilities();
         for (int32 i = 0; i < Specs.Num(); ++i)
         {
             const FGameplayAbilitySpec& Spec = Specs[i];
             if (Spec.Ability)
             {
-                FString TriggerTags;
-                for (const FAbilityTriggerData& Trigger : Spec.Ability->AbilityTriggers)
-                {
-                    if (!TriggerTags.IsEmpty()) TriggerTags += TEXT(", ");
-                    TriggerTags += Trigger.TriggerTag.ToString();
-                }
                 UE_LOG(LogTurnManager, Verbose,
-                    TEXT("[TriggerPlayerMove]   Ability[%d]: %s (Triggers: %s)"),
-                    i, *Spec.Ability->GetName(), TriggerTags.IsEmpty() ? TEXT("NONE") : *TriggerTags);
+                    TEXT("[TriggerPlayerMove]   Ability[%d]: %s (Level=%d, InputID=%d)"),
+                    i, *Spec.Ability->GetName(), Spec.Level, Spec.InputID);
             }
         }
     }
