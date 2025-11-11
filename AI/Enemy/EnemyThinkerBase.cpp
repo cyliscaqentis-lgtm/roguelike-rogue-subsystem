@@ -17,8 +17,8 @@ UEnemyThinkerBase::UEnemyThinkerBase()
 void UEnemyThinkerBase::BeginPlay()
 {
     Super::BeginPlay();
-    
-    // ★★★ PathFinderをキャッシュ ★★★
+
+    // ★★★ PathFinderとTurnManagerをキャッシュ ★★★
     UWorld* World = GetWorld();
     if (World)
     {
@@ -26,6 +26,13 @@ void UEnemyThinkerBase::BeginPlay()
         {
             CachedPathFinder = *It;
             UE_LOG(LogTemp, Log, TEXT("[EnemyThinker] PathFinder cached: %s"), *CachedPathFinder->GetName());
+            break;
+        }
+
+        for (TActorIterator<AGameTurnManagerBase> It(World); It; ++It)
+        {
+            CachedTurnManager = *It;
+            UE_LOG(LogTemp, Log, TEXT("[EnemyThinker] TurnManager cached: %s"), *CachedTurnManager->GetName());
             break;
         }
     }
@@ -207,7 +214,20 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
         // ★★★ FIX (2025-11-11): プレイヤーをターゲットとして保存 ★★★
         // GA_MeleeAttackが実行時に隣接検索するのではなく、
         // 決定時のターゲットを使用するように変更
-        if (AActor* PlayerActor = UGameplayStatics::GetPlayerPawn(World, 0))
+        // ★★★ REFACTOR (2025-11-11): 一元管理されたTurnManager APIを使用 ★★★
+        AActor* PlayerActor = nullptr;
+        if (CachedTurnManager.IsValid())
+        {
+            PlayerActor = CachedTurnManager->GetPlayerPawn();
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[DecideIntent] %s: TurnManager cache invalid, falling back to direct fetch"),
+                *GetNameSafe(GetOwner()));
+            PlayerActor = UGameplayStatics::GetPlayerPawn(World, 0);
+        }
+
+        if (PlayerActor)
         {
             Intent.Target = PlayerActor;
             Intent.TargetActor = PlayerActor;  // 互換性のため両方設定

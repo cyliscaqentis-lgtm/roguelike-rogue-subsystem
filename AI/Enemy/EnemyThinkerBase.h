@@ -61,10 +61,14 @@ protected:
     //--------------------------------------------------------------------------
     // キャッシュ
     //--------------------------------------------------------------------------
-    
+
     /** PathFinderのキャッシュ（BeginPlayで取得） */
     UPROPERTY(Transient)
     TWeakObjectPtr<class AGridPathfindingLibrary> CachedPathFinder;
+
+    /** TurnManagerのキャッシュ（BeginPlayで取得） */
+    UPROPERTY(Transient)
+    TWeakObjectPtr<class AGameTurnManagerBase> CachedTurnManager;
 
     //--------------------------------------------------------------------------
     // アビリティ射程取得（マス単位）
