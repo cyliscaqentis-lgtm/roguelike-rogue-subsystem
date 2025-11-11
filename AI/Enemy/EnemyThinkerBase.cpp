@@ -7,6 +7,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "../../Grid/GridPathfindingLibrary.h"
 #include "../../Turn/GameTurnManagerBase.h"
+#include "../../Utility/RogueGameplayTags.h"
 #include "EngineUtils.h"
 
 UEnemyThinkerBase::UEnemyThinkerBase()
@@ -208,7 +209,7 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
     // 従来の条件 DistanceToPlayer > 0 では Distance=0 の場合に攻撃が選択されなかった
     if (DistanceToPlayer >= 0 && DistanceToPlayer <= AttackRangeInTiles)
     {
-        Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Attack"));
+        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Attack;
         Intent.NextCell = Intent.CurrentCell;  // 攻撃時は移動しない
 
         // ★★★ FIX (2025-11-11): プレイヤーをターゲットとして保存 ★★★
@@ -243,12 +244,12 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
     }
     else
     {
-        Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Move"));
-        
+        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Move;
+
         // P2対策：現在セル==目的セルならWaitにダウングレード
         if (Intent.NextCell == Intent.CurrentCell)
         {
-        Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"));
+        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Wait;
         UE_LOG(LogTurnManager, Log, TEXT("[Thinker] %s WAIT - NextCell identical to current"),
             *GetNameSafe(GetOwner()));
         }
@@ -277,7 +278,7 @@ FGameplayTag UEnemyThinkerBase::GetAttackAbilityForRange(int32 DistanceInTiles) 
 {
     if (DistanceInTiles <= AttackRangeInTiles)
     {
-        return FGameplayTag::RequestGameplayTag(FName("AI.Intent.Attack"));
+        return RogueGameplayTags::AI_Intent_Attack;
     }
 
     return FGameplayTag();
