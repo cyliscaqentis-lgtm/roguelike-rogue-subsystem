@@ -195,14 +195,26 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
     // Distanceからプレイヤー距離を取得して攻撃判定
     // マンハッタン距離 ≤ AttackRange → Attack、それ以外は追尾Move
     const int32 DistanceToPlayer = Distance; // 既に取得したDistanceを使用
-    
-    if (DistanceToPlayer <= AttackRangeInTiles && DistanceToPlayer > 0)
+
+    // ★★★ 修正 (2025-11-11): Distance=0 の場合も攻撃範囲として扱う ★★★
+    // Distance=0 は「プレイヤーと同じセル」または「隣接」を意味する（実装依存）
+    // 従来の条件 DistanceToPlayer > 0 では Distance=0 の場合に攻撃が選択されなかった
+    if (DistanceToPlayer >= 0 && DistanceToPlayer <= AttackRangeInTiles)
     {
         Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Attack"));
         Intent.NextCell = Intent.CurrentCell;  // 攻撃時は移動しない
 
-        UE_LOG(LogTemp, Log, TEXT("[DecideIntent] %s: ★ ATTACK intent (Distance=%d, Range=%d)"),
-            *GetNameSafe(GetOwner()), DistanceToPlayer, AttackRangeInTiles);
+        // ★ Distance=0 の場合は警告ログを出力（通常は起こらないはず）
+        if (DistanceToPlayer == 0)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[DecideIntent] %s: ⚠ ATTACK with Distance=0 (same cell or adjacent?), Range=%d"),
+                *GetNameSafe(GetOwner()), AttackRangeInTiles);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Log, TEXT("[DecideIntent] %s: ★ ATTACK intent (Distance=%d, Range=%d)"),
+                *GetNameSafe(GetOwner()), DistanceToPlayer, AttackRangeInTiles);
+        }
     }
     else
     {
