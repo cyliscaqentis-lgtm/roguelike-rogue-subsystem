@@ -899,7 +899,7 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
         // GridCostはあくまで「地形の通行コスト/Walkable状態」を表し、占有状態とは別チャンネルで管理すべき。
         // UpdateGridState(CachedFirstLoc, 1);  // ← LEGACY CODE REMOVED
 
-        // ★★★ 2025-11-10: GridOccupancySubsystemを更新（ユニット移動後） ★★★
+        // ★★★ 2025-11-11: GridOccupancySubsystem更新 + 失敗時ロールバック ★★★
         if (UWorld* World = GetWorld())
         {
             if (UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>())
@@ -913,9 +913,19 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
                 }
                 else
                 {
+                    // ★★★ CRITICAL FIX (2025-11-11): ロールバック時に予約を解放 ★★★
+                    if (UGridOccupancySubsystem* Occupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
+                    {
+                        Occupancy->ReleaseReservationForActor(Unit);
+                    }
+
+                    // ★★★ ROLLBACK: 占有更新失敗時は元位置に戻す（重なり防止） ★★★
+                    const FVector RollbackWorld = PathFinder->GridToWorld(GridBefore, LocationBefore.Z);
+                    Unit->SetActorLocation(RollbackWorld, false, nullptr, ETeleportType::TeleportPhysics);
+
                     UE_LOG(LogTurnManager, Error,
-                        TEXT("[OnMoveFinished] CRITICAL: GridOccupancy update FAILED for %s to (%d,%d) - cell occupied!"),
-                        *GetNameSafe(Unit), GridAfter.X, GridAfter.Y);
+                        TEXT("[OnMoveFinished] OCCUPANCY UPDATE FAILED → ROLLBACK: %s returned to (%d,%d) from (%d,%d) - cell occupied by another unit! Reservation released."),
+                        *GetNameSafe(Unit), GridBefore.X, GridBefore.Y, GridAfter.X, GridAfter.Y);
                 }
             }
         }

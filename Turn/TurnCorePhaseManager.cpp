@@ -165,6 +165,30 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
     }
 
     UGridOccupancySubsystem* GridOccupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>();
+
+    // ★★★ CRITICAL FIX (2025-11-11): ターン番号を設定して古い予約を削除 ★★★
+    if (GridOccupancy)
+    {
+        // ターン番号を取得（TurnManager から）
+        int32 CurrentTurnId = 0;
+        if (AGameTurnManagerBase* TurnManager = ResolveTurnManager())
+        {
+            // ★★★ FIX (2025-11-11): GetCurrentTurnIndex() を使用（CurrentTurnId は増分されない） ★★★
+            CurrentTurnId = TurnManager->GetCurrentTurnIndex();
+        }
+
+        // ターン番号を設定
+        GridOccupancy->SetCurrentTurnId(CurrentTurnId);
+
+        // 古い予約を削除
+        GridOccupancy->PurgeOutdatedReservations(CurrentTurnId);
+    }
+
+    // ★★★ 二相コミット: MovePhase開始 (2025-11-11) ★★★
+    if (GridOccupancy)
+    {
+        GridOccupancy->BeginMovePhase();
+    }
     auto GetLiveCell = [&](AActor* A) -> FIntPoint
         {
             if (GridOccupancy)
@@ -315,6 +339,13 @@ void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& Reso
         UE_LOG(LogTurnCore, Error,
             TEXT("[Execute] ☁E�E�E�E�E☁EAbility activation result: NumActivated=%d"),
             NumActivated);
+    }
+
+    // ★★★ 二相コミット: MovePhase終了 (2025-11-11) ★★★
+    UGridOccupancySubsystem* GridOccupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>();
+    if (GridOccupancy)
+    {
+        GridOccupancy->EndMovePhase();
     }
 }
 

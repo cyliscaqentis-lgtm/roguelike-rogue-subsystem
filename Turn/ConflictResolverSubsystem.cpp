@@ -1,5 +1,6 @@
 #include "Turn/ConflictResolverSubsystem.h"
 #include "Utility/RogueGameplayTags.h"
+#include "Grid/GridOccupancySubsystem.h"
 
 // Define a local log category to avoid circular dependencies
 DEFINE_LOG_CATEGORY_STATIC(LogConflictResolver, Log, All);
@@ -32,6 +33,14 @@ void UConflictResolverSubsystem::AddReservation(const FReservationEntry& Entry)
 TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
 {
     TArray<FResolvedAction> ResolvedActions;
+
+    // ★★★ CRITICAL FIX (2025-11-11): GridOccupancySubsystem を取得してターン番号を取得 ★★★
+    UGridOccupancySubsystem* GridOccupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>();
+    int32 CurrentTurnId = 0;
+    if (GridOccupancy)
+    {
+        CurrentTurnId = GridOccupancy->GetCurrentTurnId();
+    }
 
     // ★★★ CRITICAL FIX (2025-11-10): スワップ検出（敵同士のA↔B入れ替わり防止） ★★★
     // 全エントリを収集して Actor→(CurrentCell, NextCell) マップを構築
@@ -97,6 +106,7 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                 const FReservationEntry& Winner = Contenders[0];
                 FResolvedAction Action;
                 Action.Actor = Winner.Actor;
+                Action.SourceActor = Winner.Actor;  // ★★★ CRITICAL FIX (2025-11-11): SourceActor を設定
                 Action.CurrentCell = Winner.CurrentCell;
 
                 // ★★★ スワップに関与している場合は Wait に変換 ★★★
@@ -116,6 +126,12 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                     Action.FinalAbilityTag = Winner.AbilityTag;
                     Action.NextCell = Winner.Cell;
                     Action.bIsWait = false;
+
+                    // ★★★ CRITICAL FIX (2025-11-11): 勝者の予約を confirmed にマーク ★★★
+                    if (GridOccupancy)
+                    {
+                        GridOccupancy->MarkReservationCommitted(WinnerActorPtr, CurrentTurnId);
+                    }
                 }
 
                 ResolvedActions.Add(Action);
@@ -133,6 +149,7 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
             // Add the winner's action
             FResolvedAction WinnerAction;
             WinnerAction.Actor = Winner.Actor;
+            WinnerAction.SourceActor = Winner.Actor;  // ★★★ CRITICAL FIX (2025-11-11): SourceActor を設定
             WinnerAction.CurrentCell = Winner.CurrentCell;
 
             // ★★★ 勝者でもスワップに関与している場合は Wait に変換 ★★★
@@ -154,6 +171,12 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                 WinnerAction.bIsWait = false;
                 WinnerAction.ResolutionReason = FString::Printf(TEXT("Won contest for cell (%d, %d)"), Cell.X, Cell.Y);
                 UE_LOG(LogConflictResolver, Log, TEXT("Winner for (%d, %d) is %s"), Cell.X, Cell.Y, *GetNameSafe(WinnerActorPtr));
+
+                // ★★★ CRITICAL FIX (2025-11-11): 勝者の予約を confirmed にマーク ★★★
+                if (GridOccupancy)
+                {
+                    GridOccupancy->MarkReservationCommitted(WinnerActorPtr, CurrentTurnId);
+                }
             }
 
             ResolvedActions.Add(WinnerAction);
@@ -166,6 +189,7 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                 const FReservationEntry& Loser = Contenders[i];
                 FResolvedAction LoserAction;
                 LoserAction.Actor = Loser.Actor;
+                LoserAction.SourceActor = Loser.Actor;  // ★★★ CRITICAL FIX (2025-11-11): SourceActor を設定
                 LoserAction.bIsWait = true; // This is the key part
                 LoserAction.FinalAbilityTag = RogueGameplayTags::AI_Intent_Wait;
                 LoserAction.CurrentCell = Loser.CurrentCell;
@@ -175,6 +199,17 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                 UE_LOG(LogConflictResolver, Log, TEXT("Loser for (%d, %d) is %s, will wait."), Cell.X, Cell.Y, *GetNameSafe(Loser.Actor));
             }
         }
+    }
+
+    // ★★★ DEBUG: ResolvedActionsのSourceActorを検証 (2025-11-11) ★★★
+    UE_LOG(LogConflictResolver, Log, TEXT("[ResolveAllConflicts] Generated %d resolved actions"), ResolvedActions.Num());
+    for (int32 i = 0; i < ResolvedActions.Num(); ++i)
+    {
+        const FResolvedAction& Action = ResolvedActions[i];
+        UE_LOG(LogConflictResolver, Verbose,
+            TEXT("[ResolvedAction %d] SourceActor=%s, Actor=%s, From=(%d,%d), To=(%d,%d), bIsWait=%d"),
+            i, *GetNameSafe(Action.SourceActor), *GetNameSafe(Action.Actor.Get()),
+            Action.CurrentCell.X, Action.CurrentCell.Y, Action.NextCell.X, Action.NextCell.Y, Action.bIsWait ? 1 : 0);
     }
 
     return ResolvedActions;

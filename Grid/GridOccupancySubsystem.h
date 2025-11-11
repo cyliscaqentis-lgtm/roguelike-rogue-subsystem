@@ -7,6 +7,43 @@
 #include "GridOccupancySubsystem.generated.h"
 
 /**
+ * ★★★ CRITICAL FIX (2025-11-11): 予約情報構造体（TurnId + bCommitted） ★★★
+ * - TurnId: 予約が作成されたターン番号（古い予約の検出用）
+ * - bCommitted: ConflictResolver で勝者が決まり、確定した予約かどうか
+ */
+USTRUCT()
+struct FReservationInfo
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TWeakObjectPtr<AActor> Owner;
+
+    UPROPERTY()
+    FIntPoint Cell;
+
+    UPROPERTY()
+    int32 TurnId;
+
+    UPROPERTY()
+    bool bCommitted;
+
+    FReservationInfo()
+        : Owner(nullptr)
+        , Cell(-1, -1)
+        , TurnId(-1)
+        , bCommitted(false)
+    {}
+
+    FReservationInfo(AActor* InOwner, FIntPoint InCell, int32 InTurnId)
+        : Owner(InOwner)
+        , Cell(InCell)
+        , TurnId(InTurnId)
+        , bCommitted(false)
+    {}
+};
+
+/**
  * UGridOccupancySubsystem: グリチE��の占有�E通行可否管琁E
  * - 神速対応�E要E��Actor→セル位置の最新マップを管琁E
  * - Slot0の移動結果がSlot1に確実に反映されめE
@@ -84,8 +121,69 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
     void ClearAllReservations();
 
+    /**
+     * Try to reserve a cell exclusively (first-come-first-served)
+     * Returns false if the cell is already reserved by another actor
+     */
+    UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
+    bool TryReserveCell(AActor* Actor, const FIntPoint& Cell, int32 TurnId);
+
+    /**
+     * Begin move phase - clears committed actors set
+     */
+    UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
+    void BeginMovePhase();
+
+    /**
+     * End move phase - cleanup
+     */
+    UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
+    void EndMovePhase();
+
+    /**
+     * Check if an actor has committed its move this tick
+     */
+    bool HasCommittedThisTick(AActor* Actor) const;
+
+    /**
+     * ★★★ CRITICAL FIX (2025-11-11): 勝者の予約を committed にマーク ★★★
+     * ConflictResolver で勝者が決まった後に呼び出す
+     */
+    UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
+    void MarkReservationCommitted(AActor* Actor, int32 TurnId);
+
+    /**
+     * ★★★ CRITICAL FIX (2025-11-11): 古い予約を削除 ★★★
+     * ターン開始時 or CleanupPhase で呼び出す
+     */
+    UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
+    void PurgeOutdatedReservations(int32 CurrentTurnId);
+
+    /**
+     * Set the current turn ID for reservation tracking
+     */
+    UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
+    void SetCurrentTurnId(int32 TurnId);
+
+    /**
+     * Get the current turn ID
+     */
+    UFUNCTION(BlueprintPure, Category = "Turn|Occupancy")
+    int32 GetCurrentTurnId() const { return CurrentTurnId; }
 
 private:
+    /**
+     * Check if an actor will leave its current cell this tick
+     * Returns true if the actor has a reservation for a different cell
+     */
+    bool WillLeaveThisTick(AActor* Actor) const;
+
+    /**
+     * Check if two actors form a perfect swap (A->B and B->A)
+     * Returns true if both actors have reservations to each other's current cells
+     */
+    bool IsPerfectSwap(AActor* A, AActor* B) const;
+
     // ☁EActor ↁEセル位置のマップ（神速対応�E要E��E
     UPROPERTY()
     TMap<TObjectPtr<AActor>, FIntPoint> ActorToCell;
@@ -94,6 +192,18 @@ private:
     UPROPERTY()
     TMap<FIntPoint, TWeakObjectPtr<AActor>> OccupiedCells;
 
-    TMap<FIntPoint, TWeakObjectPtr<AActor>> ReservedCells;
-    TMap<TWeakObjectPtr<AActor>, FIntPoint> ActorToReservation;
+    // ★★★ CRITICAL FIX (2025-11-11): FReservationInfo 形式に変更（TurnId + bCommitted） ★★★
+    UPROPERTY()
+    TMap<FIntPoint, FReservationInfo> ReservedCells;
+
+    UPROPERTY()
+    TMap<TWeakObjectPtr<AActor>, FReservationInfo> ActorToReservation;
+
+    // ★★★ 二相コミット用: このターンで移動を確定したActor集合 (2025-11-11) ★★★
+    UPROPERTY()
+    TSet<TWeakObjectPtr<AActor>> CommittedThisTick;
+
+    // ★★★ CRITICAL FIX (2025-11-11): 現在のターンID（古い予約の検出用） ★★★
+    UPROPERTY()
+    int32 CurrentTurnId = 0;
 };
