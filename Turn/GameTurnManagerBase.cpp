@@ -3244,13 +3244,14 @@ void AGameTurnManagerBase::OnAttacksFinished(int32 TurnId)
     //==========================================================================
     UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Starting Move Phase (after attacks)"), TurnId);
 
-    ExecuteMovePhase();  // 既存の移動実行関数
+    // ★★★ FIX (2025-11-12): 攻撃完了後の呼び出しなので、攻撃インテントチェックをスキップ ★★★
+    ExecuteMovePhase(true);  // bSkipAttackCheck=true で無限ループを防止
 
     // ★★★ 注意: 移動完了は OnAllMovesFinished() デリゲートで通知される
 }
 
 
-void AGameTurnManagerBase::ExecuteMovePhase()
+void AGameTurnManagerBase::ExecuteMovePhase(bool bSkipAttackCheck)
 {
     // ★★★ Phase 5: ConflictResolver Integration (2025-11-09) ★★★
     // Use TurnCorePhaseManager instead of non-existent ActionExecutorSubsystem
@@ -3349,20 +3350,30 @@ void AGameTurnManagerBase::ExecuteMovePhase()
     // ★★★ ATTACK PRIORITY (2025-11-12): 攻撃インテントがあれば攻撃フェーズへ ★★★
     // 理由: プレイヤー移動後の再計画で攻撃に昇格する可能性があるため、
     //       Execute直前に再チェックして攻撃優先で処理
+    // ★★★ FIX (2025-11-12): 攻撃完了後の呼び出し時はスキップ（無限ループ防止）
     //==========================================================================
-    const bool bHasAnyAttack = HasAnyAttackIntent();
-    if (bHasAnyAttack)
+    if (!bSkipAttackCheck)
     {
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[Turn %d] ★ ATTACK INTENT detected (%d intents) - Executing attack phase instead of move phase"),
-            CurrentTurnIndex, EnemyData->Intents.Num());
+        const bool bHasAnyAttack = HasAnyAttackIntent();
+        if (bHasAnyAttack)
+        {
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[Turn %d] ★ ATTACK INTENT detected (%d intents) - Executing attack phase instead of move phase"),
+                CurrentTurnIndex, EnemyData->Intents.Num());
 
-        // 攻撃フェーズを実行（既存の実装を使用）
-        ExecuteAttacks();
+            // 攻撃フェーズを実行（既存の実装を使用）
+            ExecuteAttacks();
 
-        // 注意: 攻撃完了後に OnAttacksFinished() が呼ばれ、その後 ExecuteMovePhase() が再度呼ばれる
-        //       その時は攻撃インテントが処理済みなので、移動フェーズが実行される
-        return;
+            // 注意: 攻撃完了後に OnAttacksFinished() が呼ばれ、その後 ExecuteMovePhase(true) が呼ばれる
+            //       その時は bSkipAttackCheck=true なので、このチェックがスキップされて移動フェーズが実行される
+            return;
+        }
+    }
+    else
+    {
+        UE_LOG(LogTurnManager, Log,
+            TEXT("[Turn %d] Attack check skipped (called after attack completion)"),
+            CurrentTurnIndex);
     }
 
     UE_LOG(LogTurnManager, Log,

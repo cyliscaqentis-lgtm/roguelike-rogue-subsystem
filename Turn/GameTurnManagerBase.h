@@ -640,7 +640,7 @@ protected:
 
     void ExecuteSequentialPhase();
     void ExecuteSimultaneousPhase();
-    void ExecuteMovePhase();
+    void ExecuteMovePhase(bool bSkipAttackCheck = false);
     void HandleManualMoveFinished(AUnitBase* Unit);
     void RegisterManualMoveDelegate(AUnitBase* Unit, bool bIsPlayerFallback);
     void FinalizePlayerMove(AActor* CompletedActor);
