@@ -291,8 +291,9 @@ void UGA_MoveBase::ActivateAbility(
 	// ★★★ DEFERRED: Barrier登録は移動検証成功後に実行（早期終了時の登録漏れ対策）★★★
 	// RegisterBarrier と RegisterActionOnce は Line 382 以降に移動
 
+	// ★★★ CRITICAL FIX: タグ操作はサーバー側でのみ実行（2025-11-12）★★★
 	UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
-	if (ASC)
+	if (ASC && HasAuthority(&ActivationInfo))
 	{
 		int32 CountBefore = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress.GetTag());
 		DIAG_LOG(Log, TEXT("[GA_MoveBase] ActivateAbility: InProgress count before=%d"), CountBefore);
@@ -559,9 +560,13 @@ void UGA_MoveBase::EndAbility(
 		MoveFinishedHandle.Reset();
 	}
 
+	// ★★★ CRITICAL FIX: タグ操作はサーバー側でのみ実行（2025-11-12）★★★
 	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
 	{
-		ASC->RemoveLooseGameplayTag(RogueGameplayTags::Event_Dungeon_Step);
+		if (HasAuthority(&ActivationInfo))
+		{
+			ASC->RemoveLooseGameplayTag(RogueGameplayTags::Event_Dungeon_Step);
+		}
 	}
 
 	// ☁E�E☁ESparky修正: 状態を保存してからBarrierに通知�E�クリア前に�E�E��E☁E�E☁E
@@ -571,7 +576,9 @@ void UGA_MoveBase::EndAbility(
 
 	// ★★★FIX: bBarrierRegistered チェックを追加して確実に CompleteAction を呼ぶ（2025-11-11）★★★
 	// Barrier登録済みの場合は必ず完了通知を送る（ターン進行停止の防止）
-	if (bBarrierRegistered)
+	// ★★★ CRITICAL FIX: サーバー権限チェック追加（2025-11-12）★★★
+	// Barrier通知はサーバー側でのみ実行する
+	if (bBarrierRegistered && HasAuthority(&ActivationInfo))
 	{
 		if (UWorld* World = GetWorld())
 		{
@@ -594,7 +601,7 @@ void UGA_MoveBase::EndAbility(
 				}
 
 				// ★★★ Token方式: 冪等Complete ★★★
-				if (HasAuthority(&ActivationInfo) && BarrierToken.IsValid())
+				if (BarrierToken.IsValid())
 				{
 					Barrier->CompleteActionToken(BarrierToken);
 					UE_LOG(LogTurnManager, Verbose,
@@ -885,7 +892,23 @@ void UGA_MoveBase::BindMoveFinishedDelegate()
 void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
 {
     //==========================================================================
-    // ★★★ 優先度1: TurnId検証を最初に実施（stale通知の早期リターン）
+    // ★★★ CRITICAL FIX: サーバー権限チェックを最初に実施（2025-11-12）
+    //==========================================================================
+    // OnMoveFinishedはクライアント側でも呼ばれる可能性があるため、
+    // タグ操作、Barrier通知、Occupancy確定は**サーバー側でのみ**実行する。
+    // クライアント側での実行を許可すると、未初期化のBarrierから-1を取得し、
+    // stale判定で誤って早期returnしてしまう。
+    if (!HasAuthority(&CachedActivationInfo))
+    {
+        UE_LOG(LogTurnManager, Verbose,
+            TEXT("[OnMoveFinished] Client-side call, skipping server-side logic (Actor=%s)"),
+            *GetNameSafe(Unit));
+        // クライアント側は視覚的な処理のみ（現在は何もしない）
+        return;
+    }
+
+    //==========================================================================
+    // ★★★ 優先度1: TurnId検証（サーバー側のみ実施）
     //==========================================================================
     // TurnIdの不一致（stale通知）の場合は、タグやOccupancyを一切触らずに即座にreturn。
     // これにより、古い完了通知が来ても現在進行中のアクションのInProgressタグを
@@ -904,6 +927,13 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
                 // Stale完了は処理せずに即座にreturn（タグ、Occupancy、EndAbilityを触らない）
                 return;
             }
+        }
+        else
+        {
+            UE_LOG(LogTurnManager, Error,
+                TEXT("[OnMoveFinished] Barrier subsystem not found on server (Actor=%s)"),
+                *GetNameSafe(Unit));
+            return;
         }
     }
 
@@ -1197,6 +1227,16 @@ bool UGA_MoveBase::RegisterBarrier(AActor* Avatar)
 {
 	if (!Avatar)
 	{
+		return false;
+	}
+
+	// ★★★ CRITICAL FIX: サーバー権限チェック追加（2025-11-12）★★★
+	// Barrier登録はサーバー側でのみ実行する
+	if (!HasAuthority(&CachedActivationInfo))
+	{
+		UE_LOG(LogTurnManager, Verbose,
+			TEXT("[RegisterBarrier] Client-side call, skipping registration (Actor=%s)"),
+			*Avatar->GetName());
 		return false;
 	}
 
