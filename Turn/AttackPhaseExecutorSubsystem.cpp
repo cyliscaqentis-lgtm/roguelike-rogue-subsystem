@@ -152,8 +152,7 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 				Spec.Level, Spec.InputID, Spec.IsActive());
 
 			// アセットタグを確認（攻撃アビリティかどうか）
-			FGameplayTagContainer AssetTags;
-			Spec.Ability->GetAssetTags(AssetTags);
+			const FGameplayTagContainer& AssetTags = Spec.Ability->GetAssetTags();
 			UE_LOG(LogAttackPhase, Warning,
 				TEXT("    AssetTags: %s"),
 				*AssetTags.ToStringSimple());
