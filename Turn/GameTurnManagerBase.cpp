@@ -3317,6 +3317,30 @@ void AGameTurnManagerBase::ExecuteMovePhase()
     }
 
     //==========================================================================
+    // ★★★ ATTACK PRIORITY (2025-11-12): 攻撃インテントがあれば攻撃フェーズへ ★★★
+    // 理由: プレイヤー移動後の再計画で攻撃に昇格する可能性があるため、
+    //       Execute直前に再チェックして攻撃優先で処理
+    //==========================================================================
+    const bool bHasAnyAttack = HasAnyAttackIntent();
+    if (bHasAnyAttack)
+    {
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[Turn %d] ★ ATTACK INTENT detected (%d intents) - Executing attack phase instead of move phase"),
+            CurrentTurnIndex, EnemyData->Intents.Num());
+
+        // 攻撃フェーズを実行（既存の実装を使用）
+        ExecuteAttacks();
+
+        // 注意: 攻撃完了後に OnAttacksFinished() が呼ばれ、その後 ExecuteMovePhase() が再度呼ばれる
+        //       その時は攻撃インテントが処理済みなので、移動フェーズが実行される
+        return;
+    }
+
+    UE_LOG(LogTurnManager, Log,
+        TEXT("[Turn %d] No attack intents - Proceeding with move phase"),
+        CurrentTurnIndex);
+
+    //==========================================================================
     // ★★★ CRITICAL FIX (2025-11-11): Playerの移動もConflictResolverに追加 ★★★
     // Swap検出を機能させるため、PlayerとEnemyの移動情報を統合する
     //==========================================================================
@@ -3496,8 +3520,13 @@ void AGameTurnManagerBase::ExecutePlayerMove()
         UE_LOG(LogTurnManager, Warning,
             TEXT("  OwnedTags: %s"),
             *ASC->GetOwnedGameplayTags().ToStringSimple());
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("  Sending EventTag: %s (Valid: %s)"),
+            *Tag_AbilityMove.ToString(),
+            Tag_AbilityMove.IsValid() ? TEXT("YES") : TEXT("NO"));
 
         int32 AbilityIndex = 0;
+        int32 PotentialMoveAbilities = 0;
         for (const FGameplayAbilitySpec& Spec : ASC->GetActivatableAbilities())
         {
             if (Spec.Ability)
@@ -3518,12 +3547,29 @@ void AGameTurnManagerBase::ExecutePlayerMove()
                     &FailureTags
                 );
 
-                UE_LOG(LogTurnManager, Warning,
-                    TEXT("    - CanActivate: %s (FailureTags: %s)"),
-                    bCanActivate ? TEXT("YES") : TEXT("NO"),
-                    *FailureTags.ToStringSimple());
+                const FString FailureInfo = FailureTags.Num() > 0
+                    ? FString::Printf(TEXT(" (FailureTags: %s)"), *FailureTags.ToStringSimple())
+                    : TEXT("");
 
-                // DynamicAbilityTags は FGameplayAbilitySpec の public メンバー
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("    - CanActivate: %s%s"),
+                    bCanActivate ? TEXT("YES") : TEXT("NO"),
+                    *FailureInfo);
+
+                // GA_MoveBaseかどうかチェック
+                const bool bIsMoveAbility = Spec.Ability->GetClass()->GetName().Contains(TEXT("MoveBase"));
+                if (bIsMoveAbility)
+                {
+                    UE_LOG(LogTurnManager, Warning,
+                        TEXT("    - ★ This is a MOVE ability! CanActivate=%s"),
+                        bCanActivate ? TEXT("YES") : TEXT("NO"));
+                    if (bCanActivate)
+                    {
+                        ++PotentialMoveAbilities;
+                    }
+                }
+
+                // DynamicAbilityTags
                 if (Spec.DynamicAbilityTags.Num() > 0)
                 {
                     UE_LOG(LogTurnManager, Warning,
@@ -3533,7 +3579,9 @@ void AGameTurnManagerBase::ExecutePlayerMove()
             }
             ++AbilityIndex;
         }
-        UE_LOG(LogTurnManager, Warning, TEXT("==== END ASC DIAGNOSTIC ===="));
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("==== END ASC DIAGNOSTIC ==== Total=%d, PotentialMoveAbilities=%d"),
+            AbilityIndex, PotentialMoveAbilities);
 
         FGameplayEventData EventData;
         EventData.EventTag = Tag_AbilityMove;
