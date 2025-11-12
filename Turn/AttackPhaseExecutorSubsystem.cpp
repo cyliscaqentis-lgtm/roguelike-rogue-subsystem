@@ -135,7 +135,7 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 	Payload.Instigator = Attacker;
 	Payload.TargetData = Action.TargetData;
 
-	// ★★★ CRITICAL DIAGNOSTIC (2025-11-12): AbilityTriggers診断 ★★★
+	// ★★★ CRITICAL DIAGNOSTIC (2025-11-12): Ability診断 ★★★
 	UE_LOG(LogAttackPhase, Warning,
 		TEXT("[Turn %d] %s: ASC has %d activatable abilities"),
 		TurnId, *Attacker->GetName(), ASC->GetActivatableAbilities().Num());
@@ -145,19 +145,18 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 		const FGameplayAbilitySpec& Spec = ASC->GetActivatableAbilities()[i];
 		if (Spec.Ability)
 		{
+			// ★★★ AbilityTriggersはprotectedなので、クラス名と基本情報のみ出力 ★★★
 			UE_LOG(LogAttackPhase, Warning,
-				TEXT("  [%d] Ability=%s, Level=%d, InputID=%d, Triggers=%d"),
-				i, *Spec.Ability->GetName(), Spec.Level, Spec.InputID,
-				Spec.Ability->AbilityTriggers.Num());
+				TEXT("  [%d] Ability=%s (Class=%s), Level=%d, InputID=%d, IsActive=%d"),
+				i, *Spec.Ability->GetName(), *Spec.Ability->GetClass()->GetName(),
+				Spec.Level, Spec.InputID, Spec.IsActive());
 
-			// ★★★ NEW: Trigger詳細を出力 ★★★
-			for (int32 j = 0; j < Spec.Ability->AbilityTriggers.Num(); ++j)
-			{
-				const FAbilityTriggerData& Trigger = Spec.Ability->AbilityTriggers[j];
-				UE_LOG(LogAttackPhase, Warning,
-					TEXT("    Trigger[%d]: Tag=%s, Source=%d"),
-					j, *Trigger.TriggerTag.ToString(), (int32)Trigger.TriggerSource);
-			}
+			// アセットタグを確認（攻撃アビリティかどうか）
+			FGameplayTagContainer AssetTags;
+			Spec.Ability->GetAssetTags(AssetTags);
+			UE_LOG(LogAttackPhase, Warning,
+				TEXT("    AssetTags: %s"),
+				*AssetTags.ToStringSimple());
 		}
 	}
 
