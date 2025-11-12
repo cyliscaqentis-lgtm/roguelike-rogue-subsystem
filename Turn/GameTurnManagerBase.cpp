@@ -2179,15 +2179,45 @@ void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnIndex)
     }
 
     //==========================================================================
-    // ★★★ CRITICAL FIX (2025-11-11): BuildObservations を削除（二重実行の防止） ★★★
-    // 理由: プレイヤー移動前の観測は意味がない
-    //       ContinueTurnAfterInput() でプレイヤー移動後に実行するため、ここでは不要
-    //       これにより、ターン開始時の処理が軽量化され、入力受付が早くなる
+    // ★★★ CRITICAL FIX (2025-11-12): ターン開始時に仮インテントを生成 ★★★
+    // 理由: 「インテントが空のまま同時移動フェーズに突入」を防ぐため
+    //       ターン開始時に仮インテントを生成し、プレイヤー移動後に再計画で上書き
+    //       これにより、ExecuteMovePhaseで確実にインテントが存在する
     //==========================================================================
-
     UE_LOG(LogTurnManager, Warning,
-        TEXT("[Turn %d] BuildObservations SKIPPED - will be called after player move"),
+        TEXT("[Turn %d] Generating preliminary enemy intents at turn start..."),
         TurnIndex);
+
+    UEnemyAISubsystem* EnemyAISys = GetWorld()->GetSubsystem<UEnemyAISubsystem>();
+    UEnemyTurnDataSubsystem* EnemyTurnDataSys = GetWorld()->GetSubsystem<UEnemyTurnDataSubsystem>();
+
+    if (EnemyAISys && EnemyTurnDataSys && CachedPathFinder.IsValid() && CachedPlayerPawn && CachedEnemies.Num() > 0)
+    {
+        // 仮のObservationsを生成（現在のプレイヤー位置で）
+        TArray<FEnemyObservation> PreliminaryObs;
+        EnemyAISys->BuildObservations(CachedEnemies, CachedPlayerPawn, CachedPathFinder.Get(), PreliminaryObs);
+        EnemyTurnDataSys->Observations = PreliminaryObs;
+
+        // 仮のIntentsを収集
+        TArray<FEnemyIntent> PreliminaryIntents;
+        EnemyAISys->CollectIntents(PreliminaryObs, CachedEnemies, PreliminaryIntents);
+        EnemyTurnDataSys->Intents = PreliminaryIntents;
+
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[Turn %d] Preliminary intents generated: %d intents from %d enemies (will be updated after player move)"),
+            TurnIndex, PreliminaryIntents.Num(), CachedEnemies.Num());
+    }
+    else
+    {
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[Turn %d] Cannot generate preliminary intents: EnemyAISys=%d, EnemyTurnDataSys=%d, PathFinder=%d, PlayerPawn=%d, Enemies=%d"),
+            TurnIndex,
+            EnemyAISys != nullptr,
+            EnemyTurnDataSys != nullptr,
+            CachedPathFinder.IsValid(),
+            CachedPlayerPawn != nullptr,
+            CachedEnemies.Num());
+    }
 
     // ★★★ 削除: BuildObservations の実行（プレイヤー行動後に移動）
     // UEnemyAISubsystem* EnemyAISys = GetWorld()->GetSubsystem<UEnemyAISubsystem>();
@@ -2860,8 +2890,44 @@ void AGameTurnManagerBase::ContinueTurnAfterInput()
     // 敵リストを更新
     CollectEnemies();
 
-    // プレイヤーの新しい位置を元に観測データを構築
-    BuildObservations();
+    //==========================================================================
+    // ★★★ FIX (2025-11-12): BuildObservationsを直接実装 ★★★
+    // 理由: BuildObservations_Implementation()は空なので、直接EnemyAISubsystemを呼ぶ
+    //==========================================================================
+    UEnemyAISubsystem* EnemyAISys = GetWorld()->GetSubsystem<UEnemyAISubsystem>();
+    UEnemyTurnDataSubsystem* EnemyTurnDataSys = GetWorld()->GetSubsystem<UEnemyTurnDataSubsystem>();
+
+    if (EnemyAISys && EnemyTurnDataSys && CachedPathFinder.IsValid() && CachedPlayerPawn)
+    {
+        // DistanceFieldを更新（敵AIの判断に必要）
+        if (UDistanceFieldSubsystem* DistanceField = GetWorld()->GetSubsystem<UDistanceFieldSubsystem>())
+        {
+            FIntPoint PlayerGrid = CachedPathFinder->WorldToGrid(CachedPlayerPawn->GetActorLocation());
+            DistanceField->UpdateDistanceField(PlayerGrid);
+            UE_LOG(LogTurnManager, Log,
+                TEXT("[Turn %d] DistanceField updated for PlayerGrid=(%d,%d)"),
+                CurrentTurnIndex, PlayerGrid.X, PlayerGrid.Y);
+        }
+
+        // プレイヤーの新しい位置を元に観測データを構築
+        TArray<FEnemyObservation> Observations;
+        EnemyAISys->BuildObservations(CachedEnemies, CachedPlayerPawn, CachedPathFinder.Get(), Observations);
+        EnemyTurnDataSys->Observations = Observations;
+
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[Turn %d] BuildObservations completed: Generated %d observations from %d enemies"),
+            CurrentTurnIndex, Observations.Num(), CachedEnemies.Num());
+    }
+    else
+    {
+        UE_LOG(LogTurnManager, Error,
+            TEXT("[Turn %d] Cannot build observations: EnemyAISys=%d, EnemyTurnDataSys=%d, PathFinder=%d, PlayerPawn=%d"),
+            CurrentTurnIndex,
+            EnemyAISys != nullptr,
+            EnemyTurnDataSys != nullptr,
+            CachedPathFinder.IsValid(),
+            CachedPlayerPawn != nullptr);
+    }
 
     // 敵の意図を収集（この時点の盤面で判断）
     CollectIntents();
@@ -3182,14 +3248,72 @@ void AGameTurnManagerBase::ExecuteMovePhase()
         return;
     }
 
+    //==========================================================================
+    // ★★★ CRITICAL FIX (2025-11-12): フェイルセーフ - インテントが空なら再生成 ★★★
+    //==========================================================================
     if (EnemyData->Intents.Num() == 0)
     {
         UE_LOG(LogTurnManager, Warning,
-            TEXT("[Turn %d] ExecuteMovePhase: No enemy intents, skipping"),
+            TEXT("[Turn %d] ExecuteMovePhase: No enemy intents detected, attempting fallback generation..."),
             CurrentTurnIndex);
 
-        EndEnemyTurn();
-        return;
+        // フェイルセーフ: Observations と Intents を再生成
+        UEnemyAISubsystem* EnemyAISys = World->GetSubsystem<UEnemyAISubsystem>();
+        if (EnemyAISys && CachedPathFinder.IsValid() && CachedPlayerPawn && CachedEnemies.Num() > 0)
+        {
+            // DistanceFieldを更新
+            if (UDistanceFieldSubsystem* DistanceField = World->GetSubsystem<UDistanceFieldSubsystem>())
+            {
+                FIntPoint PlayerGrid = CachedPathFinder->WorldToGrid(CachedPlayerPawn->GetActorLocation());
+                DistanceField->UpdateDistanceField(PlayerGrid);
+                UE_LOG(LogTurnManager, Log,
+                    TEXT("[Turn %d] Fallback: DistanceField updated for PlayerGrid=(%d,%d)"),
+                    CurrentTurnIndex, PlayerGrid.X, PlayerGrid.Y);
+            }
+
+            // Observationsを生成
+            TArray<FEnemyObservation> Observations;
+            EnemyAISys->BuildObservations(CachedEnemies, CachedPlayerPawn, CachedPathFinder.Get(), Observations);
+            EnemyData->Observations = Observations;
+
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[Turn %d] Fallback: Generated %d observations"),
+                CurrentTurnIndex, Observations.Num());
+
+            // Intentsを収集
+            TArray<FEnemyIntent> Intents;
+            EnemyAISys->CollectIntents(Observations, CachedEnemies, Intents);
+            EnemyData->Intents = Intents;
+
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[Turn %d] Fallback: Generated %d intents"),
+                CurrentTurnIndex, Intents.Num());
+        }
+        else
+        {
+            UE_LOG(LogTurnManager, Error,
+                TEXT("[Turn %d] Fallback failed: EnemyAISys=%d, PathFinder=%d, PlayerPawn=%d, Enemies=%d"),
+                CurrentTurnIndex,
+                EnemyAISys != nullptr,
+                CachedPathFinder.IsValid(),
+                CachedPlayerPawn != nullptr,
+                CachedEnemies.Num());
+        }
+
+        // 再チェック: まだ空ならスキップ
+        if (EnemyData->Intents.Num() == 0)
+        {
+            UE_LOG(LogTurnManager, Error,
+                TEXT("[Turn %d] ExecuteMovePhase: Still no intents after fallback, skipping enemy turn"),
+                CurrentTurnIndex);
+
+            EndEnemyTurn();
+            return;
+        }
+
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[Turn %d] Fallback successful: Proceeding with %d intents"),
+            CurrentTurnIndex, EnemyData->Intents.Num());
     }
 
     //==========================================================================
