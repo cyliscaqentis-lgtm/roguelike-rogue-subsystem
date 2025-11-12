@@ -13,6 +13,9 @@ class LYRAGAME_API UGA_AttackBase : public UGA_TurnActionBase
 public:
     UGA_AttackBase(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
+    // ★★★ FIX (2025-11-12): BP上書き対策 - PostInitPropertiesで強制設定 ★★★
+    virtual void PostInitProperties() override;
+
     // ★★★ Barrier統合 (2025-11-12) ★★★
     virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle,
         const FGameplayAbilityActorInfo* ActorInfo,

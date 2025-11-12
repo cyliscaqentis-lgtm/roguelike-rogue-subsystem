@@ -47,6 +47,52 @@ UGA_AttackBase::UGA_AttackBase(const FObjectInitializer& ObjectInitializer)
         ActivationOwnedTags.Num());
 }
 
+//==============================================================================
+// ★★★ FIX (2025-11-12): BP上書き対策 - PostInitPropertiesで強制設定 ★★★
+//==============================================================================
+
+void UGA_AttackBase::PostInitProperties()
+{
+    Super::PostInitProperties();
+
+    // ★★★ BP継承時にAbilityTriggersが空になる問題を修正 ★★★
+    // PostInitPropertiesはBPのデフォルト値設定後に呼ばれるため、
+    // ここで再度設定すれば確実にTriggerが登録される
+
+    bool bNeedsFix = true;
+
+    // 既にGameplayEvent.Intent.Attackが登録されているかチェック
+    for (const FAbilityTriggerData& Trigger : AbilityTriggers)
+    {
+        if (Trigger.TriggerTag == RogueGameplayTags::GameplayEvent_Intent_Attack)
+        {
+            bNeedsFix = false;
+            break;
+        }
+    }
+
+    if (bNeedsFix)
+    {
+        // AbilityTriggersをクリアして再設定
+        AbilityTriggers.Empty();
+
+        FAbilityTriggerData Trigger;
+        Trigger.TriggerTag = RogueGameplayTags::GameplayEvent_Intent_Attack;
+        Trigger.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
+        AbilityTriggers.Add(Trigger);
+
+        UE_LOG(LogTemp, Warning,
+            TEXT("[GA_AttackBase::PostInitProperties] ★ FIXED: Re-registered trigger %s (was missing or cleared by BP)"),
+            *Trigger.TriggerTag.ToString());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log,
+            TEXT("[GA_AttackBase::PostInitProperties] Trigger already registered: %s"),
+            *RogueGameplayTags::GameplayEvent_Intent_Attack.ToString());
+    }
+}
+
 void UGA_AttackBase::ExecuteAttack_Implementation(AActor* Target)
 {
     if (!Target)
