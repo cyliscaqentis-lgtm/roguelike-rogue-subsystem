@@ -3,6 +3,7 @@
 #include "Utility/RogueGameplayTags.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
+#include "ProjectDiagnostics.h"
 
 UGA_TurnActionBase::UGA_TurnActionBase()
 {
