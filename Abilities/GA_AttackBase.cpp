@@ -158,6 +158,12 @@ void UGA_AttackBase::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
     const FGameplayAbilityActivationInfo ActivationInfo,
     const FGameplayEventData* TriggerEventData)
 {
+    // ★★★ DIAGNOSTIC (2025-11-12): どのクラスが実際に使われているか確認 ★★★
+    UE_LOG(LogAttackAbility, Error,
+        TEXT("[GA_AttackBase] ActivateAbility CALLED - ActualClass=%s, Actor=%s"),
+        *GetClass()->GetName(),
+        *GetNameSafe(GetAvatarActorFromActorInfo()));
+
     // 親クラスのActivateAbilityを呼ぶ（タイムアウトタイマー、State.Ability.Executing追加など）
     Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
