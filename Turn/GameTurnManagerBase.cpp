@@ -2714,7 +2714,22 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
         {
             if (UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>())
             {
-                TArray<AActor*> Enemies = EnemyData->GetEnemiesSortedCopy();
+                // ★★★ FIX (2025-11-12): GetEnemiesSortedCopy()ではなくCachedEnemiesを使用 ★★★
+                // OnPlayerCommandAcceptedのタイミングではEnemyDataがまだ空の可能性がある
+                TArray<AActor*> Enemies;
+                Enemies.Reserve(CachedEnemies.Num());
+                for (const TObjectPtr<AActor>& Enemy : CachedEnemies)
+                {
+                    if (Enemy)
+                    {
+                        Enemies.Add(Enemy.Get());
+                    }
+                }
+
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("[Turn %d] Intent regeneration: Using %d cached enemies"),
+                    CurrentTurnIndex, Enemies.Num());
+
                 TArray<FEnemyObservation> Observations;
                 TArray<FEnemyIntent> Intents;
 
