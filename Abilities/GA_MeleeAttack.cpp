@@ -255,6 +255,64 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
         return;
     }
 
+    AActor* Avatar = GetAvatarActorFromActorInfo();
+    if (!Avatar)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] Avatar is null"));
+        return;
+    }
+
+    // ★★★ DIAGNOSTIC (2025-11-12): ダメージ倍率がゼロになる原因を特定 ★★★
+    UE_LOG(LogTemp, Warning,
+        TEXT("[GA_MeleeAttack] ==== DAMAGE DIAGNOSTIC START ===="));
+    UE_LOG(LogTemp, Warning,
+        TEXT("[GA_MeleeAttack] Attacker=%s, Target=%s, BaseDamage=%.2f"),
+        *Avatar->GetName(), *Target->GetName(), BaseDamage);
+
+    // Team check diagnostic
+    if (AUnitBase* AttackerUnit = Cast<AUnitBase>(Avatar))
+    {
+        if (AUnitBase* TargetUnit = Cast<AUnitBase>(Target))
+        {
+            UE_LOG(LogTemp, Warning,
+                TEXT("[GA_MeleeAttack] AttackerTeam=%d, TargetTeam=%d (SameTeam=%s)"),
+                AttackerUnit->Team, TargetUnit->Team,
+                AttackerUnit->Team == TargetUnit->Team ? TEXT("YES - DAMAGE BLOCKED") : TEXT("NO - OK"));
+        }
+    }
+
+    // Distance diagnostic
+    const float Distance = FVector::Dist(Avatar->GetActorLocation(), Target->GetActorLocation());
+    UE_LOG(LogTemp, Warning,
+        TEXT("[GA_MeleeAttack] Distance=%.2f, Range=%.2f (InRange=%s)"),
+        Distance, Range, Distance <= Range ? TEXT("YES") : TEXT("NO - TOO FAR"));
+
+    // ASC and Tags diagnostic
+    if (UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Target))
+    {
+        FGameplayTagContainer TargetTags;
+        TargetASC->GetOwnedGameplayTags(TargetTags);
+        UE_LOG(LogTemp, Warning,
+            TEXT("[GA_MeleeAttack] TargetTags=%s"),
+            *TargetTags.ToStringSimple());
+
+        // Check for invulnerability or damage immunity tags
+        const bool bHasInvuln = TargetTags.HasTag(FGameplayTag::RequestGameplayTag(FName("State.Invulnerable")));
+        const bool bHasImmune = TargetTags.HasTag(FGameplayTag::RequestGameplayTag(FName("State.DamageImmune")));
+        UE_LOG(LogTemp, Warning,
+            TEXT("[GA_MeleeAttack] Invulnerable=%s, DamageImmune=%s"),
+            bHasInvuln ? TEXT("YES - DAMAGE BLOCKED") : TEXT("NO"),
+            bHasImmune ? TEXT("YES - DAMAGE BLOCKED") : TEXT("NO"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error,
+            TEXT("[GA_MeleeAttack] Target has NO AbilitySystemComponent - cannot apply damage!"));
+    }
+
+    UE_LOG(LogTemp, Warning,
+        TEXT("[GA_MeleeAttack] ==== DAMAGE DIAGNOSTIC END ===="));
+
     if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
     {
         FGameplayEffectContextHandle ContextHandle = ASC->MakeEffectContext();
@@ -265,10 +323,22 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
         {
             SpecHandle.Data->SetSetByCallerMagnitude(RogueGameplayTags::SetByCaller_Damage, BaseDamage);
 
+            UE_LOG(LogTemp, Warning,
+                TEXT("[GA_MeleeAttack] Applying GameplayEffect: %s with SetByCaller damage=%.2f"),
+                *MeleeAttackEffect->GetName(), BaseDamage);
+
             if (UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Target))
             {
-                ASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), TargetASC);
+                FActiveGameplayEffectHandle EffectHandle = ASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), TargetASC);
+                UE_LOG(LogTemp, Warning,
+                    TEXT("[GA_MeleeAttack] GameplayEffect applied, Handle valid=%s"),
+                    EffectHandle.IsValid() ? TEXT("YES") : TEXT("NO - EFFECT FAILED"));
             }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error,
+                TEXT("[GA_MeleeAttack] Failed to create GameplayEffectSpec"));
         }
     }
 }

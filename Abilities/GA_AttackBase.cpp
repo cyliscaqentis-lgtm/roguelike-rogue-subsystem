@@ -5,6 +5,9 @@
 #include "GameFramework/Actor.h"
 #include "Kismet/GameplayStatics.h"
 #include "Utility/RogueGameplayTags.h"
+#include "Turn/TurnActionBarrierSubsystem.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogAttackAbility, Log, All);
 
 UGA_AttackBase::UGA_AttackBase(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -144,4 +147,83 @@ TArray<AActor*> UGA_AttackBase::FindTargetsInRange(float SearchRange) const
 
     UE_LOG(LogTemp, Verbose, TEXT("[GA_AttackBase] Found %d targets in range %.2f"), FoundTargets.Num(), ActualRange);
     return FoundTargets;
+}
+
+//==============================================================================
+// ★★★ Barrier統合 (2025-11-12): 攻撃アクションをBarrierに登録 ★★★
+//==============================================================================
+
+void UGA_AttackBase::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
+    const FGameplayAbilityActorInfo* ActorInfo,
+    const FGameplayAbilityActivationInfo ActivationInfo,
+    const FGameplayEventData* TriggerEventData)
+{
+    // 親クラスのActivateAbilityを呼ぶ（タイムアウトタイマー、State.Ability.Executing追加など）
+    Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
+
+    // ★★★ Barrier登録：攻撃もターン進行のブロック対象として管理 ★★★
+    AActor* Avatar = GetAvatarActorFromActorInfo();
+    if (!Avatar)
+    {
+        UE_LOG(LogAttackAbility, Warning,
+            TEXT("[GA_AttackBase] ActivateAbility: Avatar is null, cannot register with Barrier"));
+        return;
+    }
+
+    UWorld* World = Avatar->GetWorld();
+    if (!World)
+    {
+        UE_LOG(LogAttackAbility, Warning,
+            TEXT("[GA_AttackBase] ActivateAbility: World is null"));
+        return;
+    }
+
+    UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>();
+    if (!Barrier)
+    {
+        UE_LOG(LogAttackAbility, Warning,
+            TEXT("[GA_AttackBase] ActivateAbility: TurnActionBarrierSubsystem not found"));
+        return;
+    }
+
+    // Barrierに攻撃アクションを登録
+    AttackTurnId = Barrier->GetCurrentTurnId();
+    AttackActionId = Barrier->RegisterAction(Avatar, AttackTurnId);
+    bBarrierRegistered = true;
+
+    UE_LOG(LogAttackAbility, Log,
+        TEXT("[GA_AttackBase] ActivateAbility: Registered attack with Barrier (TurnId=%d, ActionId=%s, Actor=%s)"),
+        AttackTurnId, *AttackActionId.ToString(), *Avatar->GetName());
+}
+
+void UGA_AttackBase::EndAbility(const FGameplayAbilitySpecHandle Handle,
+    const FGameplayAbilityActorInfo* ActorInfo,
+    const FGameplayAbilityActivationInfo ActivationInfo,
+    bool bReplicateEndAbility,
+    bool bWasCancelled)
+{
+    // ★★★ Barrier完了通知：攻撃終了をBarrierに通知してターン進行を許可 ★★★
+    if (bBarrierRegistered)
+    {
+        AActor* Avatar = GetAvatarActorFromActorInfo();
+        if (Avatar)
+        {
+            if (UWorld* World = Avatar->GetWorld())
+            {
+                if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
+                {
+                    Barrier->CompleteAction(Avatar, AttackTurnId, AttackActionId);
+
+                    UE_LOG(LogAttackAbility, Log,
+                        TEXT("[GA_AttackBase] EndAbility: Completed attack in Barrier (TurnId=%d, ActionId=%s, Actor=%s)"),
+                        AttackTurnId, *AttackActionId.ToString(), *Avatar->GetName());
+
+                    bBarrierRegistered = false;
+                }
+            }
+        }
+    }
+
+    // 親クラスのEndAbilityを呼ぶ（タイムアウトクリア、State.Ability.Executing削除など）
+    Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }

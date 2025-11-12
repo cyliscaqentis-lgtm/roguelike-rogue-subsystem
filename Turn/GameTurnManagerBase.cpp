@@ -3159,6 +3159,13 @@ void AGameTurnManagerBase::ExecuteAttacks()
         return;
     }
 
+    // ★★★ FIX (2025-11-12): 攻撃フェーズ中は入力ゲートを閉じる ★★★
+    // プレイヤー移動と攻撃の競合を防ぐため、攻撃実行中は入力を受け付けない。
+    // 入力は OnAttacksFinished で再度開く。
+    UE_LOG(LogTurnManager, Warning,
+        TEXT("[Turn %d] ExecuteAttacks: Closing input gate (attack phase starts)"), CurrentTurnIndex);
+    ApplyWaitInputGate(false);  // Close input gate
+
     if (UWorld* World = GetWorld())
     {
         if (UTurnCorePhaseManager* PM = World->GetSubsystem<UTurnCorePhaseManager>())
@@ -3209,6 +3216,12 @@ void AGameTurnManagerBase::OnAttacksFinished(int32 TurnId)
     }
 
     UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] OnAttacksFinished: All attacks completed"), TurnId);
+
+    // ★★★ FIX (2025-11-12): 攻撃完了後に入力ゲートを再度開く ★★★
+    // ExecuteAttacks で閉じたゲートを再度開き、プレイヤーが次の入力をできるようにする。
+    UE_LOG(LogTurnManager, Warning,
+        TEXT("[Turn %d] OnAttacksFinished: Re-opening input gate (attack phase complete)"), TurnId);
+    ApplyWaitInputGate(true);  // Re-open input gate
 
     //==========================================================================
     // (2) 移動フェーズ。攻撃後
@@ -4621,10 +4634,17 @@ bool AGameTurnManagerBase::DispatchResolvedMove(const FResolvedAction& Action)
             return true;
         }
 
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[ResolvedMove] Player fallback to direct MoveUnit (GA trigger failed)"));
+        // ★★★ FIX (2025-11-12): プレイヤー移動はGAS経路のみに統一 ★★★
+        // Direct MoveUnit フォールバックを廃止。GA起動失敗時はエラー終了。
+        // これにより、移動経路が「コマンド受付 → GAS起動」に一本化され、
+        // 攻撃フェーズとの競合や二重実行を防止。
+        UE_LOG(LogTurnManager, Error,
+            TEXT("[ResolvedMove] ❌ Player GA trigger failed - Move BLOCKED (GAS-only path enforced)"));
+        ReleaseMoveReservation(Unit);
+        return false;
     }
 
+    // ★★★ 以下のDirect MoveUnitパスは敵専用 ★★★
     const FVector StartWorld = Unit->GetActorLocation();
     const FVector EndWorld = LocalPathFinder->GridToWorld(Action.NextCell, StartWorld.Z);
 

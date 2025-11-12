@@ -13,6 +13,18 @@ class LYRAGAME_API UGA_AttackBase : public UGA_TurnActionBase
 public:
     UGA_AttackBase(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
+    // ★★★ Barrier統合 (2025-11-12) ★★★
+    virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle,
+        const FGameplayAbilityActorInfo* ActorInfo,
+        const FGameplayAbilityActivationInfo ActivationInfo,
+        const FGameplayEventData* TriggerEventData) override;
+
+    virtual void EndAbility(const FGameplayAbilitySpecHandle Handle,
+        const FGameplayAbilityActorInfo* ActorInfo,
+        const FGameplayAbilityActivationInfo ActivationInfo,
+        bool bReplicateEndAbility,
+        bool bWasCancelled) override;
+
 protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Attack")
     float BaseDamage = 10.0f;
@@ -46,4 +58,10 @@ public:
     // 範囲取得（追加）
     UFUNCTION(BlueprintPure, Category = "Attack")
     float GetRange() const { return Range; }
+
+private:
+    // ★★★ Barrier統合用の内部状態 (2025-11-12) ★★★
+    FGuid AttackActionId;
+    int32 AttackTurnId = -1;
+    bool bBarrierRegistered = false;
 };
