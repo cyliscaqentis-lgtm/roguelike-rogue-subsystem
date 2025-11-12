@@ -243,8 +243,19 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
             LiveCurrentCell = Intent.CurrentCell;
         }
 
+        // ★★★ FIX (2025-11-12): 攻撃インテントは移動しないので NextCell を CurrentCell に修正 ★★★
+        // 攻撃者の現在地を ConflictResolver で占有し続けるため
+        FIntPoint ResolvedNextCell = Intent.NextCell;
+        if (Intent.AbilityTag.MatchesTag(RogueGameplayTags::AI_Intent_Attack))
+        {
+            ResolvedNextCell = LiveCurrentCell;  // 攻撃時は移動しない
+            UE_LOG(LogTemp, Verbose,
+                TEXT("[TurnCore] Attack intent detected: %s stays at (%d,%d) (original NextCell=(%d,%d))"),
+                *GetNameSafe(Actor), LiveCurrentCell.X, LiveCurrentCell.Y, Intent.NextCell.X, Intent.NextCell.Y);
+        }
+
         int32 CurrentDist = DistanceField->GetDistance(LiveCurrentCell);
-        int32 NextDist = DistanceField->GetDistance(Intent.NextCell);
+        int32 NextDist = DistanceField->GetDistance(ResolvedNextCell);
         int32 DistanceReduction = FMath::Max(0, CurrentDist - NextDist);
 
         FReservationEntry Entry;
@@ -252,7 +263,7 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
         Entry.ActorID = ActorID;
         Entry.TimeSlot = Intent.TimeSlot;
         Entry.CurrentCell = LiveCurrentCell;
-        Entry.Cell = Intent.NextCell;
+        Entry.Cell = ResolvedNextCell;
         Entry.AbilityTag = Intent.AbilityTag;
         Entry.ActionTier = 1;
         Entry.BasePriority = 100;
