@@ -2685,49 +2685,50 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
 
         // ★★★ プレイヤーの移動先を計算 ★★★
         FIntPoint PlayerDestination = FIntPoint(0, 0);
-        if (APawn* PlayerPawn = GetWorld()->GetFirstPlayerController()->GetPawn())
+        if (CachedPathFinder.IsValid() && PlayerPawn)
         {
-            if (AGridPathfindingLibrary* PathFinder = CachedPathfindingLibrary.Get())
-            {
-                FIntPoint CurrentCell = PathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
-                FIntPoint Direction = FIntPoint(
-                    FMath::RoundToInt(Command.Direction.X),
-                    FMath::RoundToInt(Command.Direction.Y)
-                );
-                PlayerDestination = CurrentCell + Direction;
+            FIntPoint CurrentCell = CachedPathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
+            FIntPoint Direction = FIntPoint(
+                FMath::RoundToInt(Command.Direction.X),
+                FMath::RoundToInt(Command.Direction.Y)
+            );
+            PlayerDestination = CurrentCell + Direction;
 
-                UE_LOG(LogTurnManager, Warning,
-                    TEXT("[Turn %d] Player destination predicted: (%d,%d) → (%d,%d)"),
-                    CurrentTurnIndex, CurrentCell.X, CurrentCell.Y, PlayerDestination.X, PlayerDestination.Y);
-            }
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[Turn %d] Player destination predicted: (%d,%d) → (%d,%d)"),
+                CurrentTurnIndex, CurrentCell.X, CurrentCell.Y, PlayerDestination.X, PlayerDestination.Y);
         }
 
         // ★★★ DistanceFieldを移動先で更新 ★★★
-        if (UWorld* World = GetWorld())
+        if (UDistanceFieldSubsystem* DF = World->GetSubsystem<UDistanceFieldSubsystem>())
         {
-            if (UDistanceFieldSubsystem* DF = World->GetSubsystem<UDistanceFieldSubsystem>())
+            DF->UpdateDistanceField(PlayerDestination);
+
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[Turn %d] DistanceField updated with player destination (%d,%d)"),
+                CurrentTurnIndex, PlayerDestination.X, PlayerDestination.Y);
+        }
+
+        // ★★★ インテント再生成（プレイヤー移動先で） ★★★
+        if (UEnemyAISubsystem* EnemyAI = World->GetSubsystem<UEnemyAISubsystem>())
+        {
+            if (UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>())
             {
-                DF->BuildFromPlayer(PlayerDestination);
+                TArray<AActor*> Enemies = EnemyData->GetEnemiesSortedCopy();
+                TArray<FEnemyObservation> Observations;
+                TArray<FEnemyIntent> Intents;
+
+                // BuildObservations: void function with output parameter
+                EnemyAI->BuildObservations(Enemies, PlayerPawn, CachedPathFinder.Get(), Observations);
+
+                // CollectIntents: void function with output parameter
+                EnemyAI->CollectIntents(Observations, Enemies, Intents);
+
+                EnemyData->SaveIntents(Intents);
 
                 UE_LOG(LogTurnManager, Warning,
-                    TEXT("[Turn %d] DistanceField updated with player destination (%d,%d)"),
-                    CurrentTurnIndex, PlayerDestination.X, PlayerDestination.Y);
-            }
-
-            // ★★★ インテント再生成（プレイヤー移動先で） ★★★
-            if (UEnemyAISubsystem* EnemyAI = World->GetSubsystem<UEnemyAISubsystem>())
-            {
-                const TArray<FEnemyObservation> Observations = EnemyAI->BuildObservations();
-                const TArray<FEnemyIntent> Intents = EnemyAI->CollectIntents(Observations);
-
-                if (UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>())
-                {
-                    EnemyData->SaveIntents(Intents);
-
-                    UE_LOG(LogTurnManager, Warning,
-                        TEXT("[Turn %d] Intents regenerated: %d intents (with player destination)"),
-                        CurrentTurnIndex, Intents.Num());
-                }
+                    TEXT("[Turn %d] Intents regenerated: %d intents (with player destination)"),
+                    CurrentTurnIndex, Intents.Num());
             }
         }
 
