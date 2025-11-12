@@ -59,8 +59,17 @@ void UGA_TurnActionBase::EndAbility(const FGameplayAbilitySpecHandle Handle,
     // ★★★ FIX (2025-11-12): InProgressタグを明示的に削除してBarrier通知前にクリア ★★★
     // ActivationOwnedTagsの自動削除はSuper::EndAbility()内で行われるが、
     // 遅延する可能性があるため、SendCompletionEvent()が呼ばれる前に確実に削除する
-    GetAbilitySystemComponentFromActorInfo()->RemoveLooseGameplayTag(RogueGameplayTags::State_Ability_Executing);
-    GetAbilitySystemComponentFromActorInfo()->RemoveLooseGameplayTag(RogueGameplayTags::State_Action_InProgress);
+    if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
+    {
+        const int32 CountBefore = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress);
+        ASC->RemoveLooseGameplayTag(RogueGameplayTags::State_Ability_Executing);
+        ASC->RemoveLooseGameplayTag(RogueGameplayTags::State_Action_InProgress);
+        const int32 CountAfter = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress);
+
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[GA_TurnActionBase] ★ EndAbility: InProgress tag REMOVED BEFORE SendCompletionEvent: Actor=%s, Count %d → %d"),
+            *GetNameSafe(GetAvatarActorFromActorInfo()), CountBefore, CountAfter);
+    }
 
     Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 
