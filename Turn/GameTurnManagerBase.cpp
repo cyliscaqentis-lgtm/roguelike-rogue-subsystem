@@ -3583,12 +3583,12 @@ void AGameTurnManagerBase::ExecutePlayerMove()
                 }
 
                 // DynamicAbilityTags (using new API GetDynamicSpecSourceTags)
-                const FGameplayTagContainer* DynamicTags = Spec.GetDynamicSpecSourceTags();
-                if (DynamicTags && DynamicTags->Num() > 0)
+                const FGameplayTagContainer DynamicTags = Spec.GetDynamicSpecSourceTags();
+                if (DynamicTags.Num() > 0)
                 {
                     UE_LOG(LogTurnManager, Warning,
                         TEXT("    - DynamicAbilityTags: %s"),
-                        *DynamicTags->ToStringSimple());
+                        *DynamicTags.ToStringSimple());
                 }
             }
             ++AbilityIndex;
