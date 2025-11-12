@@ -2730,11 +2730,33 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
                     TEXT("[Turn %d] Intent regeneration: Using %d cached enemies"),
                     CurrentTurnIndex, Enemies.Num());
 
+                // ★★★ FIX (2025-11-12): BuildObservationsを呼ばずに手動でObservationsを構築 ★★★
+                // BuildObservationsはPlayerPawn->GetActorLocation()を使ってDistanceFieldを上書きしてしまうため
+                // 予測位置(PlayerDestination)を維持するために、手動でObservationsを構築する
                 TArray<FEnemyObservation> Observations;
-                TArray<FEnemyIntent> Intents;
+                Observations.Reserve(Enemies.Num());
 
-                // BuildObservations: void function with output parameter
-                EnemyAI->BuildObservations(Enemies, PlayerPawn, CachedPathFinder.Get(), Observations);
+                for (AActor* Enemy : Enemies)
+                {
+                    if (!Enemy || !CachedPathFinder.IsValid())
+                    {
+                        continue;
+                    }
+
+                    FEnemyObservation Obs;
+                    Obs.GridPosition = CachedPathFinder->WorldToGrid(Enemy->GetActorLocation());
+                    Obs.PlayerGridPosition = PlayerDestination;
+                    Obs.DistanceInTiles = FMath::Abs(Obs.GridPosition.X - PlayerDestination.X) +
+                        FMath::Abs(Obs.GridPosition.Y - PlayerDestination.Y);
+
+                    Observations.Add(Obs);
+                }
+
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("[Turn %d] Built %d observations with player destination (%d,%d)"),
+                    CurrentTurnIndex, Observations.Num(), PlayerDestination.X, PlayerDestination.Y);
+
+                TArray<FEnemyIntent> Intents;
 
                 // CollectIntents: void function with output parameter
                 EnemyAI->CollectIntents(Observations, Enemies, Intents);
