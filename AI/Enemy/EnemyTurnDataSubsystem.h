@@ -142,6 +142,21 @@ public:
     void ClearIntents();
 
     /**
+     * 攻撃インテントのみをクリア（移動インテントは残す）
+     * 攻撃完了後に呼び出し
+     */
+    UFUNCTION(BlueprintCallable, Category = "Turn|Enemy")
+    void ClearAttackIntents();
+
+    /**
+     * 攻撃インテントをWaitインテントに変換
+     * 攻撃完了後に呼び出し、攻撃した敵が移動しないようにする
+     * ConflictResolverで現在地の占有を維持するため
+     */
+    UFUNCTION(BlueprintCallable, Category = "Turn|Enemy")
+    void ConvertAttacksToWait();
+
+    /**
      * Intent配列の取得（Blueprint用・コピー返し）
      */
     UFUNCTION(BlueprintPure, Category = "Turn|Enemy")

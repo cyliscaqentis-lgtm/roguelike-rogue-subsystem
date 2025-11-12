@@ -287,6 +287,66 @@ void UEnemyTurnDataSubsystem::ClearIntents()
     Intents.Reset();
 }
 
+void UEnemyTurnDataSubsystem::ClearAttackIntents()
+{
+    // ★★★ FIX (2025-11-12): 攻撃インテントのみをクリア（移動インテントは残す） ★★★
+    // 攻撃した敵は移動フェーズで動かないようにするため
+    const FGameplayTag AttackTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Attack"), false);
+
+    if (!AttackTag.IsValid())
+    {
+        UE_LOG(LogEnemyTurnDataSys, Warning,
+            TEXT("[ClearAttackIntents] AI.Intent.Attack tag not found"));
+        return;
+    }
+
+    const int32 OriginalCount = Intents.Num();
+
+    // 攻撃インテントを除外
+    Intents.RemoveAll([AttackTag](const FEnemyIntent& Intent) {
+        return Intent.AbilityTag.MatchesTag(AttackTag);
+    });
+
+    const int32 RemovedCount = OriginalCount - Intents.Num();
+
+    UE_LOG(LogEnemyTurnDataSys, Log,
+        TEXT("[ClearAttackIntents] Cleared %d attack intents, %d intents remaining"),
+        RemovedCount, Intents.Num());
+}
+
+void UEnemyTurnDataSubsystem::ConvertAttacksToWait()
+{
+    // ★★★ FIX (2025-11-12): 攻撃インテントをWaitインテントに変換 ★★★
+    // 攻撃した敵は移動しないが、ConflictResolverで現在地を占有し続けるため
+    const FGameplayTag AttackTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Attack"), false);
+    const FGameplayTag WaitTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"), false);
+
+    if (!AttackTag.IsValid() || !WaitTag.IsValid())
+    {
+        UE_LOG(LogEnemyTurnDataSys, Warning,
+            TEXT("[ConvertAttacksToWait] AI.Intent tags not found (Attack=%d, Wait=%d)"),
+            AttackTag.IsValid(), WaitTag.IsValid());
+        return;
+    }
+
+    int32 ConvertedCount = 0;
+
+    // 攻撃インテントを Wait に変換
+    for (FEnemyIntent& Intent : Intents)
+    {
+        if (Intent.AbilityTag.MatchesTag(AttackTag))
+        {
+            Intent.AbilityTag = WaitTag;
+            Intent.NextCell = Intent.CurrentCell;  // 移動しない
+            ConvertedCount++;
+        }
+    }
+
+    UE_LOG(LogEnemyTurnDataSys, Log,
+        TEXT("[ConvertAttacksToWait] Converted %d attack intents to wait, total intents=%d"),
+        ConvertedCount, Intents.Num());
+}
+
 TArray<FEnemyIntent> UEnemyTurnDataSubsystem::GetIntentsCopy() const
 {
     return Intents;

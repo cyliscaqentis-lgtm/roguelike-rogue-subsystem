@@ -3217,19 +3217,21 @@ void AGameTurnManagerBase::OnAttacksFinished(int32 TurnId)
 
     UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] OnAttacksFinished: All attacks completed"), TurnId);
 
-    // ★★★ FIX (2025-11-12): 攻撃完了後にIntentをクリア ★★★
-    // 攻撃が完了したら、EnemyTurnDataSubsystemに記録されたIntentをクリアする。
-    // これにより、次のターンで同じ攻撃が再実行されることを防ぐ。
+    // ★★★ FIX (2025-11-12): 攻撃インテントをWaitインテントに変換 ★★★
+    // 攻撃が完了したら、攻撃インテントをWaitインテントに変換する。
+    // 移動インテントは残すことで、攻撃しなかった敵が移動フェーズで動く。
+    // 攻撃した敵はWaitインテントで現在地を占有し続ける（移動しない）。
+    // これにより、攻撃した敵は移動せず、攻撃しなかった敵のみが移動する。
     if (UWorld* World = GetWorld())
     {
         if (UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>())
         {
-            EnemyData->ClearIntents();
-            UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Cleared attack intents after completion"), TurnId);
+            EnemyData->ConvertAttacksToWait();
+            UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Converted attack intents to wait (move intents preserved)"), TurnId);
         }
         else
         {
-            UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] Failed to get EnemyTurnDataSubsystem for clearing intents"), TurnId);
+            UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] Failed to get EnemyTurnDataSubsystem for converting intents"), TurnId);
         }
     }
 
