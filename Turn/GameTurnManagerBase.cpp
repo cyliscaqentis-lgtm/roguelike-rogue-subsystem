@@ -3487,6 +3487,45 @@ void AGameTurnManagerBase::ExecutePlayerMove()
     //==========================================================================
     if (UAbilitySystemComponent* ASC = GetPlayerASC())
     {
+        //======================================================================
+        // ★★★ DIAGNOSTIC (2025-11-12): ASCのアビリティとトリガータグを診断 ★★★
+        //======================================================================
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[Turn %d] ==== ASC DIAGNOSTIC ==== Checking granted abilities for %s"),
+            CurrentTurnIndex, *PlayerPawnNow->GetName());
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("  OwnedTags: %s"),
+            *ASC->GetOwnedGameplayTags().ToStringSimple());
+
+        int32 AbilityIndex = 0;
+        for (const FGameplayAbilitySpec& Spec : ASC->GetActivatableAbilities())
+        {
+            if (Spec.Ability)
+            {
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("  Ability[%d]: %s"),
+                    AbilityIndex, *Spec.Ability->GetName());
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("    - Triggers: %d"),
+                    Spec.Ability->AbilityTriggers.Num());
+                for (const FAbilityTriggerData& Trigger : Spec.Ability->AbilityTriggers)
+                {
+                    UE_LOG(LogTurnManager, Warning,
+                        TEXT("      * TriggerTag: %s, Source: %d"),
+                        *Trigger.TriggerTag.ToString(),
+                        static_cast<int32>(Trigger.TriggerSource));
+                }
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("    - ActivationRequiredTags: %s"),
+                    *Spec.Ability->ActivationRequiredTags.ToStringSimple());
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("    - ActivationBlockedTags: %s"),
+                    *Spec.Ability->ActivationBlockedTags.ToStringSimple());
+            }
+            ++AbilityIndex;
+        }
+        UE_LOG(LogTurnManager, Warning, TEXT("==== END ASC DIAGNOSTIC ===="));
+
         FGameplayEventData EventData;
         EventData.EventTag = Tag_AbilityMove;
         EventData.Instigator = PlayerPawnNow;
@@ -3500,7 +3539,7 @@ void AGameTurnManagerBase::ExecutePlayerMove()
         const int32 DirY = FMath::RoundToInt(CachedPlayerCommand.Direction.Y);
         EventData.EventMagnitude = static_cast<float>(TurnCommandEncoding::PackDir(DirX, DirY));
 
-        UE_LOG(LogTurnManager, Log,
+        UE_LOG(LogTurnManager, Warning,
             TEXT("Turn %d: Sending GameplayEvent %s (Magnitude=%.2f, Direction=(%.0f,%.0f))"),
             CurrentTurnIndex,
             *EventData.EventTag.ToString(),
@@ -3512,15 +3551,15 @@ void AGameTurnManagerBase::ExecutePlayerMove()
 
         if (TriggeredCount > 0)
         {
-            UE_LOG(LogTurnManager, Log,
+            UE_LOG(LogTurnManager, Warning,
                 TEXT("Turn %d: ✅GA_MoveBase activated (count=%d)"),
                 CurrentTurnIndex, TriggeredCount);
         }
         else
         {
             UE_LOG(LogTurnManager, Error,
-                TEXT("Turn %d: ❌No abilities triggered for %s"),
-                CurrentTurnIndex, *EventData.EventTag.ToString());
+                TEXT("Turn %d: ❌No abilities triggered for %s (Expected trigger tag: %s)"),
+                CurrentTurnIndex, *EventData.EventTag.ToString(), *Tag_AbilityMove.ToString());
         }
     }
     else
