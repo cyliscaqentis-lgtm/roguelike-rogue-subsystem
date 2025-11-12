@@ -2976,8 +2976,11 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
 
     if (NotifiedTurn != CurrentTurn)
     {
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("Server: IGNORE stale move notification (notified=%d, current=%d)"),
+        // ★★★ 優先度3: stale通知ログの改善（正常な遅延であることを明示） ★★★
+        // これは正常系の遅延（前ターンの完了通知が遅れて届いた）であり、
+        // 既に次のターンに進んでいるため無視して問題ない。
+        UE_LOG(LogTurnManager, Verbose,
+            TEXT("[Net] Late move completion for closed turn (notified=%d, current=%d) — safely ignored (normal turn transition delay)"),
             NotifiedTurn, CurrentTurn);
         return;
     }

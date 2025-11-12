@@ -1035,7 +1035,10 @@ void APlayerControllerBase::Client_ConfirmCommandAccepted_Implementation(int32 W
     // 同一ウィンドウのACKのみ有効（古いACKを無視）
     if (WindowId != CurrentInputWindowId)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Client] ACK IGNORED: WindowId mismatch (ACK=%d, Current=%d)"),
+        // ★★★ 優先度3: ACKログの改善（正常な遅延であることを明示） ★★★
+        // これは正常系の遅延（ネットワークレースで遅れて届いたACK）であり、
+        // 既に次のウィンドウに進んでいるため無視して問題ない。
+        UE_LOG(LogTemp, Verbose, TEXT("[Net] Late ACK for closed window (ack=%d current=%d) — safely ignored (normal network delay)"),
             WindowId, CurrentInputWindowId);
         return;
     }

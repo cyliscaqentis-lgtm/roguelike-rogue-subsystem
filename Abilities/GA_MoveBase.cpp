@@ -884,10 +884,35 @@ void UGA_MoveBase::BindMoveFinishedDelegate()
 
 void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
 {
+    //==========================================================================
+    // ★★★ 優先度1: TurnId検証を最初に実施（stale通知の早期リターン）
+    //==========================================================================
+    // TurnIdの不一致（stale通知）の場合は、タグやOccupancyを一切触らずに即座にreturn。
+    // これにより、古い完了通知が来ても現在進行中のアクションのInProgressタグを
+    // 誤って削除することを防ぐ。
+    if (UWorld* World = GetWorld())
+    {
+        if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
+        {
+            const int32 CurrentTurnId = Barrier->GetCurrentTurnId();
+            if (MoveTurnId != INDEX_NONE && MoveTurnId != CurrentTurnId)
+            {
+                UE_LOG(LogTurnManager, Error,
+                    TEXT("[OnMoveFinished] ❌ STALE COMPLETION DETECTED: MoveTurnId=%d != CurrentTurnId=%d, ABORTING (Actor=%s)"),
+                    MoveTurnId, CurrentTurnId, *GetNameSafe(Unit));
+
+                // Stale完了は処理せずに即座にreturn（タグ、Occupancy、EndAbilityを触らない）
+                return;
+            }
+        }
+    }
+
+    //==========================================================================
     // ★★★ 優先度A: InProgressタグを明示的に同期削除（2025-11-12） ★★★
+    //==========================================================================
+    // TurnId検証が通過した後で、タグ削除を実施。
     // EndAbility呼び出しより前にタグを削除することで、Barrierの完了通知が来る前に
-    // タグが確実に削除されることを保証する。これにより、ターン進行時のタグカウント
-    // チェックで「まだタグが残っている」状態を回避できる。
+    // タグが確実に削除されることを保証する。
     UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
     if (ASC)
     {
@@ -908,27 +933,6 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
             UE_LOG(LogTurnManager, Warning,
                 TEXT("[GA_MoveBase] OnMoveFinished: InProgress tag already 0: Actor=%s"),
                 *GetNameSafe(Unit));
-        }
-    }
-
-    // ☁E�E☁E二重通知防止: Barrier通知は EndAbility() でのみ行う ☁E�E☁E
-    // OnMoveFinished ↁEEndAbility の頁E��呼ばれるため、ここでは Barrier を触らなぁE
-
-    // TurnId変更の検�E�E�デバッグログのみ�E�E
-    if (UWorld* World = GetWorld())
-    {
-        if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
-        {
-            const int32 CurrentTurnId = Barrier->GetCurrentTurnId();
-            if (MoveTurnId != INDEX_NONE && MoveTurnId != CurrentTurnId)
-            {
-                UE_LOG(LogTurnManager, Warning,
-                    TEXT("[OnMoveFinished] TurnId mismatch detected: MoveTurnId=%d, CurrentTurnId=%d (Actor=%s)"),
-                    MoveTurnId, CurrentTurnId, *GetNameSafe(Unit));
-                UE_LOG(LogTurnManager, Warning,
-                    TEXT("[OnMoveFinished] Barrier notification will be handled by EndAbility() with TurnId=%d"),
-                    MoveTurnId);
-            }
         }
     }
 
