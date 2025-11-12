@@ -4,6 +4,8 @@
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
 #include "Utility/RogueGameplayTags.h"
+#include "GameFramework/PlayerState.h"
+#include "GameFramework/Pawn.h"
 
 DEFINE_LOG_CATEGORY(LogAttackPhase);
 
