@@ -15,22 +15,19 @@
 UGA_MeleeAttack::UGA_MeleeAttack(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
 {
-    InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
-    NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerInitiated;
-    ReplicationPolicy = EGameplayAbilityReplicationPolicy::ReplicateYes;
+    // ★★★ 親クラス(UGA_AttackBase)で既に設定済みのため、ここでは上書きしない ★★★
+    // - InstancingPolicy, NetExecutionPolicy, ReplicationPolicy
+    // - MaxExecutionTime
+    // - ActivationBlockedTags, ActivationOwnedTags
+    // - AbilityTriggers
 
-    MaxExecutionTime = 5.0f;
+    // ★★★ 近接攻撃固有のパラメータのみ設定 ★★★
     BaseDamage = 28.0f;
     Range = 150.0f; // 隣接判定用（1.5タイル相当）
 
-    // アセットタグ
-    FGameplayTagContainer Tags;
-    Tags.AddTag(RogueGameplayTags::Ability_Attack);
-    Tags.AddTag(RogueGameplayTags::Ability_Melee);
-    Tags.AddTag(RogueGameplayTags::Ability_MeleeAttack);  // ネイティブタグを使用
-    SetAssetTags(Tags);
-
-    ActivationBlockedTags.AddTag(RogueGameplayTags::State_Ability_Executing);
+    // ★★★ 近接攻撃固有のタグを追加（親クラスのタグに追加） ★★★
+    AbilityTags.AddTag(RogueGameplayTags::Ability_Melee);
+    AbilityTags.AddTag(RogueGameplayTags::Ability_MeleeAttack);
 }
 
 //------------------------------------------------------------------------------
