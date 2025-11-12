@@ -87,9 +87,10 @@ void UGA_AttackBase::PostInitProperties()
     }
     else
     {
+        const FGameplayTag AttackEventTag = RogueGameplayTags::GameplayEvent_Intent_Attack;
         UE_LOG(LogTemp, Log,
             TEXT("[GA_AttackBase::PostInitProperties] Trigger already registered: %s"),
-            *RogueGameplayTags::GameplayEvent_Intent_Attack.ToString());
+            *AttackEventTag.ToString());
     }
 }
 
