@@ -84,6 +84,10 @@ struct FEnemyIntent
     UPROPERTY(BlueprintReadWrite, Category = "Intent")
     TObjectPtr<AActor> Owner = nullptr;
 
+    // ★★★ FIX (2025-11-12): 実行済みフラグを追加（無限ループ防止） ★★★
+    UPROPERTY(BlueprintReadWrite, Category = "Intent")
+    bool bExecuted = false;
+
     FEnemyIntent() = default;
 
     FEnemyIntent(const FGameplayTag& InTag, const FIntPoint& InCell, AActor* InTarget = nullptr)

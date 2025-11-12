@@ -1441,13 +1441,14 @@ bool AGameTurnManagerBase::HasAnyAttackIntent() const
 
     const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;  // ネイティブタグを使用
 
+    // ★★★ FIX (2025-11-12): 未実行の攻撃インテントのみをチェック ★★★
     for (const FEnemyIntent& I : Intents)
     {
-        if (I.AbilityTag.MatchesTag(AttackTag))
+        if (I.AbilityTag.MatchesTag(AttackTag) && !I.bExecuted)  // ← bExecuted チェックを追加
         {
             if (I.Actor.IsValid())
             {
-                UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Attack Intent found: %s"), CurrentTurnIndex, *I.Actor->GetName());
+                UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Attack Intent found (not yet executed): %s"), CurrentTurnIndex, *I.Actor->GetName());
                 return true;
             }
         }
@@ -3193,6 +3194,20 @@ void AGameTurnManagerBase::ExecuteAttacks()
                 }
 
                 AttackExecutor->BeginSequentialAttacks(AttackActions, CurrentTurnIndex);
+
+                // ★★★ FIX (2025-11-12): 攻撃インテントを「実行済み」としてマーク ★★★
+                // 無限ループを防ぐため、攻撃実行後は bExecuted = true を設定
+                const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
+                for (FEnemyIntent& Intent : EnemyTurnData->Intents)
+                {
+                    if (Intent.AbilityTag.MatchesTag(AttackTag) && !Intent.bExecuted)
+                    {
+                        Intent.bExecuted = true;
+                        UE_LOG(LogTurnManager, Log,
+                            TEXT("[Turn %d] ExecuteAttacks: Marked attack intent as executed: %s"),
+                            CurrentTurnIndex, *GetNameSafe(Intent.Actor.Get()));
+                    }
+                }
             }
         }
     }
