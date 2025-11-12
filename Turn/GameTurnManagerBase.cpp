@@ -2672,13 +2672,66 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
     CachedPlayerCommand = Command;
 
     //==========================================================================
-    // ★★★ (11) 攻撃判定による分岐（ヤンガス方式）
+    // ★★★ FIX (2025-11-12): プレイヤー移動先でインテント再生成→敵ターン開始
+    // 理由: プレイヤーの移動先を見てからインテントを決める（ボタンを押した瞬間）
     //==========================================================================
     const FGameplayTag InputMove = RogueGameplayTags::InputTag_Move;  // ネイティブタグを使用
 
     if (Command.CommandTag.MatchesTag(InputMove))
     {
-        // ★★★ 攻撃判定: 敵に攻撃インテントがあるか確認
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[Turn %d] Player move command accepted - regenerating intents with predicted destination"),
+            CurrentTurnIndex);
+
+        // ★★★ プレイヤーの移動先を計算 ★★★
+        FIntPoint PlayerDestination = FIntPoint(0, 0);
+        if (APawn* PlayerPawn = GetWorld()->GetFirstPlayerController()->GetPawn())
+        {
+            if (AGridPathfindingLibrary* PathFinder = CachedPathfindingLibrary.Get())
+            {
+                FIntPoint CurrentCell = PathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
+                FIntPoint Direction = FIntPoint(
+                    FMath::RoundToInt(Command.Direction.X),
+                    FMath::RoundToInt(Command.Direction.Y)
+                );
+                PlayerDestination = CurrentCell + Direction;
+
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("[Turn %d] Player destination predicted: (%d,%d) → (%d,%d)"),
+                    CurrentTurnIndex, CurrentCell.X, CurrentCell.Y, PlayerDestination.X, PlayerDestination.Y);
+            }
+        }
+
+        // ★★★ DistanceFieldを移動先で更新 ★★★
+        if (UWorld* World = GetWorld())
+        {
+            if (UDistanceFieldSubsystem* DF = World->GetSubsystem<UDistanceFieldSubsystem>())
+            {
+                DF->BuildFromPlayer(PlayerDestination);
+
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("[Turn %d] DistanceField updated with player destination (%d,%d)"),
+                    CurrentTurnIndex, PlayerDestination.X, PlayerDestination.Y);
+            }
+
+            // ★★★ インテント再生成（プレイヤー移動先で） ★★★
+            if (UEnemyAISubsystem* EnemyAI = World->GetSubsystem<UEnemyAISubsystem>())
+            {
+                const TArray<FEnemyObservation> Observations = EnemyAI->BuildObservations();
+                const TArray<FEnemyIntent> Intents = EnemyAI->CollectIntents(Observations);
+
+                if (UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>())
+                {
+                    EnemyData->SaveIntents(Intents);
+
+                    UE_LOG(LogTurnManager, Warning,
+                        TEXT("[Turn %d] Intents regenerated: %d intents (with player destination)"),
+                        CurrentTurnIndex, Intents.Num());
+                }
+            }
+        }
+
+        // ★★★ 攻撃判定による分岐 ★★★
         const bool bHasAttack = HasAnyAttackIntent();
 
         UE_LOG(LogTurnManager, Log,
@@ -2691,7 +2744,7 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
         {
             // ★★★ 攻撃あり: 同時移動しない。逐次実行
             UE_LOG(LogTurnManager, Warning,
-                TEXT("[Turn %d] Attacks detected → Sequential mode (no simultaneous move)"),
+                TEXT("[Turn %d] Attacks detected (with player destination) → Sequential mode"),
                 CurrentTurnIndex);
 
             ExecuteSequentialPhase();  // 攻撃→移動を順次に実装
@@ -2700,7 +2753,7 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
         {
             // ★★★ 攻撃なし: 同時移動する
             UE_LOG(LogTurnManager, Warning,
-                TEXT("[Turn %d] No attacks → Simultaneous move mode"),
+                TEXT("[Turn %d] No attacks (with player destination) → Simultaneous move mode"),
                 CurrentTurnIndex);
 
             ExecuteSimultaneousPhase();  // 同時移動
@@ -3138,6 +3191,9 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
 
     // ★★★ 現在はAPシステム未実装のため、フェーズ遷移は別のロジックで制御 ★★★
     // APシステム実装後は、AP残量に基づいてフェーズ遷移を制御する
+
+    // ★★★ 注意: 敵ターン開始はOnPlayerCommandAcceptedで既に実行済み ★★★
+    // プレイヤーがボタンを押した瞬間（移動先予測時）にインテント生成と敵ターン開始
 }
 
 
