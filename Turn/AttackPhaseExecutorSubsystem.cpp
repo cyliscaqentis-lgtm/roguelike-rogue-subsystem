@@ -112,8 +112,45 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 	}
 
 	AActor* Attacker = Action.Actor.Get();
+
+	// ★★★ DIAGNOSTIC (2025-11-12): ASC取得元を確認 ★★★
 	UAbilitySystemComponent* ASC =
 		UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Attacker);
+
+	if (ASC)
+	{
+		AActor* ASCOwner = ASC->GetOwnerActor();
+		UE_LOG(LogAttackPhase, Warning,
+			TEXT("[Turn %d] %s: ASC found, Owner=%s"),
+			TurnId, *Attacker->GetName(), *GetNameSafe(ASCOwner));
+	}
+	else
+	{
+		UE_LOG(LogAttackPhase, Warning,
+			TEXT("[Turn %d] %s: NO ASC found, checking PlayerState..."),
+			TurnId, *Attacker->GetName());
+
+		// PlayerStateから取得を試みる
+		if (APawn* Pawn = Cast<APawn>(Attacker))
+		{
+			if (APlayerState* PS = Pawn->GetPlayerState())
+			{
+				ASC = Cast<UAbilitySystemComponent>(PS->GetComponentByClass(UAbilitySystemComponent::StaticClass()));
+				if (ASC)
+				{
+					UE_LOG(LogAttackPhase, Warning,
+						TEXT("[Turn %d] %s: ASC found in PlayerState %s"),
+						TurnId, *Attacker->GetName(), *PS->GetName());
+				}
+			}
+			else
+			{
+				UE_LOG(LogAttackPhase, Warning,
+					TEXT("[Turn %d] %s: No PlayerState found"),
+					TurnId, *Attacker->GetName());
+			}
+		}
+	}
 
 	// ASCバリデーション
 	if (!ASC)
@@ -129,7 +166,7 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 	// 🌟 ASC完了イベント購読（Lumina提言：ポーリング廃止）
 	BindASC(ASC);
 
-	// ★★★ DIAGNOSTIC (2025-11-12): ASCに登録されているアビリティとトリガーを確認 ★★★
+	// ★★★ DIAGNOSTIC (2025-11-12): ASCに登録されているアビリティを確認 ★★★
 	TArray<FGameplayAbilitySpec>& Specs = ASC->GetActivatableAbilities();
 	UE_LOG(LogAttackPhase, Warning,
 		TEXT("[Turn %d] %s: ASC has %d activatable abilities"),
@@ -141,15 +178,13 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 		if (Spec.Ability)
 		{
 			UE_LOG(LogAttackPhase, Warning,
-				TEXT("  [%d] Ability=%s, Triggers=%d"),
-				i, *Spec.Ability->GetClass()->GetName(), Spec.Ability->AbilityTriggers.Num());
-
-			for (const FAbilityTriggerData& Trigger : Spec.Ability->AbilityTriggers)
-			{
-				UE_LOG(LogAttackPhase, Warning,
-					TEXT("    - TriggerTag=%s, Source=%d"),
-					*Trigger.TriggerTag.ToString(), (int32)Trigger.TriggerSource);
-			}
+				TEXT("  [%d] Ability=%s, Level=%d, InputID=%d"),
+				i, *Spec.Ability->GetClass()->GetName(), Spec.Level, Spec.InputID);
+		}
+		else
+		{
+			UE_LOG(LogAttackPhase, Warning,
+				TEXT("  [%d] Ability=NULL"), i);
 		}
 	}
 
@@ -160,8 +195,8 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 	Payload.TargetData = Action.TargetData;
 
 	UE_LOG(LogAttackPhase, Warning,
-		TEXT("[Turn %d] Sending GameplayEvent: Tag=%s"),
-		TurnId, *Payload.EventTag.ToString());
+		TEXT("[Turn %d] Sending GameplayEvent: Tag=%s (to %s)"),
+		TurnId, *Payload.EventTag.ToString(), *Attacker->GetName());
 
 	const int32 TriggeredCount = ASC->HandleGameplayEvent(Payload.EventTag, &Payload);
 
