@@ -272,12 +272,12 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
     // Team check diagnostic
     if (AUnitBase* AttackerUnit = Cast<AUnitBase>(Avatar))
     {
-        if (AUnitBase* TargetUnit = Cast<AUnitBase>(Target))
+        if (AUnitBase* TargetUnitRef = Cast<AUnitBase>(Target))
         {
             UE_LOG(LogTemp, Warning,
                 TEXT("[GA_MeleeAttack] AttackerTeam=%d, TargetTeam=%d (SameTeam=%s)"),
-                AttackerUnit->Team, TargetUnit->Team,
-                AttackerUnit->Team == TargetUnit->Team ? TEXT("YES - DAMAGE BLOCKED") : TEXT("NO - OK"));
+                AttackerUnit->Team, TargetUnitRef->Team,
+                AttackerUnit->Team == TargetUnitRef->Team ? TEXT("YES - DAMAGE BLOCKED") : TEXT("NO - OK"));
         }
     }
 
