@@ -1004,7 +1004,8 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
         // UpdateGridState(CachedFirstLoc, 1);  // ← LEGACY CODE REMOVED
 
         // ★★★ 2025-11-11: GridOccupancySubsystem更新 + 失敗時ロールバック ★★★
-        if (UWorld* World = GetWorld())
+        // World変数は関数冒頭で既に取得済み（line 908）なので再利用
+        if (World)
         {
             if (UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>())
             {
