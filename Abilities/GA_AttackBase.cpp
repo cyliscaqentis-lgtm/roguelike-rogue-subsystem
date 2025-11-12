@@ -2,6 +2,7 @@
 #include "Abilities/GA_AttackBase.h"
 #include "Abilities/GA_TurnActionBase.h"
 #include "AbilitySystemComponent.h"
+#include "AbilitySystemBlueprintLibrary.h"
 #include "GameFramework/Actor.h"
 #include "Kismet/GameplayStatics.h"
 #include "Utility/RogueGameplayTags.h"
@@ -161,12 +162,17 @@ void UGA_AttackBase::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
     // 親クラスのActivateAbilityを呼ぶ（タイムアウトタイマー、State.Ability.Executing追加など）
     Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
+    UE_LOG(LogAttackAbility, Error,
+        TEXT("[GA_AttackBase] ActivateAbility CALLED - ActualClass=%s, Actor=%s"),
+        *GetClass()->GetName(), *GetNameSafe(GetAvatarActorFromActorInfo()));
+
     // ★★★ Barrier登録：攻撃もターン進行のブロック対象として管理 ★★★
     AActor* Avatar = GetAvatarActorFromActorInfo();
     if (!Avatar)
     {
         UE_LOG(LogAttackAbility, Warning,
             TEXT("[GA_AttackBase] ActivateAbility: Avatar is null, cannot register with Barrier"));
+        EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
         return;
     }
 
@@ -175,6 +181,7 @@ void UGA_AttackBase::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
     {
         UE_LOG(LogAttackAbility, Warning,
             TEXT("[GA_AttackBase] ActivateAbility: World is null"));
+        EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
         return;
     }
 
@@ -183,6 +190,7 @@ void UGA_AttackBase::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
     {
         UE_LOG(LogAttackAbility, Warning,
             TEXT("[GA_AttackBase] ActivateAbility: TurnActionBarrierSubsystem not found"));
+        EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
         return;
     }
 
@@ -194,6 +202,51 @@ void UGA_AttackBase::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
     UE_LOG(LogAttackAbility, Log,
         TEXT("[GA_AttackBase] ActivateAbility: Registered attack with Barrier (TurnId=%d, ActionId=%s, Actor=%s)"),
         AttackTurnId, *AttackActionId.ToString(), *Avatar->GetName());
+
+    // ★★★ CRITICAL FIX (2025-11-12): ターゲット取得と攻撃実行を追加 ★★★
+    AActor* Target = nullptr;
+
+    // EventDataからターゲットを取得
+    if (TriggerEventData && TriggerEventData->TargetData.IsValid(0))
+    {
+        if (FHitResult HitResult = UAbilitySystemBlueprintLibrary::GetHitResultFromTargetData(TriggerEventData->TargetData, 0); HitResult.bBlockingHit)
+        {
+            Target = HitResult.GetActor();
+            UE_LOG(LogAttackAbility, Log,
+                TEXT("[GA_AttackBase] Target from EventData: %s"), *GetNameSafe(Target));
+        }
+    }
+
+    // ターゲットが無い場合は範囲検索
+    if (!Target)
+    {
+        TArray<AActor*> Targets = FindTargetsInRange();
+        if (Targets.Num() > 0)
+        {
+            Target = Targets[0];
+            UE_LOG(LogAttackAbility, Warning,
+                TEXT("[GA_AttackBase] Using fallback range search, found: %s"), *GetNameSafe(Target));
+        }
+    }
+
+    // 攻撃を実行
+    if (Target)
+    {
+        UE_LOG(LogAttackAbility, Log,
+            TEXT("[GA_AttackBase] Executing attack on target: %s"), *GetNameSafe(Target));
+        ExecuteAttack(Target);
+    }
+    else
+    {
+        UE_LOG(LogAttackAbility, Warning,
+            TEXT("[GA_AttackBase] No target found, attack cancelled"));
+    }
+
+    // ★★★ 即座にEndAbilityを呼ぶ（モンタージュ無しのシンプル実装） ★★★
+    // Blueprintでモンタージュを追加したい場合は、このクラスを継承してオーバーライド
+    UE_LOG(LogAttackAbility, Log,
+        TEXT("[GA_AttackBase] Attack completed, calling EndAbility"));
+    OnAttackCompleted();
 }
 
 void UGA_AttackBase::EndAbility(const FGameplayAbilitySpecHandle Handle,
