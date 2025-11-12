@@ -892,49 +892,54 @@ void UGA_MoveBase::BindMoveFinishedDelegate()
 void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
 {
     //==========================================================================
-    // ★★★ CRITICAL FIX: サーバー権限チェックを最初に実施（2025-11-12）
+    // ★★★ CRITICAL FIX: サーバー権限チェック（より確実な方法）
     //==========================================================================
-    // OnMoveFinishedはクライアント側でも呼ばれる可能性があるため、
-    // タグ操作、Barrier通知、Occupancy確定は**サーバー側でのみ**実行する。
-    // クライアント側での実行を許可すると、未初期化のBarrierから-1を取得し、
-    // stale判定で誤って早期returnしてしまう。
-    if (!HasAuthority(&CachedActivationInfo))
+    // CurrentActorInfo を使った権限チェックに変更（より確実）
+    if (!CurrentActorInfo || !CurrentActorInfo->IsNetAuthority())
     {
         UE_LOG(LogTurnManager, Verbose,
-            TEXT("[OnMoveFinished] Client-side call, skipping server-side logic (Actor=%s)"),
+            TEXT("[OnMoveFinished] Client-side call, skipping server-side logic (Actor=%s, IsAuthority=false)"),
             *GetNameSafe(Unit));
-        // クライアント側は視覚的な処理のみ（現在は何もしない）
+        // クライアント側は視覚的な処理のみ
         return;
     }
 
-    //==========================================================================
-    // ★★★ 優先度1: TurnId検証（サーバー側のみ実施）
-    //==========================================================================
-    // TurnIdの不一致（stale通知）の場合は、タグやOccupancyを一切触らずに即座にreturn。
-    // これにより、古い完了通知が来ても現在進行中のアクションのInProgressタグを
-    // 誤って削除することを防ぐ。
-    if (UWorld* World = GetWorld())
-    {
-        if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
-        {
-            const int32 CurrentTurnId = Barrier->GetCurrentTurnId();
-            if (MoveTurnId != INDEX_NONE && MoveTurnId != CurrentTurnId)
-            {
-                UE_LOG(LogTurnManager, Error,
-                    TEXT("[OnMoveFinished] ❌ STALE COMPLETION DETECTED: MoveTurnId=%d != CurrentTurnId=%d, ABORTING (Actor=%s)"),
-                    MoveTurnId, CurrentTurnId, *GetNameSafe(Unit));
+    UE_LOG(LogTurnManager, Log,
+        TEXT("[OnMoveFinished] Server-side execution starting (Actor=%s, MoveTurnId=%d)"),
+        *GetNameSafe(Unit), MoveTurnId);
 
-                // Stale完了は処理せずに即座にreturn（タグ、Occupancy、EndAbilityを触らない）
-                return;
-            }
-        }
-        else
-        {
-            UE_LOG(LogTurnManager, Error,
-                TEXT("[OnMoveFinished] Barrier subsystem not found on server (Actor=%s)"),
-                *GetNameSafe(Unit));
-            return;
-        }
+    //==========================================================================
+    // ★★★ 優先度1: Barrier 登録有無で stale 判定（より安全）
+    //==========================================================================
+    // TurnId 比較ではなく、Action が登録されているかで判定する
+    UWorld* World = GetWorld();
+    UTurnActionBarrierSubsystem* Barrier = World ? World->GetSubsystem<UTurnActionBarrierSubsystem>() : nullptr;
+
+    if (!Barrier)
+    {
+        UE_LOG(LogTurnManager, Error,
+            TEXT("[OnMoveFinished] Barrier subsystem not found on server (Actor=%s)"),
+            *GetNameSafe(Unit));
+        return;
+    }
+
+    // ActionID が無効なら stale 判定
+    if (!MoveActionId.IsValid())
+    {
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[OnMoveFinished] STALE (invalid ActionId): Turn=%d (Actor=%s)"),
+            MoveTurnId, *GetNameSafe(Unit));
+        return;
+    }
+
+    // TurnId の一致もチェック（追加の安全策）
+    const int32 CurrentTurnId = Barrier->GetCurrentTurnId();
+    if (MoveTurnId != INDEX_NONE && MoveTurnId != CurrentTurnId)
+    {
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[OnMoveFinished] STALE (TurnId mismatch): MoveTurnId=%d != CurrentTurnId=%d (Actor=%s)"),
+            MoveTurnId, CurrentTurnId, *GetNameSafe(Unit));
+        return;
     }
 
     //==========================================================================
