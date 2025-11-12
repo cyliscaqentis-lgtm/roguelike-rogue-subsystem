@@ -42,13 +42,26 @@ void UGA_MeleeAttack::ActivateAbility(
     const FGameplayAbilityActivationInfo ActivationInfo,
     const FGameplayEventData* TriggerEventData)
 {
+    // ★★★ CRITICAL DIAGNOSTIC (2025-11-12): アビリティ起動の確認 ★★★
+    UE_LOG(LogTemp, Error,
+        TEXT("[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=%s"),
+        *GetNameSafe(GetAvatarActorFromActorInfo()));
+
     Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
+
+    UE_LOG(LogTemp, Error,
+        TEXT("[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"));
 
     if (!CommitAbility(Handle, ActorInfo, ActivationInfo))
     {
+        UE_LOG(LogTemp, Error,
+            TEXT("[GA_MeleeAttack] CommitAbility FAILED - Ending ability"));
         EndAbility(Handle, ActorInfo, ActivationInfo, /*bReplicateEndAbility=*/true, /*bWasCancelled=*/true);
         return;
     }
+
+    UE_LOG(LogTemp, Error,
+        TEXT("[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic"));
 
     // ★★★ FIX (2025-11-11): EventDataからターゲットを抽出 ★★★
     // AI決定時に保存されたターゲットを使用（実行時検索を回避）
@@ -130,7 +143,12 @@ void UGA_MeleeAttack::ActivateAbility(
     }
 
     // 攻撃モンタージュを再生
+    UE_LOG(LogTemp, Error,
+        TEXT("[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=%s"),
+        MeleeAttackMontage ? *MeleeAttackMontage->GetName() : TEXT("NULL"));
     PlayAttackMontage();
+    UE_LOG(LogTemp, Error,
+        TEXT("[GA_MeleeAttack] ActivateAbility COMPLETED"));
 }
 
 //------------------------------------------------------------------------------
@@ -138,12 +156,18 @@ void UGA_MeleeAttack::ActivateAbility(
 
 void UGA_MeleeAttack::PlayAttackMontage_Implementation()
 {
+    UE_LOG(LogTemp, Error,
+        TEXT("[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=%s"),
+        MeleeAttackMontage ? *MeleeAttackMontage->GetName() : TEXT("NULL"));
+
     if (!MeleeAttackMontage)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] MeleeAttackMontage is null"));
+        UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] MeleeAttackMontage is NULL - calling OnMontageCompleted immediately"));
         OnMontageCompleted();
         return;
     }
+
+    UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] Creating PlayMontageAndWait task..."));
 
     UAbilityTask_PlayMontageAndWait* Task =
         UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(
@@ -161,17 +185,21 @@ void UGA_MeleeAttack::PlayAttackMontage_Implementation()
 
 void UGA_MeleeAttack::OnMontageCompleted()
 {
+    UE_LOG(LogTemp, Error,
+        TEXT("[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=%s"),
+        *GetNameSafe(GetAvatarActorFromActorInfo()));
+
     // ★★★ FIX (2025-11-11): ActivateAbilityで保存されたターゲットを使用 ★★★
     // 実行時に再検索せず、AI決定時に保存されたターゲットを攻撃
     if (TargetUnit && IsValid(TargetUnit))
     {
-        UE_LOG(LogTemp, Log, TEXT("[GA_MeleeAttack] %s: Attacking stored target: %s"),
+        UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] %s: Attacking stored target: %s"),
             *GetNameSafe(GetAvatarActorFromActorInfo()), *GetNameSafe(TargetUnit));
         ApplyDamageToTarget(TargetUnit);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] %s: No valid target to attack (TargetUnit is null or invalid)"),
+        UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] %s: No valid target to attack (TargetUnit is null or invalid)"),
             *GetNameSafe(GetAvatarActorFromActorInfo()));
     }
 
@@ -180,9 +208,10 @@ void UGA_MeleeAttack::OnMontageCompleted()
     // 理由: 0.2秒の遅延がターンをまたいで完了通知が届く原因だった
     //       OnMontageCompletedが呼ばれた時点でモンタージュは完了済みなので遅延不要
     //==========================================================================
-    UE_LOG(LogTemp, Log, TEXT("[GA_MeleeAttack] %s: Montage completed, ending ability immediately"),
+    UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] %s: Montage completed, calling EndAbility immediately"),
         *GetNameSafe(GetAvatarActorFromActorInfo()));
     EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+    UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] EndAbility RETURNED"));
 
     // ★★★ 削除: 0.2秒遅延タイマー（ターンブロック問題の原因）
     // FTimerHandle DelayHandle;
