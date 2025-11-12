@@ -3217,6 +3217,22 @@ void AGameTurnManagerBase::OnAttacksFinished(int32 TurnId)
 
     UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] OnAttacksFinished: All attacks completed"), TurnId);
 
+    // ★★★ FIX (2025-11-12): 攻撃完了後にIntentをクリア ★★★
+    // 攻撃が完了したら、EnemyTurnDataSubsystemに記録されたIntentをクリアする。
+    // これにより、次のターンで同じ攻撃が再実行されることを防ぐ。
+    if (UWorld* World = GetWorld())
+    {
+        if (UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>())
+        {
+            EnemyData->ClearIntents();
+            UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Cleared attack intents after completion"), TurnId);
+        }
+        else
+        {
+            UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] Failed to get EnemyTurnDataSubsystem for clearing intents"), TurnId);
+        }
+    }
+
     // ★★★ FIX (2025-11-12): 攻撃完了後に入力ゲートを再度開く ★★★
     // ExecuteAttacks で閉じたゲートを再度開き、プレイヤーが次の入力をできるようにする。
     UE_LOG(LogTurnManager, Warning,
