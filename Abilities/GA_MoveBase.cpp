@@ -569,8 +569,23 @@ void UGA_MoveBase::EndAbility(
 	const FGuid SavedActionId = MoveActionId;
 	AActor* SavedAvatar = GetAvatarActorFromActorInfo();
 
+	// ★★★ ActivationOwnedTags を使用するため、GASが自動でタグを削除する ★★★
+	// Super::EndAbility() の中で State_Action_InProgress が自動削除される
+
+	// ☁E�E☁ESparky修正: CompletedTurnIdForEventを設定！EendCompletionEventで使用�E�E☁E�E☁E
+	CompletedTurnIdForEvent = SavedTurnId;
+
+	// ☁E�E☁E重要E Super::EndAbility()の前にMoveTurnIdをクリアしなぁE��E☁E�E☁E
+	// 基底クラスがSendCompletionEventを呼ぶ可能性があめE
+
+	// ★★★ FIX (2025-11-12): Super::EndAbility()を先に呼んでInProgressタグを削除 ★★★
+	// その後でBarrier->CompleteAction()を呼ぶことで、CanAdvanceTurn()チェック時には
+	// 確実にInProgress=0となり、0.5秒の遅延なしで即座にターン進行可能になる
+	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+
 	// ★★★FIX: bBarrierRegistered チェックを追加して確実に CompleteAction を呼ぶ（2025-11-11）★★★
 	// Barrier登録済みの場合は必ず完了通知を送る（ターン進行停止の防止）
+	// 重要: Super::EndAbility()の後に呼ぶことで、InProgressタグ削除が先に行われる
 	if (bBarrierRegistered)
 	{
 		if (UWorld* World = GetWorld())
@@ -604,17 +619,6 @@ void UGA_MoveBase::EndAbility(
 			}
 		}
 	}
-
-	// ★★★ ActivationOwnedTags を使用するため、GASが自動でタグを削除する ★★★
-	// Super::EndAbility() の中で State_Action_InProgress が自動削除される
-
-	// ☁E�E☁ESparky修正: CompletedTurnIdForEventを設定！EendCompletionEventで使用�E�E☁E�E☁E
-	CompletedTurnIdForEvent = SavedTurnId;
-
-	// ☁E�E☁E重要E Super::EndAbility()の前にMoveTurnIdをクリアしなぁE��E☁E�E☁E
-	// 基底クラスがSendCompletionEventを呼ぶ可能性があめE
-
-	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 
 	// ☁E�E☁ESparky修正: Super::EndAbility()の後にクリア ☁E�E☁E
 	MoveTurnId = INDEX_NONE;
