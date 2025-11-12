@@ -605,8 +605,19 @@ void UGA_MoveBase::EndAbility(
 		}
 	}
 
-	// ★★★ ActivationOwnedTags を使用するため、GASが自動でタグを削除する ★★★
-	// Super::EndAbility() の中で State_Action_InProgress が自動削除される
+	// ★★★ FIX: InProgressタグを明示的に削除（2025-11-12）★★★
+	// ActivationOwnedTags の自動削除は遅延する可能性があるため、
+	// TurnManager がターン進行判定を行う前に確実に削除する
+	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
+	{
+		const int32 CountBefore = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress.GetTag());
+		ASC->RemoveLooseGameplayTag(RogueGameplayTags::State_Action_InProgress.GetTag());
+		const int32 CountAfter = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress.GetTag());
+
+		UE_LOG(LogTurnManager, Log,
+			TEXT("[GA_MoveBase] ★ InProgress tag MANUALLY REMOVED: Actor=%s, Count %d → %d"),
+			*GetNameSafe(GetAvatarActorFromActorInfo()), CountBefore, CountAfter);
+	}
 
 	// ☁E�E☁ESparky修正: CompletedTurnIdForEventを設定！EendCompletionEventで使用�E�E☁E�E☁E
 	CompletedTurnIdForEvent = SavedTurnId;
