@@ -884,6 +884,33 @@ void UGA_MoveBase::BindMoveFinishedDelegate()
 
 void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
 {
+    // ★★★ 優先度A: InProgressタグを明示的に同期削除（2025-11-12） ★★★
+    // EndAbility呼び出しより前にタグを削除することで、Barrierの完了通知が来る前に
+    // タグが確実に削除されることを保証する。これにより、ターン進行時のタグカウント
+    // チェックで「まだタグが残っている」状態を回避できる。
+    UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
+    if (ASC)
+    {
+        const FGameplayTag InProgressTag = RogueGameplayTags::State_Action_InProgress.GetTag();
+        const int32 TagCountBefore = ASC->GetTagCount(InProgressTag);
+
+        if (TagCountBefore > 0)
+        {
+            ASC->RemoveLooseGameplayTag(InProgressTag);
+            const int32 TagCountAfter = ASC->GetTagCount(InProgressTag);
+
+            UE_LOG(LogTurnManager, Log,
+                TEXT("[GA_MoveBase] OnMoveFinished: InProgress tag REMOVED BEFORE EndAbility: Actor=%s, Before=%d, After=%d"),
+                *GetNameSafe(Unit), TagCountBefore, TagCountAfter);
+        }
+        else
+        {
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[GA_MoveBase] OnMoveFinished: InProgress tag already 0: Actor=%s"),
+                *GetNameSafe(Unit));
+        }
+    }
+
     // ☁E�E☁E二重通知防止: Barrier通知は EndAbility() でのみ行う ☁E�E☁E
     // OnMoveFinished ↁEEndAbility の頁E��呼ばれるため、ここでは Barrier を触らなぁE
 
@@ -904,9 +931,6 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
             }
         }
     }
-
-    int32 TagCountBefore = -1;
-    int32 TagCountAfter = -1;
 
     const AGridPathfindingLibrary* PathFinder = GetPathFinder();
     if (Unit)
@@ -976,21 +1000,26 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
             *GetNameSafe(Unit), MoveTurnId);
     }
 
-    if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
+    // ★★★ 2025-11-12: EndAbility前後のタグカウント確認（検証用ログ） ★★★
+    // タグは既にOnMoveFinished冒頭で削除済みだが、EndAbilityでの二重削除がないか確認
+    int32 TagCountBeforeEnd = -1;
+    int32 TagCountAfterEnd = -1;
+
+    if (ASC)
     {
-        TagCountBefore = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress.GetTag());
+        TagCountBeforeEnd = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress.GetTag());
     }
 
     EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, false);
 
-    if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
+    if (ASC)
     {
-        TagCountAfter = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress.GetTag());
+        TagCountAfterEnd = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress.GetTag());
     }
 
     UE_LOG(LogTurnManager, Verbose,
-        TEXT("[MoveComplete] InProgress tag count (Actor=%s): %d -> %d"),
-        *GetNameSafe(Unit), TagCountBefore, TagCountAfter);
+        TEXT("[MoveComplete] InProgress tag count around EndAbility (Actor=%s): Before=%d, After=%d"),
+        *GetNameSafe(Unit), TagCountBeforeEnd, TagCountAfterEnd);
 }
 
 void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)

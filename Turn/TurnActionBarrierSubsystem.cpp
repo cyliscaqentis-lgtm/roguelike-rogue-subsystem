@@ -223,10 +223,28 @@ void UTurnActionBarrierSubsystem::CompleteAction(AActor* Actor, int32 TurnId, co
         // ★★★ 新規追加：0到達時に即通知（ActionIDモデル完成） ★★★
         if (Remaining == 0)
         {
+            // ★★★ 優先度C: InProgressタグカウントをログ出力（2025-11-12） ★★★
+            int32 InProgressCount = -1;
+            if (UWorld* World = GetWorld())
+            {
+                // プレイヤーASCを取得してInProgressタグをチェック
+                if (APlayerController* PC = World->GetFirstPlayerController())
+                {
+                    if (APawn* PlayerPawn = PC->GetPawn())
+                    {
+                        if (UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(PlayerPawn))
+                        {
+                            const FGameplayTag InProgressTag = FGameplayTag::RequestGameplayTag(TEXT("State.Action.InProgress"));
+                            InProgressCount = ASC->GetTagCount(InProgressTag);
+                        }
+                    }
+                }
+            }
+
             // Warning: 全アクション完了は重要イベントなので可視性保つ
             UE_LOG(LogTurnBarrier, Warning,
-                TEXT("[Barrier] 🎉 Turn %d: ALL ACTIONS COMPLETED (Remaining=0) -> Broadcasting OnAllMovesFinished"),
-                TurnId);
+                TEXT("[Barrier] 🎉 Turn %d: ALL ACTIONS COMPLETED -> InProgressCount=%d, PendingActions=%d -> Broadcasting OnAllMovesFinished"),
+                TurnId, InProgressCount, Remaining);
             OnAllMovesFinished.Broadcast(TurnId);  // ← ここで確実に発火
         }
     }

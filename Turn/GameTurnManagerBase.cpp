@@ -327,6 +327,11 @@ void AGameTurnManagerBase::InitializeTurnSystem()
     UE_LOG(LogTurnManager, Log, TEXT("InitializeTurnSystem: Initialization completed successfully"));
 
     //==========================================================================
+    // ★★★ 優先度B: InProgressタグカウント変化のリスナーを登録（2025-11-12） ★★★
+    //==========================================================================
+    RegisterInProgressListener();
+
+    //==========================================================================
     // ★★★ StartFirstTurnは削除: TryStartFirstTurnゲートから呼ぶ（2025-11-09 解析サマリ対応）
     //==========================================================================
     // StartFirstTurn(); // 削除: 全条件が揃うまで待つ
@@ -3997,6 +4002,58 @@ bool AGameTurnManagerBase::CanAdvanceTurn(int32 TurnId) const
     }
 
     return bCanAdvance;
+}
+
+//------------------------------------------------------------------------------
+// ★★★ 優先度B: InProgressタグカウント変化の購読（2025-11-12） ★★★
+//------------------------------------------------------------------------------
+
+void AGameTurnManagerBase::RegisterInProgressListener()
+{
+    UAbilitySystemComponent* ASC = GetPlayerASC();
+    if (!ASC)
+    {
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[RegisterInProgressListener] Player ASC not found - will retry later"));
+        return;
+    }
+
+    const FGameplayTag InProgressTag = RogueGameplayTags::State_Action_InProgress;
+
+    // タグカウント変化のイベントを購読（NewOrRemovedは新規追加時と削除時の両方で発火）
+    ASC->RegisterGameplayTagEvent(InProgressTag, EGameplayTagEventType::NewOrRemoved)
+        .AddUObject(this, &AGameTurnManagerBase::OnInProgressTagChanged);
+
+    UE_LOG(LogTurnManager, Log,
+        TEXT("[RegisterInProgressListener] ✅ Registered InProgress tag listener"));
+}
+
+void AGameTurnManagerBase::OnInProgressTagChanged(const FGameplayTag Tag, int32 NewCount)
+{
+    UE_LOG(LogTurnManager, Verbose,
+        TEXT("[OnInProgressTagChanged] InProgressCount changed -> %d (Turn=%d)"),
+        NewCount, CurrentTurnIndex);
+
+    // タグカウントが0になったら、即座にターン進行を試みる
+    if (NewCount == 0)
+    {
+        UE_LOG(LogTurnManager, Log,
+            TEXT("[OnInProgressTagChanged] ✅ InProgress reached 0 -> Attempting immediate turn advance (Turn=%d)"),
+            CurrentTurnIndex);
+
+        // リトライ連打防止とターン進行中フラグをチェック
+        if (!bEndTurnPosted && !bTurnContinuing)
+        {
+            // EndEnemyTurnを呼ぶ（CanAdvanceTurnの二重鍵チェックを経由する）
+            EndEnemyTurn();
+        }
+        else
+        {
+            UE_LOG(LogTurnManager, Verbose,
+                TEXT("[OnInProgressTagChanged] Turn advance already in progress (bEndTurnPosted=%d, bTurnContinuing=%d)"),
+                bEndTurnPosted ? 1 : 0, bTurnContinuing ? 1 : 0);
+        }
+    }
 }
 
 //------------------------------------------------------------------------------

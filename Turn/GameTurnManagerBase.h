@@ -571,6 +571,17 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Turn|State")
     bool IsInputOpen_Server() const;
 
+    //==========================================================================
+    // ★★★ 優先度B: InProgressタグカウント変化の購読（2025-11-12） ★★★
+    //==========================================================================
+
+    /** InProgressタグカウント変化のリスナーを登録 */
+    void RegisterInProgressListener();
+
+    /** InProgressタグカウントが変化した時のコールバック */
+    UFUNCTION()
+    void OnInProgressTagChanged(const FGameplayTag Tag, int32 NewCount);
+
 protected:
     //==========================================================================
     // PathFinder隗｣豎ｺ繝ｻ逕滓�E・医ヵ繧�E�繝ｼ繝ｫ繝�Eャ繧�E�逕ｨ・・    //==========================================================================
