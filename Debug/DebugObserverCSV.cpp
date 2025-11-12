@@ -175,17 +175,21 @@ void UDebugObserverCSV::LogMessageWithLevel(const FString& Category, const FStri
 
 void UDebugObserverCSV::MarkSessionStart()
 {
+    // ★★★ 変更（2025-11-12）：新しいセッション開始時に前回のログをクリア ★★★
+    // 毎回消して直前のセッションのログだけを記録する
+    ClearLogs();
+
     CurrentSessionID = NextSessionID++;
     const double Timestamp = FPlatformTime::Seconds();
-    
+
     // ★★★ セッション開始マーカーを追加（CSV形式: Type,SessionID,Category,Timestamp,Message） ★★★
     // SessionIDをわかりやすく表示するため、メッセージに含める
     LogLines.Add(FString::Printf(TEXT("SessionStart,%d,Session,%.6f,=== SESSION %d STARTED ==="),
         CurrentSessionID,
         Timestamp,
         CurrentSessionID));
-    
-    UE_LOG(LogTemp, Log, TEXT("[CSV] Session %d started at %.6f"), CurrentSessionID, Timestamp);
+
+    UE_LOG(LogTemp, Log, TEXT("[CSV] Session %d started at %.6f (logs cleared)"), CurrentSessionID, Timestamp);
 }
 
 void UDebugObserverCSV::MarkSessionEnd()

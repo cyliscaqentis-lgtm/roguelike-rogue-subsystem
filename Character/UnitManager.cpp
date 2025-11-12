@@ -135,8 +135,8 @@ int32 AUnitManager::SpawnEnemyUnits(int32 DesiredEnemyCount)
 {
 	EnsureTeamSize2();
 
-	UE_LOG(LogTemp, Warning, TEXT("[UnitManager::SpawnEnemyUnits] START - DesiredCount=%d, bEnemiesSpawned=%d, BigEnoughRooms=%d"),
-		DesiredEnemyCount, bEnemiesSpawned, BigEnoughRooms.Num());
+	UE_LOG(LogTemp, Warning, TEXT("[UnitManager::SpawnEnemyUnits] START - DesiredCount=%d, bEnemiesSpawned=%d"),
+		DesiredEnemyCount, bEnemiesSpawned);
 
 	if (!PathFinder)
 	{
@@ -147,6 +147,12 @@ int32 AUnitManager::SpawnEnemyUnits(int32 DesiredEnemyCount)
 	if (bEnemiesSpawned)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("UnitManager::SpawnEnemyUnits: Already spawned enemies, skipping (bEnemiesSpawned=%d)"), bEnemiesSpawned);
+		return 0;
+	}
+
+	if (!PlayerStartRoom)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UnitManager::SpawnEnemyUnits: PlayerStartRoom not set"));
 		return 0;
 	}
 
@@ -166,50 +172,39 @@ int32 AUnitManager::SpawnEnemyUnits(int32 DesiredEnemyCount)
 		bEnemyStatsInitialized = true;
 	}
 
-	TArray<TObjectPtr<AAABB>> CandidateRooms = BigEnoughRooms;
-	if (CandidateRooms.Num() == 0)
-	{
-		CandidateRooms = Rooms;
-	}
+	// ★★★ 変更：敵をプレイヤーと同じ部屋（PlayerStartRoom）にスポーン ★★★
+	UE_LOG(LogTemp, Log, TEXT("[UnitManager::SpawnEnemyUnits] Spawning %d enemies in PlayerStartRoom at %s"),
+		TargetEnemyCount, *PlayerStartRoom->GetActorLocation().ToString());
 
 	int32 SpawnedEnemies = 0;
 	bool bLoggedMissingEnemyClass = false;
 
-	while (SpawnedEnemies < TargetEnemyCount && CandidateRooms.Num() > 0)
-	{
-		const int32 Counter = FMath::RandRange(0, CandidateRooms.Num() - 1);
-		AAABB* EnemyRoom = CandidateRooms[Counter];
-		CandidateRooms.RemoveAt(Counter);
+	// すべての敵をPlayerStartRoomにスポーン
+	const TArray<FVector> EnemySpawns = SpawnLocations(PlayerStartRoom, TargetEnemyCount);
 
-		if (!IsValid(EnemyRoom) || EnemyRoom == PlayerStartRoom)
+	UE_LOG(LogTemp, Log, TEXT("[UnitManager::SpawnEnemyUnits] Found %d spawn locations in PlayerStartRoom"),
+		EnemySpawns.Num());
+
+	for (const FVector& Loc : EnemySpawns)
+	{
+		if (!EnemyUnitClass)
 		{
+			if (!bLoggedMissingEnemyClass)
+			{
+				UE_LOG(LogTemp, Error, TEXT("UnitManager::SpawnEnemyUnits: EnemyUnitClass is not set."));
+				bLoggedMissingEnemyClass = true;
+			}
 			continue;
 		}
 
-		const int32 Remaining = TargetEnemyCount - SpawnedEnemies;
-		const int32 SpawnCountThisRoom = FMath::Min(UnitsPerRoom, Remaining);
-		const TArray<FVector> EnemySpawns = SpawnLocations(EnemyRoom, SpawnCountThisRoom);
-
-		for (const FVector& Loc : EnemySpawns)
+		UWorld* World = GetWorld();
+		if (!World)
 		{
-			if (!EnemyUnitClass)
-			{
-				if (!bLoggedMissingEnemyClass)
-				{
-					UE_LOG(LogTemp, Error, TEXT("UnitManager::SpawnEnemyUnits: EnemyUnitClass is not set."));
-					bLoggedMissingEnemyClass = true;
-				}
-				continue;
-			}
+			UE_LOG(LogTemp, Error, TEXT("UnitManager::SpawnEnemyUnits: World is null"));
+			return SpawnedEnemies;
+		}
 
-			UWorld* World = GetWorld();
-			if (!World)
-			{
-				UE_LOG(LogTemp, Error, TEXT("UnitManager::SpawnEnemyUnits: World is null"));
-				return SpawnedEnemies;
-			}
-
-			// ★★★ CDOからカプセル半高を取得して床から正しい高さでスポーン ★★★
+		// ★★★ CDOからカプセル半高を取得して床から正しい高さでスポーン ★★★
 		float CapsuleHalfHeight = 0.f;
 		if (EnemyUnitClass)
 		{
@@ -227,70 +222,69 @@ int32 AUnitManager::SpawnEnemyUnits(int32 DesiredEnemyCount)
 		FVector SpawnLoc = Loc;
 		SpawnLoc.Z = Loc.Z + CapsuleHalfHeight + ZEpsilon;
 
-		UE_LOG(LogTemp, Warning, TEXT("EnemySpawn Z=%.2f (Loc.Z=%.2f, HalfHeight=%.2f)"),
-			SpawnLoc.Z, Loc.Z, CapsuleHalfHeight);
+		UE_LOG(LogTemp, Log, TEXT("[UnitManager::SpawnEnemyUnits] Spawning enemy at: %s (Z=%.2f, HalfHeight=%.2f)"),
+			*SpawnLoc.ToString(), SpawnLoc.Z, CapsuleHalfHeight);
 
 		FTransform SpawnTM(FRotator::ZeroRotator, SpawnLoc, FVector::OneVector);
-			FActorSpawnParameters P;
-			P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+		FActorSpawnParameters P;
+		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-			AEnemyUnitBase* Enemy = World->SpawnActor<AEnemyUnitBase>(EnemyUnitClass, SpawnTM, P);
-			if (!Enemy)
-			{
-				continue;
-			}
+		AEnemyUnitBase* Enemy = World->SpawnActor<AEnemyUnitBase>(EnemyUnitClass, SpawnTM, P);
+		if (!Enemy)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[UnitManager::SpawnEnemyUnits] Failed to spawn enemy at %s"),
+				*SpawnLoc.ToString());
+			continue;
+		}
 
-			if (Enemy->HasAuthority())
+		if (Enemy->HasAuthority())
+		{
+			if (AEnemyUnitBase* EnemyUnit = Cast<AEnemyUnitBase>(Enemy))
 			{
-				if (AEnemyUnitBase* EnemyUnit = Cast<AEnemyUnitBase>(Enemy))
+				ULyraPawnData* PawnDataToApply = DefaultEnemyPawnData;
+
+				if (!PawnDataToApply)
 				{
-					ULyraPawnData* PawnDataToApply = DefaultEnemyPawnData;
-
-					if (!PawnDataToApply)
+					if (EnemyUnitClass)
 					{
-						if (EnemyUnitClass)
+						if (const AEnemyUnitBase* EnemyCDO = Cast<AEnemyUnitBase>(EnemyUnitClass->GetDefaultObject()))
 						{
-							if (const AEnemyUnitBase* EnemyCDO = Cast<AEnemyUnitBase>(EnemyUnitClass->GetDefaultObject()))
-							{
-								PawnDataToApply = EnemyCDO->GetEnemyPawnData();
-							}
+							PawnDataToApply = EnemyCDO->GetEnemyPawnData();
 						}
 					}
+				}
 
-					// ★★★ 修正: PawnData設定後にコントローラーをスポーン ★★★
-					if (PawnDataToApply)
-					{
-						EnemyUnit->SetEnemyPawnData(PawnDataToApply);
+				// ★★★ 修正: PawnData設定後にコントローラーをスポーン ★★★
+				if (PawnDataToApply)
+				{
+					EnemyUnit->SetEnemyPawnData(PawnDataToApply);
 
-						// PawnData設定後、コントローラーをスポーン（bDeferredControllerSpawn=trueのため）
-						if (!EnemyUnit->GetController())
-						{
-							EnemyUnit->SpawnDefaultController();
-							UE_LOG(LogTemp, Log, TEXT("[UnitManager] Spawned controller for %s after PawnData setup"),
-								*EnemyUnit->GetName());
-						}
-					}
-					else
+					// PawnData設定後、コントローラーをスポーン（bDeferredControllerSpawn=trueのため）
+					if (!EnemyUnit->GetController())
 					{
-						UE_LOG(LogTemp, Warning, TEXT("[UnitManager] No PawnData available for %s (DefaultEnemyPawnData unset, class CDO empty)"),
+						EnemyUnit->SpawnDefaultController();
+						UE_LOG(LogTemp, Log, TEXT("[UnitManager] Spawned controller for %s after PawnData setup"),
 							*EnemyUnit->GetName());
 					}
 				}
-
-				Enemy->StatBlock = DefaultStatBlock;
-				Enemy->SetStatVars();
-				Enemy->SetActorHiddenInGame(false);
-				Enemy->Team = 1;
-				AllUnits.Add(Enemy);
-
-				UnitManager_Private::OccupyInitialCell(World, PathFinder, Enemy);
-				++SpawnedEnemies;
-
-				if (SpawnedEnemies >= TargetEnemyCount)
+				else
 				{
-					break;
+					UE_LOG(LogTemp, Warning, TEXT("[UnitManager] No PawnData available for %s (DefaultEnemyPawnData unset, class CDO empty)"),
+						*EnemyUnit->GetName());
 				}
 			}
+
+			Enemy->StatBlock = DefaultStatBlock;
+			Enemy->SetStatVars();
+			Enemy->SetActorHiddenInGame(false);
+			Enemy->Team = 1;
+			AllUnits.Add(Enemy);
+
+			UnitManager_Private::OccupyInitialCell(World, PathFinder, Enemy);
+			++SpawnedEnemies;
+
+			UE_LOG(LogTemp, Log, TEXT("[UnitManager::SpawnEnemyUnits] Successfully spawned enemy %d/%d: %s"),
+				SpawnedEnemies, TargetEnemyCount, *Enemy->GetName());
 		}
 	}
 
