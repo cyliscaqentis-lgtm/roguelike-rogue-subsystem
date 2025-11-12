@@ -129,11 +129,39 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 	// 🌟 ASC完了イベント購読（Lumina提言：ポーリング廃止）
 	BindASC(ASC);
 
+	// ★★★ DIAGNOSTIC (2025-11-12): ASCに登録されているアビリティとトリガーを確認 ★★★
+	TArray<FGameplayAbilitySpec>& Specs = ASC->GetActivatableAbilities();
+	UE_LOG(LogAttackPhase, Warning,
+		TEXT("[Turn %d] %s: ASC has %d activatable abilities"),
+		TurnId, *Attacker->GetName(), Specs.Num());
+
+	for (int32 i = 0; i < Specs.Num(); i++)
+	{
+		const FGameplayAbilitySpec& Spec = Specs[i];
+		if (Spec.Ability)
+		{
+			UE_LOG(LogAttackPhase, Warning,
+				TEXT("  [%d] Ability=%s, Triggers=%d"),
+				i, *Spec.Ability->GetClass()->GetName(), Spec.Ability->AbilityTriggers.Num());
+
+			for (const FAbilityTriggerData& Trigger : Spec.Ability->AbilityTriggers)
+			{
+				UE_LOG(LogAttackPhase, Warning,
+					TEXT("    - TriggerTag=%s, Source=%d"),
+					*Trigger.TriggerTag.ToString(), (int32)Trigger.TriggerSource);
+			}
+		}
+	}
+
 	// GameplayEvent送出
 	FGameplayEventData Payload;
 	Payload.EventTag = Action.AbilityTag;
 	Payload.Instigator = Attacker;
 	Payload.TargetData = Action.TargetData;
+
+	UE_LOG(LogAttackPhase, Warning,
+		TEXT("[Turn %d] Sending GameplayEvent: Tag=%s"),
+		TurnId, *Payload.EventTag.ToString());
 
 	const int32 TriggeredCount = ASC->HandleGameplayEvent(Payload.EventTag, &Payload);
 
