@@ -1876,9 +1876,20 @@ void AGameTurnManagerBase::StartFirstTurn()
 
     bTurnStarted = true;
 
-    // ★★★ REMOVED: StartMoveBatch は非推奨。BeginTurn() が AdvanceTurnAndRestart で既に呼ばれている (2025-11-09) ★★★
-    // 以前の実装: Barrier->StartMoveBatch(1, CurrentTurnIndex);
-    // BeginTurn() がターン開始とバリア初期化を一括処理するため、この呼び出しは冗長。
+    // ★★★ CRITICAL FIX (2025-11-12): Turn 0 でも Barrier.BeginTurn() を呼ぶ必要がある ★★★
+    // 以前の誤った前提: "AdvanceTurnAndRestart で既に呼ばれている"
+    // 実際: AdvanceTurnAndRestart は Turn 1以降のみ。Turn 0 では呼ばれない。
+    // この欠落により Barrier->GetCurrentTurnId() が -1 を返し、OnMoveFinished が stale 判定で失敗していた。
+    if (UWorld* World = GetWorld())
+    {
+        if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
+        {
+            Barrier->BeginTurn(CurrentTurnIndex);
+            UE_LOG(LogTurnManager, Log,
+                TEXT("[StartFirstTurn] Barrier::BeginTurn(%d) called"),
+                CurrentTurnIndex);
+        }
+    }
 
     // ★★★ リファクタリング: EventDispatcher経由でイベント配信（2025-11-09） ★★★
     if (EventDispatcher)
