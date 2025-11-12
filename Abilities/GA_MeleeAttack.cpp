@@ -11,6 +11,8 @@
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
+#include "Grid/GridPathfindingLibrary.h"
+#include "EngineUtils.h"
 
 UGA_MeleeAttack::UGA_MeleeAttack(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -21,7 +23,7 @@ UGA_MeleeAttack::UGA_MeleeAttack(const FObjectInitializer& ObjectInitializer)
 
     MaxExecutionTime = 5.0f;
     BaseDamage = 28.0f;
-    Range = 150.0f; // 隣接判定用（1.5タイル相当）
+    RangeInTiles = 1; // 近接攻撃は隣接（1マス）のみ
 
     // アセットタグ
     FGameplayTagContainer Tags;
@@ -310,11 +312,39 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
         }
     }
 
-    // Distance diagnostic
-    const float Distance = FVector::Dist(Avatar->GetActorLocation(), Target->GetActorLocation());
-    UE_LOG(LogTemp, Warning,
-        TEXT("[GA_MeleeAttack] Distance=%.2f, Range=%.2f (InRange=%s)"),
-        Distance, Range, Distance <= Range ? TEXT("YES") : TEXT("NO - TOO FAR"));
+    // ★★★ FIX (2025-11-12): タイルベースの距離計算（斜め対応） ★★★
+    int32 DistanceInTiles = -1;
+    AGridPathfindingLibrary* GridLib = nullptr;
+
+    // GridPathfindingLibraryを取得
+    if (UWorld* World = GetWorld())
+    {
+        for (TActorIterator<AGridPathfindingLibrary> It(World); It; ++It)
+        {
+            GridLib = *It;
+            break;
+        }
+    }
+
+    if (GridLib)
+    {
+        FIntPoint AttackerGrid = GridLib->WorldToGrid(Avatar->GetActorLocation());
+        FIntPoint TargetGrid = GridLib->WorldToGrid(Target->GetActorLocation());
+
+        // マンハッタン距離（斜めも正しく計算される）
+        DistanceInTiles = FMath::Abs(AttackerGrid.X - TargetGrid.X) + FMath::Abs(AttackerGrid.Y - TargetGrid.Y);
+
+        UE_LOG(LogTemp, Warning,
+            TEXT("[GA_MeleeAttack] Attacker=(%d,%d), Target=(%d,%d), DistanceInTiles=%d, RangeInTiles=%d (InRange=%s)"),
+            AttackerGrid.X, AttackerGrid.Y, TargetGrid.X, TargetGrid.Y,
+            DistanceInTiles, RangeInTiles,
+            DistanceInTiles <= RangeInTiles ? TEXT("YES") : TEXT("NO - TOO FAR"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error,
+            TEXT("[GA_MeleeAttack] GridPathfindingLibrary not found - cannot calculate tile distance!"));
+    }
 
     // ASC and Tags diagnostic
     if (UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Target))
@@ -324,14 +354,6 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
         UE_LOG(LogTemp, Warning,
             TEXT("[GA_MeleeAttack] TargetTags=%s"),
             *TargetTags.ToStringSimple());
-
-        // Check for invulnerability or damage immunity tags
-        const bool bHasInvuln = TargetTags.HasTag(FGameplayTag::RequestGameplayTag(FName("State.Invulnerable")));
-        const bool bHasImmune = TargetTags.HasTag(FGameplayTag::RequestGameplayTag(FName("State.DamageImmune")));
-        UE_LOG(LogTemp, Warning,
-            TEXT("[GA_MeleeAttack] Invulnerable=%s, DamageImmune=%s"),
-            bHasInvuln ? TEXT("YES - DAMAGE BLOCKED") : TEXT("NO"),
-            bHasImmune ? TEXT("YES - DAMAGE BLOCKED") : TEXT("NO"));
     }
     else
     {

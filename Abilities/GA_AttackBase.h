@@ -32,8 +32,9 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Attack")
     float BaseDamage = 10.0f;
 
+    /** 攻撃射程（マス数）- 斜め移動を考慮したマンハッタン距離 */
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Attack")
-    float Range = 200.0f;
+    int32 RangeInTiles = 1;
 
     UFUNCTION(BlueprintNativeEvent, Category = "Attack")
     void ExecuteAttack(AActor* Target);
@@ -58,9 +59,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Attack")
     TArray<AActor*> FindTargetsInRange(float SearchRange = 0.0f) const;
 
-    // 範囲取得（追加）
+    // 射程取得（マス数）
     UFUNCTION(BlueprintPure, Category = "Attack")
-    float GetRange() const { return Range; }
+    int32 GetRangeInTiles() const { return RangeInTiles; }
 
 private:
     // ★★★ Barrier統合用の内部状態 (2025-11-12) ★★★
