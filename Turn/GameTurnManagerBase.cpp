@@ -3503,24 +3503,33 @@ void AGameTurnManagerBase::ExecutePlayerMove()
             if (Spec.Ability)
             {
                 UE_LOG(LogTurnManager, Warning,
-                    TEXT("  Ability[%d]: %s"),
-                    AbilityIndex, *Spec.Ability->GetName());
+                    TEXT("  Ability[%d]: %s (Class: %s)"),
+                    AbilityIndex,
+                    *Spec.Ability->GetName(),
+                    *Spec.Ability->GetClass()->GetName());
+
+                // CanActivateAbility をテスト
+                FGameplayTagContainer FailureTags;
+                const bool bCanActivate = Spec.Ability->CanActivateAbility(
+                    Spec.Handle,
+                    ASC->AbilityActorInfo.Get(),
+                    nullptr,
+                    nullptr,
+                    &FailureTags
+                );
+
                 UE_LOG(LogTurnManager, Warning,
-                    TEXT("    - Triggers: %d"),
-                    Spec.Ability->AbilityTriggers.Num());
-                for (const FAbilityTriggerData& Trigger : Spec.Ability->AbilityTriggers)
+                    TEXT("    - CanActivate: %s (FailureTags: %s)"),
+                    bCanActivate ? TEXT("YES") : TEXT("NO"),
+                    *FailureTags.ToStringSimple());
+
+                // DynamicAbilityTags は FGameplayAbilitySpec の public メンバー
+                if (Spec.DynamicAbilityTags.Num() > 0)
                 {
                     UE_LOG(LogTurnManager, Warning,
-                        TEXT("      * TriggerTag: %s, Source: %d"),
-                        *Trigger.TriggerTag.ToString(),
-                        static_cast<int32>(Trigger.TriggerSource));
+                        TEXT("    - DynamicAbilityTags: %s"),
+                        *Spec.DynamicAbilityTags.ToStringSimple());
                 }
-                UE_LOG(LogTurnManager, Warning,
-                    TEXT("    - ActivationRequiredTags: %s"),
-                    *Spec.Ability->ActivationRequiredTags.ToStringSimple());
-                UE_LOG(LogTurnManager, Warning,
-                    TEXT("    - ActivationBlockedTags: %s"),
-                    *Spec.Ability->ActivationBlockedTags.ToStringSimple());
             }
             ++AbilityIndex;
         }
