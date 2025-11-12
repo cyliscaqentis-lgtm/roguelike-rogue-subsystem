@@ -135,6 +135,36 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 	Payload.Instigator = Attacker;
 	Payload.TargetData = Action.TargetData;
 
+	// ★★★ CRITICAL DIAGNOSTIC (2025-11-12): AbilityTriggers診断 ★★★
+	UE_LOG(LogAttackPhase, Warning,
+		TEXT("[Turn %d] %s: ASC has %d activatable abilities"),
+		TurnId, *Attacker->GetName(), ASC->GetActivatableAbilities().Num());
+
+	for (int32 i = 0; i < ASC->GetActivatableAbilities().Num(); ++i)
+	{
+		const FGameplayAbilitySpec& Spec = ASC->GetActivatableAbilities()[i];
+		if (Spec.Ability)
+		{
+			UE_LOG(LogAttackPhase, Warning,
+				TEXT("  [%d] Ability=%s, Level=%d, InputID=%d, Triggers=%d"),
+				i, *Spec.Ability->GetName(), Spec.Level, Spec.InputID,
+				Spec.Ability->AbilityTriggers.Num());
+
+			// ★★★ NEW: Trigger詳細を出力 ★★★
+			for (int32 j = 0; j < Spec.Ability->AbilityTriggers.Num(); ++j)
+			{
+				const FAbilityTriggerData& Trigger = Spec.Ability->AbilityTriggers[j];
+				UE_LOG(LogAttackPhase, Warning,
+					TEXT("    Trigger[%d]: Tag=%s, Source=%d"),
+					j, *Trigger.TriggerTag.ToString(), (int32)Trigger.TriggerSource);
+			}
+		}
+	}
+
+	UE_LOG(LogAttackPhase, Warning,
+		TEXT("[Turn %d] Sending GameplayEvent: Tag=%s (to %s)"),
+		TurnId, *Action.AbilityTag.ToString(), *Attacker->GetName());
+
 	const int32 TriggeredCount = ASC->HandleGameplayEvent(Payload.EventTag, &Payload);
 
 	if (TriggeredCount > 0)
