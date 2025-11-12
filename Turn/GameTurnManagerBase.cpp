@@ -3301,15 +3301,20 @@ void AGameTurnManagerBase::OnAttacksFinished(int32 TurnId)
         return;
     }
 
-    // TurnId検証
+    // ★★★ FIX (2025-11-12): TurnId検証を削除 ★★★
+    // 攻撃アニメーション完了が次のターンで通知されることがあるため、
+    // TurnId mismatchでスキップすると、ConvertAttacksToWait()が呼ばれず、
+    // 攻撃した敵が移動してしまう問題を修正
     if (TurnId != CurrentTurnIndex)
     {
-        UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] OnAttacksFinished: TurnId mismatch (%d != %d)"),
-            CurrentTurnIndex, TurnId, CurrentTurnIndex);
-        return;
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[Turn %d] OnAttacksFinished: Delayed notification from Turn %d (animation delay) - Processing anyway"),
+            CurrentTurnIndex, TurnId);
+        // ★★★ returnを削除：遅延通知でも処理を続行 ★★★
     }
 
-    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] OnAttacksFinished: All attacks completed"), TurnId);
+    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] OnAttacksFinished: All attacks completed (notification from Turn %d)"),
+        CurrentTurnIndex, TurnId);
 
     // ★★★ FIX (2025-11-12): 攻撃インテントをWaitインテントに変換 ★★★
     // 攻撃が完了したら、攻撃インテントをWaitインテントに変換する。
