@@ -111,14 +111,8 @@ void UGA_AttackBase::ExecuteAttack_Implementation(AActor* Target)
         return;
     }
 
-    const float Distance = FVector::Dist(Avatar->GetActorLocation(), Target->GetActorLocation());
-    if (Distance > Range)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[GA_AttackBase] Target out of range: %.2f > %.2f"), Distance, Range);
-        OnAttackMiss(Target);
-        OnAttackCompleted();
-        return;
-    }
+    // ★★★ 注意: 距離チェックは子クラス（GA_MeleeAttackなど）で実装 ★★★
+    // 基底クラスではタイルベース距離を計算できないため、ここでは省略
 
     const float Damage = CalculateDamage(Target);
 
@@ -174,7 +168,11 @@ TArray<AActor*> UGA_AttackBase::FindTargetsInRange(float SearchRange) const
         return FoundTargets;
     }
 
-    const float ActualRange = (SearchRange > 0.0f) ? SearchRange : Range;
+    // ★★★ タイルベース射程をWorld距離（cm）に概算変換 ★★★
+    // タイルサイズ = 100cm と仮定
+    const float TileSize = 100.0f;
+    const float DefaultRangeInWorld = RangeInTiles * TileSize;
+    const float ActualRange = (SearchRange > 0.0f) ? SearchRange : DefaultRangeInWorld;
 
     TArray<AActor*> AllActors;
     UGameplayStatics::GetAllActorsOfClass(Avatar->GetWorld(), AActor::StaticClass(), AllActors);
