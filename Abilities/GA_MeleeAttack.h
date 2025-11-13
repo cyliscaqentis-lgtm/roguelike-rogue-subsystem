@@ -60,6 +60,9 @@ protected:
     UPROPERTY(BlueprintReadOnly, Category = "MeleeAttack|State")
     TObjectPtr<AActor> TargetUnit;
 
+    /** 攻撃前の向き（攻撃完了後に元に戻すため） */
+    FRotator OriginalRotation;
+
     //--------------------------------------------------------------------------
     // C++内部実装
     //--------------------------------------------------------------------------
