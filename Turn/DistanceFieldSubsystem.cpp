@@ -323,18 +323,40 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(const FIntPoint& Fro
         FromCell + FIntPoint(0, 1), FromCell + FIntPoint(0, -1)
     };
 
+    // ★★★ DEBUG: 診断ログを追加 ★★★
+    UE_LOG(LogTemp, Warning, TEXT("[GetNextStep] ===== PATHFINDING DEBUG ====="));
+    UE_LOG(LogTemp, Warning, TEXT("[GetNextStep] FromCell=(%d,%d) CurrentDist=%d PlayerPos=(%d,%d)"),
+        FromCell.X, FromCell.Y, CurrentDist, PlayerPosition.X, PlayerPosition.Y);
+
     for (int32 i = 0; i < 4; ++i)
     {
         const FIntPoint& N = Neighbors[i];
-        if (!IsWalkable(N, IgnoreActor)) continue;  // ★★★ 修正 (2025-11-11): IgnoreActorを渡して自分のOriginHoldを無視
-        
+        const bool bWalkable = IsWalkable(N, IgnoreActor);
         const int32 nd = GetDistanceAbs(N);
-        if (nd >= 0 && nd < bestDist) 
-        { 
-            bestDist = nd; 
-            Best = N; 
+
+        FString DirectionName = TEXT("UNKNOWN");
+        if (i == 0) DirectionName = TEXT("EAST(+X)");
+        else if (i == 1) DirectionName = TEXT("WEST(-X)");
+        else if (i == 2) DirectionName = TEXT("SOUTH(+Y)");
+        else if (i == 3) DirectionName = TEXT("NORTH(-Y)");
+
+        UE_LOG(LogTemp, Warning, TEXT("[GetNextStep] Neighbor[%d] %s=(%d,%d) Walkable=%s Dist=%d"),
+            i, *DirectionName, N.X, N.Y, bWalkable ? TEXT("YES") : TEXT("NO"), nd);
+
+        if (!bWalkable) continue;  // ★★★ 修正 (2025-11-11): IgnoreActorを渡して自分のOriginHoldを無視
+
+        if (nd >= 0 && nd < bestDist)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[GetNextStep] -> Selected %s as better (Dist %d < %d)"),
+                *DirectionName, nd, bestDist);
+            bestDist = nd;
+            Best = N;
         }
     }
+
+    UE_LOG(LogTemp, Warning, TEXT("[GetNextStep] FINAL: Best=(%d,%d) BestDist=%d"),
+        Best.X, Best.Y, bestDist);
+    UE_LOG(LogTemp, Warning, TEXT("[GetNextStep] ================================"));
     
     if (Best == FromCell) 
     {
