@@ -3362,6 +3362,12 @@ void AGameTurnManagerBase::OnAttacksFinished(int32 TurnId)
         return;
     }
 
+    // ★★★ DIAGNOSTIC (2025-11-13): OnAttacksFinishedのタイミングを追跡 ★★★
+    const double Timestamp = FPlatformTime::Seconds();
+    UE_LOG(LogTurnManager, Error,
+        TEXT("[TurnManager] 🔔 OnAttacksFinished RECEIVED: CurrentTurn=%d NotificationTurn=%d Time=%.3f"),
+        CurrentTurnIndex, TurnId, Timestamp);
+
     // ★★★ FIX (2025-11-12): TurnId検証を削除 ★★★
     // 攻撃アニメーション完了が次のターンで通知されることがあるため、
     // TurnId mismatchでスキップすると、ConvertAttacksToWait()が呼ばれず、
@@ -3373,9 +3379,6 @@ void AGameTurnManagerBase::OnAttacksFinished(int32 TurnId)
             CurrentTurnIndex, TurnId);
         // ★★★ returnを削除：遅延通知でも処理を続行 ★★★
     }
-
-    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] OnAttacksFinished: All attacks completed (notification from Turn %d)"),
-        CurrentTurnIndex, TurnId);
 
     // ★★★ FIX (2025-11-12): 攻撃インテントをWaitインテントに変換 ★★★
     // 攻撃が完了したら、攻撃インテントをWaitインテントに変換する。
@@ -3404,7 +3407,11 @@ void AGameTurnManagerBase::OnAttacksFinished(int32 TurnId)
     //==========================================================================
     // (2) 移動フェーズ。攻撃後
     //==========================================================================
-    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Starting Move Phase (after attacks)"), TurnId);
+    // ★★★ DIAGNOSTIC (2025-11-13): ExecuteMovePhase呼び出しのタイミングを追跡 ★★★
+    const double MovePhaseTiming = FPlatformTime::Seconds();
+    UE_LOG(LogTurnManager, Error,
+        TEXT("[TurnManager] 📞 Calling ExecuteMovePhase(true) after attacks: Turn=%d Time=%.3f"),
+        TurnId, MovePhaseTiming);
 
     // ★★★ FIX (2025-11-12): 攻撃完了後の呼び出しなので、攻撃インテントチェックをスキップ ★★★
     ExecuteMovePhase(true);  // bSkipAttackCheck=true で無限ループを防止
@@ -3844,6 +3851,12 @@ void AGameTurnManagerBase::OnAllMovesFinished(int32 FinishedTurnId)
         return;
     }
 
+    // ★★★ DIAGNOSTIC (2025-11-13): OnAllMovesFinished受信のタイミングを追跡 ★★★
+    const double Timestamp = FPlatformTime::Seconds();
+    UE_LOG(LogTurnManager, Error,
+        TEXT("[TurnManager] 🏁 OnAllMovesFinished RECEIVED: FinishedTurn=%d CurrentTurn=%d Time=%.3f"),
+        FinishedTurnId, CurrentTurnIndex, Timestamp);
+
     // TurnId検証
     if (FinishedTurnId != CurrentTurnIndex)
     {
@@ -3851,8 +3864,6 @@ void AGameTurnManagerBase::OnAllMovesFinished(int32 FinishedTurnId)
             FinishedTurnId, CurrentTurnIndex);
         return;
     }
-
-    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Barrier complete - all moves finished"), FinishedTurnId);
 
     //==========================================================================
     // ★★★ セーフティ: 実行中フラグ/ゲートを確実に解除

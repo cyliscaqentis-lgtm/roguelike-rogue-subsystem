@@ -86,9 +86,11 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 	// キュー終端チェック
 	if (CurrentIndex >= Queue.Num())
 	{
-		UE_LOG(LogAttackPhase, Log,
-			TEXT("[Turn %d] All %d attacks completed"),
-			TurnId, Queue.Num());
+		// ★★★ DIAGNOSTIC (2025-11-13): OnFinished発火のタイミングを追跡 ★★★
+		const double Timestamp = FPlatformTime::Seconds();
+		UE_LOG(LogAttackPhase, Error,
+			TEXT("[AttackExecutor] 🎉 All %d attacks DISPATCHED -> Broadcasting OnFinished(Turn=%d) Time=%.3f"),
+			Queue.Num(), TurnId, Timestamp);
 
 		// デリゲート解除
 		UnbindCurrentASC();
@@ -236,9 +238,11 @@ void UAttackPhaseExecutorSubsystem::UnbindCurrentASC()
 void UAttackPhaseExecutorSubsystem::OnAbilityCompleted(
 	const FGameplayEventData* Payload)
 {
-	UE_LOG(LogAttackPhase, Log,
-		TEXT("[Turn %d] Ability completed at index %d"),
-		TurnId, CurrentIndex);
+	// ★★★ DIAGNOSTIC (2025-11-13): 完了イベントのタイミングを追跡 ★★★
+	const double Timestamp = FPlatformTime::Seconds();
+	UE_LOG(LogAttackPhase, Error,
+		TEXT("[AttackExecutor] ⚡ OnAbilityCompleted: Turn=%d Index=%d/%d Time=%.3f"),
+		TurnId, CurrentIndex, Queue.Num(), Timestamp);
 
 	// 完了したので次の攻撃へ
 	UnbindCurrentASC();

@@ -247,21 +247,28 @@ void UGA_AttackBase::EndAbility(const FGameplayAbilitySpecHandle Handle,
     bool bReplicateEndAbility,
     bool bWasCancelled)
 {
+    // ★★★ DIAGNOSTIC (2025-11-13): EndAbilityのタイミングを追跡 ★★★
+    const double Timestamp = FPlatformTime::Seconds();
+    AActor* Avatar = GetAvatarActorFromActorInfo();
+    UE_LOG(LogAttackAbility, Error,
+        TEXT("[GA_AttackBase] ⚡ EndAbility CALLED: Actor=%s TurnId=%d ActionId=%s Time=%.3f"),
+        *GetNameSafe(Avatar), AttackTurnId, *AttackActionId.ToString(), Timestamp);
+
     // ★★★ Barrier完了通知：攻撃終了をBarrierに通知してターン進行を許可 ★★★
     if (bBarrierRegistered)
     {
-        AActor* Avatar = GetAvatarActorFromActorInfo();
         if (Avatar)
         {
             if (UWorld* World = Avatar->GetWorld())
             {
                 if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
                 {
-                    Barrier->CompleteAction(Avatar, AttackTurnId, AttackActionId);
+                    const double CompleteTime = FPlatformTime::Seconds();
+                    UE_LOG(LogAttackAbility, Error,
+                        TEXT("[GA_AttackBase] 📤 Calling Barrier->CompleteAction: TurnId=%d ActionId=%s Actor=%s Time=%.3f"),
+                        AttackTurnId, *AttackActionId.ToString(), *Avatar->GetName(), CompleteTime);
 
-                    UE_LOG(LogAttackAbility, Log,
-                        TEXT("[GA_AttackBase] EndAbility: Completed attack in Barrier (TurnId=%d, ActionId=%s, Actor=%s)"),
-                        AttackTurnId, *AttackActionId.ToString(), *Avatar->GetName());
+                    Barrier->CompleteAction(Avatar, AttackTurnId, AttackActionId);
 
                     bBarrierRegistered = false;
                 }
