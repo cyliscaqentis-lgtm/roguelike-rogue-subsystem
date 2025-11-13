@@ -141,8 +141,8 @@ FGuid UTurnActionBarrierSubsystem::RegisterAction(AActor* Actor, int32 TurnId)
     // 現在の保留アクション数を計算
     int32 TotalPending = GetPendingActionCount(TurnId);
 
-    // Verbose: 個別の登録は冗長（合計数は別途ログ）
-    UE_LOG(LogTurnBarrier, Verbose,
+    // ★★★ DIAGNOSTIC (2025-11-13): 登録を追跡 ★★★
+    UE_LOG(LogTurnBarrier, Error,
         TEXT("[Barrier] ✅ REGISTER: Turn=%d Actor=%s Action=%s (Total=%d)"),
         TurnId, *Actor->GetName(), *ActionId.ToString(), TotalPending);
 
@@ -215,8 +215,8 @@ void UTurnActionBarrierSubsystem::CompleteAction(AActor* Actor, int32 TurnId, co
         // 残りのアクション数
         int32 Remaining = GetPendingActionCount(TurnId);
 
-        // Verbose: 個別の完了は冗長（Remaining=0は別途ログ）
-        UE_LOG(LogTurnBarrier, Verbose,
+        // ★★★ DIAGNOSTIC (2025-11-13): 完了を追跡 ★★★
+        UE_LOG(LogTurnBarrier, Error,
             TEXT("[Barrier] ✅ COMPLETE: Turn=%d Actor=%s Action=%s (Remaining=%d)"),
             TurnId, *Actor->GetName(), *ActionId.ToString(), Remaining);
 

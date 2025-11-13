@@ -86,6 +86,11 @@ void UGA_TurnActionBase::OnTimeout()
 
 void UGA_TurnActionBase::SendCompletionEvent(bool bTimedOut)
 {
+    // ★★★ DIAGNOSTIC (2025-11-13): 完了イベント送信を追跡 ★★★
+    UE_LOG(LogTemp, Error,
+        TEXT("[GA_TurnActionBase] SendCompletionEvent CALLED: Actor=%s, TimedOut=%d, Tag=%s"),
+        *GetNameSafe(GetAvatarActorFromActorInfo()), bTimedOut, *CompletionEventTag.ToString());
+
     FGameplayEventData Payload;
     Payload.Instigator = GetAvatarActorFromActorInfo();
     Payload.OptionalObject = this;
@@ -97,8 +102,25 @@ void UGA_TurnActionBase::SendCompletionEvent(bool bTimedOut)
         UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(InstigatorActor);
         if (ASC)
         {
+            UE_LOG(LogTemp, Error,
+                TEXT("[GA_TurnActionBase] Calling ASC->HandleGameplayEvent with tag=%s"),
+                *CompletionEventTag.ToString());
+
             ASC->HandleGameplayEvent(CompletionEventTag, &Payload);
+
+            UE_LOG(LogTemp, Error,
+                TEXT("[GA_TurnActionBase] HandleGameplayEvent RETURNED"));
         }
+        else
+        {
+            UE_LOG(LogTemp, Error,
+                TEXT("[GA_TurnActionBase] SendCompletionEvent: ASC is NULL!"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error,
+            TEXT("[GA_TurnActionBase] SendCompletionEvent: InstigatorActor is NULL!"));
     }
 }
 
