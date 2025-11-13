@@ -114,6 +114,7 @@ void UGA_MeleeAttack::ActivateAbility(
     //==========================================================================
     // ★★★ CRITICAL FIX (2025-11-11): ターゲットの方を向く ★★★
     // 理由: 敵がプレイヤーを攻撃する際、ターゲットの方向を向いていなかった
+    // ★★★ FIX (2025-11-13): MulticastRPCで全クライアントに通知 ★★★
     //==========================================================================
     if (TargetUnit && ActorInfo && ActorInfo->AvatarActor.IsValid())
     {
@@ -126,9 +127,14 @@ void UGA_MeleeAttack::ActivateAbility(
             if (!ToTarget.IsNearlyZero())
             {
                 FRotator NewRotation = ToTarget.Rotation();
+
+                // サーバー側で回転
                 Avatar->SetActorRotation(NewRotation);
 
-                UE_LOG(LogTemp, Log, TEXT("[GA_MeleeAttack] %s: Rotated to face target %s (Yaw=%.1f)"),
+                // 全クライアントに回転を通知（Multicast RPC）
+                Multicast_RotateToTarget(Avatar, NewRotation);
+
+                UE_LOG(LogTemp, Log, TEXT("[GA_MeleeAttack] %s: Rotated to face target %s (Yaw=%.1f) + Multicast sent"),
                     *GetNameSafe(Avatar), *GetNameSafe(TargetUnit), NewRotation.Yaw);
             }
             else
@@ -440,4 +446,22 @@ AGameTurnManagerBase* UGA_MeleeAttack::GetTurnManager() const
         }
     }
     return CachedTurnManager.Get();
+}
+
+//------------------------------------------------------------------------------
+// Multicast RPC - 全クライアントで回転を実行
+//------------------------------------------------------------------------------
+
+void UGA_MeleeAttack::Multicast_RotateToTarget_Implementation(AActor* Avatar, FRotator NewRotation)
+{
+    if (Avatar && IsValid(Avatar))
+    {
+        Avatar->SetActorRotation(NewRotation);
+        UE_LOG(LogTemp, Verbose, TEXT("[GA_MeleeAttack] Multicast_RotateToTarget: %s rotated to Yaw=%.1f"),
+            *GetNameSafe(Avatar), NewRotation.Yaw);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] Multicast_RotateToTarget: Avatar is invalid"));
+    }
 }
