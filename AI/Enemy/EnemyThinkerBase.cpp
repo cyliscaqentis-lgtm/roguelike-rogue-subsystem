@@ -308,6 +308,21 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
             // 明示的にMoveに変更する必要がある
             Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Move"));
 
+            // ★★★ FIX (2025-11-13): NextCellを新しいDistanceFieldで再計算 ★★★
+            // DecideIntent()は古いDistanceFieldで計算しているため、
+            // OnPlayerCommandAcceptedで更新された新しいDistanceFieldを使って再計算する
+            if (UWorld* World = GetWorld())
+            {
+                if (UDistanceFieldSubsystem* DistanceField = World->GetSubsystem<UDistanceFieldSubsystem>())
+                {
+                    Intent.NextCell = DistanceField->GetNextStepTowardsPlayer(Intent.CurrentCell, GetOwner());
+                    UE_LOG(LogTemp, Log,
+                        TEXT("[ComputeIntent] %s: ★ NextCell recalculated with updated DistanceField: (%d,%d) -> (%d,%d)"),
+                        *GetNameSafe(GetOwner()), Intent.CurrentCell.X, Intent.CurrentCell.Y,
+                        Intent.NextCell.X, Intent.NextCell.Y);
+                }
+            }
+
             // NextCellが現在位置と同じならWaitにダウングレード
             if (Intent.NextCell == Intent.CurrentCell)
             {
