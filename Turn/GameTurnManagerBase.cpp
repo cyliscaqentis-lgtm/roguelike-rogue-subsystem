@@ -2796,6 +2796,12 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
 
             ExecuteSimultaneousPhase();  // 同時移動
         }
+
+        // ★★★ FIX (2025-11-13): ContinueTurnAfterInputでの二重実行を防ぐフラグ ★★★
+        bIntentsAlreadyHandled = true;
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[Turn %d] bIntentsAlreadyHandled=true (intents regenerated with predicted position)"),
+            CurrentTurnIndex);
     }
     else if (Command.CommandTag == RogueGameplayTags::InputTag_Turn)  // ネイティブタグを使用
     {
@@ -2971,6 +2977,19 @@ void AGameTurnManagerBase::ContinueTurnAfterInput()
     bPlayerMoveInProgress = true;
 
     UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] ContinueTurnAfterInput: Starting phase"), CurrentTurnIndex);
+
+    //==========================================================================
+    // ★★★ FIX (2025-11-13): OnPlayerCommandAcceptedで既に処理済みならスキップ ★★★
+    // 理由: OnPlayerCommandAcceptedでプレイヤー移動先予測に基づいてインテント再生成＋Phase実行済み
+    //==========================================================================
+    if (bIntentsAlreadyHandled)
+    {
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[Turn %d] ContinueTurnAfterInput: SKIPPING (already handled in OnPlayerCommandAccepted)"),
+            CurrentTurnIndex);
+        bIntentsAlreadyHandled = false;  // フラグリセット
+        return;
+    }
 
     //==========================================================================
     // ★★★ CRITICAL FIX (2025-11-11): プレイヤー行動後に敵の意思決定を実行 ★★★
@@ -4086,6 +4105,9 @@ void AGameTurnManagerBase::OpenInputWindow()
 
     // ★★★ WindowIdをインクリメント
     ++InputWindowId;
+
+    // ★★★ FIX (2025-11-13): 新しいターン開始時にフラグをリセット ★★★
+    bIntentsAlreadyHandled = false;
 
     UE_LOG(LogTurnManager, Log,
         TEXT("[WindowId] Opened: Turn=%d WindowId=%d"),

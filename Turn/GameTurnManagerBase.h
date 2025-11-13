@@ -497,6 +497,10 @@ public:
     UPROPERTY()
     bool bUnitsSpawned = false;
 
+    /** OnPlayerCommandAcceptedでインテント再生成＋Phase実行済みフラグ */
+    UPROPERTY()
+    bool bIntentsAlreadyHandled = false;
+
     /** プレイヤー所持完了フラグ */
     UPROPERTY()
     bool bPlayerPossessed = false;
