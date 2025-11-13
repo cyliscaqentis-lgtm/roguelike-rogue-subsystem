@@ -193,6 +193,12 @@ void UGA_MeleeAttack::PlayAttackMontage_Implementation()
         return;
     }
 
+    // ★★★ DIAGNOSTIC (2025-11-13): モンタージュの長さと開始時刻を出力 ★★★
+    const float MontageLength = MeleeAttackMontage->GetPlayLength();
+    const double StartTime = FPlatformTime::Seconds();
+    UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] Montage length: %.3f seconds, StartTime=%.3f (if >5 seconds, this is TOO LONG!)"),
+        MontageLength, StartTime);
+
     UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] Creating PlayMontageAndWait task..."));
 
     UAbilityTask_PlayMontageAndWait* Task =
@@ -203,6 +209,9 @@ void UGA_MeleeAttack::PlayAttackMontage_Implementation()
     Task->OnBlendOut.AddDynamic(this, &UGA_MeleeAttack::OnMontageBlendOut);
     Task->OnCancelled.AddDynamic(this, &UGA_MeleeAttack::OnMontageCancelled);
     Task->ReadyForActivation();
+
+    UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] PlayMontageAndWait task activated at %.3f, waiting for completion..."),
+        StartTime);
 }
 
 //------------------------------------------------------------------------------
@@ -211,9 +220,11 @@ void UGA_MeleeAttack::PlayAttackMontage_Implementation()
 
 void UGA_MeleeAttack::OnMontageCompleted()
 {
+    // ★★★ DIAGNOSTIC (2025-11-13): 完了タイミングを診断 ★★★
+    const double CurrentTime = FPlatformTime::Seconds();
     UE_LOG(LogTemp, Error,
-        TEXT("[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=%s"),
-        *GetNameSafe(GetAvatarActorFromActorInfo()));
+        TEXT("[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=%s, Time=%.3f"),
+        *GetNameSafe(GetAvatarActorFromActorInfo()), CurrentTime);
 
     // ★★★ FIX (2025-11-11): ActivateAbilityで保存されたターゲットを使用 ★★★
     // 実行時に再検索せず、AI決定時に保存されたターゲットを攻撃
