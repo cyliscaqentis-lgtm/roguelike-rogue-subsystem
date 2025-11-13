@@ -234,8 +234,33 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& Playe
         }
     }
 
-    UE_LOG(LogTemp, Log, TEXT("[DistanceField] Dijkstra complete: PlayerCell=(%d,%d), Cells=%d, Processed=%d, TargetsLeft=%d"),
+    UE_LOG(LogTemp, Warning, TEXT("[DistanceField] ===== DIJKSTRA BUILD COMPLETE ====="));
+    UE_LOG(LogTemp, Warning, TEXT("[DistanceField] PlayerCell=(%d,%d), TotalCells=%d, Processed=%d, TargetsLeft=%d"),
         PlayerCell.X, PlayerCell.Y, DistanceMap.Num(), ProcessedCells, RemainingTargets);
+    UE_LOG(LogTemp, Warning, TEXT("[DistanceField] Bounds: Min=(%d,%d) Max=(%d,%d)"),
+        Bounds.Min.X, Bounds.Min.Y, Bounds.Max.X, Bounds.Max.Y);
+
+    // ★★★ DEBUG: プレイヤー周囲の距離値をサンプル出力 ★★★
+    UE_LOG(LogTemp, Warning, TEXT("[DistanceField] Sample distances around player:"));
+    for (int32 dy = -2; dy <= 2; ++dy)
+    {
+        FString Line = FString::Printf(TEXT("  Y=%d: "), PlayerCell.Y + dy);
+        for (int32 dx = -2; dx <= 2; ++dx)
+        {
+            FIntPoint TestCell = PlayerCell + FIntPoint(dx, dy);
+            const int32* DistPtr = DistanceMap.Find(TestCell);
+            if (DistPtr)
+            {
+                Line += FString::Printf(TEXT("(%d,%d)=%d "), TestCell.X, TestCell.Y, *DistPtr);
+            }
+            else
+            {
+                Line += FString::Printf(TEXT("(%d,%d)=NONE "), TestCell.X, TestCell.Y);
+            }
+        }
+        UE_LOG(LogTemp, Warning, TEXT("%s"), *Line);
+    }
+    UE_LOG(LogTemp, Warning, TEXT("[DistanceField] =========================================="));
 
     // ★ 敵移動AI診断：未到達敵の詳細ログ
     UE_LOG(LogTemp, Warning, TEXT("[DistanceField] BuildComplete: TotalCells=%d, ProcessedCells=%d, UnreachedEnemies=%d"),
