@@ -2704,16 +2704,27 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
         // ★★★ DistanceFieldを移動先で更新 ★★★
         if (UDistanceFieldSubsystem* DF = World->GetSubsystem<UDistanceFieldSubsystem>())
         {
-            // ★★★ CRITICAL FIX (2025-11-13): プレイヤーの現在位置も通過可能として扱う ★★★
-            // 理由: プレイヤーはまだ移動アニメーション前で現在位置を占有している
-            // Dijkstraがこの位置を壁として扱うと、経路が遮断される
+            // ★★★ CRITICAL FIX (2025-11-13): プレイヤーと敵の現在位置も通過可能として扱う ★★★
+            // 理由: プレイヤーと敵はまだ移動アニメーション前で現在位置を占有している
+            // Dijkstraがこれらの位置を壁として扱うと、経路が遮断される
             TSet<FIntPoint> PassableCells;
-            PassableCells.Add(CurrentCell);  // 現在位置を通過可能に
+            PassableCells.Add(CurrentCell);  // プレイヤーの現在位置を通過可能に
+
+            // 敵の現在位置もすべて通過可能に追加
+            for (const TObjectPtr<AActor>& Enemy : CachedEnemies)
+            {
+                if (Enemy && CachedPathFinder.IsValid())
+                {
+                    FIntPoint EnemyCell = CachedPathFinder->WorldToGrid(Enemy->GetActorLocation());
+                    PassableCells.Add(EnemyCell);
+                }
+            }
+
             DF->UpdateDistanceFieldOptimized(PlayerDestination, PassableCells, 100);
 
             UE_LOG(LogTurnManager, Warning,
-                TEXT("[Turn %d] DistanceField updated with player destination (%d,%d), old position (%d,%d) marked passable"),
-                CurrentTurnIndex, PlayerDestination.X, PlayerDestination.Y, CurrentCell.X, CurrentCell.Y);
+                TEXT("[Turn %d] DistanceField updated with player destination (%d,%d), %d passable cells (player + enemies)"),
+                CurrentTurnIndex, PlayerDestination.X, PlayerDestination.Y, PassableCells.Num());
         }
 
         // ★★★ インテント再生成（プレイヤー移動先で） ★★★
