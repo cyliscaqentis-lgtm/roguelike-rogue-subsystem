@@ -76,6 +76,19 @@ public:
     UFUNCTION(Client, Reliable)
     void Client_ApplyFacingNoTurn(int32 WindowId, FVector2D Direction);
 
+    /**
+     * ★★★ OnRep_WaitingForPlayerInputから呼ばれる (2025-11-13)
+     * レプリケーション完了後に入力ウィンドウが開いたことを確定する
+     * @param NewWindowId レプリケートされた最新のWindowId
+     */
+    void OnInputWindowOpened(int32 NewWindowId);
+
+    /**
+     * ★★★ OnRep_WaitingForPlayerInputから呼ばれる (2025-11-13)
+     * レプリケーション完了後に入力ウィンドウが閉じたことを確定する
+     */
+    void OnInputWindowClosed();
+
 protected:
     //--------------------------------------------------------------------------
     // 入力ウィンドウ制御（WindowId方式）
@@ -95,6 +108,14 @@ protected:
     /** 初期同期完了フラグ */
     UPROPERTY()
     bool bPrevInitSynced = false;
+
+    /**
+     * ★★★ レプリケーション完了フラグ (2025-11-13)
+     * OnRep_WaitingForPlayerInput → OnInputWindowOpened() で true に設定
+     * Input_Move_Triggered で確実な同期を保証
+     */
+    UPROPERTY()
+    bool bInputWindowOpenConfirmed = false;
 
     //--------------------------------------------------------------------------
     // Lifecycle Overrides

@@ -4013,7 +4013,8 @@ void AGameTurnManagerBase::OnRep_WaitingForPlayerInput()
     }
 
     //==========================================================================
-    // Standalone + Network両対応：ゲートリセット。既存の処理
+    // ★★★ レプリケーション完了通知 (2025-11-13) ★★★
+    // PlayerControllerに入力ウィンドウの開閉を確定的に通知
     //==========================================================================
     if (UWorld* World = GetWorld())
     {
@@ -4021,9 +4022,16 @@ void AGameTurnManagerBase::OnRep_WaitingForPlayerInput()
         {
             if (WaitingForPlayerInput)
             {
-                // 入力ウィンドウが開いたら → ゲートをリセット
-                
-                UE_LOG(LogTemp, Warning, TEXT("[Client] OnRep: Window OPEN, gate reset"));
+                // ★★★ 入力ウィンドウが開いた → 確定通知（WindowIdも渡す）
+                PC->OnInputWindowOpened(InputWindowId);
+                UE_LOG(LogTemp, Warning, TEXT("[Client] OnRep: Window OPEN, PC notified (WindowId=%d)"),
+                    InputWindowId);
+            }
+            else
+            {
+                // ★★★ 入力ウィンドウが閉じた → 確定通知
+                PC->OnInputWindowClosed();
+                UE_LOG(LogTemp, Log, TEXT("[Client] OnRep: Window CLOSED, PC notified"));
             }
         }
     }

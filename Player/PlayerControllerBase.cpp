@@ -507,37 +507,24 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
 
     //==========================================================================
     // Step 2: 入力ウィンドウチェック（クライアント側で事前検証）
-    // ★★★ CRITICAL FIX (2025-11-11): Gemini分析により判明
-    // 問題: ターン開始直後、レプリケーション完了前に入力を送信していた
-    // 修正: クライアント側でも WaitingForPlayerInput と Gate をチェック
+    // ★★★ CRITICAL FIX (2025-11-13): レプリケーション完了を確実に検証
+    // 問題: OnRep_WaitingForPlayerInputとInput_Move_Triggeredのタイミング競合
+    // 修正: OnRep内でセットされるbInputWindowOpenConfirmedをチェック
     //==========================================================================
 
-    // レプリケートされた WaitingForPlayerInput をチェック
-    const bool bWaitingReplicated = CachedTurnManager->WaitingForPlayerInput;
-
-    // Gate_Input_Open タグをチェック
-    bool bGateOpenClient = false;
-    if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(GetPawn()))
-    {
-        if (UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent())
-        {
-            bGateOpenClient = ASC->HasMatchingGameplayTag(RogueGameplayTags::Gate_Input_Open);
-        }
-    }
-
-    // ★★★ DEBUG (2025-11-11): ガード条件の詳細を常に出力 ★★★
-    UE_LOG(LogTemp, Warning,
-        TEXT("[Client] Input_Move_Triggered: bWaitingReplicated=%d, bGateOpenClient=%d, bSentThisInputWindow=%d, WindowId=%d"),
-        bWaitingReplicated, bGateOpenClient, bSentThisInputWindow, CurrentInputWindowId);
-
-    // 両方が true の場合のみ送信可能
-    if (!bWaitingReplicated || !bGateOpenClient)
+    // ★★★ レプリケーション完了フラグをチェック（2025-11-13）
+    if (!bInputWindowOpenConfirmed)
     {
         UE_LOG(LogTemp, Warning,
-            TEXT("[Client] ❌ Input BLOCKED by gate check: WaitingForPlayerInput=%d, Gate=%d"),
-            bWaitingReplicated, bGateOpenClient);
+            TEXT("[Client] ❌ Input BLOCKED: Window not confirmed open (replication not complete yet). WindowId=%d"),
+            CurrentInputWindowId);
         return;
     }
+
+    // デバッグ用：詳細を出力
+    UE_LOG(LogTemp, Warning,
+        TEXT("[Client] Input_Move_Triggered: bInputWindowOpenConfirmed=%d, bSentThisInputWindow=%d, WindowId=%d"),
+        bInputWindowOpenConfirmed, bSentThisInputWindow, CurrentInputWindowId);
 
     //==========================================================================
     // ★ Step 3: 送信済みチェック（クライアント側の多重送信防止）
@@ -1080,4 +1067,32 @@ void APlayerControllerBase::Client_ApplyFacingNoTurn_Implementation(int32 Window
     }
 
     // 任意：フェイシング専用のフィードバック（アニメーション、サウンド等）
+}
+
+
+//==============================================================================
+// ★★★ レプリケーション完了通知 (2025-11-13) ★★★
+//==============================================================================
+
+void APlayerControllerBase::OnInputWindowOpened(int32 NewWindowId)
+{
+    // ★★★ WindowIdを最新に更新（Tickより先に確定）
+    CurrentInputWindowId = NewWindowId;
+
+    bInputWindowOpenConfirmed = true;
+    UE_LOG(LogTemp, Warning, TEXT("[Client] ✅ INPUT WINDOW CONFIRMED OPEN via OnRep (WindowId=%d)"),
+        CurrentInputWindowId);
+
+    // Tick関数のラッチリセットと同様の処理
+    bSentThisInputWindow = false;
+    LastProcessedWindowId = INDEX_NONE;
+}
+
+void APlayerControllerBase::OnInputWindowClosed()
+{
+    bInputWindowOpenConfirmed = false;
+    UE_LOG(LogTemp, Log, TEXT("[Client] INPUT WINDOW CONFIRMED CLOSED via OnRep"));
+
+    // ラッチもリセット（念のため）
+    bSentThisInputWindow = false;
 }
