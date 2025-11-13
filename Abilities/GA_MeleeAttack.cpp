@@ -114,18 +114,12 @@ void UGA_MeleeAttack::ActivateAbility(
     //==========================================================================
     // ★★★ CRITICAL FIX (2025-11-11): ターゲットの方を向く ★★★
     // 理由: 敵がプレイヤーを攻撃する際、ターゲットの方向を向いていなかった
-    // ★★★ FIX (2025-11-13): 攻撃前の向きを保存（攻撃完了後に元に戻すため） ★★★
     //==========================================================================
     if (TargetUnit && ActorInfo && ActorInfo->AvatarActor.IsValid())
     {
         AActor* Avatar = ActorInfo->AvatarActor.Get();
         if (Avatar && IsValid(TargetUnit))
         {
-            // 攻撃前の向きを保存
-            OriginalRotation = Avatar->GetActorRotation();
-            UE_LOG(LogTemp, Verbose, TEXT("[GA_MeleeAttack] %s: Saved original rotation (Yaw=%.1f)"),
-                *GetNameSafe(Avatar), OriginalRotation.Yaw);
-
             FVector ToTarget = TargetUnit->GetActorLocation() - Avatar->GetActorLocation();
             ToTarget.Z = 0.0f;  // 水平方向のみ（Z軸は無視）
 
@@ -411,21 +405,6 @@ void UGA_MeleeAttack::EndAbility(
     bool bReplicateEndAbility,
     bool bWasCancelled)
 {
-    //==========================================================================
-    // ★★★ FIX (2025-11-13): 攻撃完了後に元の向きに戻す ★★★
-    // 理由: 攻撃時にターゲットの方向を向いたまま、Wait状態になると向きが変わらない
-    //==========================================================================
-    if (ActorInfo && ActorInfo->AvatarActor.IsValid())
-    {
-        AActor* Avatar = ActorInfo->AvatarActor.Get();
-        if (Avatar && IsValid(Avatar))
-        {
-            Avatar->SetActorRotation(OriginalRotation);
-            UE_LOG(LogTemp, Log, TEXT("[GA_MeleeAttack] %s: Restored original rotation (Yaw=%.1f)"),
-                *GetNameSafe(Avatar), OriginalRotation.Yaw);
-        }
-    }
-
     if (bInputDisabled && ActorInfo && ActorInfo->AvatarActor.IsValid())
     {
         if (APawn* Pawn = Cast<APawn>(ActorInfo->AvatarActor.Get()))
