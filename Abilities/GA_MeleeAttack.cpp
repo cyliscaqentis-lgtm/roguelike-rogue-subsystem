@@ -124,35 +124,47 @@ void UGA_MeleeAttack::ActivateAbility(
         {
             if (IsValid(TargetUnit))
             {
-                FVector ToTarget = TargetUnit->GetActorLocation() - Avatar->GetActorLocation();
+                const FVector AttackerLoc = Avatar->GetActorLocation();
+                const FVector TargetLoc = TargetUnit->GetActorLocation();
+                FVector ToTarget = TargetLoc - AttackerLoc;
                 ToTarget.Z = 0.0f;  // 水平方向のみ（Z軸は無視）
+
+                UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] ===== ROTATION DIAGNOSTIC ====="));
+                UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] Attacker: %s at (%.1f, %.1f, %.1f)"),
+                    *GetNameSafe(Avatar), AttackerLoc.X, AttackerLoc.Y, AttackerLoc.Z);
+                UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] Target: %s at (%.1f, %.1f, %.1f)"),
+                    *GetNameSafe(TargetUnit), TargetLoc.X, TargetLoc.Y, TargetLoc.Z);
+                UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] Direction vector: (%.1f, %.1f) Length: %.1f"),
+                    ToTarget.X, ToTarget.Y, ToTarget.Size());
 
                 if (!ToTarget.IsNearlyZero())
                 {
                     FRotator NewRotation = ToTarget.Rotation();
 
+                    UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] Calling Multicast_SetRotation with Yaw=%.1f"),
+                        NewRotation.Yaw);
+
                     // AvatarがUnitBaseの場合、MulticastRPCで全クライアントに回転を通知
                     UnitAvatar->Multicast_SetRotation(NewRotation);
 
-                    UE_LOG(LogTemp, Log, TEXT("[GA_MeleeAttack] %s: Called Multicast_SetRotation (Yaw=%.1f) to face target %s"),
-                        *GetNameSafe(Avatar), NewRotation.Yaw, *GetNameSafe(TargetUnit));
+                    UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] Multicast_SetRotation call completed"));
                 }
                 else
                 {
-                    UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] %s: Cannot rotate - target is at same location"),
-                        *GetNameSafe(Avatar));
+                    UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] %s: Cannot rotate - target is at same location (distance=%.3f)"),
+                        *GetNameSafe(Avatar), ToTarget.Size());
                 }
             }
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] %s: Avatar is not a UnitBase - cannot use Multicast RPC"),
+            UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] %s: Avatar is not a UnitBase - cannot use Multicast RPC"),
                 *GetNameSafe(Avatar));
         }
     }
     else if (!TargetUnit)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] %s: Cannot rotate - no target"),
+        UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] %s: Cannot rotate - no target"),
             *GetNameSafe(GetAvatarActorFromActorInfo()));
     }
 

@@ -821,7 +821,10 @@ void AUnitBase::SetStatVars()
 
 void AUnitBase::Multicast_SetRotation_Implementation(FRotator NewRotation)
 {
+    const FRotator OldRotation = GetActorRotation();
     SetActorRotation(NewRotation);
-    UE_LOG(LogUnitBase, Verbose, TEXT("[UnitBase] Multicast_SetRotation: %s rotated to Yaw=%.1f"),
-        *GetName(), NewRotation.Yaw);
+    const FRotator ActualRotation = GetActorRotation();
+
+    UE_LOG(LogUnitBase, Warning, TEXT("[UnitBase] Multicast_SetRotation: %s | Old Yaw=%.1f → Requested Yaw=%.1f → Actual Yaw=%.1f | MoveStatus=%d"),
+        *GetName(), OldRotation.Yaw, NewRotation.Yaw, ActualRotation.Yaw, (int32)MoveStatus);
 }
