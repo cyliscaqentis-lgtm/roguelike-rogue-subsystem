@@ -42,7 +42,7 @@ public:
     // ========================================================================
 
     UFUNCTION(BlueprintCallable, Category = "Turn|Core")
-    void CoreObservationPhase(const FIntPoint& PlayerCell, const TArray<AActor*>& Enemies = TArray<AActor*>());
+    void CoreObservationPhase(const FIntPoint& PlayerCell, const TArray<AActor*>& Enemies);
 
     UFUNCTION(BlueprintCallable, Category = "Turn|Core")
     TArray<FEnemyIntent> CoreThinkPhase(const TArray<AActor*>& Enemies);
