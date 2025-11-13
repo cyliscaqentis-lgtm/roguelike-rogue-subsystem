@@ -303,11 +303,26 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
         }
         else if (ChebyshevDistance > AttackRangeInTiles)
         {
-            // 移動を確認（DecideIntentで既に設定されているはず）
-            UE_LOG(LogTemp, Verbose,
-                TEXT("[ComputeIntent] %s: MOVE intent confirmed (Chebyshev=%d > Range=%d, ObservationPlayerPos=(%d,%d))"),
-                *GetNameSafe(GetOwner()), ChebyshevDistance, AttackRangeInTiles,
-                Observation.PlayerGridPosition.X, Observation.PlayerGridPosition.Y);
+            // ★★★ CRITICAL FIX: プレイヤーが射程外に移動した場合、Moveに変更 ★★★
+            // DecideIntentが古い位置でAttackを決定していた可能性があるため、
+            // 明示的にMoveに変更する必要がある
+            Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Move"));
+
+            // NextCellが現在位置と同じならWaitにダウングレード
+            if (Intent.NextCell == Intent.CurrentCell)
+            {
+                Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"));
+                UE_LOG(LogTemp, Log,
+                    TEXT("[ComputeIntent] %s: ★ Changed to WAIT (player out of range, no movement needed: Chebyshev=%d > Range=%d)"),
+                    *GetNameSafe(GetOwner()), ChebyshevDistance, AttackRangeInTiles);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Log,
+                    TEXT("[ComputeIntent] %s: ★ Changed to MOVE (player out of range: Chebyshev=%d > Range=%d, ObservationPlayerPos=(%d,%d))"),
+                    *GetNameSafe(GetOwner()), ChebyshevDistance, AttackRangeInTiles,
+                    Observation.PlayerGridPosition.X, Observation.PlayerGridPosition.Y);
+            }
         }
     }
 
