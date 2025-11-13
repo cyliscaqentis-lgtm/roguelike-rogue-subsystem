@@ -2710,16 +2710,24 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
             TSet<FIntPoint> PassableCells;
             PassableCells.Add(CurrentCell);  // プレイヤーの現在位置を通過可能に
 
-            // 敵の現在位置もすべて通過可能に追加
-            for (const TObjectPtr<AActor>& Enemy : CachedEnemies)
+            // ★★★ CRITICAL FIX (2025-11-13): 全ユニット（味方・敵）の位置を追加 ★★★
+            // 理由: 敵の位置だけでは不十分。味方ユニットが「壁」として扱われ、
+            //       迂回する長い経路を計算してしまう問題を修正
+            TArray<AActor*> AllUnits;
+            UGameplayStatics::GetAllActorsOfClass(World, AUnitBase::StaticClass(), AllUnits);
+            for (AActor* Unit : AllUnits)
             {
-                if (Enemy && CachedPathFinder.IsValid())
+                if (Unit && CachedPathFinder.IsValid())
                 {
-                    FIntPoint EnemyCell = CachedPathFinder->WorldToGrid(Enemy->GetActorLocation());
-                    PassableCells.Add(EnemyCell);
-                    UE_LOG(LogTurnManager, Warning,
-                        TEXT("[Turn %d] PassableCells: Added enemy %s at (%d,%d)"),
-                        CurrentTurnIndex, *Enemy->GetName(), EnemyCell.X, EnemyCell.Y);
+                    FIntPoint UnitCell = CachedPathFinder->WorldToGrid(Unit->GetActorLocation());
+                    PassableCells.Add(UnitCell);
+
+                    if (AUnitBase* UnitBase = Cast<AUnitBase>(Unit))
+                    {
+                        UE_LOG(LogTurnManager, Log,
+                            TEXT("[Turn %d] PassableCells: Added unit %s (Team=%d) at (%d,%d)"),
+                            CurrentTurnIndex, *Unit->GetName(), UnitBase->Team, UnitCell.X, UnitCell.Y);
+                    }
                 }
             }
 

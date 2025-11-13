@@ -22,6 +22,7 @@
 #include "GameFramework/Controller.h"
 #include "Character/LyraCharacter.h"
 #include "Character/LyraPawnExtensionComponent.h"
+#include "Character/UnitBase.h"
 #include "AbilitySystem/LyraAbilitySystemComponent.h"
 #include "../Utility/RogueGameplayTags.h"
 #include "EngineUtils.h"
@@ -145,10 +146,12 @@ void UTurnCorePhaseManager::CoreObservationPhase(const FIntPoint& PlayerCell, co
 
     // ★★★ CRITICAL FIX (2025-11-13): 敵の位置をPassableCellsとして追加 ★★★
     // 理由: 敵の現在位置が占有されているため、Dijkstraが到達できない
-    // OptionalTargetsに敵の位置を渡すことで、占有セルも通過可能として扱う
+    // ★★★ CRITICAL FIX (2025-11-13): 全ユニット（味方・敵）の位置をPassableCellsとして追加 ★★★
+    // 理由: 敵の位置だけでは不十分。味方ユニットが「壁」として扱われ、
+    //       迂回する長い経路を計算してしまう問題を修正
     TSet<FIntPoint> PassableCells;
 
-    // PathFinderを取得して敵の位置をグリッド座標に変換
+    // PathFinderを取得して全ユニットの位置をグリッド座標に変換
     if (UWorld* World = GetWorld())
     {
         TArray<AActor*> FoundActors;
@@ -158,12 +161,22 @@ void UTurnCorePhaseManager::CoreObservationPhase(const FIntPoint& PlayerCell, co
             AGridPathfindingLibrary* PathFinder = Cast<AGridPathfindingLibrary>(FoundActors[0]);
             if (PathFinder)
             {
-                for (AActor* Enemy : Enemies)
+                // 全ユニットを取得
+                TArray<AActor*> AllUnits;
+                UGameplayStatics::GetAllActorsOfClass(World, AUnitBase::StaticClass(), AllUnits);
+                for (AActor* Unit : AllUnits)
                 {
-                    if (IsValid(Enemy))
+                    if (IsValid(Unit))
                     {
-                        FIntPoint EnemyCell = PathFinder->WorldToGrid(Enemy->GetActorLocation());
-                        PassableCells.Add(EnemyCell);
+                        FIntPoint UnitCell = PathFinder->WorldToGrid(Unit->GetActorLocation());
+                        PassableCells.Add(UnitCell);
+
+                        if (AUnitBase* UnitBase = Cast<AUnitBase>(Unit))
+                        {
+                            UE_LOG(LogTemp, Verbose,
+                                TEXT("[TurnCore] ObservationPhase: Added unit %s (Team=%d) at (%d,%d) to PassableCells"),
+                                *Unit->GetName(), UnitBase->Team, UnitCell.X, UnitCell.Y);
+                        }
                     }
                 }
             }
