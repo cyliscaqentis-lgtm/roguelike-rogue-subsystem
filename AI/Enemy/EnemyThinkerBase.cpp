@@ -192,14 +192,35 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
         Distance, AttackRangeInTiles);
 
     // ★★★ P1対策：攻撃意図のデフォルト実装 ★★★
-    // Distanceからプレイヤー距離を取得して攻撃判定
-    // マンハッタン距離 ≤ AttackRange → Attack、それ以外は追尾Move
-    const int32 DistanceToPlayer = Distance; // 既に取得したDistanceを使用
+    // Distance（マンハッタン距離）はパスファインディング用
+    // 攻撃範囲判定はチェビシェフ距離（8方向=斜めも含む）を使用
 
-    // ★★★ 修正 (2025-11-11): Distance=0 の場合も攻撃範囲として扱う ★★★
-    // Distance=0 は「プレイヤーと同じセル」または「隣接」を意味する（実装依存）
-    // 従来の条件 DistanceToPlayer > 0 では Distance=0 の場合に攻撃が選択されなかった
-    if (DistanceToPlayer >= 0 && DistanceToPlayer <= AttackRangeInTiles)
+    // ★★★ 修正 (2025-11-13): 攻撃範囲判定をチェビシェフ距離に変更 ★★★
+    // ローグライクでは斜めも攻撃可能（8方向）
+    int32 AttackDistanceToPlayer = Distance; // デフォルトはマンハッタン距離
+    AActor* PlayerActor = UGameplayStatics::GetPlayerPawn(World, 0);
+
+    // プレイヤーの位置を取得してチェビシェフ距離を計算
+    if (PlayerActor)
+    {
+        // プレイヤーのグリッド位置を取得
+        FIntPoint PlayerCell = FIntPoint(0, 0);
+        if (const AGridPathfindingLibrary* GridLib = CachedPathFinder.Get())
+        {
+            PlayerCell = GridLib->WorldToGrid(PlayerActor->GetActorLocation());
+        }
+
+        // チェビシェフ距離 = max(|dx|, |dy|)
+        const int32 DX = FMath::Abs(Intent.CurrentCell.X - PlayerCell.X);
+        const int32 DY = FMath::Abs(Intent.CurrentCell.Y - PlayerCell.Y);
+        AttackDistanceToPlayer = FMath::Max(DX, DY);
+
+        UE_LOG(LogTemp, Verbose, TEXT("[DecideIntent] %s: Chebyshev distance to player: %d (Manhattan: %d)"),
+            *GetNameSafe(GetOwner()), AttackDistanceToPlayer, Distance);
+    }
+
+    // チェビシェフ距離で攻撃範囲を判定
+    if (AttackDistanceToPlayer >= 0 && AttackDistanceToPlayer <= AttackRangeInTiles)
     {
         Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Attack"));
         Intent.NextCell = Intent.CurrentCell;  // 攻撃時は移動しない
@@ -207,24 +228,24 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
         // ★★★ FIX (2025-11-11): プレイヤーをターゲットとして保存 ★★★
         // GA_MeleeAttackが実行時に隣接検索するのではなく、
         // 決定時のターゲットを使用するように変更
-        if (AActor* PlayerActor = UGameplayStatics::GetPlayerPawn(World, 0))
+        if (PlayerActor)
         {
             Intent.Target = PlayerActor;
             Intent.TargetActor = PlayerActor;  // 互換性のため両方設定
 
-            UE_LOG(LogTemp, Log, TEXT("[DecideIntent] %s: ★ ATTACK intent (Distance=%d, Range=%d, Target=%s)"),
-                *GetNameSafe(GetOwner()), DistanceToPlayer, AttackRangeInTiles, *GetNameSafe(PlayerActor));
+            UE_LOG(LogTemp, Log, TEXT("[DecideIntent] %s: ★ ATTACK intent (Chebyshev=%d, Range=%d, Target=%s)"),
+                *GetNameSafe(GetOwner()), AttackDistanceToPlayer, AttackRangeInTiles, *GetNameSafe(PlayerActor));
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("[DecideIntent] %s: ★ ATTACK intent (Distance=%d, Range=%d) but Player not found!"),
-                *GetNameSafe(GetOwner()), DistanceToPlayer, AttackRangeInTiles);
+            UE_LOG(LogTemp, Warning, TEXT("[DecideIntent] %s: ★ ATTACK intent (Chebyshev=%d, Range=%d) but Player not found!"),
+                *GetNameSafe(GetOwner()), AttackDistanceToPlayer, AttackRangeInTiles);
         }
     }
     else
     {
         Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Move"));
-        
+
         // P2対策：現在セル==目的セルならWaitにダウングレード
         if (Intent.NextCell == Intent.CurrentCell)
         {
@@ -234,8 +255,8 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
         }
         else
         {
-            UE_LOG(LogTemp, Log, TEXT("[DecideIntent] %s: ★ MOVE intent (Distance=%d > Range=%d)"),
-                *GetNameSafe(GetOwner()), DistanceToPlayer, AttackRangeInTiles);
+            UE_LOG(LogTemp, Log, TEXT("[DecideIntent] %s: ★ MOVE intent (Chebyshev=%d > Range=%d)"),
+                *GetNameSafe(GetOwner()), AttackDistanceToPlayer, AttackRangeInTiles);
         }
     }
 
