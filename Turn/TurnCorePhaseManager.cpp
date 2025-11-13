@@ -25,6 +25,8 @@
 #include "AbilitySystem/LyraAbilitySystemComponent.h"
 #include "../Utility/RogueGameplayTags.h"
 #include "EngineUtils.h"
+#include "Kismet/GameplayStatics.h"
+#include "../Grid/GridPathfindingLibrary.h"
 
 
 DEFINE_LOG_CATEGORY(LogTurnCore);
@@ -118,7 +120,7 @@ void UTurnCorePhaseManager::Deinitialize()
 // Core Phase Pipeline
 // ????????????????????????????????????????????????????????????????????????
 
-void UTurnCorePhaseManager::CoreObservationPhase(const FIntPoint& PlayerCell)
+void UTurnCorePhaseManager::CoreObservationPhase(const FIntPoint& PlayerCell, const TArray<AActor*>& Enemies)
 {
     if (!DistanceField)
     {
@@ -141,8 +143,35 @@ void UTurnCorePhaseManager::CoreObservationPhase(const FIntPoint& PlayerCell)
         }
     }
 
-    DistanceField->UpdateDistanceField(PlayerCell);
-    UE_LOG(LogTemp, Log, TEXT("[TurnCore] ObservationPhase: Complete"));
+    // ★★★ CRITICAL FIX (2025-11-13): 敵の位置をPassableCellsとして追加 ★★★
+    // 理由: 敵の現在位置が占有されているため、Dijkstraが到達できない
+    // OptionalTargetsに敵の位置を渡すことで、占有セルも通過可能として扱う
+    TSet<FIntPoint> PassableCells;
+
+    // PathFinderを取得して敵の位置をグリッド座標に変換
+    if (UWorld* World = GetWorld())
+    {
+        TArray<AActor*> FoundActors;
+        UGameplayStatics::GetAllActorsOfClass(World, AGridPathfindingLibrary::StaticClass(), FoundActors);
+        if (FoundActors.Num() > 0)
+        {
+            AGridPathfindingLibrary* PathFinder = Cast<AGridPathfindingLibrary>(FoundActors[0]);
+            if (PathFinder)
+            {
+                for (AActor* Enemy : Enemies)
+                {
+                    if (IsValid(Enemy))
+                    {
+                        FIntPoint EnemyCell = PathFinder->WorldToGrid(Enemy->GetActorLocation());
+                        PassableCells.Add(EnemyCell);
+                    }
+                }
+            }
+        }
+    }
+
+    DistanceField->UpdateDistanceFieldOptimized(PlayerCell, PassableCells, 100);
+    UE_LOG(LogTemp, Log, TEXT("[TurnCore] ObservationPhase: Complete (PassableCells=%d)"), PassableCells.Num());
 }
 
 TArray<FEnemyIntent> UTurnCorePhaseManager::CoreThinkPhase(const TArray<AActor*>& Enemies)

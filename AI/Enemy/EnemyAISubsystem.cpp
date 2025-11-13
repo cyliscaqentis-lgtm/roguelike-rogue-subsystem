@@ -35,12 +35,14 @@ void UEnemyAISubsystem::BuildObservations(
 
     // ★★★ 重要：DistanceFieldを更新 ★★★
     // これがないとGetNextStepTowardsPlayerが常に現在セルを返してしまう
+    // ★★★ CRITICAL FIX (2025-11-13): 敵のリストを渡してPassableCellsとして使用 ★★★
     if (UWorld* World = GetWorld())
     {
         if (UTurnCorePhaseManager* TurnCore = World->GetSubsystem<UTurnCorePhaseManager>())
         {
-            TurnCore->CoreObservationPhase(PlayerGrid);
-            UE_LOG(LogEnemyAI, Log, TEXT("[BuildObservations] DistanceField updated with PlayerGrid=(%d,%d)"), PlayerGrid.X, PlayerGrid.Y);
+            TurnCore->CoreObservationPhase(PlayerGrid, Enemies);
+            UE_LOG(LogEnemyAI, Log, TEXT("[BuildObservations] DistanceField updated with PlayerGrid=(%d,%d) and %d enemies"),
+                PlayerGrid.X, PlayerGrid.Y, Enemies.Num());
         }
         else
         {
