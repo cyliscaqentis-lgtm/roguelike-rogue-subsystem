@@ -120,6 +120,10 @@ void UTurnCorePhaseManager::Deinitialize()
 
 void UTurnCorePhaseManager::CoreObservationPhase(const FIntPoint& PlayerCell)
 {
+    UE_LOG(LogTurnCore, Warning,
+        TEXT("[TurnCore] CoreObservationPhase received PlayerCell=(%d, %d)"),
+        PlayerCell.X, PlayerCell.Y);
+
     if (!DistanceField)
     {
         UE_LOG(LogTemp, Error, TEXT("[TurnCore] DistanceField is null"));
@@ -391,6 +395,13 @@ void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& Reso
             *EventTag.ToString(),
             *GetNameSafe(Action.SourceActor),
             Action.NextCell.X, Action.NextCell.Y);
+
+        // Dump the ASC's active tags before the event to trace blocking tags.
+        FGameplayTagContainer OwnedTags;
+        ASC->GetOwnedGameplayTags(OwnedTags);
+        UE_LOG(LogTurnCore, Log,
+            TEXT("[Execute] DEBUG: Owned Tags BEFORE HandleGameplayEvent: %s"),
+            *OwnedTags.ToStringSimple());
 
         int32 NumActivated = ASC->HandleGameplayEvent(EventTag, &EventData);
 

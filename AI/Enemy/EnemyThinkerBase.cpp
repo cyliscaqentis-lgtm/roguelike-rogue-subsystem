@@ -99,6 +99,8 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
     Intent.NextCell = DistanceField->GetNextStepTowardsPlayer(Intent.CurrentCell, GetOwner());  // ★★★ 修正 (2025-11-11): 自分自身のOriginHoldを無視（AI待機問題修正）
     int32 Distance = DistanceField->GetDistance(Intent.CurrentCell);
 
+    const int32 TileDistanceToPlayer = (Distance >= 0) ? (Distance / 10) : -1;
+
     const int32 CurrentDF = Distance;
     const FIntPoint NeighborOffsets[4] = {
         { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }
@@ -185,16 +187,16 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
     // ★★★ デバッグログ：DistanceFieldの状態を詳細に出力 ★★★
     // ★ 遠距離敵の WAIT 判定は通常動作→ Verbose に
     UE_LOG(LogTurnManager, Verbose, 
-        TEXT("[DecideIntent] %s: CurrentCell=(%d,%d), NextCell=(%d,%d), Distance=%d, AttackRange=%d"),
+        TEXT("[DecideIntent] %s: CurrentCell=(%d,%d), NextCell=(%d,%d), DF_Cost=%d, Tiles=%d, AttackRange=%d"),
         *GetNameSafe(GetOwner()), 
         Intent.CurrentCell.X, Intent.CurrentCell.Y,
         Intent.NextCell.X, Intent.NextCell.Y,
-        Distance, AttackRangeInTiles);
+        Distance, TileDistanceToPlayer, AttackRangeInTiles);
 
     // ★★★ P1対策：攻撃意図のデフォルト実装 ★★★
     // Distanceからプレイヤー距離を取得して攻撃判定
     // マンハッタン距離 ≤ AttackRange → Attack、それ以外は追尾Move
-    const int32 DistanceToPlayer = Distance; // 既に取得したDistanceを使用
+    const int32 DistanceToPlayer = TileDistanceToPlayer; // Convert Dijkstra cost to tile units for range comparisons
 
     // ★★★ 修正 (2025-11-11): Distance=0 の場合も攻撃範囲として扱う ★★★
     // Distance=0 は「プレイヤーと同じセル」または「隣接」を意味する（実装依存）
@@ -244,8 +246,72 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
 
 FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObservation& Observation)
 {
-    // ★★★ 重要：DecideIntent()を呼び出す ★★★
-    return DecideIntent();
+    FEnemyIntent Intent;
+    Intent.Owner = GetOwner();
+    Intent.Actor = GetOwner();
+    Intent.CurrentCell = Observation.GridPosition;
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[ComputeIntent] %s: World is NULL"), *GetNameSafe(GetOwner()));
+        return Intent;
+    }
+
+    const int32 DistanceToPlayer = Observation.DistanceInTiles;
+
+    if (DistanceToPlayer >= 0 && DistanceToPlayer <= AttackRangeInTiles)
+    {
+        Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Attack"));
+        Intent.NextCell = Intent.CurrentCell;
+
+        if (AActor* PlayerActor = UGameplayStatics::GetPlayerPawn(World, 0))
+        {
+            Intent.Target = PlayerActor;
+            Intent.TargetActor = PlayerActor;
+            UE_LOG(LogTemp, Log,
+                TEXT("[ComputeIntent] %s: ★ ATTACK intent (TileDistance=%d, Range=%d, Target=%s)"),
+                *GetNameSafe(GetOwner()), DistanceToPlayer, AttackRangeInTiles, *GetNameSafe(PlayerActor));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning,
+                TEXT("[ComputeIntent] %s: ★ ATTACK intent (TileDistance=%d, Range=%d) but Player not found!"),
+                *GetNameSafe(GetOwner()), DistanceToPlayer, AttackRangeInTiles);
+        }
+    }
+    else
+    {
+        Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Move"));
+
+        if (UDistanceFieldSubsystem* DistanceField = World->GetSubsystem<UDistanceFieldSubsystem>())
+        {
+            Intent.NextCell = DistanceField->GetNextStepTowardsPlayer(Intent.CurrentCell, GetOwner());
+        }
+        else
+        {
+            Intent.NextCell = Intent.CurrentCell;
+            UE_LOG(LogTemp, Warning,
+                TEXT("[ComputeIntent] %s: DistanceField not available, staying put"),
+                *GetNameSafe(GetOwner()));
+        }
+
+        if (Intent.NextCell == Intent.CurrentCell)
+        {
+            Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"));
+            UE_LOG(LogTurnManager, Log,
+                TEXT("[ComputeIntent] %s WAIT - NextCell identical to current (TileDistance=%d)"),
+                *GetNameSafe(GetOwner()), DistanceToPlayer);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Log,
+                TEXT("[ComputeIntent] %s: ★ MOVE intent (TileDistance=%d > Range=%d)"),
+                *GetNameSafe(GetOwner()), DistanceToPlayer, AttackRangeInTiles);
+        }
+    }
+
+    return Intent;
 }
 
 int32 UEnemyThinkerBase::GetMaxAttackRangeInTiles() const

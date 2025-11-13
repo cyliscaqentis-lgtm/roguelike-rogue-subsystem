@@ -4739,11 +4739,24 @@ bool AGameTurnManagerBase::DispatchResolvedMove(const FResolvedAction& Action)
         return false;
     }
 
+    // ★★★ CRITICAL FIX (2025-11-13): 予約とコミットのセル一致を検証 ★★★
+    // Gemini分析: 「予約したセル」と「コミット時に移動させるセル」が異なるバグを防止
     if (!IsMoveAuthorized(Unit, Action.NextCell))
     {
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[ResolvedMove] Move to (%d,%d) not authorized for %s"),
-            Action.NextCell.X, Action.NextCell.Y, *GetNameSafe(Unit));
+        UE_LOG(LogTurnManager, Error,
+            TEXT("[ResolvedMove] ✖ AUTHORIZATION FAILED: %s tried to move to (%d,%d) but reservation is for a different cell!"),
+            *GetNameSafe(Unit), Action.NextCell.X, Action.NextCell.Y);
+        
+        // 予約されているセルをログ出力
+        TWeakObjectPtr<AActor> ActorKey(Unit);
+        if (const FIntPoint* ReservedCell = PendingMoveReservations.Find(ActorKey))
+        {
+            UE_LOG(LogTurnManager, Error,
+                TEXT("[ResolvedMove] Reserved cell for %s is (%d,%d), but Action.NextCell is (%d,%d) - MISMATCH!"),
+                *GetNameSafe(Unit), ReservedCell->X, ReservedCell->Y, Action.NextCell.X, Action.NextCell.Y);
+        }
+        
+        ReleaseMoveReservation(Unit);
         return false;
     }
 
@@ -4758,6 +4771,14 @@ bool AGameTurnManagerBase::DispatchResolvedMove(const FResolvedAction& Action)
     const bool bIsPlayerUnit = (Unit->Team == 0);
     if (bIsPlayerUnit)
     {
+        if (bPlayerMoveInProgress)
+        {
+            UE_LOG(LogTurnManager, Log,
+                TEXT("[DispatchResolvedMove] Player move already in progress, skipping duplicate GA trigger for %s"),
+                *GetNameSafe(Unit));
+            return true;
+        }
+
         if (TriggerPlayerMoveAbility(Action, Unit))
         {
             return true;

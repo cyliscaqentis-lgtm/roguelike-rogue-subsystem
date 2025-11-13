@@ -372,11 +372,22 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
         FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(MeleeAttackEffect, 1.0f, ContextHandle);
         if (SpecHandle.IsValid())
         {
-            SpecHandle.Data->SetSetByCallerMagnitude(RogueGameplayTags::SetByCaller_Damage, BaseDamage);
+            // ★★★ CRITICAL FIX (2025-11-13): ダメージ0防止のフェイルセーフ ★★★
+            // BaseDamageが0以下の場合、デフォルト値（28.0f）を使用
+            const float FinalDamage = (BaseDamage > 0.0f) ? BaseDamage : 28.0f;
+            
+            if (BaseDamage <= 0.0f)
+            {
+                UE_LOG(LogTemp, Error,
+                    TEXT("[GA_MeleeAttack] WARNING: BaseDamage=%.2f is invalid! Using fallback damage=%.2f"),
+                    BaseDamage, FinalDamage);
+            }
+            
+            SpecHandle.Data->SetSetByCallerMagnitude(RogueGameplayTags::SetByCaller_Damage, FinalDamage);
 
             UE_LOG(LogTemp, Warning,
-                TEXT("[GA_MeleeAttack] Applying GameplayEffect: %s with SetByCaller damage=%.2f"),
-                *MeleeAttackEffect->GetName(), BaseDamage);
+                TEXT("[GA_MeleeAttack] Applying GameplayEffect: %s with SetByCaller damage=%.2f (BaseDamage=%.2f)"),
+                *MeleeAttackEffect->GetName(), FinalDamage, BaseDamage);
 
             if (UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Target))
             {
