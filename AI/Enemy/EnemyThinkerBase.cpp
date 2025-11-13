@@ -265,8 +265,53 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
 
 FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObservation& Observation)
 {
-    // ★★★ 重要：DecideIntent()を呼び出す ★★★
-    return DecideIntent();
+    // ★★★ CRITICAL FIX (2025-11-13): Observationから正しいプレイヤー位置を使用 ★★★
+    // DecideIntentはPlayerActor->GetActorLocation()を使用するため、
+    // 移動アニメーション前の古い位置を取得してしまう問題があった。
+    // Observationには既に更新されたPlayerGridPositionが含まれている。
+
+    FEnemyIntent Intent = DecideIntent();
+
+    // ★★★ 攻撃範囲判定をObservationのPlayerGridPositionで再計算 ★★★
+    if (Observation.PlayerGridPosition != FIntPoint::ZeroValue)
+    {
+        const int32 DX = FMath::Abs(Intent.CurrentCell.X - Observation.PlayerGridPosition.X);
+        const int32 DY = FMath::Abs(Intent.CurrentCell.Y - Observation.PlayerGridPosition.Y);
+        const int32 ChebyshevDistance = FMath::Max(DX, DY);
+
+        // 攻撃範囲内かチェック
+        if (ChebyshevDistance >= 0 && ChebyshevDistance <= AttackRangeInTiles)
+        {
+            // 攻撃に変更
+            Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Attack"));
+            Intent.NextCell = Intent.CurrentCell;  // 攻撃時は移動しない
+
+            // ターゲットを設定
+            if (UWorld* World = GetWorld())
+            {
+                if (AActor* PlayerActor = UGameplayStatics::GetPlayerPawn(World, 0))
+                {
+                    Intent.Target = PlayerActor;
+                    Intent.TargetActor = PlayerActor;
+
+                    UE_LOG(LogTemp, Log,
+                        TEXT("[ComputeIntent] %s: ★ ATTACK intent (Chebyshev=%d, Range=%d, ObservationPlayerPos=(%d,%d))"),
+                        *GetNameSafe(GetOwner()), ChebyshevDistance, AttackRangeInTiles,
+                        Observation.PlayerGridPosition.X, Observation.PlayerGridPosition.Y);
+                }
+            }
+        }
+        else if (ChebyshevDistance > AttackRangeInTiles)
+        {
+            // 移動を確認（DecideIntentで既に設定されているはず）
+            UE_LOG(LogTemp, Verbose,
+                TEXT("[ComputeIntent] %s: MOVE intent confirmed (Chebyshev=%d > Range=%d, ObservationPlayerPos=(%d,%d))"),
+                *GetNameSafe(GetOwner()), ChebyshevDistance, AttackRangeInTiles,
+                Observation.PlayerGridPosition.X, Observation.PlayerGridPosition.Y);
+        }
+    }
+
+    return Intent;
 }
 
 int32 UEnemyThinkerBase::GetMaxAttackRangeInTiles() const
