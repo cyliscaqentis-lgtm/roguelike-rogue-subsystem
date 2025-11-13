@@ -2685,9 +2685,11 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
 
         // ★★★ プレイヤーの移動先を計算 ★★★
         FIntPoint PlayerDestination = FIntPoint(0, 0);
+        FIntPoint CurrentCell = FIntPoint(0, 0);  // ★★★ スコープ外で宣言
+
         if (CachedPathFinder.IsValid() && PlayerPawn)
         {
-            FIntPoint CurrentCell = CachedPathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
+            CurrentCell = CachedPathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
             FIntPoint Direction = FIntPoint(
                 FMath::RoundToInt(Command.Direction.X),
                 FMath::RoundToInt(Command.Direction.Y)
