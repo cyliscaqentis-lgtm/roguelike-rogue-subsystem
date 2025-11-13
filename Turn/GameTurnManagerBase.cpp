@@ -2717,14 +2717,30 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
                 {
                     FIntPoint EnemyCell = CachedPathFinder->WorldToGrid(Enemy->GetActorLocation());
                     PassableCells.Add(EnemyCell);
+                    UE_LOG(LogTurnManager, Warning,
+                        TEXT("[Turn %d] PassableCells: Added enemy %s at (%d,%d)"),
+                        CurrentTurnIndex, *Enemy->GetName(), EnemyCell.X, EnemyCell.Y);
                 }
             }
 
             DF->UpdateDistanceFieldOptimized(PlayerDestination, PassableCells, 100);
 
+            // ★★★ DEBUG: PassableCellsの内容を詳細ログ出力 ★★★
             UE_LOG(LogTurnManager, Warning,
                 TEXT("[Turn %d] DistanceField updated with player destination (%d,%d), %d passable cells (player + enemies)"),
                 CurrentTurnIndex, PlayerDestination.X, PlayerDestination.Y, PassableCells.Num());
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[Turn %d] PassableCells list: PlayerOldPos=(%d,%d)"),
+                CurrentTurnIndex, CurrentCell.X, CurrentCell.Y);
+            for (const FIntPoint& Cell : PassableCells)
+            {
+                if (Cell != CurrentCell)
+                {
+                    UE_LOG(LogTurnManager, Warning,
+                        TEXT("[Turn %d] PassableCells: (%d,%d)"),
+                        CurrentTurnIndex, Cell.X, Cell.Y);
+                }
+            }
         }
 
         // ★★★ インテント再生成（プレイヤー移動先で） ★★★
