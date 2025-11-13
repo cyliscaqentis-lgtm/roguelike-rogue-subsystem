@@ -70,10 +70,6 @@ protected:
     /** GameplayEffectを適用してダメージを与える */
     void ApplyDamageToTarget(AActor* Target);
 
-    /** 全クライアントでターゲット方向を向く（Multicast RPC） */
-    UFUNCTION(NetMulticast, Reliable)
-    void Multicast_RotateToTarget(AActor* Avatar, FRotator NewRotation);
-
     /** モンタージュ完了コールバック */
     UFUNCTION()
     void OnMontageCompleted();

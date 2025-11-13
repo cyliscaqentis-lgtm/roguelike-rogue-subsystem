@@ -76,6 +76,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Unit|Detection")
     TArray<AUnitBase*> GetAdjacentPlayers() const;
 
+    // ===== ネットワーク同期 =====
+    /** 全クライアントでユニットの向きを更新（攻撃時など） */
+    UFUNCTION(NetMulticast, Reliable)
+    void Multicast_SetRotation(FRotator NewRotation);
+
     // ===== UnitManager統合用API =====
     /** StatBlockから各ステータス変数へコピー */
     UFUNCTION(BlueprintCallable, Category = "Unit|Stats")

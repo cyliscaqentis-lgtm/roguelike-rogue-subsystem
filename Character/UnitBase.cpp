@@ -814,3 +814,14 @@ void AUnitBase::SetStatVars()
 
     UE_LOG(LogUnitBase, Log, TEXT("SetStatVars: Team=%d, MovementRange=%d"), Team, CurrentMovementRange);
 }
+
+//==============================================================================
+// ネットワーク同期
+//==============================================================================
+
+void AUnitBase::Multicast_SetRotation_Implementation(FRotator NewRotation)
+{
+    SetActorRotation(NewRotation);
+    UE_LOG(LogUnitBase, Verbose, TEXT("[UnitBase] Multicast_SetRotation: %s rotated to Yaw=%.1f"),
+        *GetName(), NewRotation.Yaw);
+}
