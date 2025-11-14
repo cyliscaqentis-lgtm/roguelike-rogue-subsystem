@@ -197,7 +197,9 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& Playe
                 const bool bIsTargetCell = PendingTargets.Contains(Next);
 
                 // ☁E�E☁EPathFinderの統吁EPI IsCellWalkable を使用 ☁E�E☁E
-                if (!bIsTargetCell && Next != PlayerCell && !GridPathfinding->IsCellWalkable(Next))
+                // ★★★ FIX (INC-2025-00002): Occupancy を無視し、地形コストのみで Dijkstra を構築する ★★★
+                // IsCellWalkable() は他のユニットの占有を壁とみなすが、IsCellWalkableIgnoringActor(Next, nullptr) は地形のみを見る
+                if (!bIsTargetCell && Next != PlayerCell && !GridPathfinding->IsCellWalkableIgnoringActor(Next, nullptr))
                 {
                     return;
                 }
