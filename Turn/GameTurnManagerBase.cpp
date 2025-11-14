@@ -3448,6 +3448,8 @@ void AGameTurnManagerBase::ExecuteMovePhase(bool bSkipAttackCheck)
     }
 
     //==========================================================================
+    // FIX (INC-2025-00003): capture attack intent before regen
+    const bool bHasAttack = HasAnyAttackIntent();
     // ★★★ ATTACK PRIORITY (2025-11-12): 攻撃インテントがあれば攻撃フェーズへ ★★★
     // 理由: プレイヤー移動後の再計画で攻撃に昇格する可能性があるため、
     //       Execute直前に再チェックして攻撃優先で処理
@@ -3455,8 +3457,7 @@ void AGameTurnManagerBase::ExecuteMovePhase(bool bSkipAttackCheck)
     //==========================================================================
     if (!bSkipAttackCheck)
     {
-        const bool bHasAnyAttack = HasAnyAttackIntent();
-        if (bHasAnyAttack)
+        if (bHasAttack)
         {
             UE_LOG(LogTurnManager, Warning,
                 TEXT("[Turn %d] ★ ATTACK INTENT detected (%d intents) - Executing attack phase instead of move phase"),
