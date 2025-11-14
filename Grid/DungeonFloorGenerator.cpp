@@ -321,7 +321,7 @@ void ADungeonFloorGenerator::ConnectCentersWithMST(const TArray<FIntPoint>& Cent
             for (int32 vIdx = 0; vIdx < unused.Num(); ++vIdx)
             {
                 const int32 v = unused[vIdx];
-                // ☁E�E☁E最適匁E GridUtils使用�E�重褁E��ード削除 2025-11-09�E�E
+                // ☁E�E☁E最適匁E GridUtils使用�E�重褁E��ード削除 2025-11-09�E�E
                 const int32 d = FGridUtils::ManhattanDistance(Centers[u], Centers[v]);
                 if (d < bestDist) { bestDist = d; bestU = u; bestV = v; bestIdx = vIdx; }
             }

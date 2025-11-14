@@ -6,11 +6,11 @@
 #include "AI/Ally/AllyThinkerBase.h"
 #include "Turn/TurnSystemTypes.h"
 
-// ƒƒOƒJƒeƒSƒŠ’è‹`
+// ï¿½ï¿½ï¿½Oï¿½Jï¿½eï¿½Sï¿½ï¿½ï¿½ï¿½`
 DEFINE_LOG_CATEGORY(LogAllyTurnData);
 
 //------------------------------------------------------------------------------
-// ‰Šú‰»
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 //------------------------------------------------------------------------------
 
 void UAllyTurnDataSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -35,7 +35,7 @@ void UAllyTurnDataSubsystem::Deinitialize()
 }
 
 //------------------------------------------------------------------------------
-// “à•”ƒwƒ‹ƒp[
+// ï¿½ï¿½ï¿½ï¿½ï¿½wï¿½ï¿½pï¿½[
 //------------------------------------------------------------------------------
 
 int32 UAllyTurnDataSubsystem::FindAllyIndex(AActor* AllyActor) const
@@ -57,7 +57,7 @@ int32 UAllyTurnDataSubsystem::FindAllyIndex(AActor* AllyActor) const
 }
 
 //------------------------------------------------------------------------------
-// “o˜^ŠÇ—
+// ï¿½oï¿½^ï¿½Ç—ï¿½
 //------------------------------------------------------------------------------
 
 void UAllyTurnDataSubsystem::RegisterAlly(AActor* AllyActor, EAllyCommand InitialCommand)
@@ -106,7 +106,7 @@ void UAllyTurnDataSubsystem::UnregisterAlly(AActor* AllyActor)
 }
 
 //------------------------------------------------------------------------------
-// ƒRƒ}ƒ“ƒh‘€ì
+// ï¿½Rï¿½}ï¿½ï¿½ï¿½hï¿½ï¿½ï¿½ï¿½
 //------------------------------------------------------------------------------
 
 void UAllyTurnDataSubsystem::SetAllyCommand(AActor* AllyActor, EAllyCommand Command)
@@ -165,14 +165,14 @@ void UAllyTurnDataSubsystem::SetAllAllyCommands(EAllyCommand Command)
 }
 
 //------------------------------------------------------------------------------
-// ˆÓ}\’z
+// ï¿½Ó}ï¿½\ï¿½z
 //------------------------------------------------------------------------------
 
 void UAllyTurnDataSubsystem::BuildAllAllyIntents_Implementation(const FTurnContext& Context)
 {
     PreBuildIntents(Context);
 
-    // “¯ŠúiƒTƒCƒY‘µ‚¦j
+    // ï¿½ï¿½ï¿½ï¿½ï¿½iï¿½Tï¿½Cï¿½Yï¿½ï¿½ï¿½ï¿½ï¿½j
     if (Intents.Num() != Allies.Num())
     {
         Intents.SetNum(Allies.Num());
@@ -187,7 +187,7 @@ void UAllyTurnDataSubsystem::BuildAllAllyIntents_Implementation(const FTurnConte
             continue;
         }
 
-        // ƒvƒŒƒCƒ„[w¦‚ª‚ ‚éê‡‚ÍƒXƒLƒbƒv
+        // ï¿½vï¿½ï¿½ï¿½Cï¿½ï¿½ï¿½[ï¿½wï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ê‡ï¿½ÍƒXï¿½Lï¿½bï¿½v
         if (Intents[i].bIsPlayerDirected)
         {
             UE_LOG(LogAllyTurnData, Verbose, TEXT("[AllyTurnData] BuildAllAllyIntents: %s (Player Directed)"),
@@ -207,7 +207,7 @@ void UAllyTurnDataSubsystem::BuildAllAllyIntents_Implementation(const FTurnConte
         }
         else
         {
-            Out.ActionType = FGameplayTag(); // Šù’è: ‰½‚à‚µ‚È‚¢
+            Out.ActionType = FGameplayTag(); // ï¿½ï¿½ï¿½ï¿½: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È‚ï¿½
             Out.Score = 0.0f;
 
             UE_LOG(LogAllyTurnData, Warning, TEXT("[AllyTurnData] BuildAllAllyIntents: %s has no AllyThinkerBase"),

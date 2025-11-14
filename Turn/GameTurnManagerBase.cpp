@@ -113,6 +113,16 @@ void AGameTurnManagerBase::InitializeTurnSystem()
 
     UE_LOG(LogTurnManager, Log, TEXT("InitializeTurnSystem: Starting..."));
 
+    if (UWorld* World = GetWorld())
+    {
+        if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
+        {
+            Barrier->BeginTurn(CurrentTurnIndex);
+            UE_LOG(LogTurnManager, Log,
+                TEXT("[Turn %d] ExecuteAttacks: Barrier::BeginTurn(%d) called"),
+                CurrentTurnIndex, CurrentTurnIndex);
+        }
+    }
     //==========================================================================
     // 笘・・笘・譁ｰ隕・ Subsystem蛻晄悄蛹厄ｼ・025-11-09繝ｪ繝輔ぃ繧ｯ繧ｿ繝ｪ繝ｳ繧ｰ・・笘・・笘・
     //==========================================================================
@@ -2300,6 +2310,7 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
         //==========================================================================
         // (2) TurnId讀懆ｨｼ縲らｭ我ｾ｡蛹・
         //==========================================================================
+    // ★★★ FIX (2025-11-14): ignore stale OnAttacksFinished notifications from previous turns ★★★
         if (Command.TurnId != CurrentTurnIndex && Command.TurnId != INDEX_NONE)
         {
             UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Command rejected - TurnId mismatch or invalid (%d != %d)"),
@@ -3256,6 +3267,17 @@ void AGameTurnManagerBase::ExecuteAttacks()
     // 笘・・笘・FIX (2025-11-12): 謾ｻ謦・ヵ繧ｧ繝ｼ繧ｺ荳ｭ縺ｯ蜈･蜉帙ご繝ｼ繝医ｒ髢峨§繧・笘・・笘・
     // 繝励Ξ繧､繝､繝ｼ遘ｻ蜍輔→謾ｻ謦・・遶ｶ蜷医ｒ髦ｲ縺舌◆繧√∵判謦・ｮ溯｡御ｸｭ縺ｯ蜈･蜉帙ｒ蜿励￠莉倥￠縺ｪ縺・・
     // 蜈･蜉帙・ OnAttacksFinished 縺ｧ蜀榊ｺｦ髢九￥縲・
+    if (UWorld* World = GetWorld())
+    {
+        if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
+        {
+            Barrier->BeginTurn(CurrentTurnIndex);
+            UE_LOG(LogTurnManager, Log,
+                TEXT("[Turn %d] ExecuteAttacks: Barrier::BeginTurn(%d) called"),
+                CurrentTurnIndex, CurrentTurnIndex);
+        }
+    }
+
     UE_LOG(LogTurnManager, Warning,
         TEXT("[Turn %d] ExecuteAttacks: Closing input gate (attack phase starts)"), CurrentTurnIndex);
     ApplyWaitInputGate(false);  // Close input gate
@@ -3305,6 +3327,7 @@ void AGameTurnManagerBase::OnAttacksFinished(int32 TurnId)
     // 謾ｻ謦・い繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ螳御ｺ・′谺｡縺ｮ繧ｿ繝ｼ繝ｳ縺ｧ騾夂衍縺輔ｌ繧九％縺ｨ縺後≠繧九◆繧√・
     // TurnId mismatch縺ｧ繧ｹ繧ｭ繝・・縺吶ｋ縺ｨ縲，onvertAttacksToWait()縺悟他縺ｰ繧後★縲・
     // 謾ｻ謦・＠縺滓雰縺檎ｧｻ蜍輔＠縺ｦ縺励∪縺・撫鬘後ｒ菫ｮ豁｣
+    // ★★★ FIX (2025-11-14): ignore stale OnAttacksFinished notifications from previous turns ★★★
     if (TurnId != CurrentTurnIndex)
     {
         // CodeRevision: INC-2025-00004-R1 (Stale OnAttacksFinished notifications are ignored) (2025-11-14 22:50)

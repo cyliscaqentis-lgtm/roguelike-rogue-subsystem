@@ -1,14 +1,14 @@
-﻿// Copyright Epic Games, Inc. All Rights Reserved.
+// Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "DistanceFieldSubsystem.h"
 #include "../Grid/GridOccupancySubsystem.h"
 #include "../Grid/GridPathfindingLibrary.h"
-#include "../ProjectDiagnostics.h"  // ☁E�E☁EDIAG_LOG用 ☁E�E☁E
+#include "../ProjectDiagnostics.h"  // ☁E E☁EDIAG_LOG用 ☁E E☁E
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
 
-// ☁E�E☁ECVar定義 ☁E�E☁E
-static int32 GTS_DF_MaxCells = 300000;  // ☁E�E☁Edefault拡張�E�E4x64以上�Eマップで余裕を持たせる ☁E�E☁E
+// ☁E E☁ECVar定義 ☁E E☁E
+static int32 GTS_DF_MaxCells = 300000;  // ☁E E☁Edefault拡張 E E4x64以上 Eマップで余裕を持たせる ☁E E☁E
 static FAutoConsoleVariableRef CVarTS_DF_MaxCells(
     TEXT("ts.DistanceField.MaxCells"),
     GTS_DF_MaxCells,
@@ -28,7 +28,7 @@ void UDistanceFieldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
     
-    // ☁E�E☁EPathFinderをキャチE��ュ�E��E期化時に存在しなぁE��合�E遁E��取得！E☁E�E☁E
+    // ☁E E☁EPathFinderをキャチE  ュ E  E期化時に存在しなぁE  合 E遁E  取得！E☁E E☁E
     TArray<AActor*> FoundActors;
     UGameplayStatics::GetAllActorsOfClass(GetWorld(), AGridPathfindingLibrary::StaticClass(), FoundActors);
     if (FoundActors.Num() > 0)
@@ -36,7 +36,7 @@ void UDistanceFieldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
         CachedPathFinder = Cast<AGridPathfindingLibrary>(FoundActors[0]);
         UE_LOG(LogTemp, Log, TEXT("[DistanceField] PathFinder cached: %s"), *CachedPathFinder->GetName());
     }
-    // ☁E�E☁E警告削除�E��E期化頁E��によりPathFinderがまだ存在しなぁE��合があるが、GetPathFinder()で遁E��取得される ☁E�E☁E
+    // ☁E E☁E警告削除 E  E期化頁E  によりPathFinderがまだ存在しなぁE  合があるが、GetPathFinder()で遁E  取得される ☁E E☁E
     
     UE_LOG(LogTemp, Log, TEXT("[DistanceField] Initialized (PathFinder will be lazily loaded if needed)"));
 }
@@ -49,15 +49,15 @@ void UDistanceFieldSubsystem::Deinitialize()
     Super::Deinitialize();
 }
 
-// ☁E�E☁EBlueprint用�E�シンプル牁E☁E�E☁E
+// ☁E E☁EBlueprint用 E シンプル牁E☁E E☁E
 void UDistanceFieldSubsystem::UpdateDistanceField(const FIntPoint& PlayerCell)
 {
-    // ☁E�E☁EBoundsMarginめE00に拡大�E�遠距離の敵もカバ�E ☁E�E☁E
-    // マップ�E域（紁E00x100タイル�E�を想宁E
+    // ☁E E☁EBoundsMarginめE00に拡大 E 遠距離の敵もカバ E ☁E E☁E
+    // マップ E域（紁E00x100タイル E を想宁E
     UpdateDistanceFieldInternal(PlayerCell, TSet<FIntPoint>(), 100);
 }
 
-// ☁E�E☁EC++用�E�最適化版 ☁E�E☁E
+// ☁E E☁EC++用 E 最適化版 ☁E E☁E
 void UDistanceFieldSubsystem::UpdateDistanceFieldOptimized(const FIntPoint& PlayerCell,
     const TSet<FIntPoint>& OptionalTargets,
     int32 BoundsMargin)
@@ -65,7 +65,7 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldOptimized(const FIntPoint& Play
     UpdateDistanceFieldInternal(PlayerCell, OptionalTargets, BoundsMargin);
 }
 
-// ☁E�E☁E優先度キュー用ヘルチE☁E�E☁E
+// ☁E E☁E優先度キュー用ヘルチE☁E E☁E
 struct FOpenNode
 {
     FIntPoint Cell;
@@ -80,7 +80,7 @@ struct FOpenNodeLess
     }
 };
 
-// ☁E�E☁E冁E��実裁E���E通ロジチE�� ☁E�E☁E
+// ☁E E☁E冁E  実裁E   E通ロジチE   ☁E E☁E
 void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& PlayerCell,
     const TSet<FIntPoint>& OptionalTargets,
     int32 BoundsMargin)
@@ -89,11 +89,11 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& Playe
     NextStepMap.Empty();
     PlayerPosition = PlayerCell;
     
-    // ☁E�E☁EBoundsを�E期化�E�絶対座標系�E�E☁E�E☁E
+    // ☁E E☁EBoundsを E期化 E 絶対座標系 E E☁E E☁E
     Bounds.Min = PlayerCell - FIntPoint(BoundsMargin, BoundsMargin);
     Bounds.Max = PlayerCell + FIntPoint(BoundsMargin, BoundsMargin);
 
-    // 1. バウンチE��ング
+    // 1. バウンチE  ング
     FIntPoint Min = PlayerCell;
     FIntPoint Max = PlayerCell;
 
@@ -120,7 +120,7 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& Playe
     const int32 MaxCells = GTS_DF_MaxCells;
     const bool bDiagonal = !!GTS_DF_AllowDiag;
 
-    // ☁E�E☁EキャチE��ュからPathFinderを取征E☁E�E☁E
+    // ☁E E☁EキャチE  ュからPathFinderを取征E☁E E☁E
     const AGridPathfindingLibrary* GridPathfinding = GetPathFinder();
     if (!GridPathfinding)
     {
@@ -134,7 +134,7 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& Playe
     Open.HeapPush(FOpenNode{ PlayerCell, 0 }, FOpenNodeLess{});
     DistanceMap.Add(PlayerCell, 0);
 
-    // ☁E�E☁ESparky修正: Closed Set追加で重褁E�E琁E��防ぁE☁E�E☁E
+    // ☁E E☁ESparky修正: Closed Set追加で重褁E E琁E  防ぁE☁E E☁E
     TSet<FIntPoint> ClosedSet;
 
     static const FIntPoint StraightDirs[] = { {1, 0}, {-1, 0}, {0, 1}, {0, -1} };
@@ -148,10 +148,10 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& Playe
         FOpenNode Current;
         Open.HeapPop(Current, FOpenNodeLess{});
 
-        // ☁E�E☁ESparky修正: 早期終亁E- 既に処琁E��みのセルはスキチE�E ☁E�E☁E
+        // ☁E E☁ESparky修正: 早期終亁E- 既に処琁E  みのセルはスキチE E ☁E E☁E
         if (ClosedSet.Contains(Current.Cell))
         {
-            continue;  // 重褁E��ントリをスキチE�E�E��E琁E��み�E�E
+            continue;  // 重褁E  ントリをスキチE E E  E琁E  み E E
         }
 
         if (++ProcessedCells > MaxCells)
@@ -165,7 +165,7 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& Playe
             continue;
         }
 
-        // ☁E�E☁ESparky修正: こ�Eセルを�E琁E��みとしてマ�Eク ☁E�E☁E
+        // ☁E E☁ESparky修正: こ Eセルを E琁E  みとしてマ Eク ☁E E☁E
         ClosedSet.Add(Current.Cell);
 
         if (RemainingTargets > 0 && PendingTargets.Remove(Current.Cell) > 0)
@@ -188,7 +188,7 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& Playe
                     return;
                 }
 
-                // ☁E�E☁ESparky最適匁E 既に処琁E��みのセルはスキチE�E ☁E�E☁E
+                // ☁E E☁ESparky最適匁E 既に処琁E  みのセルはスキチE E ☁E E☁E
                 if (ClosedSet.Contains(Next))
                 {
                     return;  // 既に最短距離確定済み
@@ -196,7 +196,7 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& Playe
 
                 const bool bIsTargetCell = PendingTargets.Contains(Next);
 
-                // ☁E�E☁EPathFinderの統吁EPI IsCellWalkable を使用 ☁E�E☁E
+                // ☁E E☁EPathFinderの統吁EPI IsCellWalkable を使用 ☁E E☁E
                 // ★★★ FIX (INC-2025-00002): Occupancy を無視し、地形コストのみで Dijkstra を構築する ★★★
                 // IsCellWalkable() は他のユニットの占有を壁とみなすが、IsCellWalkableIgnoringActor(Next, nullptr) は地形のみを見る
                 if (!bIsTargetCell && Next != PlayerCell && !GridPathfinding->IsCellWalkableIgnoringActor(Next, nullptr))
@@ -239,7 +239,7 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& Playe
     UE_LOG(LogTemp, Log, TEXT("[DistanceField] Dijkstra complete: PlayerCell=(%d,%d), Cells=%d, Processed=%d, TargetsLeft=%d"),
         PlayerCell.X, PlayerCell.Y, DistanceMap.Num(), ProcessedCells, RemainingTargets);
 
-    // ☁E敵移動AI診断�E�未到達敵の詳細ログ
+    // ☁E敵移動AI診断 E 未到達敵の詳細ログ
     UE_LOG(LogTemp, Warning, TEXT("[DistanceField] BuildComplete: TotalCells=%d, ProcessedCells=%d, UnreachedEnemies=%d"),
         DistanceMap.Num(), ProcessedCells, RemainingTargets);
 
@@ -260,7 +260,7 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& Playe
             }
         }
         
-        // 個別敵チェチE���E�簡易版�E�E
+        // 個別敵チェチE   E 簡易版 E E
         if (UWorld* World = GetWorld())
         {
             int32 UnreachedCount = 0;
@@ -269,7 +269,7 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& Playe
                 AActor* Actor = *It;
                 if (Actor && Actor->ActorHasTag(TEXT("Enemy")))
                 {
-                    // 簡易チェチE���E�敵が存在することをログ出劁E
+                    // 簡易チェチE   E 敵が存在することをログ出劁E
                     UE_LOG(LogTemp, Warning, TEXT("[DistanceField] Found enemy: %s"), *GetNameSafe(Actor));
                     UnreachedCount++;
                 }
@@ -287,11 +287,11 @@ int32 UDistanceFieldSubsystem::GetDistance(const FIntPoint& Cell) const
 
 FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(const FIntPoint& FromCell, AActor* IgnoreActor) const
 {
-    // ☁E�E☁E絶対座標APIで距離チェチE�� + EnsureCoverage対忁E☁E�E☁E
+    // ☁E E☁E絶対座標APIで距離チェチE   + EnsureCoverage対忁E☁E E☁E
     int32 d0 = GetDistanceAbs(FromCell);
     if (d0 < 0) {
-        // ☁E�E☁EEnsureCoverageは重いので最小限に ☁E�E☁E
-        // const_castで一時的にEnsureCoverageを呼ぶ�E�EonstメソチE��制紁E��避�E�E
+        // ☁E E☁EEnsureCoverageは重いので最小限に ☁E E☁E
+        // const_castで一時的にEnsureCoverageを呼ぶ E EonstメソチE  制紁E  避 E E
         // const_cast<UDistanceFieldSubsystem*>(this)->EnsureCoverage(FromCell);
         // d0 = GetDistanceAbs(FromCell);
         // if (d0 < 0) {
@@ -300,7 +300,7 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(const FIntPoint& Fro
         //     return FromCell;  // 現在地に留まめE
         // }
 
-        // ☁E�E☁E暫定：距離場外�E場合�Eそ�E場征E��（軽量！E☁E�E☁E
+        // ☁E E☁E暫定：距離場外 E場合 Eそ E場征E  （軽量！E☁E E☁E
         DIAG_LOG(Warning, TEXT("[GetNextStep] Enemy out of bounds (%d,%d) - staying put"),
                  FromCell.X, FromCell.Y);
         return FromCell;
@@ -308,18 +308,18 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(const FIntPoint& Fro
 
     int32 CurrentDist = d0;
 
-    // プレイヤー位置の場合�Eそ�Eまま返す
+    // プレイヤー位置の場合 Eそ Eまま返す
     if (CurrentDist == 0)
     {
         DIAG_LOG(Log, TEXT("[GetNextStep] FromCell=(%d,%d) ALREADY AT PLAYER"), FromCell.X, FromCell.Y);
         return FromCell;
     }
 
-    // ☁E�E☁E近傍選定：絶対座標で距離を取征E☁E�E☁E
+    // ☁E E☁E近傍選定：絶対座標で距離を取征E☁E E☁E
     FIntPoint Best = FromCell;
     int32 bestDist = CurrentDist;
 
-    // 4方向近傍をチェチE��
+    // 4方向近傍をチェチE  
 
     struct FNeighborDef
     {
@@ -352,7 +352,7 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(const FIntPoint& Fro
     if (Best == FromCell) 
     {
         DIAG_LOG(Log, TEXT("[GetNextStep] STAY at (%d,%d) - no better neighbor found"), FromCell.X, FromCell.Y);
-        return FromCell;  // 攻撁E��E��など
+        return FromCell;  // 攻撁E  E  など
     }
     
     DIAG_LOG(Log, TEXT("[GetNextStep] FromCell=(%d,%d) -> NextCell=(%d,%d) (Dist: %d ↁE%d)"), 
@@ -363,7 +363,7 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(const FIntPoint& Fro
 
 bool UDistanceFieldSubsystem::IsWalkable(const FIntPoint& Cell, AActor* IgnoreActor) const
 {
-    // ☁E�E☁EキャチE��ュからPathFinderを取征E☁E�E☁E
+    // ☁E E☁EキャチE  ュからPathFinderを取征E☁E E☁E
     const AGridPathfindingLibrary* GridPathfinding = GetPathFinder();
     if (!GridPathfinding)
     {
@@ -371,7 +371,7 @@ bool UDistanceFieldSubsystem::IsWalkable(const FIntPoint& Cell, AActor* IgnoreAc
         return false;
     }
 
-    // ☁E�E☁E修正 (2025-11-11): IgnoreActorを老E�Eした歩行可能性判定！EI征E��問題修正�E�E☁E�E☁E
+    // ☁E E☁E修正 (2025-11-11): IgnoreActorを老E Eした歩行可能性判定！EI征E  問題修正 E E☁E E☁E
     if (IgnoreActor)
     {
         return GridPathfinding->IsCellWalkableIgnoringActor(Cell, IgnoreActor);
@@ -388,14 +388,14 @@ bool UDistanceFieldSubsystem::CanMoveDiagonal(const FIntPoint& From, const FIntP
     const FIntPoint Side1 = From + FIntPoint(Delta.X, 0);  // 横の肩
     const FIntPoint Side2 = From + FIntPoint(0, Delta.Y);  // 縦の肩
 
-    // ☁E�E☁EFIX (2025-11-11): 正しい角抜け禁止ルール ☁E�E☁E
-    // 角をすり抜けて移動することを防ぐため、両方の肩が通行可能な場合�Eみ許可
-    // 牁E��の肩でも壁があれば、その斜め移動�E禁止
-    return IsWalkable(Side1) && IsWalkable(Side2);  // 両方が通行可能な場合�Eみ許可
+    // ☁E E☁EFIX (2025-11-11): 正しい角抜け禁止ルール ☁E E☁E
+    // 角をすり抜けて移動することを防ぐため、両方の肩が通行可能な場合 Eみ許可
+    // 牁E  の肩でも壁があれば、その斜め移動 E禁止
+    return IsWalkable(Side1) && IsWalkable(Side2);  // 両方が通行可能な場合 Eみ許可
 }
 
 //------------------------------------------------------------------------------
-// ☁E�E☁E距離場座標系修正�E�絶対座標API ☁E�E☁E
+// ☁E E☁E距離場座標系修正 E 絶対座標API ☁E E☁E
 //------------------------------------------------------------------------------
 
 int32 UDistanceFieldSubsystem::GetDistanceAbs(const FIntPoint& Abs) const
@@ -404,16 +404,16 @@ int32 UDistanceFieldSubsystem::GetDistanceAbs(const FIntPoint& Abs) const
     const int32 lx = Abs.X - Bounds.Min.X;
     const int32 ly = Abs.Y - Bounds.Min.Y;
     
-    // DistanceMapは絶対座標で保存されてぁE��ので直接参�E
+    // DistanceMapは絶対座標で保存されてぁE  ので直接参 E
     const int32* DistPtr = DistanceMap.Find(Abs);
     return DistPtr ? *DistPtr : -1;
 }
 
 bool UDistanceFieldSubsystem::EnsureCoverage(const FIntPoint& Abs)
 {
-    if (Bounds.Contains(Abs)) return false;          // 既にカバ�E
+    if (Bounds.Contains(Abs)) return false;          // 既にカバ E
     
-    // 侁E プレイヤー中忁E��半征E��庁E��て再構築（�E域ならここで全域構築！E
+    // 侁E プレイヤー中忁E  半征E  庁E  て再構築（ E域ならここで全域構築！E
     const int32 Radius = FMath::Max(
         FMath::Abs(Abs.X - PlayerPosition.X),
         FMath::Abs(Abs.Y - PlayerPosition.Y)) + 2;
@@ -424,14 +424,14 @@ bool UDistanceFieldSubsystem::EnsureCoverage(const FIntPoint& Abs)
 }
 
 //------------------------------------------------------------------------------
-// PathFinder取得�Eルパ�E
+// PathFinder取得 Eルパ E
 //------------------------------------------------------------------------------
 
 AGridPathfindingLibrary* UDistanceFieldSubsystem::GetPathFinder() const
 {
     if (!CachedPathFinder.IsValid())
     {
-        // ☁E�E☁EキャチE��ュが無効な場合�E再取得を試みめE☁E�E☁E
+        // ☁E E☁EキャチE  ュが無効な場合 E再取得を試みめE☁E E☁E
         TArray<AActor*> FoundActors;
         UGameplayStatics::GetAllActorsOfClass(GetWorld(), AGridPathfindingLibrary::StaticClass(), FoundActors);
         if (FoundActors.Num() > 0)

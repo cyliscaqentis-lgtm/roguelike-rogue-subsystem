@@ -18,7 +18,7 @@ class LYRAGAME_API UDashStopEvaluator : public UObject
 
 public:
     /**
-     * ダッシュ可能距離を計算（停止条件を考慮）
+     * ダッシュ可能覧｣を計算（停止条件を考慮）
      */
     UFUNCTION(BlueprintCallable, Category = "Turn|Dash")
     static int32 CalculateAllowedDashSteps(
@@ -35,7 +35,7 @@ public:
     static bool HasAdjacentEnemy(const FIntPoint& Cell, UWorld* World);
 
     /**
-     * 危険タイルか判定
+     * 危険タイモｩ判定
      */
     UFUNCTION(BlueprintPure, Category = "Turn|Dash")
     static bool IsDangerTile(const FIntPoint& Cell, UWorld* World);

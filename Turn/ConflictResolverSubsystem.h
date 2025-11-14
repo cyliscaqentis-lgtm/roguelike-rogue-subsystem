@@ -11,7 +11,7 @@
 #include "ConflictResolverSubsystem.generated.h"
 
 /**
- * UConflictResolverSubsystem: —\–ñƒe[ƒuƒ‹‚ÆÕ“Ë‰ğŒˆiv2.2 ‘æ7ğE‘æ17ğj
+ * UConflictResolverSubsystem: —\–ñƒe[ƒuƒ‚ÆÕ“Ë‰ğŒˆiv2.2 ‘æ7ğE‘æ17ğj
  */
 UCLASS()
 class LYRAGAME_API UConflictResolverSubsystem : public UWorldSubsystem
@@ -23,7 +23,7 @@ public:
     virtual void Deinitialize() override;
 
     /**
-     * —\–ñƒe[ƒuƒ‹‚ğƒNƒŠƒAiƒ^[ƒ“ŠJnj
+     * —\–ñƒe[ƒuƒ‚ğƒNƒŠƒAiƒ^[ƒ“ŠJnj
      */
     UFUNCTION(BlueprintCallable, Category = "Turn|Resolve")
     void ClearReservations();
@@ -35,7 +35,7 @@ public:
     void AddReservation(const FReservationEntry& Entry);
 
     /**
-     * ‘S‚Ä‚ÌÕ“Ë‚ğ‰ğŒˆiv2.2 O’iƒoƒPƒbƒg + ƒTƒCƒNƒ‹‹–‰Âj
+     * ‘S‚Ä‚ÌÕ“Ë‚ğ‰ğŒˆiv2.2 O’iƒoƒPƒbƒg + ƒTƒCƒNƒ–‰Âj
      */
     UFUNCTION(BlueprintCallable, Category = "Turn|Resolve")
     TArray<FResolvedAction> ResolveAllConflicts();
@@ -47,16 +47,16 @@ public:
     int32 GetActionTier(const FGameplayTag& AbilityTag) const;
 
 private:
-    // —\–ñƒe[ƒuƒ‹: Key=(TimeSlot, Cell), Value=‰•åÒƒŠƒXƒg
+    // —\–ñƒe[ƒuƒ: Key=(TimeSlot, Cell), Value=‰•åÒƒŠƒXƒg
     TMap<TPair<int32, FIntPoint>, TArray<FReservationEntry>> ReservationTable;
 
     // O’iƒoƒPƒbƒg‰ğŒˆiv2.2 ‘æ17ğj
     TArray<FResolvedAction> ResolveWithTripleBucket(const TArray<FReservationEntry>& Applicants);
 
-    // ƒTƒCƒNƒ‹ŒŸoik†3‚ÌzŠÂ‹–‰Âj
+    // ƒTƒCƒNƒŒŸoik†3‚ÌzŠÂ–‰Âj
     bool DetectAndAllowCycle(const TArray<FReservationEntry>& Applicants, TArray<FStableActorID>& OutCycle);
 
-    // ƒtƒH[ƒ‹ƒoƒbƒNŒó•âi‹ß–T1‰ñ‚Ì‚İj
+    // ƒtƒH[ƒƒoƒbƒNŒó•âiß–T1‰ñ‚Ì‚İj
     FResolvedAction TryFallbackMove(const FReservationEntry& LoserEntry);
 
     // Wait~Ši

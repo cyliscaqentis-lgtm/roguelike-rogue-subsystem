@@ -4,12 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-// ★★★ 修正：相対パスで Turn フォルダを参照 ★★★
+// ★★★ 修正：相対パスで Turn フォャ_を参照 ★★★
 #include "../Turn/TurnSystemTypes.h"
 #include "DebugVisualizerComponent.generated.h"
 
 /**
- * UDebugVisualizerComponent: ターンシステムのデバッグ可視化（v2.2 第19条）
+ * UDebugVisualizerComponent: ターンシステムのデバッグ可脂ｻ（v2.2 第19条）
  */
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class LYRAGAME_API UDebugVisualizerComponent : public UActorComponent
@@ -23,13 +23,13 @@ public:
         FActorComponentTickFunction* ThisTickFunction) override;
 
     /**
-     * 予約テーブルを可視化
+     * 予約テーブモﾂ脂ｻ
      */
     UFUNCTION(BlueprintCallable, Category = "Debug|Turn")
     void VisualizeReservations(const TArray<FReservationEntry>& Reservations);
 
     /**
-     * 解決済みアクションを可視化
+     * 解決済みアクションを可脂ｻ
      */
     UFUNCTION(BlueprintCallable, Category = "Debug|Turn")
     void VisualizeResolvedActions(const TArray<FResolvedAction>& Actions);
@@ -65,7 +65,7 @@ public:
     float GridSize = 100.0f;
 
 private:
-    // セルをワールド座標に変換
+    // セモ潤[ャh座標に変換
     FVector CellToWorld(const FIntPoint& Cell) const;
 
     // デバッグテキストを描画

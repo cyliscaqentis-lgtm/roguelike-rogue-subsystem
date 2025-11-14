@@ -102,11 +102,11 @@ void UDebugVisualizerComponent::VisualizeStableIDs(const TArray<AActor*>& Actors
             continue;
         }
 
-        // ššš C³FFStableActorID‚ÌŽÀÛ‚Ìƒƒ“ƒo[•Ï”‚ðŽg—p ššš
+        // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Cï¿½ï¿½ï¿½FFStableActorIDï¿½ÌŽï¿½ï¿½Û‚Ìƒï¿½ï¿½ï¿½ï¿½oï¿½[ï¿½Ïï¿½ï¿½ï¿½ï¿½gï¿½p ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
         FStableActorID StableID = Registry->GetStableID(Actor);
         FVector Location = Actor->GetActorLocation() + FVector(0, 0, 100);
 
-        // PersistentGUID‚ÆGenerationOrder‚ð•\Ž¦
+        // PersistentGUIDï¿½ï¿½GenerationOrderï¿½ï¿½\ï¿½ï¿½
         FString Text = FString::Printf(TEXT("Gen:%d"), StableID.GenerationOrder);
         DrawDebugText(Location, Text, FLinearColor::White);
     }

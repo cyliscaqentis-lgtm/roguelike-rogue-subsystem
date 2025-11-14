@@ -1,4 +1,4 @@
-﻿// UnitBase.cpp
+// UnitBase.cpp
 // Location: Rogue/Character/UnitBase.cpp
 
 #include "UnitBase.h"

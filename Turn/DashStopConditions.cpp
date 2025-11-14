@@ -24,29 +24,29 @@ int32 UDashStopEvaluator::CalculateAllowedDashSteps(
         return 0;
     }
 
-    // ’¼üŒo˜H‚ğæ“¾
+    // ï¿½ï¿½ï¿½ï¿½ï¿½oï¿½Hï¿½ï¿½ï¿½æ“¾
     TArray<FIntPoint> Path = GetLinePath(StartCell, TargetCell, ProposedK);
 
-    // Šeƒ^ƒCƒ‹‚Å’â~ğŒ‚ğƒ`ƒFƒbƒN
+    // ï¿½eï¿½^ï¿½Cï¿½ï¿½Å’ï¿½~ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½`ï¿½Fï¿½bï¿½N
     for (int32 t = 0; t < Path.Num(); ++t)
     {
         const FIntPoint& CurrentCell = Path[t];
 
-        // “G—×Úƒ`ƒFƒbƒN
+        // ï¿½Gï¿½×Úƒ`ï¿½Fï¿½bï¿½N
         if (Config.bStopOnEnemyAdjacent && HasAdjacentEnemy(CurrentCell, World))
         {
             UE_LOG(LogTemp, Log, TEXT("[DashStop] Stopped at step %d (EnemyAdjacent)"), t + 1);
             return t + 1;
         }
 
-        // ŠëŒ¯ƒ^ƒCƒ‹ƒ`ƒFƒbƒN
+        // ï¿½ëŒ¯ï¿½^ï¿½Cï¿½ï¿½`ï¿½Fï¿½bï¿½N
         if (Config.bStopOnDangerTile && IsDangerTile(CurrentCell, World))
         {
             UE_LOG(LogTemp, Log, TEXT("[DashStop] Stopped at step %d (DangerTile)"), t);
             return FMath::Max(0, t);
         }
 
-        // áŠQ•¨ƒ`ƒFƒbƒN
+        // ï¿½ï¿½Qï¿½ï¿½ï¿½`ï¿½Fï¿½bï¿½N
         if (Config.bStopOnObstacle && IsObstacle(CurrentCell, World))
         {
             UE_LOG(LogTemp, Log, TEXT("[DashStop] Stopped at step %d (Obstacle)"), t);
@@ -54,7 +54,7 @@ int32 UDashStopEvaluator::CalculateAllowedDashSteps(
         }
     }
 
-    // ’â~ğŒ‚ÉŠY“–‚µ‚È‚¢ê‡‚Í’ñˆÄ’Ê‚è
+    // ï¿½ï¿½~ï¿½ï¿½ï¿½ï¿½ï¿½ÉŠYï¿½ï¿½ï¿½ï¿½ï¿½È‚ï¿½ï¿½ê‡ï¿½Í’ï¿½Ä’Ê‚ï¿½
     return ProposedK;
 }
 
@@ -65,8 +65,8 @@ bool UDashStopEvaluator::HasAdjacentEnemy(const FIntPoint& Cell, UWorld* World)
         return false;
     }
 
-    // TODO: Phase 3Œã”¼‚ÅÀ‘•
-    // 8•ûŒü‚Ì—×Úƒ}ƒX‚É“G‚ª‚¢‚é‚©ƒ`ƒFƒbƒN
+    // TODO: Phase 3ï¿½ã”¼ï¿½Åï¿½ï¿½ï¿½
+    // 8ï¿½ï¿½ï¿½ï¿½ï¿½Ì—×Úƒ}ï¿½Xï¿½É“Gï¿½ï¿½ï¿½ï¿½ï¿½é‚©ï¿½`ï¿½Fï¿½bï¿½N
     return false;
 }
 
@@ -77,8 +77,8 @@ bool UDashStopEvaluator::IsDangerTile(const FIntPoint& Cell, UWorld* World)
         return false;
     }
 
-    // TODO: Phase 3Œã”¼‚ÅÀ‘•
-    // ŠëŒ¯ƒ^ƒCƒ‹iã©A—nŠâ“™j‚Ì”»’è
+    // TODO: Phase 3ï¿½ã”¼ï¿½Åï¿½ï¿½ï¿½
+    // ï¿½ëŒ¯ï¿½^ï¿½Cï¿½ï¿½iã©Aï¿½nï¿½â“™ï¿½jï¿½Ì”ï¿½ï¿½ï¿½
     return false;
 }
 
@@ -89,8 +89,8 @@ bool UDashStopEvaluator::IsObstacle(const FIntPoint& Cell, UWorld* World)
         return false;
     }
 
-    // TODO: Phase 3Œã”¼‚ÅÀ‘•
-    // áŠQ•¨i•ÇA”à“™j‚Ì”»’è
+    // TODO: Phase 3ï¿½ã”¼ï¿½Åï¿½ï¿½ï¿½
+    // ï¿½ï¿½Qï¿½ï¿½ï¿½iï¿½ÇAï¿½ï¿½ï¿½ï¿½ï¿½jï¿½Ì”ï¿½ï¿½ï¿½
     return false;
 }
 
@@ -105,18 +105,18 @@ TArray<FIntPoint> UDashStopEvaluator::GetLinePath(
     FIntPoint Current = Start;
     FIntPoint Delta = Target - Start;
 
-    // •ûŒü‚ğ³‹K‰»i-1, 0, 1j
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Kï¿½ï¿½ï¿½i-1, 0, 1ï¿½j
     FIntPoint Direction;
     Direction.X = FMath::Clamp(Delta.X, -1, 1);
     Direction.Y = FMath::Clamp(Delta.Y, -1, 1);
 
-    // ’¼üŒo˜H‚ğ¶¬
+    // ï¿½ï¿½ï¿½ï¿½ï¿½oï¿½Hï¿½ğ¶ï¿½
     for (int32 i = 0; i < MaxSteps; ++i)
     {
         Current += Direction;
         Path.Add(Current);
 
-        // ƒ^[ƒQƒbƒg‚É“’B‚µ‚½‚çI—¹
+        // ï¿½^ï¿½[ï¿½Qï¿½bï¿½gï¿½É“ï¿½ï¿½Bï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Iï¿½ï¿½
         if (Current == Target)
         {
             break;

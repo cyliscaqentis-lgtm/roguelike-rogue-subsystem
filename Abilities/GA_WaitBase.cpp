@@ -1,4 +1,4 @@
-﻿// GA_WaitBase.cpp
+// GA_WaitBase.cpp
 #include "Abilities/GA_WaitBase.h"
 
 #include "Utility/RogueGameplayTags.h"
