@@ -3844,6 +3844,9 @@ void AGameTurnManagerBase::EndEnemyTurn()
         // ★★★ Phase 5補完: リトライ連打防止（2025-11-09） ★★★
         // 最初の1回だけリトライをスケジュール、以降は抑止
         //======================================================================
+        // Force-clear lingering InProgress tags before retrying.
+        ClearResidualInProgressTags();
+
         if (!bEndTurnPosted)
         {
             bEndTurnPosted = true;  // フラグを立てる
@@ -4961,4 +4964,3 @@ bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Actio
 
     return false;
 }
-

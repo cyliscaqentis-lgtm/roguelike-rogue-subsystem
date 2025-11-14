@@ -1035,9 +1035,18 @@ void APlayerControllerBase::Client_ConfirmCommandAccepted_Implementation(int32 W
     // 同一ウィンドウのACKのみ有効（古いACKを無視）
     if (WindowId != CurrentInputWindowId)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Client] ACK IGNORED: WindowId mismatch (ACK=%d, Current=%d)"),
-            WindowId, CurrentInputWindowId);
-        return;
+        if (WindowId == CurrentInputWindowId + 1)
+        {
+            UE_LOG(LogTemp, Log, TEXT("[Client] ACK advanced by one: WindowId=%d (Previous=%d)"),
+                WindowId, CurrentInputWindowId);
+            CurrentInputWindowId = WindowId;
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[Client] ACK IGNORED: WindowId mismatch (ACK=%d, Current=%d)"),
+                WindowId, CurrentInputWindowId);
+            return;
+        }
     }
 
     // ★★★ サーバー確定後にラッチを確定 ★★★
