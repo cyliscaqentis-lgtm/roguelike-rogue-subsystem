@@ -241,7 +241,7 @@ void ADungeonFloorGenerator::BSP_Split(const FIntRectLite& Root, FRandomStream& 
 
     while (stack.Num() > 0)
     {
-        FIntRectLite leaf = stack.Pop(false);
+        FIntRectLite leaf = stack.Pop();
         const bool canSplitH = leaf.W() >= 2 * minLeafW;
         const bool canSplitV = leaf.H() >= 2 * minLeafH;
         bool doSplit = (canSplitH || canSplitV) && (RNG.FRand() > Params.StopSplitProbability);
@@ -321,7 +321,7 @@ void ADungeonFloorGenerator::ConnectCentersWithMST(const TArray<FIntPoint>& Cent
             for (int32 vIdx = 0; vIdx < unused.Num(); ++vIdx)
             {
                 const int32 v = unused[vIdx];
-                // ★★★ 最適化: GridUtils使用（重複コード削除 2025-11-09）
+                // ☁E�E☁E最適匁E GridUtils使用�E�重褁E��ード削除 2025-11-09�E�E
                 const int32 d = FGridUtils::ManhattanDistance(Centers[u], Centers[v]);
                 if (d < bestDist) { bestDist = d; bestU = u; bestV = v; bestIdx = vIdx; }
             }

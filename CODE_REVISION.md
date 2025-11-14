@@ -1,11 +1,19 @@
 ## Rogue CodeRevision Log
 
-ã“ã®ãƒ•ã‚©ãƒ«ãƒ€ã®ã‚³ãƒ¼ãƒ‰å¤‰æ›´ã«ã¯ã€ä»¥ä¸‹ã®ã‚ˆã†ãª `CodeRevision` ã‚³ãƒ¡ãƒ³ãƒˆã‚’è¶³ã—ã¦ãƒãƒ¼ã‚¸ãƒ§ãƒ³ã‚’æ˜Žç¤ºã—ã¾ã™ã€‚Claude Code ã‚’å«ã‚€ä»–ã®ã‚¨ãƒ¼ã‚¸ã‚§ãƒ³ãƒˆã«ã‚‚ã“ã®æ–¹é‡ã‚’å…±æœ‰ã™ã‚‹ãŸã‚ã€è©²å½“ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ç·¨é›†ã™ã‚‹ãŸã³ã«ã“ã“ã‚’ç¢ºèªã—ã¦ãã ã•ã„ã€‚
+‚±‚ÌƒtƒHƒ‹ƒ_‚ÌƒR[ƒh•ÏX‚É‚ÍAˆÈ‰º‚Ì‚æ‚¤‚È `CodeRevision` ƒRƒƒ“ƒg‚ð‘«‚µ‚Äƒo[ƒWƒ‡ƒ“‚ð–¾Ž¦‚µ‚Ü‚·BClaude Code ‚ðŠÜ‚Þ‘¼‚ÌƒG[ƒWƒFƒ“ƒg‚É‚à‚±‚Ì•ûj‚ð‹¤—L‚·‚é‚½‚ßAŠY“–ƒtƒ@ƒCƒ‹‚ð•ÒW‚·‚é‚½‚Ñ‚É‚±‚±‚ðŠm”F‚µ‚Ä‚­‚¾‚³‚¢B
 
-- `CodeRevision: INC-2025-00001-R1` â€” `AGameTurnManagerBase::EndEnemyTurn()` ã«æ®‹ç•™ã‚¿ã‚°ã‚¯ãƒªã‚¢ã®ç›´å‰ã§è¿½åŠ ï¼ˆã‚¿ãƒƒã‚°å‡¦ç†ã®å®‰å®šåŒ–ï¼‰ã€‚
-- `CodeRevision: INC-2025-00001-R2` â€” `APlayerControllerBase::Client_ConfirmCommandAccepted_Implementation` ã® `WindowId` ACKå‡¦ç†å¼·åŒ–ã€‚
-- `CodeRevision: INC-2025-00002-R1` â€” `DistanceFieldSubsystem::GetNextStepTowardsPlayer()` ã«è©³ç´°ãªè¿‘å‚é¸å®šãƒ­ã‚¸ãƒƒã‚¯ã€‚
+- `CodeRevision: INC-2025-00001-R1` ? `AGameTurnManagerBase::EndEnemyTurn()` ‚ÉŽc—¯ƒ^ƒOƒNƒŠƒA‚Ì’¼‘O‚Å’Ç‰Áiƒ^ƒbƒOˆ—‚ÌˆÀ’è‰»jB
+- `CodeRevision: INC-2025-00001-R2` ? `APlayerControllerBase::Client_ConfirmCommandAccepted_Implementation` ‚Ì `WindowId` ACKˆ—‹­‰»B
+- `CodeRevision: INC-2025-00002-R1` ? `DistanceFieldSubsystem::GetNextStepTowardsPlayer()` ‚ÉÚ×‚È‹ß–T‘I’èƒƒWƒbƒNB
+- `CodeRevision: INC-2025-00003-R1` ? `response_note.md` ‚Æ–{ƒƒO‚ÉuCodeRevision ‚É“úŽž‚ðŠÜ‚ß‚év‰^—pƒ‹[ƒ‹‚ð’Ç‹Li2025-11-14 22:24jB
+- `CodeRevision: INC-2025-00004-R1` ? `OnAttacksFinished` ‚ÅŒÃ‚¢ƒ^[ƒ“’Ê’m‚ð”jŠü‚µ GridOccupancy ‚Ì”j’]‚ð–hŽ~i2025-11-14 22:50jB
+- `CodeRevision: INC-2025-00005-R1` ? `TurnManager` ‚Ì‰ŠúƒƒOƒƒbƒZ[ƒW‚ð ASCII ‰»‚µA`DungeonFloorGenerator::BSP_Split` ‚Ì `stack.Pop()` ‚ðÅV API ‚É‡‚í‚¹‚ÄXVi2025-11-14 23:00jB
 
-**é‹ç”¨ãƒ«ãƒ¼ãƒ«**
-1. è¿½åŠ æ”¹ä¿®ã§ã¯æ–°ã—ã„ `CodeRevision` ã‚’ä½œã‚Šã€ãƒ•ã‚¡ã‚¤ãƒ«ã®é–¢é€£ç®‡æ‰€ã«ã‚³ãƒ¡ãƒ³ãƒˆã¨ã—ã¦æ®‹ã—ã¦ãã ã•ã„ã€‚
-2. ã“ã®ãƒ­ã‚°ã«ã‚‚æœ€æ–°ã® `CodeRevision` ã¨å¤‰æ›´å¯¾è±¡ã®ãƒ•ã‚¡ã‚¤ãƒ«ãƒ»ç›®çš„ã‚’éšæ™‚è¿½è¨˜ã—ã¦ã€ãƒãƒ£ãƒƒãƒˆãŒåˆ‡ã‚Šæ›¿ã‚ã£ã¦ã‚‚å±¥æ­´ãŒã‚ã‹ã‚‹ã‚ˆã†ã«ã—ã¦ãã ã•ã„ã€‚
+## ‹L˜^ƒtƒH[ƒ}ƒbƒg
+
+- V‚µ‚¢ `CodeRevision` ‚Í `CodeRevision: <ID> ? <à–¾> (YYYY-MM-DD HH:MM)` ‚ÌŒ`Ž®‚Å‹L˜^‚µAƒRƒƒ“ƒg‚É‚àƒƒO‚É‚à“¯‚¶“úŽž‚ð‹Lq‚µ‚Ä‚­‚¾‚³‚¢B
+
+**‰^—pƒ‹[ƒ‹**
+1. ’Ç‰Á‰üC‚Å‚ÍV‚µ‚¢ `CodeRevision` ‚ðì‚èAƒtƒ@ƒCƒ‹‚ÌŠÖ˜A‰ÓŠ‚ÉƒRƒƒ“ƒg‚Æ‚µ‚ÄŽc‚µ‚Ä‚­‚¾‚³‚¢B
+2. ‚±‚ÌƒƒO‚É‚àÅV‚Ì `CodeRevision` ‚Æ•ÏX‘ÎÛ‚Ìƒtƒ@ƒCƒ‹E–Ú“I‚ðŽž’Ç‹L‚µAƒ`ƒƒƒbƒg‚ªØ‚è‘Ö‚í‚Á‚Ä‚à—š—ð‚ª‚í‚©‚é‚æ‚¤‚É‚µ‚Ä‚­‚¾‚³‚¢B
+3. ƒRƒƒ“ƒg‚ÆƒƒO‚É‚Í“úŽž‚Ü‚ÅŠÜ‚ß‚éƒtƒH[ƒ}ƒbƒg‚ðŽç‚èA·•ª‚Ìƒo[ƒWƒ‡ƒ“‚Æ‚¢‚Â‚Ì•ÏX‚©‚ªƒZƒbƒg‚ÅŠm”F‚Å‚«‚é‚æ‚¤‚É‚µ‚Ä‚­‚¾‚³‚¢B
