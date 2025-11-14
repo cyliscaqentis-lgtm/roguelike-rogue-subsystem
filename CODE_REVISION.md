@@ -17,3 +17,14 @@
 1. 追加改修では新しい `CodeRevision` を作り、ファイルの関連箇所にコメントとして残してください。
 2. このログにも最新の `CodeRevision` と変更対象のファイル・目的を随時追記し、チャットが切り替わっても履歴がわかるようにしてください。
 3. コメントとログには日時まで含めるフォーマットを守り、差分のバージョンといつの変更かがセットで確認できるようにしてください。
+
+### Recent Fixes
+
+- `CodeRevision: INC-2025-00001-R1` - `AGameTurnManagerBase::ExecuteAttacks()` now notifies `Barrier->BeginTurn()` before invoking attacks so GA_AttackBase receives a valid turn ID.
+- `CodeRevision: INC-2025-00001-R2` - `AGameTurnManagerBase::OnAttacksFinished()` drops stale turn notifications instead of processing them, preventing outdated attack states from corrupting the turn flow.
+- `CodeRevision: INC-2025-00002-R1` - `AUnitBase::StartNextLeg()` now retries `UGridOccupancySubsystem::UpdateActorCell()` on failure (0.1s timer) instead of logging a critical error, and only broadcasts `OnMoveFinished` after the occupancy commit succeeds.
+- `CodeRevision: INC-2025-00002-R2` - `UGA_MoveBase::OnMoveFinished()` mirrors the occupancy retry behavior so ability completion waits for a successful grid commit instead of rolling back.
+
+## Comment Policy
+
+- Document any new C++ comments in English only and log the change here (2025-11-15).

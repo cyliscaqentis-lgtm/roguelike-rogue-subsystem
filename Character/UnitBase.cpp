@@ -21,6 +21,7 @@
 #include "Character/UnitUIComponent.h"
 #include "Grid/GridOccupancySubsystem.h"
 #include "Grid/GridPathfindingLibrary.h"
+#include "TimerManager.h"
 
 // 繝ｭ繧ｰ繧ｫ繝・ざ繝ｪ螳夂ｾｩ
 DEFINE_LOG_CATEGORY_STATIC(LogUnitBase, Log, All);
@@ -391,18 +392,32 @@ void AUnitBase::MoveUnit(const TArray<FVector>& InPath)
                 {
                     const FIntPoint CurrentCell = PathFinder->WorldToGrid(GetActorLocation());
                     bool bUpdateSuccess = OccSys->UpdateActorCell(this, CurrentCell);
-                    if (bUpdateSuccess)
+                    if (!bUpdateSuccess)
                     {
-                        UE_LOG(LogUnitBase, Log,
-                            TEXT("[MoveComplete] GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
+                        UE_LOG(LogUnitBase, Warning,
+                            TEXT("[MoveComplete] GridOccupancy update FAILED for %s to (%d,%d) - Retrying in 0.1s (Race Condition)"),
                             *GetName(), CurrentCell.X, CurrentCell.Y);
+
+                        FTimerHandle RetryHandle;
+                        TWeakObjectPtr<AUnitBase> WeakUnit(this);
+                        World->GetTimerManager().SetTimer(
+                            RetryHandle,
+                            FTimerDelegate::CreateLambda([WeakUnit]()
+                            {
+                                if (AUnitBase* RetryUnit = WeakUnit.Get())
+                                {
+                                    RetryUnit->StartNextLeg();
+                                }
+                            }),
+                            0.1f,
+                            false);
+
+                        return;
                     }
-                    else
-                    {
-                        UE_LOG(LogUnitBase, Error,
-                            TEXT("[MoveComplete] CRITICAL: GridOccupancy update FAILED for %s to (%d,%d) - cell occupied!"),
-                            *GetName(), CurrentCell.X, CurrentCell.Y);
-                    }
+
+                    UE_LOG(LogUnitBase, Log,
+                        TEXT("[MoveComplete] GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
+                        *GetName(), CurrentCell.X, CurrentCell.Y);
                 }
             }
         }

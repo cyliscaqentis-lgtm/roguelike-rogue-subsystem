@@ -17,6 +17,7 @@
 #include "Turn/GameTurnManagerBase.h"
 #include "Utility/PathFinderUtils.h"
 #include "Utility/TurnCommandEncoding.h"
+#include "TimerManager.h"
 
 #include "../ProjectDiagnostics.h"
 
@@ -946,28 +947,36 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
             if (UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>())
             {
                 bool bUpdateSuccess = OccSys->UpdateActorCell(Unit, GridAfter);
-                if (bUpdateSuccess)
+                if (!bUpdateSuccess)
                 {
-                    UE_LOG(LogTurnManager, Log,
-                        TEXT("[OnMoveFinished] GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
+                    UE_LOG(LogTurnManager, Warning,
+                        TEXT("[OnMoveFinished] GridOccupancy update FAILED for %s to (%d,%d) - Retrying in 0.1s (Race Condition)"),
                         *GetNameSafe(Unit), GridAfter.X, GridAfter.Y);
-                }
-                else
-                {
-                    // ★★★ CRITICAL FIX (2025-11-11): ロールバック時に予約を解放 ★★★
-                    if (UGridOccupancySubsystem* Occupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
-                    {
-                        Occupancy->ReleaseReservationForActor(Unit);
-                    }
 
-                    // ★★★ ROLLBACK: 占有更新失敗時は元位置に戻す（重なり防止） ★★★
-                    const FVector RollbackWorld = PathFinder->GridToWorld(GridBefore, LocationBefore.Z);
-                    Unit->SetActorLocation(RollbackWorld, false, nullptr, ETeleportType::TeleportPhysics);
+                    FTimerHandle RetryHandle;
+                    TWeakObjectPtr<UGA_MoveBase> WeakAbility(this);
+                    TWeakObjectPtr<AUnitBase> WeakUnit(Unit);
+                    World->GetTimerManager().SetTimer(
+                        RetryHandle,
+                        FTimerDelegate::CreateLambda([WeakAbility, WeakUnit]()
+                        {
+                            if (UGA_MoveBase* RetryAbility = WeakAbility.Get())
+                            {
+                                if (AUnitBase* RetryUnit = WeakUnit.Get())
+                                {
+                                    RetryAbility->OnMoveFinished(RetryUnit);
+                                }
+                            }
+                        }),
+                        0.1f,
+                        false);
 
-                    UE_LOG(LogTurnManager, Error,
-                        TEXT("[OnMoveFinished] OCCUPANCY UPDATE FAILED → ROLLBACK: %s returned to (%d,%d) from (%d,%d) - cell occupied by another unit! Reservation released."),
-                        *GetNameSafe(Unit), GridBefore.X, GridBefore.Y, GridAfter.X, GridAfter.Y);
+                    return;
                 }
+
+                UE_LOG(LogTurnManager, Log,
+                    TEXT("[OnMoveFinished] GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
+                    *GetNameSafe(Unit), GridAfter.X, GridAfter.Y);
             }
         }
 
@@ -1200,4 +1209,3 @@ bool UGA_MoveBase::RegisterBarrier(AActor* Avatar)
 
 	return false;
 }
-
