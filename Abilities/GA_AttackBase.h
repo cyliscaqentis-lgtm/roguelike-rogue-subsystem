@@ -1,4 +1,4 @@
-﻿// GA_AttackBase.h
+// GA_AttackBase.h
 #pragma once
 
 #include "CoreMinimal.h"

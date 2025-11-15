@@ -1,4 +1,4 @@
-﻿// GA_WaitBase.h
+// GA_WaitBase.h
 #pragma once
 
 #include "CoreMinimal.h"

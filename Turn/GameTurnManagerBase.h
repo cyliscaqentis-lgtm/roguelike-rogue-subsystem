@@ -104,11 +104,7 @@ public:
     UFUNCTION(BlueprintPure, Category = "Turn|Services")
     AGridPathfindingLibrary* GetCachedPathFinder() const;
 
-    //==========================================================================
-    // 繝繝ｳ繧�E�繝ｧ繝ｳ逕滓�E繧�E�繧�E�繝�EΒ邨�E�蜷・PI
-    //==========================================================================
 
-    /** 繝繝ｳ繧�E�繝ｧ繝ｳSubsystem縺�E�縺�E�繧�E�繧�E�繧�E�繧�E� */
     UFUNCTION(BlueprintCallable, Category="Dungeon|Access")
     URogueDungeonSubsystem* GetDungeonSystem() const { return DungeonSystem; }
 
@@ -172,18 +168,18 @@ public:
     //==========================================================================
 
     /**
-     * ★★★ Phase 5補完: 残留InProgressタグの強制クリーンアップ（2025-11-09） ★★★
+     * ★★★ Phase 5補完: Force cleanup of residual InProgress tags (2025-11-09) ★★★
      *
-     * 全ユニット（プレイヤー + 敵）のState.Action.InProgressタグを強制除去
+     * Force remove State.Action.InProgress tags from all units (player + enemies)
      *
-     * 用途:
-     * - Barrier完了後のターン終了時に呼び出し
-     * - タグがスタックしてターン進行が止まるのを防ぐ
-     * - 通常は不要だが、予期しないエラーで残留した場合の保険
+     * Usage:
+     * - Called after Barrier completion at turn end
+     * - Prevents tag stacking that stops turn progression
+     * - Usually not needed, but insurance for unexpected errors that leave residual tags
      *
-     * ログ出力:
-     * - Before: クリーンアップ前のInProgressタグ数
-     * - After: クリーンアップ後（通常は0）
+     * Log output:
+     * - Before: Number of InProgress tags before cleanup
+     * - After: After cleanup (usually 0)
      */
     void ClearResidualInProgressTags();
 
@@ -195,9 +191,6 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Turn|Utility")
     void SendGameplayEvent(AActor* Target, FGameplayTag EventTag, const FGameplayEventData& Payload);
-
-    UFUNCTION(BlueprintCallable, Category = "Turn|Enemy")
-    FEnemyObservation BP_BuildObservationForEnemy(AActor* Enemy);
 
     UFUNCTION(BlueprintPure, Category = "Turn|Utility")
     APlayerController* GetPlayerController_TBS() const;
@@ -211,20 +204,11 @@ public:
     UFUNCTION(BlueprintPure, Category = "Turn|Utility")
     AActor* GetPlayerActor() const;
 
-    UFUNCTION(BlueprintPure, Category = "Turn|Utility")
-    FBoardSnapshot CaptureSnapshot() const;
-
     UFUNCTION(BlueprintPure, Category = "Turn|State")
     void GetCachedEnemies(TArray<AActor*>& OutEnemies) const;
 
-    UFUNCTION(BlueprintPure, Category = "Turn|State")
-    bool TryGetEnemyIntent(AActor* Enemy, FEnemyIntent& OutIntent) const;
-
     UFUNCTION(BlueprintPure, Category = "Turn|Yangus")
     bool HasAnyAttackIntent() const;
-
-    UFUNCTION(BlueprintPure, Category = "Turn|Yangus")
-    bool HasAnyMoveIntent() const;
 
     //==========================================================================
     // Player・・lueprintNativeEvent・・    //==========================================================================
@@ -364,11 +348,6 @@ public:
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Turn|Legacy")
     int32 CurrentTurnIndex = 0;
 
-    //==========================================================================
-    // 繝繝ｳ繧�E�繝ｧ繝ｳ逕滓�E繧�E�繧�E�繝�EΒ邨�E�蜷医・繝ｭ繝代ユ繧�E�
-    //==========================================================================
-
-    /** 繝繝ｳ繧�E�繝ｧ繝ｳ逕滓�ESubsystem縺�E�縺�E�蜿ら�E */
     UPROPERTY()
     TObjectPtr<URogueDungeonSubsystem> DungeonSystem = nullptr;
 
@@ -385,9 +364,8 @@ public:
     int32 CurrentFloorIndex = 0;
 
     //==========================================================================
-    // 笘�EAP System・医ぁE���E�繧�E�繝ｧ繝ｳ繝昴ぁE��ｳ繝亥宛�E・    //==========================================================================
+    // AP System Configuration    //==========================================================================
     
-    /** 1繧�E�繝ｼ繝ｳ縺めE��繧翫・譛螟ｧAP */
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Turn System|AP")
     int32 PlayerAPPerTurn = 1;
     
@@ -429,22 +407,22 @@ public:
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Turn|Legacy")
     TArray<TObjectPtr<AActor>> CachedEnemies;
 
-    /** ターン冁E��使用する、収雁E�Eソート済みの安定した敵リスチE*/
+    /** Cached and sorted list of enemies for the current turn */
     UPROPERTY(BlueprintReadOnly, Category = "Turn|State")
     TArray<TObjectPtr<AActor>> CachedEnemiesForTurn;
 
-    /** プレイヤーの移動意図�E�次のResolveまで保持�E�E*/
+    /** Player's pending move intent (held until next Resolve) */
     UPROPERTY()
     FEnemyIntent PendingPlayerIntent;
 
     UPROPERTY()
     bool bPendingPlayerIntent = false;
 
-    /** 今ターン中に解決済みの移動�E予紁E��Ector→Cell�E�E*/
+    /** Resolved move reservations for the current turn (Actor -> Cell) */
     UPROPERTY(Transient)
     TMap<TWeakObjectPtr<AActor>, FIntPoint> PendingMoveReservations;
 
-    /** 敵リスト�Eリビジョン番号、EollectEnemiesが完亁E��るたびにインクリメンチE*/
+    /** Enemy list revision number, increments each time CollectEnemies completes */
     UPROPERTY(BlueprintReadOnly, Category = "Turn|State")
     int32 EnemiesRevision = 0;
 
@@ -465,37 +443,33 @@ public:
     UPROPERTY(BlueprintReadOnly, Replicated, Category = "Turn|State")
     bool bPlayerMoveInProgress = false;
 
-    /** ターン開始済みフラグ */
+    /** Flag indicating if the turn has started */
     UPROPERTY()
     bool bTurnStarted = false;
 
-    /** Pawn未確定時の遅延オープンフラグ */
+    /** Flag to defer input window opening until player is possessed */
     UPROPERTY()
     bool bDeferOpenOnPossess = false;
 
-    /** PathFinder初期化完了フラグ */
+    /** Flag indicating if pathfinding is ready */
     UPROPERTY()
     bool bPathReady = false;
 
-    /** ユニットスポーン完了フラグ */
+    /** Flag indicating if units have been spawned */
     UPROPERTY()
     bool bUnitsSpawned = false;
 
-    /** プレイヤー所持完了フラグ */
+    /** Flag indicating if player has been possessed */
     UPROPERTY()
     bool bPlayerPossessed = false;
 
-    //==========================================================================
-    // 繝代ヵ繧�E�繝ｼ繝槭Φ繧�E�譛驕ｩ蛹・    //==========================================================================
 
     UPROPERTY(Transient)
     TWeakObjectPtr<AGridPathfindingLibrary> CachedPathFinder;
 
-    //==========================================================================
-    // 繝繝ｳ繧�E�繝ｧ繝ｳ貁E���E�螳御�E�・ぁE��吶Φ繝医ワ繝ｳ繝峨Λ�E育峩蜿ら�E豕ｨ蜈･・・    //==========================================================================
 
     UFUNCTION()
-    void HandleDungeonReady(URogueDungeonSubsystem* InDungeonSys); // 竊�E縺薙！E���E�縺�E�縺�E� InitializeTurnSystem() 繧貞他縺�E�
+    void HandleDungeonReady(URogueDungeonSubsystem* InDungeonSys); // Calls InitializeTurnSystem()
 
     UPROPERTY()
     TObjectPtr<AGridPathfindingLibrary> PathFinder = nullptr;
@@ -514,18 +488,15 @@ public:
     UFUNCTION(BlueprintCallable, Category="Turn|State")
     void MarkMoveInProgress(bool bInProgress);
 
-    /** 解決済み移動�E予紁E��クリア */
+    /** Clear all resolved move reservations */
     void ClearResolvedMoves();
-
-    /** 解決済み移動を登録 */
     /**
-     * ★★★ CRITICAL FIX (2025-11-11): bool型に変更（予約成功/失敗を返す） ★★★
+     * CRITICAL FIX (2025-11-11): Changed to bool type (returns success/failure)
      * Register a resolved move for an actor.
      * @return true if reservation succeeded, false if failed
      */
     bool RegisterResolvedMove(AActor* Actor, const FIntPoint& Cell);
 
-    /** 持E��セルへの移動が予紁E��れてぁE��ぁE*/
     bool IsMoveAuthorized(AActor* Actor, const FIntPoint& Cell) const;
     bool HasReservationFor(AActor* Actor, const FIntPoint& Cell) const;
     void ReleaseMoveReservation(AActor* Actor);
@@ -536,15 +507,12 @@ public:
     UFUNCTION(BlueprintCallable, Category="Turn")
     void OpenInputWindow();
 
-    /** Possess通知 & 入力窓を再オープン */
     UFUNCTION(BlueprintCallable, Category="Turn|Flow")
     void NotifyPlayerPossessed(APawn* NewPawn);
 
-    /** 入力窓を開く（プレイヤー用） */
     UFUNCTION(BlueprintCallable, Category="Turn|Flow")
     void OpenInputWindowForPlayer();
 
-    /** 入力窓を閉じる（プレイヤー用） */
     UFUNCTION(BlueprintCallable, Category="Turn|Flow")
     void CloseInputWindowForPlayer();
 
@@ -707,7 +675,8 @@ protected:
     FGameplayTag Phase_Player_Wait;
 
     //==========================================================================
-    // 迥�E�諷狗ｮ�E�送E�E    //==========================================================================
+    // Internal State Flags
+    //==========================================================================
 
     bool bHasInitialized = false;
     
@@ -716,18 +685,18 @@ protected:
 
 private:
     //==========================================================================
-    // ★★★ 新規Subsystem参照（2025-11-09リファクタリング） ★★★
+    // New Subsystem References (2025-11-09 Refactoring)
     //==========================================================================
 
-    /** コマンド処理Subsystem */
+    /** Command processing subsystem */
     UPROPERTY(Transient)
     TObjectPtr<UTurnCommandHandler> CommandHandler = nullptr;
 
-    /** イベント配信Subsystem */
+    /** Event dispatching subsystem */
     UPROPERTY(Transient)
     TObjectPtr<UTurnEventDispatcher> EventDispatcher = nullptr;
 
-    /** デバッグSubsystem */
+    /** Debug subsystem */
     UPROPERTY(Transient)
     TObjectPtr<UTurnDebugSubsystem> DebugSubsystem = nullptr;
 
@@ -757,9 +726,6 @@ private:
      * Reset to false in AdvanceTurnAndRestart()
      */
     bool bEndTurnPosted = false;
-
-    UPROPERTY()
-    TMap<TWeakObjectPtr<AActor>, FEnemyIntent> CachedIntents;
 
     mutable TWeakObjectPtr<AActor> CachedPlayerActor;
 
