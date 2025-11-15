@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Turn/GameTurnManagerBase.h"
 #include "TBSLyraGameMode.h"  // ATBSLyraGameMode用
@@ -1041,7 +1041,7 @@ void AGameTurnManagerBase::CollectEnemies_Implementation()
 
         const bool bByActorTag = A->Tags.Contains(ActorTagEnemy);
 
-        // ☁E�E☁EぁE��れかの条件を満たせば敵として認譁E☁E�E☁E
+        // If any condition is met, treat as enemy
         if (bByGTag || bByTeam || bByActorTag)
         {
             CachedEnemies.Add(A);

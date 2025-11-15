@@ -13,6 +13,7 @@ When modifying code in this project, add a `CodeRevision` comment to track versi
 - `CodeRevision: INC-2025-00004-R1` - Fixed GridOccupancy corruption by dropping stale turn notifications in `OnAttacksFinished` (2025-11-14 22:50).
 - `CodeRevision: INC-2025-00005-R1` - Updated `TurnManager` debug messages to ASCII, updated `DungeonFloorGenerator::BSP_Split` to use latest `stack.Pop()` API (2025-11-14 23:00).
 - `CodeRevision: INC-2025-00006-R1` - Removed unused legacy functions from `AGameTurnManagerBase`: `RunTurn()`, `ProcessPlayerCommand()`, `StartTurnMoves()` (2025-11-15 20:30)
+- `CodeRevision: INC-2025-00011-R1` - Fixed garbled and Japanese comments in `GameTurnManagerBase.h` and `GameTurnManagerBase.cpp`, translated all comments to English (2025-11-15 23:30)
 
 ## Usage Guidelines
 
