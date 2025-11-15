@@ -4,6 +4,7 @@
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
 #include "Utility/RogueGameplayTags.h"
+#include "Turn/TurnActionBarrierSubsystem.h"
 
 DEFINE_LOG_CATEGORY(LogAttackPhase);
 
@@ -57,6 +58,39 @@ void UAttackPhaseExecutorSubsystem::BeginSequentialAttacks(
 			TEXT("[Turn %d] No attacks to execute"), TurnId);
 		OnFinished.Broadcast(TurnId);
 		return;
+	}
+
+	// ★★★ BUGFIX [INC-2025-TIMING]: Pre-register ALL attacks to TurnActionBarrier ★★★
+	// This prevents Barrier from completing the turn prematurely when only the first attack finishes
+	if (UWorld* World = GetWorld())
+	{
+		if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
+		{
+			UE_LOG(LogAttackPhase, Log,
+				TEXT("[Turn %d] Pre-registering %d attacks with TurnActionBarrier"),
+				TurnId, Queue.Num());
+
+			for (int32 i = 0; i < Queue.Num(); ++i)
+			{
+				FResolvedAction& Action = Queue[i];
+				if (Action.Actor.IsValid())
+				{
+					AActor* Attacker = Action.Actor.Get();
+					FGuid ActionId = Barrier->RegisterAction(Attacker, TurnId);
+					Action.BarrierActionId = ActionId;
+
+					UE_LOG(LogAttackPhase, Verbose,
+						TEXT("[Turn %d] Pre-registered attack %d/%d: %s (ActionId=%s)"),
+						TurnId, i + 1, Queue.Num(), *Attacker->GetName(), *ActionId.ToString());
+				}
+			}
+		}
+		else
+		{
+			UE_LOG(LogAttackPhase, Error,
+				TEXT("[Turn %d] TurnActionBarrierSubsystem not found! Cannot pre-register attacks"),
+				TurnId);
+		}
 	}
 
 	// 最初の攻撃を送出
@@ -244,4 +278,27 @@ void UAttackPhaseExecutorSubsystem::OnAbilityCompleted(
 	UnbindCurrentASC();
 	CurrentIndex++;
 	DispatchNext();
+}
+
+FGuid UAttackPhaseExecutorSubsystem::GetActionIdForActor(AActor* Actor) const
+{
+	if (!Actor)
+	{
+		UE_LOG(LogAttackPhase, Warning, TEXT("[GetActionIdForActor] Actor is null"));
+		return FGuid();
+	}
+
+	// Search for the actor in the current queue and return its pre-registered ActionId
+	for (const FResolvedAction& Action : Queue)
+	{
+		if (Action.Actor.IsValid() && Action.Actor.Get() == Actor)
+		{
+			return Action.BarrierActionId;
+		}
+	}
+
+	UE_LOG(LogAttackPhase, Warning,
+		TEXT("[GetActionIdForActor] Actor %s not found in attack queue"),
+		*Actor->GetName());
+	return FGuid();
 }

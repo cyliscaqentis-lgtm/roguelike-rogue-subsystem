@@ -100,6 +100,13 @@ public:
 		return FMath::Max(0, Queue.Num() - CurrentIndex);
 	}
 
+	/**
+	 * Get the pre-registered BarrierActionId for the specified actor
+	 * ★★★ BUGFIX [INC-2025-TIMING]: Allows GA_AttackBase to retrieve its ActionId ★★★
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Turn|Exec")
+	FGuid GetActionIdForActor(AActor* Actor) const;
+
 private:
 	//--------------------------------------------------------------------------
 	// 内部実装

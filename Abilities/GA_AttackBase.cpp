@@ -6,6 +6,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Utility/RogueGameplayTags.h"
 #include "Turn/TurnActionBarrierSubsystem.h"
+#include "Turn/AttackPhaseExecutorSubsystem.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogAttackAbility, Log, All);
 
@@ -231,13 +232,30 @@ void UGA_AttackBase::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
         return;
     }
 
-    // Barrierに攻撃アクションを登録
+    // ★★★ BUGFIX [INC-2025-TIMING]: Retrieve pre-registered ActionId instead of registering again ★★★
+    // AttackPhaseExecutor pre-registers all attacks to prevent premature turn completion
+    UAttackPhaseExecutorSubsystem* AttackExecutor = World->GetSubsystem<UAttackPhaseExecutorSubsystem>();
+    if (!AttackExecutor)
+    {
+        UE_LOG(LogAttackAbility, Error,
+            TEXT("[GA_AttackBase] ActivateAbility: AttackPhaseExecutorSubsystem not found! Cannot retrieve ActionId"));
+        return;
+    }
+
     AttackTurnId = Barrier->GetCurrentTurnId();
-    AttackActionId = Barrier->RegisterAction(Avatar, AttackTurnId);
-    bBarrierRegistered = true;
+    AttackActionId = AttackExecutor->GetActionIdForActor(Avatar);
+    bBarrierRegistered = AttackActionId.IsValid();
+
+    if (!bBarrierRegistered)
+    {
+        UE_LOG(LogAttackAbility, Error,
+            TEXT("[GA_AttackBase] ActivateAbility: Failed to retrieve ActionId for %s - attack was not pre-registered!"),
+            *Avatar->GetName());
+        return;
+    }
 
     UE_LOG(LogAttackAbility, Log,
-        TEXT("[GA_AttackBase] ActivateAbility: Registered attack with Barrier (TurnId=%d, ActionId=%s, Actor=%s)"),
+        TEXT("[GA_AttackBase] ActivateAbility: Retrieved pre-registered ActionId from AttackExecutor (TurnId=%d, ActionId=%s, Actor=%s)"),
         AttackTurnId, *AttackActionId.ToString(), *Avatar->GetName());
 }
 

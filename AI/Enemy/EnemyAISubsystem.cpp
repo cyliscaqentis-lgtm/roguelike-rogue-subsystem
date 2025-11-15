@@ -70,8 +70,9 @@ void UEnemyAISubsystem::BuildObservations(
         FEnemyObservation Obs;
         Obs.GridPosition = PathFinder->WorldToGrid(Enemy->GetActorLocation());
         Obs.PlayerGridPosition = PlayerGrid;
-        Obs.DistanceInTiles = FMath::Abs(Obs.GridPosition.X - PlayerGrid.X) +
-            FMath::Abs(Obs.GridPosition.Y - PlayerGrid.Y);
+        const int32 DeltaX = FMath::Abs(Obs.GridPosition.X - PlayerGrid.X);
+        const int32 DeltaY = FMath::Abs(Obs.GridPosition.Y - PlayerGrid.Y);
+        Obs.DistanceInTiles = FMath::Max(DeltaX, DeltaY);
 
         OutObs.Add(Obs);
         ++ValidEnemies;

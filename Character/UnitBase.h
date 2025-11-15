@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "Character/LyraCharacter.h"
 #include "Character/UnitStatBlock.h"
+#include "GenericTeamAgentInterface.h"
 #include "UnitBase.generated.h"
 
 // ===== 前方宣言 =====
@@ -37,6 +38,19 @@ class LYRAGAME_API AUnitBase : public ALyraCharacter
 
 public:
     AUnitBase(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━E
+    // ★ IGenericTeamAgentInterface (Lyra Damage Calculation)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━E
+    virtual FGenericTeamId GetGenericTeamId() const override
+    {
+        return FGenericTeamId(Team);
+    }
+
+    virtual void SetGenericTeamId(const FGenericTeamId& NewTeamID) override
+    {
+        Team = NewTeamID.GetId();
+    }
 
     //==========================================================================
     // ★★★ 新規Component参照（2025-11-09リファクタリング） ★★★

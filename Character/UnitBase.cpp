@@ -390,13 +390,15 @@ void AUnitBase::MoveUnit(const TArray<FVector>& InPath)
             {
                 if (UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>())
                 {
-                    const FIntPoint CurrentCell = PathFinder->WorldToGrid(GetActorLocation());
-                    bool bUpdateSuccess = OccSys->UpdateActorCell(this, CurrentCell);
+                    // ★★★ BUGFIX [INC-2025-00002]: Use GetActorLocation() since actor is already at destination ★★★
+                    // PathArray may be truncated by CurrentMovementRange, so Last() is unreliable
+                    const FIntPoint DestinationCell = PathFinder->WorldToGrid(GetActorLocation());
+                    bool bUpdateSuccess = OccSys->UpdateActorCell(this, DestinationCell);
                     if (!bUpdateSuccess)
                     {
                         UE_LOG(LogUnitBase, Warning,
                             TEXT("[MoveComplete] GridOccupancy update FAILED for %s to (%d,%d) - Retrying in 0.1s (Race Condition)"),
-                            *GetName(), CurrentCell.X, CurrentCell.Y);
+                            *GetName(), DestinationCell.X, DestinationCell.Y);
 
                         FTimerHandle RetryHandle;
                         TWeakObjectPtr<AUnitBase> WeakUnit(this);
@@ -417,7 +419,7 @@ void AUnitBase::MoveUnit(const TArray<FVector>& InPath)
 
                     UE_LOG(LogUnitBase, Log,
                         TEXT("[MoveComplete] GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
-                        *GetName(), CurrentCell.X, CurrentCell.Y);
+                        *GetName(), DestinationCell.X, DestinationCell.Y);
                 }
             }
         }
@@ -460,19 +462,21 @@ void AUnitBase::StartNextLeg()
             {
                 if (UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>())
                 {
-                    const FIntPoint CurrentCell = PathFinder->WorldToGrid(GetActorLocation());
-                    bool bUpdateSuccess = OccSys->UpdateActorCell(this, CurrentCell);
+                    // ★★★ BUGFIX [INC-2025-00002]: Use GetActorLocation() since actor is already at destination ★★★
+                    // PathArray may be truncated by CurrentMovementRange, so Last() is unreliable
+                    const FIntPoint DestinationCell = PathFinder->WorldToGrid(GetActorLocation());
+                    bool bUpdateSuccess = OccSys->UpdateActorCell(this, DestinationCell);
                     if (bUpdateSuccess)
                     {
                         UE_LOG(LogUnitBase, Log,
                             TEXT("[MoveComplete] GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
-                            *GetName(), CurrentCell.X, CurrentCell.Y);
+                            *GetName(), DestinationCell.X, DestinationCell.Y);
                     }
                     else
                     {
                         UE_LOG(LogUnitBase, Error,
                             TEXT("[MoveComplete] CRITICAL: GridOccupancy update FAILED for %s to (%d,%d) - cell occupied!"),
-                            *GetName(), CurrentCell.X, CurrentCell.Y);
+                            *GetName(), DestinationCell.X, DestinationCell.Y);
                     }
                 }
             }

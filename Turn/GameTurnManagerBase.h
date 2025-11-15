@@ -669,8 +669,9 @@ protected:
     UFUNCTION()
     void OnTurnStartedHandler(int32 TurnIndex);
 
-    UFUNCTION()
-    void OnAttacksFinished(int32 TurnId);
+    // ★★★ BUGFIX [INC-2025-TIMING]: Function disabled ★★★
+    // UFUNCTION()
+    // void OnAttacksFinished(int32 TurnId);
 
     UFUNCTION()
     void OnSimultaneousPhaseCompleted();
@@ -682,8 +683,6 @@ protected:
     void OnExperienceLoaded(const class ULyraExperienceDefinition* Experience);
 
 protected:
-    void RunTurn();
-
     // UI譖ｴ譁E��蟁E��畑繝ｭ繝ｼ繧�E�繝ｫ繝上Φ繝峨Λ�E医ち繧�E�謫堺�E�懊�E遖∵�E��E�・・    void OnWaitingForPlayerInputChanged_Local(bool bNow);
     // 讓ｩ螽∫嶌蠖難�E�医し繝ｼ繝�Eor Standalone・峨〒縺�E�縺�E� WaitingForPlayerInput 繧貞､画峩
     void SetWaitingForPlayerInput_ServerLike(bool bNew);
@@ -746,14 +745,6 @@ private:
     /** ★★★ Week 1: 入力処理Subsystem（2025-11-09リファクタリング） */
     UPROPERTY(Transient)
     TObjectPtr<UPlayerInputProcessor> PlayerInputProcessor = nullptr;
-
-    //==========================================================================
-    // Phase 2: WindowId讀懁E���E�逕ｨ縺�E�蜀・Κ繝倥Ν繝代・
-    //==========================================================================
-
-    void ProcessPlayerCommand(const FPlayerCommand& Command);
-
-    void StartTurnMoves(int32 TurnId);
 
     //==========================================================================
     // 蜀・Κ迥�E�諷・    //==========================================================================

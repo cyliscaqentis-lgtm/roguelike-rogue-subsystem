@@ -16,6 +16,9 @@
 #include "Debug/DebugObserverCSV.h"
 #include "UObject/UObjectGlobals.h"
 #include "Character/LyraPawnData.h"
+#include "Teams/LyraTeamSubsystem.h"
+#include "GenericTeamAgentInterface.h"
+#include "GameFramework/PlayerState.h"
 
 namespace UnitManager_Private
 {
@@ -275,9 +278,26 @@ int32 AUnitManager::SpawnEnemyUnits(int32 DesiredEnemyCount)
 			}
 
 			Enemy->StatBlock = DefaultStatBlock;
+			Enemy->StatBlock.Team = 2;  // ★★★ BUGFIX [INC-2025-00004]: Set Team=2 in StatBlock BEFORE SetStatVars()
 			Enemy->SetStatVars();
 			Enemy->SetActorHiddenInGame(false);
-			Enemy->Team = 1;
+			Enemy->Team = 2;  // ★★★ FIX: Changed from 1 to 2 to match LyraTBSAIController TeamID
+
+			// ★★★ BUGFIX [INC-2025-00004]: Register enemy to ULyraTeamSubsystem ★★★
+			// This ensures proper team damage calculation in LyraDamageExecution
+			// FIX: Changed TeamID from 1 to 2 to match project's enemy team convention
+			if (ULyraTeamSubsystem* TeamSubsystem = World->GetSubsystem<ULyraTeamSubsystem>())
+			{
+				const bool bSuccess = TeamSubsystem->ChangeTeamForActor(Enemy, 2);
+				UE_LOG(LogTemp, Log, TEXT("[UnitManager] Registered enemy %s to TeamSubsystem with TeamID=2 (Success=%d)"),
+					*Enemy->GetName(), bSuccess ? 1 : 0);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("[UnitManager] ULyraTeamSubsystem not found! Enemy %s team registration failed."),
+					*Enemy->GetName());
+			}
+
 			AllUnits.Add(Enemy);
 
 			UnitManager_Private::OccupyInitialCell(World, PathFinder, Enemy);
@@ -509,6 +529,42 @@ void AUnitManager::OnTBSCharacterPossessed(AUnitBase* ControlledPawnAsTBS_Player
 		ControlledPawnAsTBS_PlayerPawn->SetStatVars();                // BP: SetStatVars()
 		AllUnits.Add(ControlledPawnAsTBS_PlayerPawn);
 		ControlledPawnAsTBS_PlayerPawn->Team = 0;
+
+		if (APlayerState* PlayerState = ControlledPawnAsTBS_PlayerPawn->GetPlayerState())
+		{
+			if (IGenericTeamAgentInterface* TeamAgent = Cast<IGenericTeamAgentInterface>(PlayerState))
+			{
+				TeamAgent->SetGenericTeamId(FGenericTeamId(0));
+				UE_LOG(LogTemp, Log, TEXT("[UnitManager] Set PlayerState %s team id to 0 via IGenericTeamAgentInterface"),
+					*PlayerState->GetName());
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[UnitManager] PlayerState %s does not implement IGenericTeamAgentInterface"), *PlayerState->GetName());
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[UnitManager] Controlled player pawn %s has no PlayerState"), *ControlledPawnAsTBS_PlayerPawn->GetName());
+		}
+
+
+		// ★★★ BUGFIX [INC-2025-00004]: Register player to ULyraTeamSubsystem ★★★
+		// This ensures proper team damage calculation in LyraDamageExecution
+		if (UWorld* World = GetWorld())
+		{
+			if (ULyraTeamSubsystem* TeamSubsystem = World->GetSubsystem<ULyraTeamSubsystem>())
+			{
+				const bool bSuccess = TeamSubsystem->ChangeTeamForActor(ControlledPawnAsTBS_PlayerPawn, 0);
+				UE_LOG(LogTemp, Log, TEXT("[UnitManager] Registered player %s to TeamSubsystem with TeamID=0 (Success=%d)"),
+					*ControlledPawnAsTBS_PlayerPawn->GetName(), bSuccess ? 1 : 0);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("[UnitManager] ULyraTeamSubsystem not found! Player %s team registration failed."),
+					*ControlledPawnAsTBS_PlayerPawn->GetName());
+			}
+		}
 
 		UnitManager_Private::OccupyInitialCell(GetWorld(), PathFinder, ControlledPawnAsTBS_PlayerPawn);
 	}

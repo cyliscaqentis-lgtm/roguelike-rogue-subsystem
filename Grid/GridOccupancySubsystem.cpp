@@ -54,11 +54,11 @@ bool UGridOccupancySubsystem::WillLeaveThisTick(AActor* Actor) const
         return false;
     }
 
-    // bCommitted チェック：確定した予約のみ退去扱い
-    if (!InfoPtr->bCommitted)
-    {
-        return false;
-    }
+    // ★★★ BUGFIX [INC-2025-00002]: Removed bCommitted dependency ★★★
+    // Race condition fix: Trust logical reservation (ActorToReservation) instead of animation completion
+    // This prevents "REJECT UPDATE" when follower completes animation before leader
+    // OLD CODE (removed):
+    //   if (!InfoPtr->bCommitted) { return false; }
 
     const FIntPoint* CurrentCell = ActorToCell.Find(Actor);
     if (!CurrentCell)

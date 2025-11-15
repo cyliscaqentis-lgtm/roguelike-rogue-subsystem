@@ -341,6 +341,9 @@ struct LYRAGAME_API FResolvedAction
 
     UPROPERTY(BlueprintReadWrite, Category = "Resolved")
     FString ResolutionReason;
+
+    // ★★★ BUGFIX [INC-2025-TIMING]: Pre-registered Barrier ActionId ★★★
+    FGuid BarrierActionId;
 };
 
 //------------------------------------------------------------------------------

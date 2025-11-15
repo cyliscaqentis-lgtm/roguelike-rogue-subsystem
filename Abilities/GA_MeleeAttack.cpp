@@ -11,8 +11,59 @@
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
+#include "Grid/GridOccupancySubsystem.h"
 #include "Grid/GridPathfindingLibrary.h"
 #include "EngineUtils.h"
+#include "Math/RotationMatrix.h"
+
+struct FTargetFacingInfo
+{
+    FVector Location = FVector::ZeroVector;
+    bool bUsedReservedCell = false;
+    FIntPoint ReservedCell = FIntPoint(-1, -1);
+};
+
+static AGridPathfindingLibrary* FindGridLibrary(UWorld* World)
+{
+    if (!World)
+    {
+        return nullptr;
+    }
+
+    for (TActorIterator<AGridPathfindingLibrary> It(World); It; ++It)
+    {
+        return *It;
+    }
+
+    return nullptr;
+}
+
+static FTargetFacingInfo ComputeTargetFacingInfo(AActor* Target, UWorld* World, AGridPathfindingLibrary* GridLib)
+{
+    FTargetFacingInfo Result;
+    if (!Target)
+    {
+        return Result;
+    }
+
+    Result.Location = Target->GetActorLocation();
+    if (!GridLib || !World)
+    {
+        return Result;
+    }
+
+    if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
+    {
+        Result.ReservedCell = Occupancy->GetReservedCellForActor(Target);
+        if (Result.ReservedCell.X >= 0 && Result.ReservedCell.Y >= 0)
+        {
+            Result.Location = GridLib->GridToWorld(Result.ReservedCell, Target->GetActorLocation().Z);
+            Result.bUsedReservedCell = true;
+        }
+    }
+
+    return Result;
+}
 
 UGA_MeleeAttack::UGA_MeleeAttack(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -115,21 +166,34 @@ void UGA_MeleeAttack::ActivateAbility(
     // ★★★ CRITICAL FIX (2025-11-11): ターゲットの方を向く ★★★
     // 理由: 敵がプレイヤーを攻撃する際、ターゲットの方向を向いていなかった
     //==========================================================================
+    UWorld* World = GetWorld();
+    AGridPathfindingLibrary* GridLib = FindGridLibrary(World);
+    const FTargetFacingInfo FacingInfo = ComputeTargetFacingInfo(TargetUnit, World, GridLib);
+    FVector TargetFacingLocation = FacingInfo.Location;
+
     if (TargetUnit && ActorInfo && ActorInfo->AvatarActor.IsValid())
     {
         AActor* Avatar = ActorInfo->AvatarActor.Get();
         if (Avatar && IsValid(TargetUnit))
         {
-            FVector ToTarget = TargetUnit->GetActorLocation() - Avatar->GetActorLocation();
-            ToTarget.Z = 0.0f;  // 水平方向のみ（Z軸は無視）
+            FVector ToTarget = TargetFacingLocation - Avatar->GetActorLocation();
+            ToTarget.Z = 0.0f;  // Ignore vertical axis
 
             if (!ToTarget.IsNearlyZero())
             {
-                FRotator NewRotation = ToTarget.Rotation();
+                const FVector DirectionToTarget = ToTarget.GetSafeNormal();
+                const FRotator NewRotation = FRotationMatrix::MakeFromY(DirectionToTarget).Rotator();
                 Avatar->SetActorRotation(NewRotation);
 
                 UE_LOG(LogTemp, Log, TEXT("[GA_MeleeAttack] %s: Rotated to face target %s (Yaw=%.1f)"),
                     *GetNameSafe(Avatar), *GetNameSafe(TargetUnit), NewRotation.Yaw);
+
+                if (FacingInfo.bUsedReservedCell)
+                {
+                    UE_LOG(LogTemp, Log,
+                        TEXT("[GA_MeleeAttack] %s: Using reserved cell %s for facing rotation"),
+                        *GetNameSafe(Avatar), *FacingInfo.ReservedCell.ToString());
+                }
             }
             else
             {
@@ -313,25 +377,17 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
     }
 
     // ★★★ FIX (2025-11-12): タイルベースの距離計算（斜め対応） ★★★
+    UWorld* World = GetWorld();
+    AGridPathfindingLibrary* GridLib = FindGridLibrary(World);
+    const FTargetFacingInfo FacingInfo = ComputeTargetFacingInfo(Target, World, GridLib);
+    FVector TargetFacingLocation = FacingInfo.Location;
     int32 DistanceInTiles = -1;
-    AGridPathfindingLibrary* GridLib = nullptr;
-
-    // GridPathfindingLibraryを取得
-    if (UWorld* World = GetWorld())
-    {
-        for (TActorIterator<AGridPathfindingLibrary> It(World); It; ++It)
-        {
-            GridLib = *It;
-            break;
-        }
-    }
 
     if (GridLib)
     {
         FIntPoint AttackerGrid = GridLib->WorldToGrid(Avatar->GetActorLocation());
-        FIntPoint TargetGrid = GridLib->WorldToGrid(Target->GetActorLocation());
+        FIntPoint TargetGrid = GridLib->WorldToGrid(TargetFacingLocation);
 
-        // マンハッタン距離（斜めも正しく計算される）
         DistanceInTiles = FMath::Abs(AttackerGrid.X - TargetGrid.X) + FMath::Abs(AttackerGrid.Y - TargetGrid.Y);
 
         UE_LOG(LogTemp, Warning,
@@ -345,7 +401,6 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
         UE_LOG(LogTemp, Error,
             TEXT("[GA_MeleeAttack] GridPathfindingLibrary not found - cannot calculate tile distance!"));
     }
-
     // ASC and Tags diagnostic
     if (UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Target))
     {
@@ -452,3 +507,4 @@ AGameTurnManagerBase* UGA_MeleeAttack::GetTurnManager() const
     }
     return CachedTurnManager.Get();
 }
+
