@@ -16,6 +16,7 @@
 #include "Rogue/Grid/GridPathfindingSubsystem.h"
 #include "Rogue/Utility/RogueGameplayTags.h"
 #include "Turn/GameTurnManagerBase.h"
+#include "Turn/TurnFlowCoordinator.h"
 #include "Utility/PathFinderUtils.h"
 #include "Utility/TurnCommandEncoding.h"
 #include "TimerManager.h"
@@ -214,10 +215,25 @@ void UGA_MoveBase::ActivateAbility(
 	}
 
 	// CodeRevision: INC-2025-00018-R3 (Remove barrier management - Phase 3) (2025-11-17)
+	// CodeRevision: INC-2025-00030-R1 (Use TurnFlowCoordinator instead of GetCurrentTurnIndex) (2025-11-16 00:00)
 	// TurnId retrieval simplified - only from TurnManager for CompletedTurnIdForEvent
 	if (const AGameTurnManagerBase* TurnManager = Cast<AGameTurnManagerBase>(TriggerEventData->OptionalObject.Get()))
 	{
-		CompletedTurnIdForEvent = TurnManager->GetCurrentTurnIndex();
+		if (UWorld* World = GetWorld())
+		{
+			if (UTurnFlowCoordinator* TFC = World->GetSubsystem<UTurnFlowCoordinator>())
+			{
+				CompletedTurnIdForEvent = TFC->GetCurrentTurnId();
+			}
+			else
+			{
+				CompletedTurnIdForEvent = TurnManager->GetCurrentTurnId();
+			}
+		}
+		else
+		{
+			CompletedTurnIdForEvent = TurnManager->GetCurrentTurnId();
+		}
 		UE_LOG(LogTurnManager, Log,
 			TEXT("[GA_MoveBase] TurnId retrieved from TurnManager: %d (Actor=%s)"),
 			CompletedTurnIdForEvent, *GetNameSafe(Avatar));

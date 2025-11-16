@@ -91,8 +91,8 @@ public:
     UFUNCTION()
     void OnRep_WaitingForPlayerInput();
 
-    UFUNCTION()
-    void OnRep_InputWindowId();
+    // CodeRevision: INC-2025-00030-R1 (Removed OnRep_InputWindowId - use TurnFlowCoordinator instead) (2025-11-16 00:00)
+    // Removed: UFUNCTION() void OnRep_InputWindowId();
 
     UFUNCTION()
     void OnRep_CurrentTurnId();
@@ -104,11 +104,9 @@ public:
     UFUNCTION(BlueprintPure, Category = "Turn")
     int32 GetCurrentTurnId() const { return CurrentTurnId; }
 
-    UFUNCTION(BlueprintPure, Category = "Turn")
-    int32 GetCurrentInputWindowId() const { return InputWindowId; }
-
-    UFUNCTION(BlueprintPure, Category = "Turn")
-    int32 GetCurrentTurnIndex() const { return CurrentTurnIndex; }
+    // CodeRevision: INC-2025-00030-R1 (Remove legacy accessors - use TurnFlowCoordinator instead) (2025-11-16 00:00)
+    // Removed: GetCurrentInputWindowId() - use TurnFlowCoordinator->GetCurrentInputWindowId() instead
+    // Removed: GetCurrentTurnIndex() - use TurnFlowCoordinator->GetCurrentTurnIndex() instead
 
     //==========================================================================
     // PathFinder Accessor
@@ -306,9 +304,8 @@ public:
     UPROPERTY(EditAnywhere, Instanced, Category = "Turn|Hooks|Debug")
     TArray<TObjectPtr<UObject>> DebugObservers;
 
-    // Current turn index (used for legacy compatibility)
-    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Turn|Legacy")
-    int32 CurrentTurnIndex = 0;
+    // CodeRevision: INC-2025-00030-R1 (Removed CurrentTurnIndex - use TurnFlowCoordinator->GetCurrentTurnIndex() instead) (2025-11-16 00:00)
+    // Removed: int32 CurrentTurnIndex = 0;
 
     UPROPERTY()
     TObjectPtr<URogueDungeonSubsystem> DungeonSystem = nullptr;
@@ -360,14 +357,12 @@ public:
     // CodeRevision: INC-2025-00029-R1 (Removed CachedPlayerPawn - Use UGameplayStatics::GetPlayerPawn() instead) (2025-11-16 00:00)
     // Removed: TObjectPtr<APawn> CachedPlayerPawn = nullptr;
 
-    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Turn|Legacy")
-    TObjectPtr<UDebugObserverCSV> DebugObserverCSV = nullptr;
+    // CodeRevision: INC-2025-00030-R1 (Removed legacy subsystem references - use GetWorld()->GetSubsystem<>() instead) (2025-11-16 00:00)
+    // Removed: TObjectPtr<UDebugObserverCSV> DebugObserverCSV = nullptr; (use DebugObservers array and cast)
+    // Removed: TObjectPtr<UEnemyTurnDataSubsystem> EnemyTurnData = nullptr; (use GetWorld()->GetSubsystem<UEnemyTurnDataSubsystem>())
 
-    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Turn|Legacy")
-    TObjectPtr<UEnemyTurnDataSubsystem> EnemyTurnData = nullptr;
-
-    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Turn|Legacy")
-    TArray<TObjectPtr<AActor>> CachedEnemies;
+    // CodeRevision: INC-2025-00030-R1 (Removed CachedEnemies - use CachedEnemiesForTurn or EnemyAISubsystem instead) (2025-11-16 00:00)
+    // Removed: TArray<TObjectPtr<AActor>> CachedEnemies; (use CachedEnemiesForTurn or EnemyAISubsystem->CollectAllEnemies())
 
     /** Cached and sorted list of enemies for the current turn */
     UPROPERTY(BlueprintReadOnly, Category = "Turn|State")
@@ -388,16 +383,12 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Turn|State")
     int32 EnemiesRevision = 0;
 
-    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Turn|Legacy")
-    int32 InputWindowId = 0;
+    // CodeRevision: INC-2025-00030-R1 (Removed InputWindowId - use TurnFlowCoordinator->GetCurrentInputWindowId() instead) (2025-11-16 00:00)
+    // Removed: int32 InputWindowId = 0;
 
- 
-
-    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Turn|Legacy")
-    int32 PendingAbilityCount = 0;
-
-    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Turn|Legacy")
-    FVector CachedInputDirection = FVector::ZeroVector;
+    // CodeRevision: INC-2025-00030-R1 (Removed unused legacy members) (2025-11-16 00:00)
+    // Removed: int32 PendingAbilityCount = 0; (unused)
+    // Removed: FVector CachedInputDirection = FVector::ZeroVector; (unused)
 
     UPROPERTY(BlueprintReadWrite, ReplicatedUsing = OnRep_WaitingForPlayerInput, Category = "Turn|State")
     bool WaitingForPlayerInput = false;

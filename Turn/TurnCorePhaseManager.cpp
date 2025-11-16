@@ -6,6 +6,7 @@
 #include "ConflictResolverSubsystem.h"
 #include "StableActorRegistry.h"
 #include "Turn/GameTurnManagerBase.h"
+#include "Turn/TurnFlowCoordinator.h"
 #include "TurnSystemTypes.h"
 #include "../Grid/GridOccupancySubsystem.h"
 #include "../Utility/TurnCommandEncoding.h"
@@ -128,9 +129,10 @@ void UTurnCorePhaseManager::CoreObservationPhase(const FIntPoint& PlayerCell)
     {
         if (UGridOccupancySubsystem* GridOccupancy = World->GetSubsystem<UGridOccupancySubsystem>())
         {
-            if (AGameTurnManagerBase* TurnMgr = ResolveTurnManager())
+            // CodeRevision: INC-2025-00030-R1 (Use TurnFlowCoordinator instead of GetCurrentTurnIndex) (2025-11-16 00:00)
+            if (UTurnFlowCoordinator* TFC = World->GetSubsystem<UTurnFlowCoordinator>())
             {
-                int32 CurrentTurnId = TurnMgr->GetCurrentTurnIndex();
+                int32 CurrentTurnId = TFC->GetCurrentTurnId();
                 GridOccupancy->SetCurrentTurnId(CurrentTurnId);
                 GridOccupancy->PurgeOutdatedReservations(CurrentTurnId);
                 UE_LOG(LogTemp, Log, TEXT("[TurnCore] ObservationPhase: Purged outdated reservations for turn %d"), CurrentTurnId);
@@ -181,10 +183,14 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
 
     if (GridOccupancy)
     {
+        // CodeRevision: INC-2025-00030-R1 (Use TurnFlowCoordinator instead of GetCurrentTurnIndex) (2025-11-16 00:00)
         int32 CurrentTurnId = 0;
-        if (AGameTurnManagerBase* TurnManager = ResolveTurnManager())
+        if (UWorld* World = GetWorld())
         {
-            CurrentTurnId = TurnManager->GetCurrentTurnIndex();
+            if (UTurnFlowCoordinator* TFC = World->GetSubsystem<UTurnFlowCoordinator>())
+            {
+                CurrentTurnId = TFC->GetCurrentTurnId();
+            }
         }
 
         GridOccupancy->SetCurrentTurnId(CurrentTurnId);
