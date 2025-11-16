@@ -328,3 +328,50 @@ public:
 ---
 
 **このドキュメントに基づき、段階的にリファクタリングを実施します。**
+
+---
+
+## 6. GameTurnManagerBase ラッパー関数の削除
+
+### 現状の問題
+`GameTurnManagerBase` の責務分離は進んでいるが、依然として他のサブシステムへの処理を委譲（ラップ）するだけの関数が多数残存している。これらの関数は、`GameTurnManagerBase` が依然として多くの責務を持つ「God Object」であるかのような誤解を招き、コードの可読性と保守性を低下させている。
+
+過去の修正（`INC-2025-00009-R1`）で類似のラッパー関数が削除された際の方針に基づき、これらの不要な関数を徹底的に削除する。
+
+### 削除対象の関数リスト
+
+#### 6.1 ダンジョン管理系のラッパー関数
+**問題**: `URogueDungeonSubsystem` への単純な処理委譲。
+**修正方針**: 呼び出し元は `GetWorld()->GetSubsystem<URogueDungeonSubsystem>()` を経由して、サブシステム本体の関数を直接呼び出すように修正する。
+
+- `GetDungeonSystem()`
+- `GetFloorGenerator()`
+- `EnsureFloorGenerated()`
+- `NextFloor()`
+- `WarpPlayerToStairUp()`
+
+#### 6.2 AI処理系のラッパー関数
+**問題**: `EnemyAISubsystem` や `EnemyTurnDataSubsystem` への単純な処理委譲。
+**修正方針**: AI関連の処理フローは、`TurnFlowCoordinator` やAI関連クラスが、各AIサブシステムを直接呼び出して制御するように修正する。
+
+- `BuildAllObservations()`
+- `CollectEnemies_Implementation()`
+- `CollectIntents_Implementation()`
+- `GetEnemyIntentsBP_Implementation()`
+- `HasAnyAttackIntent()`
+
+#### 6.3 汎用ユーティリティ系の関数
+**問題**: `GameTurnManagerBase` の状態に依存しないヘルパー関数であり、クラスの責務を肥大化させている。
+**修正方針**: `UGameplayStatics` の直接使用に置き換えるか、必要であれば専用の `UBlueprintFunctionLibrary` に移管する。
+
+- `SendGameplayEventWithResult()`
+- `SendGameplayEvent()`
+- `GetPlayerController_TBS()`
+- `GetPlayerPawnCachedOrFetch()`
+- `GetPlayerPawn()`
+- `GetPlayerActor()`
+
+### 期待される効果
+- `GameTurnManagerBase` の責務が「ターン進行の管理」にさらに限定され、クラスの見通しが良くなる。
+- 各サブシステムが持つべき責務が明確になり、コードの呼び出し関係が正常化される。
+- 不要な中間層がなくなることで、コードの可読性と保守性が向上する。

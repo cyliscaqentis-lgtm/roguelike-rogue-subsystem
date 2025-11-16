@@ -224,6 +224,8 @@ private:
     bool bBarrierRegistered = false;
     bool bBarrierActionCompleted = false;
 
+    mutable TWeakObjectPtr<AActor> CachedBarrierAvatar;
+
     /**
      * ★★★ Token方式: Barrier完了トークン（冪等Complete用）
      */
