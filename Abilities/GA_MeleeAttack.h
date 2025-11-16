@@ -7,6 +7,7 @@
 // 前方宣言
 class UGameplayEffect;
 class AUnitBase;
+class AGridPathfindingLibrary;
 
 UCLASS(Blueprintable)
 class LYRAGAME_API UGA_MeleeAttack : public UGA_AttackBase
@@ -17,7 +18,7 @@ public:
     UGA_MeleeAttack(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
     //--------------------------------------------------------------------------
-    // GameplayAbility オーバーライド
+    // GameplayAbility オーバ�EライチE
     //--------------------------------------------------------------------------
 
     virtual void ActivateAbility(
@@ -40,41 +41,41 @@ protected:
     // 設定パラメータ
     //--------------------------------------------------------------------------
 
-    /** 近接攻撃のGameplayEffect */
+    /** 近接攻撁E�EGameplayEffect */
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "MeleeAttack")
     TSubclassOf<UGameplayEffect> MeleeAttackEffect;
 
-    /** 近接攻撃モンタージュ */
+    /** 近接攻撁E��ンタージュ */
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "MeleeAttack|Animation")
     TObjectPtr<UAnimMontage> MeleeAttackMontage;
 
-    /** ダメージ量（SetByCallerで設定） */
+    /** ダメージ量！EetByCallerで設定！E*/
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "MeleeAttack")
     float Damage = 28.0f;
 
     //--------------------------------------------------------------------------
-    // 内部状態
+    // 冁E��状慁E
     //--------------------------------------------------------------------------
 
-    /** 攻撃対象ユニット */
+    /** 攻撁E��象ユニッチE*/
     UPROPERTY(BlueprintReadOnly, Category = "MeleeAttack|State")
     TObjectPtr<AActor> TargetUnit;
 
     //--------------------------------------------------------------------------
-    // C++内部実装
+    // C++冁E��実裁E
     //--------------------------------------------------------------------------
 
-    /** 隣接する敵ユニットを取得 */
+    /** 隣接する敵ユニットを取征E*/
     AActor* FindAdjacentTarget();
 
-    /** GameplayEffectを適用してダメージを与える */
+    /** GameplayEffectを適用してダメージを与えめE*/
     void ApplyDamageToTarget(AActor* Target);
 
-    /** モンタージュ完了コールバック */
+    /** モンタージュ完亁E��ールバック */
     UFUNCTION()
     void OnMontageCompleted();
 
-    /** モンタージュブレンドアウト */
+    /** モンタージュブレンドアウチE*/
     UFUNCTION()
     void OnMontageBlendOut();
 
@@ -83,14 +84,14 @@ protected:
     void OnMontageCancelled();
 
     //--------------------------------------------------------------------------
-    // Blueprint拡張ポイント
+    // Blueprint拡張ポインチE
     //--------------------------------------------------------------------------
 
     /**
-     * モンタージュ再生（Blueprint実装可能）
+     * モンタージュ再生�E�Elueprint実裁E��能�E�E
      *
-     * デフォルトではC++でPlayMontageAndWaitを使用。
-     * プロジェクト固有のアニメーション制御が必要な場合はBPでオーバーライド。
+     * チE��ォルトではC++でPlayMontageAndWaitを使用、E
+     * プロジェクト固有�Eアニメーション制御が忁E��な場合�EBPでオーバ�Eライド、E
      */
     UFUNCTION(BlueprintNativeEvent, Category = "MeleeAttack|Animation")
     void PlayAttackMontage();
@@ -105,10 +106,19 @@ private:
     /** 入力無効化フラグ */
     bool bInputDisabled = false;
     
-    // ★★★ TurnManagerのキャッシュ ★★★
+    // ☁E�E☁ETurnManagerのキャチE��ュ ☁E�E☁E
     UPROPERTY(Transient)
     mutable TWeakObjectPtr<class AGameTurnManagerBase> CachedTurnManager;
     
-    /** TurnManager取得ヘルパー */
+    /** TurnManager取得�Eルパ�E */
     class AGameTurnManagerBase* GetTurnManager() const;
+
+    /** ���߂̃^�[�Q�b�g�ʒu�L���b�V�� */
+    FVector CachedTargetLocation = FVector::ZeroVector;
+    FIntPoint CachedTargetCell = FIntPoint(-1, -1);
+    bool bHasCachedTargetCell = false;
+
+    /** �^�[�Q�b�g�ʒu�L���b�V�����X�V */
+    void UpdateCachedTargetLocation(const FVector& Location, const FIntPoint& ReservedCell, const AGridPathfindingLibrary* GridLib);
 };
+

@@ -161,57 +161,14 @@ void UGA_WaitBase::CompleteBarrierAction()
 
 void UGA_WaitBase::NotifyTurnManagerStarted()
 {
-    if (!HasAuthority(&CurrentActivationInfo))
-    {
-        return;
-    }
-
-    UWorld* World = GetWorld();
-    if (!World)
-    {
-        return;
-    }
-
-    bool bNotified = false;
-    for (TActorIterator<AGameTurnManagerBase> It(World); It; ++It)
-    {
-        It->NotifyAbilityStarted();
-        DIAG_LOG(Verbose, TEXT("[GA_WaitBase] Notified TurnManager of wait start"));
-        bNotified = true;
-        break;
-    }
-
-    if (!bNotified)
-    {
-        DIAG_LOG(Warning, TEXT("[GA_WaitBase] TurnManager not found when notifying wait start"));
-    }
+    // NOTE: NotifyAbilityStarted() was removed - Barrier subsystem handles this now
+    // This function is kept for compatibility but does nothing
+    bTurnManagerNotified = true;
 }
 
 void UGA_WaitBase::NotifyTurnManagerCompleted()
 {
-    if (bTurnManagerNotified || !HasAuthority(&CurrentActivationInfo))
-    {
-        return;
-    }
-
-    UWorld* World = GetWorld();
-    if (!World)
-    {
-        return;
-    }
-
-    bool bNotified = false;
-    for (TActorIterator<AGameTurnManagerBase> It(World); It; ++It)
-    {
-        It->OnAbilityCompleted();
-        DIAG_LOG(Verbose, TEXT("[GA_WaitBase] Notified TurnManager of wait completion"));
-        bTurnManagerNotified = true;
-        bNotified = true;
-        break;
-    }
-
-    if (!bNotified)
-    {
-        DIAG_LOG(Warning, TEXT("[GA_WaitBase] TurnManager not found when notifying wait completion"));
-    }
+    // NOTE: OnAbilityCompleted() was removed - Barrier subsystem handles this now
+    // This function is kept for compatibility but does nothing
+    bTurnManagerNotified = true;
 }

@@ -25,22 +25,16 @@ void UAttackPhaseExecutorSubsystem::Initialize(FSubsystemCollectionBase& Collect
 
 void UAttackPhaseExecutorSubsystem::Deinitialize()
 {
-	// デリゲート解除
 	UnbindCurrentASC();
 
 	UE_LOG(LogAttackPhase, Log, TEXT("[AttackPhaseExecutor] Deinitialized"));
 	Super::Deinitialize();
 }
 
-//--------------------------------------------------------------------------
-// 🌟 攻撃逐次実行API（Lumina提言A2）
-//--------------------------------------------------------------------------
-
 void UAttackPhaseExecutorSubsystem::BeginSequentialAttacks(
 	const TArray<FResolvedAction>& AttackActions,
 	int32 InTurnId)
 {
-	// 既存の実行をクリーンアップ
 	UnbindCurrentASC();
 
 	Queue = AttackActions;
@@ -49,9 +43,8 @@ void UAttackPhaseExecutorSubsystem::BeginSequentialAttacks(
 
 	UE_LOG(LogAttackPhase, Log,
 		TEXT("[Turn %d] BeginSequentialAttacks: %d attacks queued"),
-		TurnId, Queue.Num());
+		 TurnId, Queue.Num());
 
-	// 攻撃がない場合は即座に完了
 	if (Queue.Num() == 0)
 	{
 		UE_LOG(LogAttackPhase, Warning,
@@ -60,8 +53,6 @@ void UAttackPhaseExecutorSubsystem::BeginSequentialAttacks(
 		return;
 	}
 
-	// ★★★ BUGFIX [INC-2025-TIMING]: Pre-register ALL attacks to TurnActionBarrier ★★★
-	// This prevents Barrier from completing the turn prematurely when only the first attack finishes
 	if (UWorld* World = GetWorld())
 	{
 		if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
@@ -93,13 +84,11 @@ void UAttackPhaseExecutorSubsystem::BeginSequentialAttacks(
 		}
 	}
 
-	// 最初の攻撃を送出
 	DispatchNext();
 }
 
 void UAttackPhaseExecutorSubsystem::NotifyAttackCompleted(AActor* Attacker)
 {
-	// GA_Attackから直接呼ばれる場合の互換API
 	if (Attacker)
 	{
 		UE_LOG(LogAttackPhase, Verbose,
@@ -107,41 +96,31 @@ void UAttackPhaseExecutorSubsystem::NotifyAttackCompleted(AActor* Attacker)
 			TurnId, *Attacker->GetName());
 	}
 
-	// ASC完了イベントと同じ処理
 	OnAbilityCompleted(nullptr);
 }
 
-//--------------------------------------------------------------------------
-// 内部実装
-//--------------------------------------------------------------------------
-
 void UAttackPhaseExecutorSubsystem::DispatchNext()
 {
-	// キュー終端チェック
 	if (CurrentIndex >= Queue.Num())
 	{
 		UE_LOG(LogAttackPhase, Log,
 			TEXT("[Turn %d] All %d attacks completed"),
 			TurnId, Queue.Num());
 
-		// デリゲート解除
 		UnbindCurrentASC();
-
-		// 完了通知
 		OnFinished.Broadcast(TurnId);
 		return;
 	}
 
 	const FResolvedAction& Action = Queue[CurrentIndex];
 
-	// Actorバリデーション
 	if (!Action.Actor.IsValid())
 	{
 		UE_LOG(LogAttackPhase, Warning,
 			TEXT("[Turn %d] Invalid actor at index %d, skipping"),
 			TurnId, CurrentIndex);
 		CurrentIndex++;
-		DispatchNext(); // 再帰呼び出しで次へ
+		DispatchNext();
 		return;
 	}
 
@@ -149,27 +128,23 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 	UAbilitySystemComponent* ASC =
 		UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Attacker);
 
-	// ASCバリデーション
 	if (!ASC)
 	{
 		UE_LOG(LogAttackPhase, Warning,
 			TEXT("[Turn %d] %s has no ASC, skipping"),
 			TurnId, *Attacker->GetName());
 		CurrentIndex++;
-		DispatchNext(); // 再帰呼び出しで次へ
+		DispatchNext();
 		return;
 	}
 
-	// 🌟 ASC完了イベント購読（Lumina提言：ポーリング廃止）
 	BindASC(ASC);
 
-	// GameplayEvent送出
 	FGameplayEventData Payload;
 	Payload.EventTag = Action.AbilityTag;
 	Payload.Instigator = Attacker;
 	Payload.TargetData = Action.TargetData;
 
-	// ★★★ CRITICAL DIAGNOSTIC (2025-11-12): Ability診断 ★★★
 	UE_LOG(LogAttackPhase, Warning,
 		TEXT("[Turn %d] %s: ASC has %d activatable abilities"),
 		TurnId, *Attacker->GetName(), ASC->GetActivatableAbilities().Num());
@@ -179,13 +154,11 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 		const FGameplayAbilitySpec& Spec = ASC->GetActivatableAbilities()[i];
 		if (Spec.Ability)
 		{
-			// ★★★ AbilityTriggersはprotectedなので、クラス名と基本情報のみ出力 ★★★
 			UE_LOG(LogAttackPhase, Warning,
 				TEXT("  [%d] Ability=%s (Class=%s), Level=%d, InputID=%d, IsActive=%d"),
 				i, *Spec.Ability->GetName(), *Spec.Ability->GetClass()->GetName(),
 				Spec.Level, Spec.InputID, Spec.IsActive());
 
-			// アセットタグを確認（攻撃アビリティかどうか）
 			const FGameplayTagContainer& AssetTags = Spec.Ability->GetAssetTags();
 			UE_LOG(LogAttackPhase, Warning,
 				TEXT("    AssetTags: %s"),
@@ -205,15 +178,14 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 			TEXT("[Turn %d] Dispatched attack %d/%d: %s (Tag=%s)"),
 			TurnId, CurrentIndex + 1, Queue.Num(),
 			*Attacker->GetName(), *Action.AbilityTag.ToString());
-	}
-	else
-	{
-		UE_LOG(LogAttackPhase, Warning,
-			TEXT("[Turn %d] %s: %s failed to trigger any abilities"),
-			TurnId, *Attacker->GetName(), *Action.AbilityTag.ToString());
+		}
+		else
+		{
+			UE_LOG(LogAttackPhase, Warning,
+				TEXT("[Turn %d] %s: %s failed to trigger any abilities"),
+				TurnId, *Attacker->GetName(), *Action.AbilityTag.ToString());
 
-		// トリガーに失敗した場合は即座に次へ
-		UnbindCurrentASC();
+			UnbindCurrentASC();
 		CurrentIndex++;
 		DispatchNext();
 	}
@@ -227,14 +199,10 @@ void UAttackPhaseExecutorSubsystem::BindASC(UAbilitySystemComponent* ASC)
 		return;
 	}
 
-	// 既存のバインド解除
 	UnbindCurrentASC();
 
 	WaitingASC = ASC;
 
-	// 🌟 ASC完了イベント購読（Lumina提言：決定論的な完了検出）
-	// GA_Attackが SendCompletionEvent(Turn.Ability.Completed) を送ると
-	// OnAbilityCompleted が呼ばれる
 	AbilityCompletedHandle = ASC->GenericGameplayEventCallbacks.FindOrAdd(
 		RogueGameplayTags::Gameplay_Event_Turn_Ability_Completed
 	).AddUObject(this, &UAttackPhaseExecutorSubsystem::OnAbilityCompleted);
@@ -274,7 +242,6 @@ void UAttackPhaseExecutorSubsystem::OnAbilityCompleted(
 		TEXT("[Turn %d] Ability completed at index %d"),
 		TurnId, CurrentIndex);
 
-	// 完了したので次の攻撃へ
 	UnbindCurrentASC();
 	CurrentIndex++;
 	DispatchNext();
@@ -288,7 +255,6 @@ FGuid UAttackPhaseExecutorSubsystem::GetActionIdForActor(AActor* Actor) const
 		return FGuid();
 	}
 
-	// Search for the actor in the current queue and return its pre-registered ActionId
 	for (const FResolvedAction& Action : Queue)
 	{
 		if (Action.Actor.IsValid() && Action.Actor.Get() == Actor)

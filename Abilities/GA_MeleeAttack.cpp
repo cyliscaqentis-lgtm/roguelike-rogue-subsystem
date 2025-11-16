@@ -57,8 +57,12 @@ static FTargetFacingInfo ComputeTargetFacingInfo(AActor* Target, UWorld* World, 
         Result.ReservedCell = Occupancy->GetReservedCellForActor(Target);
         if (Result.ReservedCell.X >= 0 && Result.ReservedCell.Y >= 0)
         {
-            Result.Location = GridLib->GridToWorld(Result.ReservedCell, Target->GetActorLocation().Z);
-            Result.bUsedReservedCell = true;
+            const FIntPoint ActualCell = GridLib->WorldToGrid(Result.Location);
+            if (ActualCell == Result.ReservedCell)
+            {
+                Result.Location = GridLib->GridToWorld(Result.ReservedCell, Target->GetActorLocation().Z);
+                Result.bUsedReservedCell = true;
+            }
         }
     }
 
@@ -74,20 +78,16 @@ UGA_MeleeAttack::UGA_MeleeAttack(const FObjectInitializer& ObjectInitializer)
 
     MaxExecutionTime = 5.0f;
     BaseDamage = 28.0f;
-    RangeInTiles = 1; // 近接攻撃は隣接（1マス）のみ
+    RangeInTiles = 1;
 
-    // アセットタグ
     FGameplayTagContainer Tags;
     Tags.AddTag(RogueGameplayTags::Ability_Attack);
     Tags.AddTag(RogueGameplayTags::Ability_Melee);
-    Tags.AddTag(RogueGameplayTags::Ability_MeleeAttack);  // ネイティブタグを使用
+    Tags.AddTag(RogueGameplayTags::Ability_MeleeAttack);
     SetAssetTags(Tags);
 
     ActivationBlockedTags.AddTag(RogueGameplayTags::State_Ability_Executing);
 }
-
-//------------------------------------------------------------------------------
-// ActivateAbility・医Γ繧､繝ｳ繝ｭ繧ｸ繝・け・・//------------------------------------------------------------------------------
 
 void UGA_MeleeAttack::ActivateAbility(
     const FGameplayAbilitySpecHandle Handle,
@@ -95,7 +95,6 @@ void UGA_MeleeAttack::ActivateAbility(
     const FGameplayAbilityActivationInfo ActivationInfo,
     const FGameplayEventData* TriggerEventData)
 {
-    // ★★★ CRITICAL DIAGNOSTIC (2025-11-12): アビリティ起動の確認 ★★★
     UE_LOG(LogTemp, Error,
         TEXT("[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=%s"),
         *GetNameSafe(GetAvatarActorFromActorInfo()));
@@ -116,8 +115,6 @@ void UGA_MeleeAttack::ActivateAbility(
     UE_LOG(LogTemp, Error,
         TEXT("[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic"));
 
-    // ★★★ FIX (2025-11-11): EventDataからターゲットを抽出 ★★★
-    // AI決定時に保存されたターゲットを使用（実行時検索を回避）
     if (TriggerEventData && TriggerEventData->TargetData.IsValid(0))
     {
         const FGameplayAbilityTargetData* TargetData = TriggerEventData->TargetData.Get(0);
@@ -133,7 +130,6 @@ void UGA_MeleeAttack::ActivateAbility(
         }
     }
 
-    // フォールバック：EventDataにターゲットがない場合は従来の検索方式
     if (!TargetUnit)
     {
         TargetUnit = FindAdjacentTarget();
@@ -162,13 +158,10 @@ void UGA_MeleeAttack::ActivateAbility(
         }
     }
 
-    //==========================================================================
-    // ★★★ CRITICAL FIX (2025-11-11): ターゲットの方を向く ★★★
-    // 理由: 敵がプレイヤーを攻撃する際、ターゲットの方向を向いていなかった
-    //==========================================================================
     UWorld* World = GetWorld();
     AGridPathfindingLibrary* GridLib = FindGridLibrary(World);
     const FTargetFacingInfo FacingInfo = ComputeTargetFacingInfo(TargetUnit, World, GridLib);
+    UpdateCachedTargetLocation(FacingInfo.Location, FacingInfo.ReservedCell, GridLib);
     FVector TargetFacingLocation = FacingInfo.Location;
 
     if (TargetUnit && ActorInfo && ActorInfo->AvatarActor.IsValid())
@@ -208,7 +201,6 @@ void UGA_MeleeAttack::ActivateAbility(
             *GetNameSafe(GetAvatarActorFromActorInfo()));
     }
 
-    // 攻撃モンタージュを再生
     UE_LOG(LogTemp, Error,
         TEXT("[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=%s"),
         MeleeAttackMontage ? *MeleeAttackMontage->GetName() : TEXT("NULL"));
@@ -216,9 +208,6 @@ void UGA_MeleeAttack::ActivateAbility(
     UE_LOG(LogTemp, Error,
         TEXT("[GA_MeleeAttack] ActivateAbility COMPLETED"));
 }
-
-//------------------------------------------------------------------------------
-// 繝｢繝ｳ繧ｿ繝ｼ繧ｸ繝･蜀咲函・・++繝・ヵ繧ｩ繝ｫ繝亥ｮ溯｣・ｼ・//------------------------------------------------------------------------------
 
 void UGA_MeleeAttack::PlayAttackMontage_Implementation()
 {
@@ -245,18 +234,12 @@ void UGA_MeleeAttack::PlayAttackMontage_Implementation()
     Task->ReadyForActivation();
 }
 
-//------------------------------------------------------------------------------
-// 繝｢繝ｳ繧ｿ繝ｼ繧ｸ繝･螳御ｺ・さ繝ｼ繝ｫ繝舌ャ繧ｯ
-//------------------------------------------------------------------------------
-
 void UGA_MeleeAttack::OnMontageCompleted()
 {
     UE_LOG(LogTemp, Error,
         TEXT("[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=%s"),
         *GetNameSafe(GetAvatarActorFromActorInfo()));
 
-    // ★★★ FIX (2025-11-11): ActivateAbilityで保存されたターゲットを使用 ★★★
-    // 実行時に再検索せず、AI決定時に保存されたターゲットを攻撃
     if (TargetUnit && IsValid(TargetUnit))
     {
         UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] %s: Attacking stored target: %s"),
@@ -269,43 +252,16 @@ void UGA_MeleeAttack::OnMontageCompleted()
             *GetNameSafe(GetAvatarActorFromActorInfo()));
     }
 
-    //==========================================================================
-    // ★★★ CRITICAL FIX (2025-11-11): 遅延を削除して即座にEndAbilityを呼ぶ ★★★
-    // 理由: 0.2秒の遅延がターンをまたいで完了通知が届く原因だった
-    //       OnMontageCompletedが呼ばれた時点でモンタージュは完了済みなので遅延不要
-    //==========================================================================
     UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] %s: Montage completed, calling EndAbility immediately"),
         *GetNameSafe(GetAvatarActorFromActorInfo()));
     EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
     UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] EndAbility RETURNED"));
-
-    // ★★★ 削除: 0.2秒遅延タイマー（ターンブロック問題の原因）
-    // FTimerHandle DelayHandle;
-    // if (UWorld* World = GetWorld())
-    // {
-    //     World->GetTimerManager().SetTimer(
-    //         DelayHandle,
-    //         [this]()
-    //         {
-    //             EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
-    //         },
-    //         0.2f,
-    //         false);
-    // }
 }
 
 void UGA_MeleeAttack::OnMontageBlendOut()
 {
-    //==========================================================================
-    // ★★★ FIX (2025-11-11): BlendOut時も適切に処理 ★★★
-    // OnCompletedで既にEndAbilityが呼ばれているはずだが、
-    // 念のためBlendOutでも呼ぶ（二重呼び出しは内部で防御される）
-    //==========================================================================
     UE_LOG(LogTemp, Verbose, TEXT("[GA_MeleeAttack] %s: Montage blend out"),
         *GetNameSafe(GetAvatarActorFromActorInfo()));
-
-    // OnCompletedが先に呼ばれている可能性が高いため、
-    // ここでは何もしない（OnCompletedで即座にEndAbilityを呼ぶようになった）
 }
 
 void UGA_MeleeAttack::OnMontageCancelled()
@@ -313,10 +269,6 @@ void UGA_MeleeAttack::OnMontageCancelled()
     UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] Montage cancelled"));
     EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
 }
-
-//------------------------------------------------------------------------------
-// 髫｣謗･繧ｿ繝ｼ繧ｲ繝・ヨ讀懃ｴ｢
-//------------------------------------------------------------------------------
 
 AActor* UGA_MeleeAttack::FindAdjacentTarget()
 {
@@ -357,7 +309,6 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
         return;
     }
 
-    // ★★★ DIAGNOSTIC (2025-11-12): ダメージ倍率がゼロになる原因を特定 ★★★
     UE_LOG(LogTemp, Warning,
         TEXT("[GA_MeleeAttack] ==== DAMAGE DIAGNOSTIC START ===="));
     UE_LOG(LogTemp, Warning,
@@ -376,7 +327,6 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
         }
     }
 
-    // ★★★ FIX (2025-11-12): タイルベースの距離計算（斜め対応） ★★★
     UWorld* World = GetWorld();
     AGridPathfindingLibrary* GridLib = FindGridLibrary(World);
     const FTargetFacingInfo FacingInfo = ComputeTargetFacingInfo(Target, World, GridLib);
@@ -386,12 +336,14 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
     if (GridLib)
     {
         FIntPoint AttackerGrid = GridLib->WorldToGrid(Avatar->GetActorLocation());
-        FIntPoint TargetGrid = GridLib->WorldToGrid(TargetFacingLocation);
+        FIntPoint TargetGrid = bHasCachedTargetCell ? CachedTargetCell : GridLib->WorldToGrid(TargetFacingLocation);
 
-        DistanceInTiles = FMath::Abs(AttackerGrid.X - TargetGrid.X) + FMath::Abs(AttackerGrid.Y - TargetGrid.Y);
+        DistanceInTiles = FMath::Max(
+            FMath::Abs(AttackerGrid.X - TargetGrid.X),
+            FMath::Abs(AttackerGrid.Y - TargetGrid.Y));
 
         UE_LOG(LogTemp, Warning,
-            TEXT("[GA_MeleeAttack] Attacker=(%d,%d), Target=(%d,%d), DistanceInTiles=%d, RangeInTiles=%d (InRange=%s)"),
+            TEXT("[GA_MeleeAttack] Attacker=(%d,%d), Target=(%d,%d), ChebyshevDistance=%d, RangeInTiles=%d (InRange=%s)"),
             AttackerGrid.X, AttackerGrid.Y, TargetGrid.X, TargetGrid.Y,
             DistanceInTiles, RangeInTiles,
             DistanceInTiles <= RangeInTiles ? TEXT("YES") : TEXT("NO - TOO FAR"));
@@ -427,8 +379,6 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
         FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(MeleeAttackEffect, 1.0f, ContextHandle);
         if (SpecHandle.IsValid())
         {
-            // ★★★ CRITICAL FIX (2025-11-13): ダメージ0防止のフェイルセーフ ★★★
-            // BaseDamageが0以下の場合、デフォルト値（28.0f）を使用
             const float FinalDamage = (BaseDamage > 0.0f) ? BaseDamage : 28.0f;
             
             if (BaseDamage <= 0.0f)
@@ -461,7 +411,6 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
 }
 
 //------------------------------------------------------------------------------
-// EndAbility・医け繝ｪ繝ｼ繝ｳ繧｢繝・・・・
 //------------------------------------------------------------------------------
 
 void UGA_MeleeAttack::EndAbility(
@@ -484,17 +433,35 @@ void UGA_MeleeAttack::EndAbility(
     bInputDisabled = false;
 
     Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+
+    CachedTargetLocation = FVector::ZeroVector;
+    CachedTargetCell = FIntPoint(-1, -1);
+    bHasCachedTargetCell = false;
 }
 
-//------------------------------------------------------------------------------
-// TurnManager蜿門ｾ励・繝ｫ繝代・
-//------------------------------------------------------------------------------
+void UGA_MeleeAttack::UpdateCachedTargetLocation(const FVector& Location, const FIntPoint& ReservedCell, const AGridPathfindingLibrary* GridLib)
+{
+    CachedTargetLocation = Location;
+    bHasCachedTargetCell = false;
+
+    if (ReservedCell.X >= 0 && ReservedCell.Y >= 0)
+    {
+        CachedTargetCell = ReservedCell;
+        bHasCachedTargetCell = true;
+        return;
+    }
+
+    if (GridLib)
+    {
+        CachedTargetCell = GridLib->WorldToGrid(Location);
+        bHasCachedTargetCell = true;
+    }
+}
 
 AGameTurnManagerBase* UGA_MeleeAttack::GetTurnManager() const
 {
     if (!CachedTurnManager.IsValid())
     {
-        // 笘・・笘・繧ｭ繝｣繝・す繝･縺檎┌蜉ｹ縺ｪ蝣ｴ蜷医・蜀榊叙蠕励ｒ隧ｦ縺ｿ繧・笘・・笘・
         if (UWorld* World = GetWorld())
         {
             TArray<AActor*> FoundActors;

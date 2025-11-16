@@ -1,8 +1,3 @@
-// ============================================================================
-// TurnCommandHandler.cpp
-// プレイヤーコマンド処理Subsystem実装
-// GameTurnManagerBaseから分離（2025-11-09）
-// ============================================================================
 
 #include "Turn/TurnCommandHandler.h"
 #include "Player/PlayerControllerBase.h"
@@ -38,25 +33,17 @@ void UTurnCommandHandler::Deinitialize()
 
 bool UTurnCommandHandler::ProcessPlayerCommand(const FPlayerCommand& Command)
 {
-	// 入力ウィンドウが開いていない場合は拒否
 	if (!bInputWindowOpen)
 	{
 		UE_LOG(LogTurnManager, Warning, TEXT("[TurnCommandHandler] Command rejected: Input window not open"));
 		return false;
 	}
 
-	// コマンドの検証
 	if (!ValidateCommand(Command))
 	{
 		UE_LOG(LogTurnManager, Warning, TEXT("[TurnCommandHandler] Command validation failed for TurnId=%d"), Command.TurnId);
 		return false;
 	}
-
-	// ★★★ CRITICAL FIX (2025-11-10): 消費登録をPrecheck成功後に移動 ★★★
-	// LastAcceptedCommands.Add() はMovePrecheck成功後にMarkCommandAsAccepted()で行う
-	// ここでは検証のみ行い、"消費"マークはしない
-	//
-	// 削除: LastAcceptedCommands.Add(Command.TurnId, Command);
 
 	UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Command validated (not yet marked as accepted): TurnId=%d, Tag=%s"),
 		Command.TurnId, *Command.CommandTag.ToString());
@@ -66,21 +53,18 @@ bool UTurnCommandHandler::ProcessPlayerCommand(const FPlayerCommand& Command)
 
 bool UTurnCommandHandler::ValidateCommand(const FPlayerCommand& Command) const
 {
-	// コマンドタグの妥当性チェック
 	if (!Command.CommandTag.IsValid())
 	{
 		UE_LOG(LogTurnManager, Warning, TEXT("[TurnCommandHandler] Invalid command tag"));
 		return false;
 	}
 
-	// タイムアウトチェック
 	if (!IsCommandTimely(Command))
 	{
 		UE_LOG(LogTurnManager, Warning, TEXT("[TurnCommandHandler] Command timed out: TurnId=%d"), Command.TurnId);
 		return false;
 	}
 
-	// 重複チェック
 	if (!IsCommandUnique(Command))
 	{
 		UE_LOG(LogTurnManager, Warning, TEXT("[TurnCommandHandler] Duplicate command: TurnId=%d"), Command.TurnId);
@@ -95,28 +79,14 @@ bool UTurnCommandHandler::ValidateCommand(const FPlayerCommand& Command) const
 
 void UTurnCommandHandler::ApplyCommand(const FPlayerCommand& Command)
 {
-	// ★★★ コアシステム: コマンド適用完全実装（2025-11-09） ★★★
-
 	UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Applying command TurnId=%d, Tag=%s"),
 		Command.TurnId, *Command.CommandTag.ToString());
-
-	// コマンドの実行は実際のゲームロジックに委譲
-	// ここではコマンド受理の記録と統計の更新を行う
-
-	// TODO: 将来的にはコマンド実行のディスパッチもここで行う
-	// 現在はGameTurnManagerBaseが実際の処理を行っている
 
 	UE_LOG(LogTurnManager, Verbose, TEXT("[TurnCommandHandler] Command applied successfully"));
 }
 
-//------------------------------------------------------------------------------
-// ★★★ CRITICAL FIX (2025-11-10): Precheck成功後にのみ"消費"マーク ★★★
-//------------------------------------------------------------------------------
-
 void UTurnCommandHandler::MarkCommandAsAccepted(const FPlayerCommand& Command)
 {
-	// MovePrecheck成功後に呼ばれ、コマンドを"受理済み"としてマーク
-	// これにより、以後の同一TurnIdのコマンドはDuplicate扱いされる
 	LastAcceptedCommands.Add(Command.TurnId, Command);
 
 	UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] ★ Command MARKED AS ACCEPTED: TurnId=%d, Tag=%s"),
@@ -169,13 +139,10 @@ void UTurnCommandHandler::ClearCommandHistory()
 
 bool UTurnCommandHandler::IsCommandTimely(const FPlayerCommand& Command) const
 {
-	// TODO: 実際のタイムアウトロジックを実装
-	// 現在は常にtrueを返す
 	return true;
 }
 
 bool UTurnCommandHandler::IsCommandUnique(const FPlayerCommand& Command) const
 {
-	// 同じTurnIdのコマンドが既に存在する場合は重複
 	return !LastAcceptedCommands.Contains(Command.TurnId);
 }

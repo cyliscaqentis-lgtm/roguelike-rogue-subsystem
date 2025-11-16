@@ -78,12 +78,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Unit|Movement")
     void MoveUnit(const TArray<FVector>& InPath);
 
-    UFUNCTION(BlueprintCallable, Category = "Unit|Visual")
-    void SetSelected(bool bSelected);
-
-    UFUNCTION(BlueprintCallable, Category = "Unit|Visual")
-    void SetHighlighted(bool bHighlighted);
-
     UFUNCTION(BlueprintCallable, Category = "Unit|Tile")
     void AdjustTile();
 

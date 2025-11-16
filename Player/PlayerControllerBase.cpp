@@ -9,15 +9,15 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Utility/RogueGameplayTags.h"
 #include "Kismet/GameplayStatics.h"
-#include "EngineUtils.h"  // ★★★ TActorIterator用 ★★★
+#include "EngineUtils.h"
 #include "AbilitySystemInterface.h"
 #include "AbilitySystemComponent.h"
-#include "Character/UnitManager.h"  // ★★★ UnitManager用 ★★★
-#include "Character/UnitBase.h"    // ★★★ UnitBase用 ★★★
-#include "Camera/LyraCameraComponent.h"  // ★★★ カメラ切り替え用 ★★★
-#include "Camera/LyraCameraMode.h"  // ★★★ カメラモード型定義用 ★★★
-#include "Character/LyraPawnExtensionComponent.h"  // ★★★ PawnData取得用 ★★★
-#include "Character/LyraPawnData.h"  // ★★★ カメラモード確認用 ★★★
+#include "Character/UnitManager.h"
+#include "Character/UnitBase.h"
+#include "Camera/LyraCameraComponent.h"
+#include "Camera/LyraCameraMode.h"
+#include "Character/LyraPawnExtensionComponent.h"
+#include "Character/LyraPawnData.h"
 
 //------------------------------------------------------------------------------
 // Constructor
@@ -31,24 +31,14 @@ APlayerControllerBase::APlayerControllerBase()
     SetTickableWhenPaused(false);
     bReplicates = false;
 
-    // GameplayTagsの初期化
-    // ★★★ 修正: サーバー側が期待する InputTag.Move を使用（2025-11-09）
     MoveInputTag = FGameplayTag::RequestGameplayTag(TEXT("InputTag.Move"));
     TurnInputTag = FGameplayTag::RequestGameplayTag(TEXT("InputTag.Turn"));
 
-    // デフォルト値の初期化
     AxisThreshold = 0.5f;
-    DeadzoneThreshold = 0.5f;  // ★★★ 修正 (2025-11-11): "ちょい押し"誤移動防止のため0.1→0.5に変更
+    DeadzoneThreshold = 0.5f;
     LastTurnDirection = FVector2D::ZeroVector;
     CachedInputDirection = FVector2D::ZeroVector;
     ServerLastTurnDirectionQuantized = FIntPoint(0, 0);
-
-    //==========================================================================
-    // ★★★ 削除: サーバ冪等化プロパティ（TurnManagerに移行）
-    //==========================================================================
-    // LastMoveCmdServerTime = -FLT_MAX;
-    // LastAcceptedTurnId = INDEX_NONE;
-    // LastAcceptedWindowId = INDEX_NONE;
 }
 
 
@@ -60,7 +50,6 @@ void APlayerControllerBase::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
 
-    // ★★★ カメラYaw診断（OnPossess直後1回のみ）
     static bool bDiagnosticDone = false;
     if (!bDiagnosticDone && GetPawn() && PlayerCameraManager)
     {
@@ -74,15 +63,11 @@ void APlayerControllerBase::Tick(float DeltaTime)
         bDiagnosticDone = true;
     }
 
-    // ✅ Tickでは検索しない（BeginPlayとタイマーで処理）
     if (!CachedTurnManager || !IsValid(CachedTurnManager))
     {
         return;
     }
 
-    //==========================================================================
-    // 初回同期
-    //==========================================================================
     if (!bPrevInitSynced)
     {
         bPrevWaitingForPlayerInput = CachedTurnManager->WaitingForPlayerInput;
@@ -92,28 +77,11 @@ void APlayerControllerBase::Tick(float DeltaTime)
             bPrevWaitingForPlayerInput, CurrentInputWindowId);
     }
 
-    //==========================================================================
-    // ★★★ 削除: 入力ウィンドウの立ち上がり検出（サーバー側が管理）
-    //==========================================================================
-    // const bool bCurrentWaiting = CachedTurnManager->WaitingForPlayerInput;
-    // if (!bPrevWaitingForPlayerInput && bCurrentWaiting)
-    // {
-    //     OnInputWindowOpened();
-    // }
-
-    //==========================================================================
-    // ★★★ CRITICAL FIX: 堅牢なラッチリセット（立ち上がりエッジ + WindowId変化検出）
-    //==========================================================================
-    
-    // 現在値を先に取り出す
     const bool bNow = CachedTurnManager->WaitingForPlayerInput;
-    const int32 NewWindowId = CachedTurnManager->GetCurrentInputWindowId();  // ★ 新しい値
-
-    // ★ 状態遷移を詳細にログ可視化
+    const int32 NewWindowId = CachedTurnManager->GetCurrentInputWindowId();
     UE_LOG(LogTemp, Verbose, TEXT("[Client_Tick] WPI: Prev=%d, Now=%d, Sent=%d, WinId=%d->%d"),
         bPrevWaitingForPlayerInput, bNow, bSentThisInputWindow, CurrentInputWindowId, NewWindowId);
 
-    // ★ 立ち上がり（false→true）: ラッチをリセット
     if (!bPrevWaitingForPlayerInput && bNow)
     {
         bSentThisInputWindow = false;
@@ -123,44 +91,29 @@ void APlayerControllerBase::Tick(float DeltaTime)
             NewWindowId);
     }
     
-    // ★ WindowId変化検出（安全策）
-    if (CurrentInputWindowId != NewWindowId)  // ★ 前の値 vs 新しい値
+    if (CurrentInputWindowId != NewWindowId)
     {
         bSentThisInputWindow = false;
         LastProcessedWindowId = INDEX_NONE;
-        CurrentInputWindowId = NewWindowId;  // ★ ここで更新
-        
-        // ★ 削除：ウィンドウ変更は稀。エラー時だけでOK
-        // UE_LOG(LogTemp, Warning, TEXT("[Client_Tick] ★ WINDOW ID CHANGED: reset latch (%d->%d)"),
-        //     CurrentInputWindowId, NewWindowId);
+        CurrentInputWindowId = NewWindowId;
     }
     
-    // ★★★ 立ち下がり（true→false）: サーバーが受理してウィンドウを閉じた (2025-11-10) ★★★
     if (bPrevWaitingForPlayerInput && !bNow)
     {
         bSentThisInputWindow = false;
-
-        // ★★★ CRITICAL FIX: ここで処理済みマーキング（サーバーが実際に受理した時点）★★★
-        // Input_Move_Completed()ではなく、サーバーの状態遷移に従ってマーキング
         LastProcessedWindowId = CurrentInputWindowId;
 
         UE_LOG(LogTemp, Verbose, TEXT("[Client] Window CLOSE -> cleanup latch, mark WindowId=%d as processed"),
             CurrentInputWindowId);
     }
 
-    // ★ WindowIdを毎フレーム同期（最後に実行して常に最新に）
     CurrentInputWindowId = NewWindowId;
-
-    // 最後に前回値を更新（順序が重要！）
     bPrevWaitingForPlayerInput = bNow;
 }
 
 
 
 
-//------------------------------------------------------------------------------
-// ★★★ 入力ウィンドウの原子的更新処理（最小パッチ A）
-//------------------------------------------------------------------------------
 
 
 
@@ -175,14 +128,11 @@ void APlayerControllerBase::BeginPlay()
 
     UE_LOG(LogTemp, Log, TEXT("[PlayerController] BeginPlay started"));
 
-    // ★★★ 最優先: Tick を強制有効化
     SetActorTickEnabled(true);
     UE_LOG(LogTemp, Warning, TEXT("[PlayerController] BeginPlay: Tick enabled"));
 
-    // ★★★ Tick最適化: BeginPlayで確実に取得を試みる
     EnsureTurnManagerCached();
 
-    // ★★★ 取得できない場合はタイマーで再試行（Tickを汚さない）
     if (!CachedTurnManager)
     {
         FTimerHandle RetryHandle;
@@ -190,12 +140,11 @@ void APlayerControllerBase::BeginPlay()
             RetryHandle,
             this,
             &APlayerControllerBase::EnsureTurnManagerCached,
-            0.1f, // 0.1秒ごと
-            true  // ループ
+            0.1f,
+            true
         );
     }
 
-    // GameplayTagsの検証
     if (!MoveInputTag.IsValid())
     {
         UE_LOG(LogTemp, Error, TEXT("[PlayerController] MoveInputTag (Ability.Move) is INVALID!"));
@@ -209,14 +158,10 @@ void APlayerControllerBase::BeginPlay()
     UE_LOG(LogTemp, Log, TEXT("[PlayerController] BeginPlay completed"));
 }
 
-//------------------------------------------------------------------------------
-// ★★★ Tick最適化: TurnManager取得ヘルパー（2025-11-09）
-//------------------------------------------------------------------------------
 void APlayerControllerBase::EnsureTurnManagerCached()
 {
     if (CachedTurnManager && IsValid(CachedTurnManager))
     {
-        // ✅ 既に取得済みならタイマーをクリア
         if (UWorld* World = GetWorld())
         {
             World->GetTimerManager().ClearAllTimersForObject(this);
@@ -224,7 +169,6 @@ void APlayerControllerBase::EnsureTurnManagerCached()
         return;
     }
 
-    // ★★★ 直接GameTurnManagerBaseを検索（統合・最適化）
     if (UWorld* World = GetWorld())
     {
         for (TActorIterator<AGameTurnManagerBase> It(World); It; ++It)
@@ -236,7 +180,6 @@ void APlayerControllerBase::EnsureTurnManagerCached()
                 UE_LOG(LogTemp, Log, TEXT("[Client] TurnManager cached successfully: %s"),
                     *CachedTurnManager->GetName());
 
-                // タイマーをクリア
                 World->GetTimerManager().ClearAllTimersForObject(this);
                 break;
             }
@@ -251,9 +194,6 @@ void APlayerControllerBase::OnPossess(APawn* InPawn)
     UE_LOG(LogTemp, Log, TEXT("[PlayerController] OnPossess called for: %s"),
         InPawn ? *InPawn->GetName() : TEXT("NULL"));
 
-    //==========================================================================
-    // ★★★ プレイヤー配置と敵スポーンのトリガー（2025-11-09）
-    //==========================================================================
     if (InPawn && InPawn->GetName().Contains(TEXT("PlayerUnit")))
     {
         // UnitManagerを直接取得
@@ -274,24 +214,14 @@ void APlayerControllerBase::OnPossess(APawn* InPawn)
         }
     }
 
-    //==========================================================================
-    // ★★★ カメラをPlayerUnitに切り替え（2025-11-09）
-    // Lyraのカメラシステムを利用してPawnDataで設定されたカメラモードを適用
-    //==========================================================================
-
-    // ViewTargetをPlayerUnitに設定（即座に切り替え）
     SetViewTargetWithBlend(InPawn, 0.0f);
 
-    // ★★★ カメラYaw値の初期化（2025-11-10）
-    // OnPossess時のPawn Yawを記録（この値がカメラの固定Yawとなる）
     if (InPawn)
     {
         FixedCameraYaw = InPawn->GetActorRotation().Yaw;
         UE_LOG(LogTemp, Warning, TEXT("[PlayerController] FixedCameraYaw initialized to %.1f"), FixedCameraYaw);
     }
 
-    // ★★★ 初回ControlRotationを強制設定（2025-11-10）
-    // カメラを固定Yaw値に設定
     if (InPawn)
     {
         const FRotator YawOnly(0.f, FixedCameraYaw, 0.f);
@@ -299,18 +229,13 @@ void APlayerControllerBase::OnPossess(APawn* InPawn)
         UE_LOG(LogTemp, Warning, TEXT("[PlayerController] Initial ControlRotation set to Yaw=%.1f"), YawOnly.Yaw);
     }
 
-    // ★★★ Lyraの自動管理を有効化（PawnDataのDefaultCameraMode適用のため）
     bAutoManageActiveCameraTarget = true;
 
-    // ★★★ カメラモードを明示的に強制適用（2025-11-09）
-    // TBSプロジェクトではLyraHeroComponentを使用しないため、
-    // DetermineCameraModeDelegate を手動で設定する必要がある
     if (InPawn)
     {
         UE_LOG(LogTemp, Warning, TEXT("[PlayerController] Camera setup: ViewTarget=%s, bAutoManage=%d"),
             *InPawn->GetName(), bAutoManageActiveCameraTarget);
 
-        // PawnDataのDefaultCameraMode確認と強制適用
         if (AUnitBase* PlayerUnit = Cast<AUnitBase>(InPawn))
         {
             if (ULyraPawnExtensionComponent* Ext = PlayerUnit->FindComponentByClass<ULyraPawnExtensionComponent>())
@@ -320,12 +245,10 @@ void APlayerControllerBase::OnPossess(APawn* InPawn)
                     UE_LOG(LogTemp, Warning, TEXT("[PlayerController] PawnData found: %s, DefaultCameraMode=%s"),
                         *PawnData->GetName(), *GetNameSafe(PawnData->DefaultCameraMode));
 
-                    // ★★★ DetermineCameraModeDelegate を設定（LyraHeroComponentの代替）
                     if (PawnData->DefaultCameraMode)
                     {
                         if (ULyraCameraComponent* CameraComp = PlayerUnit->FindComponentByClass<ULyraCameraComponent>())
                         {
-                            // カメラモードを返すデリゲートを設定
                             TSubclassOf<ULyraCameraMode> CameraMode = PawnData->DefaultCameraMode;
                             CameraComp->DetermineCameraModeDelegate.BindLambda([CameraMode]()
                             {
@@ -353,20 +276,14 @@ void APlayerControllerBase::OnPossess(APawn* InPawn)
         }
     }
 
-    //==========================================================================
-    // ★ TurnManagerにPossess通知（入力窓を開き直すトリガー）
-    //==========================================================================
     if (CachedTurnManager)
     {
         CachedTurnManager->NotifyPlayerPossessed(InPawn);
         UE_LOG(LogTemp, Log, TEXT("[PlayerController] NotifyPlayerPossessed sent"));
     }
 
-    // EnhancedInput初期化（Possess後に確実に実行）
     InitializeEnhancedInput();
 
-    // ★★★ 最終固定：InitializeEnhancedInput後にControlRotationを再固定（2025-11-10）
-    // SetIgnoreLookInput(true)でLook入力を遮断しても、IMC追加時に既に入力が入っている可能性があるため
     if (InPawn)
     {
         const FRotator YawOnly(0.f, FixedCameraYaw, 0.f);
@@ -377,12 +294,6 @@ void APlayerControllerBase::OnPossess(APawn* InPawn)
 
 void APlayerControllerBase::UpdateRotation(float DeltaTime)
 {
-    // ★★★ TBSではControlRotationを固定（2025-11-10）
-    // マウス/右スティック等からのAddYawInput/AddPitchInputによる変化を遮断
-    // Super::UpdateRotation(DeltaTime); // 呼ばない
-
-    // ★★★ 修正: Pawnの向きに追従せず、初期Yaw値を維持（2025-11-10）
-    // プレイヤー歩行時にPawnが回転してもカメラは固定される
     if (FixedCameraYaw != TNumericLimits<float>::Max())
     {
         SetControlRotation(FRotator(0.f, FixedCameraYaw, 0.f));
@@ -391,21 +302,16 @@ void APlayerControllerBase::UpdateRotation(float DeltaTime)
 
 void APlayerControllerBase::AddYawInput(float Val)
 {
-    // ★★★ 診断ログ：誰がYaw入力を送っているか確認（2025-11-09）
     if (FMath::Abs(Val) > KINDA_SMALL_NUMBER)
     {
         UE_LOG(LogTemp, Warning, TEXT("[AddYawInput] Val=%.3f (Source: IMC Look/Orbit binding)"), Val);
     }
-
-    // ★★★ TBSでは無視（SetIgnoreLookInput(true)で既に遮断されているはずだが、念のため）
-    // Super::AddYawInput(Val); // 呼ばない
 }
 
 void APlayerControllerBase::InitializeEnhancedInput()
 {
     UE_LOG(LogTemp, Log, TEXT("[PlayerController] InitializeEnhancedInput started"));
 
-    // EnhancedInput MappingContextの追加
     if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
         ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
     {
@@ -429,8 +335,6 @@ void APlayerControllerBase::InitializeEnhancedInput()
         UE_LOG(LogTemp, Error, TEXT("[PlayerController] EnhancedInputLocalPlayerSubsystem not found"));
     }
 
-    // ★★★ Look/Orbit入力を無効化（2025-11-09）
-    // TBSではControlRotationを固定するため、マウス/右スティックからの視点回転を遮断
     SetIgnoreLookInput(true);
     UE_LOG(LogTemp, Warning, TEXT("[PlayerController] SetIgnoreLookInput(true) - Look inputs disabled for TBS"));
 
@@ -445,8 +349,6 @@ void APlayerControllerBase::SetupInputComponent()
 
     if (UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(InputComponent))
     {
-        // IA_Moveのバインド（4つのイベント）
-        // ★★★ 2025-11-09: Started も追加（Triggered が走らないケースの救済）
         if (IA_Move)
         {
             EnhancedInput->BindAction(IA_Move, ETriggerEvent::Started, this,
@@ -465,7 +367,6 @@ void APlayerControllerBase::SetupInputComponent()
             UE_LOG(LogTemp, Error, TEXT("[PlayerController] IA_Move is NULL"));
         }
 
-        // IA_TurnFacingのバインド（2つのイベント）
         if (IA_TurnFacing)
         {
             EnhancedInput->BindAction(IA_TurnFacing, ETriggerEvent::Started, this,
@@ -488,34 +389,18 @@ void APlayerControllerBase::SetupInputComponent()
     UE_LOG(LogTemp, Log, TEXT("[PlayerController] SetupInputComponent completed"));
 }
 
-//------------------------------------------------------------------------------
-// Input Handlers - IA_Move（最小パッチ B 統合）
-//------------------------------------------------------------------------------
-
 void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
 {
     UE_LOG(LogTemp, Warning, TEXT("[Client] Input_Move_Triggered fired"));
 
-    //==========================================================================
-    // Step 1: TurnManager検証
-    //==========================================================================
     if (!IsValid(CachedTurnManager))
     {
         UE_LOG(LogTemp, Warning, TEXT("[Client] InputMoveTriggered: TurnManager invalid"));
         return;
     }
 
-    //==========================================================================
-    // Step 2: 入力ウィンドウチェック（クライアント側で事前検証）
-    // ★★★ CRITICAL FIX (2025-11-11): Gemini分析により判明
-    // 問題: ターン開始直後、レプリケーション完了前に入力を送信していた
-    // 修正: クライアント側でも WaitingForPlayerInput と Gate をチェック
-    //==========================================================================
-
-    // レプリケートされた WaitingForPlayerInput をチェック
     const bool bWaitingReplicated = CachedTurnManager->WaitingForPlayerInput;
 
-    // Gate_Input_Open タグをチェック
     bool bGateOpenClient = false;
     if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(GetPawn()))
     {
@@ -525,12 +410,10 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
         }
     }
 
-    // ★★★ DEBUG (2025-11-11): ガード条件の詳細を常に出力 ★★★
     UE_LOG(LogTemp, Warning,
         TEXT("[Client] Input_Move_Triggered: bWaitingReplicated=%d, bGateOpenClient=%d, bSentThisInputWindow=%d, WindowId=%d"),
         bWaitingReplicated, bGateOpenClient, bSentThisInputWindow, CurrentInputWindowId);
 
-    // 両方が true の場合のみ送信可能
     if (!bWaitingReplicated || !bGateOpenClient)
     {
         UE_LOG(LogTemp, Warning,
@@ -539,9 +422,6 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
         return;
     }
 
-    //==========================================================================
-    // ★ Step 3: 送信済みチェック（クライアント側の多重送信防止）
-    //==========================================================================
     if (bSentThisInputWindow)
     {
         UE_LOG(LogTemp, Warning, TEXT("[Client] ❌ Input BLOCKED by latch: bSentThisInputWindow=true, WindowId=%d"),
@@ -551,17 +431,9 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
 
     UE_LOG(LogTemp, Warning, TEXT("[Client] ✅ Input PASSED all guards, preparing to send command"));
 
-
-    //=== Step 2: 入力値を直接使用（修正なし） ===
     const FVector2D RawInput = Value.Get<FVector2D>();
-    
-    // ★ 削除：Raw input使用はフォールバック処理なのでエラー時のみ
-    // UE_LOG(LogTemp, Warning, TEXT("[INPUTFIX] Removed - using raw input directly: (%.2f, %.2f)"), RawInput.X, RawInput.Y);
-
-    //=== Step 3: カメラ相対方向計算 ===
     FVector Direction = CalculateCameraRelativeDirection(RawInput);
 
-    //=== Step 4: デッドゾーン ===
     if (Direction.Size() < DeadzoneThreshold) 
     {
         UE_LOG(LogTemp, Verbose, TEXT("[Client] Input ignored: deadzone (%.2f < %.2f)"),
@@ -572,49 +444,20 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
     Direction.Normalize();
     CachedInputDirection = FVector2D(Direction.X, Direction.Y);
 
-    //=== Step 5: 8方向量子化 ===
     FIntPoint GridOffset = Quantize8Way(CachedInputDirection, AxisThreshold);
 
-    //=== Step 6: コマンド作成 ===
     FPlayerCommand Command;
     Command.CommandTag = MoveInputTag;
     Command.Direction = FVector(GridOffset.X, GridOffset.Y, 0.0f);
     Command.TargetActor = GetPawn();
     Command.TargetCell = GetCurrentGridCell() + GridOffset;
 
-    // ★ TurnManagerから現在のTurnIndexを直接取得（推論ではなく実値）
     Command.TurnId = CachedTurnManager->GetCurrentTurnIndex();
     Command.WindowId = CachedTurnManager->GetCurrentInputWindowId();
 
     UE_LOG(LogTemp, Log, TEXT("[Client] Command created: TurnId=%d (from TurnManager) WindowId=%d"),
         Command.TurnId, Command.WindowId);
 
-    //==========================================================================
-    // ★★★ Geminiが指摘したフェーズII：入力時の即座回転 ★★★
-    //==========================================================================
-    if (APawn* ControlledPawn = GetPawn())
-    {
-        // ★★★ DISABLED: プレイヤー回転を無効化（カメラ視点変化を防止） (2025-11-09) ★★★
-        // TBSゲームでは固定視点が望ましい。プレイヤーを回転させるとカメラも追従して視点が変わってしまう。
-        // 以前の実装:
-        //   FVector TargetDirection = FVector(GridOffset.X, GridOffset.Y, 0.0f);
-        //   ControlledPawn->SetActorRotation(TargetDirection.Rotation());
-        //
-        // もし向きを変えたい場合は、GA_MoveBase側でアニメーション中のみ回転させるか、
-        // またはカメラを親の回転に追従させない設定にする必要がある。
-    }
-
-    //=== Step 7: サーバー送信 ===
-    // ★★★ CRITICAL FIX (2025-11-11): Gemini分析により判明した Race Condition 修正 ★★★
-    // 問題: RPC呼び出しは非同期のため、サーバー応答が先に返ってくることがある
-    // 1. Server_SubmitCommand(Command) - RPC送信
-    // 2. サーバーが即座に応答 → Client_NotifyMoveRejected RPC送信
-    // 3. Client_NotifyMoveRejected受信 → bSentThisInputWindow = false（リセット）
-    // 4. Input_Move_Triggeredの続きが実行 → bSentThisInputWindow = true（上書き！）
-    // 5. 結果: 入力が永久にブロックされる
-    //
-    // 修正: ラッチをRPC呼び出しの**前**に設定し、処理を不可分（atomic）にする
-    // これにより、サーバー応答がどのタイミングで返ってきても状態が矛盾しない
     bSentThisInputWindow = true;
 
     UE_LOG(LogTemp, Warning, TEXT("[Client] 📤 Latch SET (before RPC): bSentThisInputWindow=TRUE, WindowId=%d"),
@@ -633,17 +476,6 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
 void APlayerControllerBase::Input_Move_Canceled(const FInputActionValue& Value)
 {
     UE_LOG(LogTemp, Log, TEXT("[PlayerController] Input_Move_Canceled"));
-
-    //==========================================================================
-    // ★★★ 削除: TurnInputGuardへのリリース通知（3タグシステムで不要）
-    //==========================================================================
-    // if (UWorld* World = GetWorld())
-    // {
-    //     if (UTurnInputGuard* InputGuard = World->GetSubsystem<UTurnInputGuard>())
-    //     {
-    //         InputGuard->MarkReleased();
-    //     }
-    // }
 }
 
 
@@ -651,27 +483,11 @@ void APlayerControllerBase::Input_Move_Canceled(const FInputActionValue& Value)
 
 void APlayerControllerBase::Input_Move_Completed(const FInputActionValue& Value)
 {
-    // ★★★ CRITICAL FIX (2025-11-10): Completedでは処理済みマーキングしない ★★★
-    // Input_Move_Completed()は単なる入力イベントの終了（キーを離した等）であり、
-    // サーバーの受理とは無関係。処理済みマーキングはWaitingForPlayerInputの
-    // 立ち下がり（サーバーが実際に受理してウィンドウを閉じた時）で行う。
-    //
-    // 旧実装の問題：
-    // 1. 壁衝突でREJECT → Client_NotifyMoveRejected() → ラッチリセット
-    // 2. 直後にCompleted発火 → LastProcessedWindowId再設定
-    // 3. 次の入力がCompleted重複ガードに引っかかる
-    //
-    // 削除：LastProcessedWindowId = CurrentInputWindowId;
-
     UE_LOG(LogTemp, Verbose, TEXT("[PlayerController] Input_Move_Completed (no-op, WindowId=%d)"),
         CurrentInputWindowId);
 }
 
 
-
-//------------------------------------------------------------------------------
-// Input Handlers - IA_TurnFacing
-//------------------------------------------------------------------------------
 
 void APlayerControllerBase::Input_TurnFacing_Started(const FInputActionValue& Value)
 {
@@ -703,40 +519,31 @@ void APlayerControllerBase::Input_TurnFacing_Started(const FInputActionValue& Va
 
 void APlayerControllerBase::Input_TurnFacing_Triggered(const FInputActionValue& Value)
 {
-    // ■ Step 1: 現在の入力値を直接取得（Started キャッシュ不使用）
     const FVector2D Raw = Value.Get<FVector2D>();
     
-    // ■ Step 2: カメラ相対方向に変換
     FVector Dir = CalculateCameraRelativeDirection(Raw);
     if (Dir.Size() < DeadzoneThreshold) 
     {
-        return; // デッドゾーン内は送信しない
+        return;
     }
     Dir.Normalize();
 
-    // ■ Step 3: 8 方向量子化
     const FIntPoint Quant = Quantize8Way(FVector2D(Dir.X, Dir.Y), AxisThreshold);
     if (Quant.X == 0 && Quant.Y == 0) 
     {
-        return; // 量子化結果が (0,0) なら無視
+        return;
     }
 
-    // ■ Step 4: 同一方向連投の抑制（帯域節約・RPC ロス対策）
     if (Quant == ServerLastTurnDirectionQuantized) 
     {
-        return; // 直前と同一方向なら送信スキップ
+        return;
     }
 
-    // ■ Step 5: キャッシュ更新 & RPC 送信
     ServerLastTurnDirectionQuantized = Quant;
-    Server_TurnFacing(FVector2D(Quant.X, Quant.Y)); // 現在値ベースで送信
+    Server_TurnFacing(FVector2D(Quant.X, Quant.Y));
 
     UE_LOG(LogTemp, Verbose, TEXT("[TurnFacing] Triggered: Quant=(%d,%d)"), Quant.X, Quant.Y);
 }
-
-//------------------------------------------------------------------------------
-// Utility Functions
-//------------------------------------------------------------------------------
 
 FIntPoint APlayerControllerBase::Quantize8Way(const FVector2D& Direction, float Threshold) const
 {
@@ -767,7 +574,6 @@ FVector APlayerControllerBase::CalculateCameraRelativeDirection(const FVector2D&
     
     if (!IsValid(CameraMgr))
     {
-        // ⚠️ 一度だけ Warning を出す（ログスパム防止）
         static bool bLoggedOnce = false;
         if (!bLoggedOnce)
         {
@@ -775,7 +581,6 @@ FVector APlayerControllerBase::CalculateCameraRelativeDirection(const FVector2D&
             bLoggedOnce = true;
         }
         
-        // ■ フォールバック：Pawn の Forward/Right から算出
         if (APawn* P = GetPawn())
         {
             FVector Forward = P->GetActorForwardVector();
@@ -783,10 +588,9 @@ FVector APlayerControllerBase::CalculateCameraRelativeDirection(const FVector2D&
             return (Forward * InputValue.Y + Right * InputValue.X).GetSafeNormal();
         }
         
-        return FVector::ZeroVector; // 最終フォールバック（通常は到達しない）
+        return FVector::ZeroVector;
     }
 
-    // ■ 通常処理（既存）
     FRotator CameraRotation = CameraMgr->GetCameraRotation();
     CameraRotation.Pitch = 0.0f;
     CameraRotation.Roll = 0.0f;
@@ -822,16 +626,11 @@ FIntPoint APlayerControllerBase::GetCurrentGridCell() const
     return GridCell;
 }
 
-//------------------------------------------------------------------------------
-// ★★★ 8近傍チェック（最小パッチ D）
-//------------------------------------------------------------------------------
-
 bool APlayerControllerBase::IsAdjacent(const FIntPoint& FromCell, const FIntPoint& ToCell) const
 {
     const int32 Dx = FMath::Abs(FromCell.X - ToCell.X);
     const int32 Dy = FMath::Abs(FromCell.Y - ToCell.Y);
 
-    // ★チェビシェフ距離: 最大差が1以下 かつ 同一セルでない
     const bool bIsAdjacent8 = (Dx <= 1 && Dy <= 1) && (Dx + Dy > 0);
 
     UE_LOG(LogTemp, Verbose, TEXT("[Server] IsAdjacent8: (%d,%d)->(%d,%d) = %s"),
@@ -846,32 +645,19 @@ FIntPoint APlayerControllerBase::ServerGetCurrentCell() const
     return GetCurrentGridCell();
 }
 
-//------------------------------------------------------------------------------
-// RPC Implementations
-//------------------------------------------------------------------------------
-
 void APlayerControllerBase::Server_SubmitCommand_Implementation(const FPlayerCommand& CommandIn)
 {
-    //==========================================================================
-    // (1) 診断ログ最優先出力
-    //==========================================================================
     UE_LOG(LogTemp, Warning, TEXT("[Server] ★ SubmitCommand RPC RECEIVED"));
     UE_LOG(LogTemp, Warning, TEXT("[Server] Client sent WindowId=%d, TurnId=%d, Tag=%s, Dir=(%.1f, %.1f)"),
         CommandIn.WindowId, CommandIn.TurnId, *CommandIn.CommandTag.ToString(),
         CommandIn.Direction.X, CommandIn.Direction.Y);
 
-    //=========================================================================
-    // 検証: TurnManager
-    //=========================================================================
     if (!CachedTurnManager || !IsValid(CachedTurnManager))
     {
         UE_LOG(LogTemp, Error, TEXT("[Server] TurnManager is invalid or null"));
         return;
     }
 
-    //=========================================================================
-    // ★ WindowId検証（重複検出）
-    //=========================================================================
     const int32 CurrentWindowId = CachedTurnManager->GetCurrentInputWindowId();
 
     if (CommandIn.WindowId != CurrentWindowId)
@@ -881,14 +667,10 @@ void APlayerControllerBase::Server_SubmitCommand_Implementation(const FPlayerCom
         return;
     }
 
-    // クライアントから送られたコマンドをそのまま使用（上書きしない）
     const FPlayerCommand& Command = CommandIn;
 
     UE_LOG(LogTemp, Log, TEXT("[Server] WindowId validated: %d"), Command.WindowId);
 
-    //=========================================================================
-    // 検証: 二重鍵（WaitingForPlayerInput && Gate_Input_Open）
-    //=========================================================================
     if (!CachedTurnManager->IsInputOpen_Server())
     {
         bool bGateOpen = false;
@@ -903,48 +685,30 @@ void APlayerControllerBase::Server_SubmitCommand_Implementation(const FPlayerCom
             CachedTurnManager->WaitingForPlayerInput ? TEXT("true") : TEXT("false"),
             bGateOpen ? TEXT("open") : TEXT("closed"));
 
-        // ★★★ CRITICAL FIX (2025-11-10): クライアントに拒否を通知してラッチリセット ★★★
         Client_NotifyMoveRejected();
 
         return;
     }
 
-    //=========================================================================
-    // 入口一本化：TurnManagerのみが状態を動かす
-    // ★★★ 2025-11-09: 上書き後のCommandを渡す
-    //=========================================================================
     CachedTurnManager->OnPlayerCommandAccepted(Command);
 }
 
-//------------------------------------------------------------------------------
-// ★★★ Server_TurnFacing修正（最小パッチ C）
-//------------------------------------------------------------------------------
-
 void APlayerControllerBase::Server_TurnFacing_Implementation(FVector2D Direction)
 {
-    // ■ 仕様確定：回転はターン非消費 → Barrier / WindowId / TurnManager を一切関与させない
-
     if (!IsValid(GetPawn())) 
     {
         return;
     }
 
-    // ■ Step 1: Yaw に変換
     const float Yaw = FMath::RadiansToDegrees(FMath::Atan2(Direction.Y, Direction.X));
 
-    // ■ Step 2: ControlRotation を設定（ネットワーク平滑化＆自動レプリケーション）
-    //          SetControlRotation は Character/Pawn で自動レプリケートされる
     SetControlRotation(FRotator(0.f, Yaw, 0.f));
 
-    // ■ Step 3: 任意：即座にビジュアルを同期したい場合（補助的）
-    //          SetActorRotation は環境によっては SetControlRotation と競合する可能性があり
-    //          ⚠️ 必要に応じて片方へ統一、またはスムージング Lerp を使用
     if (APawn* P = GetPawn())
     {
         P->SetActorRotation(FRotator(0.f, Yaw, 0.f));
     }
 
-    // ■ Step 4: ログ（Verbose は常時出力されないため低コスト）
     UE_LOG(LogTemp, Verbose, TEXT("[TurnFacing_Server] Yaw=%.1f (Non-Consuming, Barrier-free)"), Yaw);
 }
 
@@ -989,37 +753,24 @@ void APlayerControllerBase::GridSmokeTest()
     }
 }
 
-//==============================================================================
-// ★★★ Client RPC: 移動コマンド拒否通知 (2025-11-09) ★★★
-//==============================================================================
 void APlayerControllerBase::Client_NotifyMoveRejected_Implementation()
 {
     UE_LOG(LogTemp, Warning, TEXT("[Client] ★★★ MOVE REJECTED RPC RECEIVED ★★★"));
     UE_LOG(LogTemp, Warning, TEXT("[Client] BEFORE reset: bSentThisInputWindow=%d, LastProcessedWindowId=%d, WindowId=%d"),
         bSentThisInputWindow, LastProcessedWindowId, CurrentInputWindowId);
 
-    // ★★★ CRITICAL FIX (2025-11-10): 両方のラッチをリセット ★★★
-    // bSentThisInputWindow: 同一ウィンドウ内での送信制御
-    // LastProcessedWindowId: Input_Move_Completed()の重複防止ガードをリセット
     bSentThisInputWindow = false;
     LastProcessedWindowId = INDEX_NONE;
 
-    // ★★★ Gemini提案: リセット直後の実際の値を確認（2025-11-11）★★★
     UE_LOG(LogTemp, Warning, TEXT("[Client] AFTER reset: bSentThisInputWindow=%s, LastProcessedWindowId=%d"),
         bSentThisInputWindow ? TEXT("TRUE") : TEXT("FALSE"), LastProcessedWindowId);
 
-    // ★★★ CRITICAL FIX (2025-11-11): Gemini分析により判明 ★★★
-    // 問題: サーバー側でWaitingForPlayerInputがtrueのままの場合、
-    // OnRep_WaitingForPlayerInputが呼ばれず、Gate_Input_Openタグが復元されない
-    // 修正: Client_NotifyMoveRejectedで明示的にGateを再開放する
     if (!IsValid(CachedTurnManager))
     {
         UE_LOG(LogTemp, Error, TEXT("[Client] Client_NotifyMoveRejected: TurnManager invalid, cannot ensure Gate state"));
     }
     else
     {
-        // TurnManagerのApplyWaitInputGateを呼び出してクライアント側のGateを確実に開く
-        // これにより、レプリケーション遅延があってもクライアント側のGate状態が保証される
         CachedTurnManager->ApplyWaitInputGate(true);
         UE_LOG(LogTemp, Warning, TEXT("[Client] ★ Gate_Input_Open tag explicitly re-applied via TurnManager"));
     }
@@ -1027,12 +778,8 @@ void APlayerControllerBase::Client_NotifyMoveRejected_Implementation()
     UE_LOG(LogTemp, Warning, TEXT("[Client] ✅ All state reset complete. Player can retry input."));
 }
 
-//==============================================================================
-// ★★★ Client RPC: コマンド受理確認（ACK）(2025-11-10) ★★★
-//==============================================================================
 void APlayerControllerBase::Client_ConfirmCommandAccepted_Implementation(int32 WindowId)
 {
-    // 同一ウィンドウのACKのみ有効（古いACKを無視）
     if (WindowId != CurrentInputWindowId)
     {
         UE_LOG(LogTemp, Warning, TEXT("[Client] ACK IGNORED: WindowId mismatch (ACK=%d, Current=%d)"),
@@ -1040,7 +787,6 @@ void APlayerControllerBase::Client_ConfirmCommandAccepted_Implementation(int32 W
         return;
     }
 
-    // ★★★ サーバー確定後にラッチを確定 ★★★
     bSentThisInputWindow = true;
     LastProcessedWindowId = WindowId;
 
@@ -1051,12 +797,8 @@ void APlayerControllerBase::Client_ConfirmCommandAccepted_Implementation(int32 W
         LastProcessedWindowId == WindowId ? -1 : LastProcessedWindowId, WindowId);
 }
 
-//==============================================================================
-// ★★★ Client RPC: 回転のみ適用（ターン不消費） (2025-11-10) ★★★
-//==============================================================================
 void APlayerControllerBase::Client_ApplyFacingNoTurn_Implementation(int32 WindowId, FVector2D Direction)
 {
-    // 同一ウィンドウのみ有効（古いRPCを無視）
     if (WindowId != CurrentInputWindowId)
     {
         UE_LOG(LogTemp, Verbose, TEXT("[Client] FacingNoTurn IGNORED: WindowId mismatch (RPC=%d, Current=%d)"),
@@ -1064,10 +806,6 @@ void APlayerControllerBase::Client_ApplyFacingNoTurn_Implementation(int32 Window
         return;
     }
 
-    // ★★★ ラッチは変更しない（入力継続可能） ★★★
-    // bSentThisInputWindow / LastProcessedWindowId は触らない
-
-    // プレイヤーの向きを変更
     if (APawn* ControlledPawn = GetPawn())
     {
         const float Yaw = FMath::Atan2(Direction.Y, Direction.X) * 180.f / PI;
@@ -1078,6 +816,4 @@ void APlayerControllerBase::Client_ApplyFacingNoTurn_Implementation(int32 Window
         UE_LOG(LogTemp, Log, TEXT("[Client] ★ FACING ONLY (No Turn): Direction=(%.1f,%.1f), Yaw=%.1f"),
             Direction.X, Direction.Y, Yaw);
     }
-
-    // 任意：フェイシング専用のフィードバック（アニメーション、サウンド等）
 }

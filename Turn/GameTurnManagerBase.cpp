@@ -636,10 +636,6 @@ AActor* AGameTurnManagerBase::GetPlayerActor() const
     return nullptr;
 }
 
-void AGameTurnManagerBase::BuildObservations_Implementation()
-{
-    UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] BuildObservations called (Blueprint should override)"), CurrentTurnIndex);
-}
 
 void AGameTurnManagerBase::StartTurn()
 {
@@ -987,33 +983,7 @@ if (Intents.Num() == 0 && EnemyTurnDataSys->Observations.Num() > 0)
     }
 }
 
-FEnemyIntent AGameTurnManagerBase::ComputeEnemyIntent_Implementation(AActor* Enemy, const FEnemyObservation& Observation)
-{
-    FEnemyIntent Intent;
-    Intent.Actor = Enemy;
 
-    if (Observation.DistanceInTiles <= 1)
-    {
-        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Attack;
-    }
-    else
-    {
-        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Move;
-    }
-
-    UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] ComputeEnemyIntent: %s -> %s (Distance=%d)"),
-        CurrentTurnIndex, *Enemy->GetName(), *Intent.AbilityTag.ToString(), Observation.DistanceInTiles);
-
-    return Intent;
-}
-
-void AGameTurnManagerBase::ExecuteEnemyMoves_Implementation()
-{
-    
-    UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] ExecuteEnemyMoves: ActionExecutor not available (class not found)"), CurrentTurnIndex);
-    return;
-
-}
 
 void AGameTurnManagerBase::GetEnemyIntentsBP_Implementation(TArray<FEnemyIntent>& OutIntents) const
 {
@@ -1053,29 +1023,6 @@ bool AGameTurnManagerBase::HasAnyAttackIntent() const
     return false;
 }
 
-void AGameTurnManagerBase::NotifyAbilityStarted()
-{
-    PendingAbilityCount++;
-    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Ability started. Pending: %d"), CurrentTurnIndex, PendingAbilityCount);
-}
-
-void AGameTurnManagerBase::OnAbilityCompleted()
-{
-    PendingAbilityCount = FMath::Max(0, PendingAbilityCount - 1);
-    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Ability completed. Remaining: %d"), CurrentTurnIndex, PendingAbilityCount);
-
-    if (PendingAbilityCount == 0)
-    {
-        UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] All abilities completed"), CurrentTurnIndex);
-
-        if (GetWorld())
-        {
-            GetWorld()->GetTimerManager().ClearTimer(AbilityWaitTimerHandle);
-        }
-
-        OnAllAbilitiesCompleted();
-    }
-}
 
 void AGameTurnManagerBase::BuildAllyIntents_Implementation(FTurnContext& Context)
 {
@@ -1118,48 +1065,6 @@ void AGameTurnManagerBase::CheckInterruptWindow_Implementation(const FPendingMov
     UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] CheckInterruptWindow called (Blueprint)"), CurrentTurnIndex);
 }
 
-void AGameTurnManagerBase::WaitForAbilityCompletion_Implementation()
-{
-    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] WaitForAbilityCompletion"), CurrentTurnIndex);
-    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Waiting for %d abilities"), CurrentTurnIndex, PendingAbilityCount);
-
-    if (PendingAbilityCount == 0)
-    {
-        UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] No abilities pending"), CurrentTurnIndex);
-        OnAllAbilitiesCompleted();
-        return;
-    }
-
-    if (!GetWorld())
-    {
-        UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] World is null"), CurrentTurnIndex);
-        return;
-    }
-
-    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Starting ability wait timer"), CurrentTurnIndex);
-
-    GetWorld()->GetTimerManager().SetTimer(
-        AbilityWaitTimerHandle,
-        [this]()
-        {
-            UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] Checking... Pending: %d"), CurrentTurnIndex, PendingAbilityCount);
-
-            if (PendingAbilityCount == 0)
-            {
-                UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Timer detected completion"), CurrentTurnIndex);
-
-                if (GetWorld())
-                {
-                    GetWorld()->GetTimerManager().ClearTimer(AbilityWaitTimerHandle);
-                }
-
-                OnAllAbilitiesCompleted();
-            }
-        },
-        0.1f,
-        true
-    );
-}
 
 void AGameTurnManagerBase::SendGameplayEvent(AActor* Target, FGameplayTag EventTag, const FGameplayEventData& Payload)
 {
@@ -1235,13 +1140,6 @@ void AGameTurnManagerBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
     DOREPLIFETIME(AGameTurnManagerBase, bPlayerMoveInProgress);
 }
 
-void AGameTurnManagerBase::ExecuteEnemyAttacks_Implementation()
-{
-    
-    UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] ExecuteEnemyAttacks: ActionExecutor not available (class not found)"), CurrentTurnIndex);
-    return;
-
-}
 void AGameTurnManagerBase::OnEnemyAttacksCompleted()
 {
     UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] All enemy attacks completed"), CurrentTurnIndex);
@@ -1811,39 +1709,64 @@ if (!bSide1Walkable || !bSide2Walkable)
             }
         }
 
-bool bOccupied = false;
+        bool bOccupied = false;
         bool bSwapDetected = false;
         AActor* OccupyingActor = nullptr;
-        if (UGridOccupancySubsystem* OccSys = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
+        UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>();
+        if (OccSys)
         {
             OccupyingActor = OccSys->GetActorAtCell(TargetCell);
-            
-            if (OccupyingActor && OccupyingActor != PlayerPawn)
+            if (OccupyingActor == PlayerPawn)
             {
-                bOccupied = true;
+                OccupyingActor = nullptr;
+            }
+        }
 
-if (UEnemyTurnDataSubsystem* EnemyTurnDataSys = GetWorld()->GetSubsystem<UEnemyTurnDataSubsystem>())
+        if (!OccupyingActor && CachedPathFinder.IsValid())
+        {
+            for (const TObjectPtr<AActor>& Enemy : CachedEnemies)
+            {
+        if (!Enemy || Enemy.Get() == PlayerPawn)
                 {
-                    const FEnemyIntent* Intent = nullptr;
-                    for (const FEnemyIntent& I : EnemyTurnDataSys->Intents)
-                    {
-                        if (I.Actor.Get() == OccupyingActor)
-                        {
-                            Intent = &I;
-                            break;
-                        }
-                    }
+                    continue;
+                }
 
-                    if (Intent && Intent->NextCell == CurrentCell)
+                const FIntPoint EnemyCell = CachedPathFinder->WorldToGrid(Enemy->GetActorLocation());
+                if (EnemyCell == TargetCell)
+                {
+                    OccupyingActor = Enemy.Get();
+                    UE_LOG(LogTurnManager, Warning,
+                        TEXT("[MovePrecheck] Spatial occupancy detected: %s is at (%d,%d)"),
+                        *GetNameSafe(OccupyingActor), TargetCell.X, TargetCell.Y);
+                    break;
+                }
+            }
+        }
+
+        if (OccupyingActor && OccupyingActor != PlayerPawn)
+        {
+            bOccupied = true;
+
+            if (UEnemyTurnDataSubsystem* EnemyTurnDataSys = World->GetSubsystem<UEnemyTurnDataSubsystem>())
+            {
+                const FEnemyIntent* Intent = nullptr;
+                for (const FEnemyIntent& I : EnemyTurnDataSys->Intents)
+                {
+                    if (I.Actor.Get() == OccupyingActor)
                     {
-                        
-                        bSwapDetected = true;
-                        UE_LOG(LogTurnManager, Warning,
-                            TEXT("[MovePrecheck] SWAP DETECTED: Player (%d,%d)->(%d,%d), Enemy %s (%d,%d)->(%d,%d)"),
-                            CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y,
-                            *GetNameSafe(OccupyingActor),
-                            TargetCell.X, TargetCell.Y, Intent->NextCell.X, Intent->NextCell.Y);
+                        Intent = &I;
+                        break;
                     }
+                }
+
+                if (Intent && Intent->NextCell == CurrentCell)
+                {
+                    bSwapDetected = true;
+                    UE_LOG(LogTurnManager, Warning,
+                        TEXT("[MovePrecheck] SWAP DETECTED: Player (%d,%d)->(%d,%d), Enemy %s (%d,%d)->(%d,%d)"),
+                        CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y,
+                        *GetNameSafe(OccupyingActor),
+                        TargetCell.X, TargetCell.Y, Intent->NextCell.X, Intent->NextCell.Y);
                 }
             }
         }
@@ -1990,7 +1913,14 @@ if (APlayerController* PC = Cast<APlayerController>(PlayerPawn->GetController())
             }
         }
 
-CloseInputWindowForPlayer();
+        if (PlayerInputProcessor)
+        {
+            PlayerInputProcessor->CloseInputWindow();
+        }
+        else
+        {
+            UE_LOG(LogTurnManager, Error, TEXT("[GameTurnManager] PlayerInputProcessor not available for CloseInputWindow"));
+        }
     }
     else
     {
@@ -2320,11 +2250,6 @@ ExecuteMovePhase();
 
 }
 
-void AGameTurnManagerBase::ExecuteSimultaneousMoves()
-{
-    
-    ExecuteSimultaneousPhase();
-}
 
 void AGameTurnManagerBase::OnSimultaneousPhaseCompleted()
 {
@@ -2792,13 +2717,16 @@ void AGameTurnManagerBase::EndEnemyTurn()
 {
     UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] ==== EndEnemyTurn ===="), CurrentTurnIndex);
 
-if (!CanAdvanceTurn(CurrentTurnIndex))
+    bool bBarrierQuiet = false;
+    int32 InProgressCount = 0;
+
+    if (!CanAdvanceTurn(CurrentTurnIndex, &bBarrierQuiet, &InProgressCount))
     {
         UE_LOG(LogTurnManager, Error,
             TEXT("[EndEnemyTurn] ABORT: Cannot end turn %d (actions still in progress)"),
             CurrentTurnIndex);
 
-if (UWorld* World = GetWorld())
+        if (UWorld* World = GetWorld())
         {
             if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
             {
@@ -2806,11 +2734,22 @@ if (UWorld* World = GetWorld())
             }
         }
 
-ClearResidualInProgressTags();
+        ClearResidualInProgressTags();
+
+        if (bBarrierQuiet && InProgressCount > 0)
+        {
+            if (CanAdvanceTurn(CurrentTurnIndex))
+            {
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("[EndEnemyTurn] Residual InProgress tags cleared, advancing turn without retry"));
+                AdvanceTurnAndRestart();
+                return;
+            }
+        }
 
         if (!bEndTurnPosted)
         {
-            bEndTurnPosted = true;  
+            bEndTurnPosted = true;
 
             if (UWorld* World = GetWorld())
             {
@@ -2832,12 +2771,12 @@ ClearResidualInProgressTags();
                 TEXT("[EndEnemyTurn] Retry suppressed (already posted)"));
         }
 
-        return;  
+        return;
     }
 
-ClearResidualInProgressTags();
+    ClearResidualInProgressTags();
 
-AdvanceTurnAndRestart();
+    AdvanceTurnAndRestart();
 }
 
 void AGameTurnManagerBase::ClearResidualInProgressTags()
@@ -3040,13 +2979,13 @@ bPlayerPossessed = true;
 
 if (bTurnStarted && !WaitingForPlayerInput)
     {
-        OpenInputWindowForPlayer();
+        OpenInputWindow();
         bDeferOpenOnPossess = false; 
     }
     
     else if (bTurnStarted && bDeferOpenOnPossess)
     {
-        OpenInputWindowForPlayer();
+        OpenInputWindow();
         bDeferOpenOnPossess = false; 
     }
     else if (!bTurnStarted)
@@ -3076,73 +3015,7 @@ if (bPathReady && bUnitsSpawned && bPlayerPossessed && !bTurnStarted)
     }
 }
 
-void AGameTurnManagerBase::OpenInputWindowForPlayer()
-{
-    if (!HasAuthority()) return;
-    if (!ensure(CachedPlayerPawn)) return;
 
-    WaitingForPlayerInput = true;
-    ++InputWindowId;
-
-if (CommandHandler)
-    {
-        CommandHandler->BeginInputWindow(InputWindowId);
-    }
-
-    if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(CachedPlayerPawn))
-    {
-        if (UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent())
-        {
-            
-            ASC->AddLooseGameplayTag(RogueGameplayTags::Gate_Input_Open);
-        }
-    }
-
-    UE_LOG(LogTurnManager, Warning, TEXT("[Turn] InputWindow OPEN: Turn=%d WinId=%d Gate=OPEN Pawn=%s"),
-        GetCurrentTurnIndex(), InputWindowId, *GetNameSafe(CachedPlayerPawn));
-}
-
-void AGameTurnManagerBase::CloseInputWindowForPlayer()
-{
-    if (!HasAuthority())
-    {
-        UE_LOG(LogTurnManager, Warning, TEXT("[CloseInputWindow] REJECT: Not authority"));
-        return;
-    }
-
-    if (!CachedPlayerPawn)
-    {
-        UE_LOG(LogTurnManager, Warning, TEXT("[CloseInputWindow] REJECT: No player pawn"));
-        return;
-    }
-
-    if (!WaitingForPlayerInput)
-    {
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[CloseInputWindow] REJECT: Already closed (WPI=false) | Turn=%d WindowId=%d"),
-            CurrentTurnIndex, InputWindowId);
-        return;
-    }
-
-WaitingForPlayerInput = false;
-
-if (CommandHandler)
-    {
-        CommandHandler->EndInputWindow();
-    }
-
-if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(CachedPlayerPawn))
-    {
-        if (UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent())
-        {
-            ASC->RemoveLooseGameplayTag(RogueGameplayTags::Gate_Input_Open);
-        }
-    }
-
-    UE_LOG(LogTurnManager, Warning,
-        TEXT("[CloseInputWindow] SUCCESS: Turn=%d WindowId=%d Reason=AcceptedValidPlayerCmd"),
-        CurrentTurnIndex, InputWindowId);
-}
 
 void AGameTurnManagerBase::OnRep_InputWindowId()
 {
@@ -3178,7 +3051,7 @@ bool AGameTurnManagerBase::IsInputOpen_Server() const
     return false;
 }
 
-bool AGameTurnManagerBase::CanAdvanceTurn(int32 TurnId) const
+bool AGameTurnManagerBase::CanAdvanceTurn(int32 TurnId, bool* OutBarrierQuiet, int32* OutInProgressCount) const
 {
     
     bool bBarrierQuiet = false;
@@ -3200,16 +3073,31 @@ bool AGameTurnManagerBase::CanAdvanceTurn(int32 TurnId) const
         {
             UE_LOG(LogTurnManager, Error,
                 TEXT("[CanAdvanceTurn] Barrier subsystem not found"));
+            if (OutBarrierQuiet)
+            {
+                *OutBarrierQuiet = false;
+            }
+            if (OutInProgressCount)
+            {
+                *OutInProgressCount = 0;
+            }
             return false;
         }
     }
+    else if (OutBarrierQuiet)
+    {
+        *OutBarrierQuiet = false;
+    }
 
-bool bNoInProgressTags = false;
     int32 InProgressCount = 0;
-
+    bool bNoInProgressTags = false;
     if (UAbilitySystemComponent* ASC = GetPlayerASC())
     {
         InProgressCount = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress);
+        if (OutInProgressCount)
+        {
+            *OutInProgressCount = InProgressCount;
+        }
         bNoInProgressTags = (InProgressCount == 0);
 
         if (!bNoInProgressTags)
@@ -3223,21 +3111,30 @@ bool bNoInProgressTags = false;
     {
         UE_LOG(LogTurnManager, Error,
             TEXT("[CanAdvanceTurn] Player ASC not found"));
+        if (OutInProgressCount)
+        {
+            *OutInProgressCount = InProgressCount;
+        }
         return false;
     }
 
-const bool bCanAdvance = bBarrierQuiet && bNoInProgressTags;
+    if (OutBarrierQuiet)
+    {
+        *OutBarrierQuiet = bBarrierQuiet;
+    }
+
+    const bool bCanAdvance = bBarrierQuiet && bNoInProgressTags;
 
     if (bCanAdvance)
     {
-            UE_LOG(LogTurnManager, Log,
-                TEXT("[CanAdvanceTurn] OK: Turn=%d (Barrier=Quiet, InProgress=0)"),
-                TurnId);
-        }
-        else
-        {
-            UE_LOG(LogTurnManager, Warning,
-                TEXT("[CanAdvanceTurn] ❌BLOCKED: Turn=%d (Barrier=%s, InProgress=%d)"),
+        UE_LOG(LogTurnManager, Log,
+            TEXT("[CanAdvanceTurn] OK: Turn=%d (Barrier=Quiet, InProgress=0)"),
+            TurnId);
+    }
+    else
+    {
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[CanAdvanceTurn] ❌BLOCKED: Turn=%d (Barrier=%s, InProgress=%d)"),
             TurnId,
             bBarrierQuiet ? TEXT("Quiet") : TEXT("Busy"),
             InProgressCount);
@@ -3276,22 +3173,6 @@ bool AGameTurnManagerBase::NextFloor()
     return true; 
 }
 
-int32 AGameTurnManagerBase::TM_ReturnGridStatus(FVector World) const
-{
-    if (ADungeonFloorGenerator* FloorGen = GetFloorGenerator())
-    {
-        return FloorGen->ReturnGridStatus(World);
-    }
-    return -999;
-}
-
-void AGameTurnManagerBase::TM_GridChangeVector(FVector World, int32 Value)
-{
-    if (ADungeonFloorGenerator* FloorGen = GetFloorGenerator())
-    {
-        FloorGen->GridChangeVector(World, Value);
-    }
-}
 
 void AGameTurnManagerBase::WarpPlayerToStairUp(AActor* Player)
 {
@@ -3303,36 +3184,6 @@ void AGameTurnManagerBase::WarpPlayerToStairUp(AActor* Player)
 UE_LOG(LogTurnManager, Warning, TEXT("[WarpPlayerToStairUp] Not implemented yet - requires dungeon stair tracking"));
 }
 
-void AGameTurnManagerBase::SetWallCell(int32 X, int32 Y)
-{
-    if (ADungeonFloorGenerator* FloorGen = GetFloorGenerator())
-    {
-        FVector WorldPos(X * FloorGen->CellSize, Y * FloorGen->CellSize, 0.0f);
-        FloorGen->GridChangeVector(WorldPos, -1); 
-    }
-}
-
-void AGameTurnManagerBase::SetWallAtWorldPosition(FVector WorldPosition)
-{
-    if (ADungeonFloorGenerator* FloorGen = GetFloorGenerator())
-    {
-        FloorGen->GridChangeVector(WorldPosition, -1); 
-    }
-}
-
-void AGameTurnManagerBase::SetWallRect(int32 MinX, int32 MinY, int32 MaxX, int32 MaxY)
-{
-    if (ADungeonFloorGenerator* FloorGen = GetFloorGenerator())
-    {
-        for (int32 X = MinX; X <= MaxX; X++)
-        {
-            for (int32 Y = MinY; Y <= MaxY; Y++)
-            {
-                SetWallCell(X, Y);
-            }
-        }
-    }
-}
 
 void AGameTurnManagerBase::MarkMoveInProgress(bool bInProgress)
 {

@@ -3,7 +3,6 @@
 #include "TurnCorePhaseManager.h"
 #include "DistanceFieldSubsystem.h"
 #include "ConflictResolverSubsystem.h"
-// #include "Action/ActionExecutorSubsystem.h"  // ☁E�E�E�E�E☁E統合完亁E�E�E�E��E�E�E�より削除 ☁E�E�E�E�E☁E
 #include "StableActorRegistry.h"
 #include "Turn/GameTurnManagerBase.h"
 #include "TurnSystemTypes.h"
@@ -54,8 +53,6 @@ namespace TurnCorePhaseManagerPrivate
     }
 }
 
-// ????????????????????????????????????????????????????????????????????????
-// GenerationOrder読み取りヘルパ�E�E�E�E�E�E�E�E�反封E�E�E�E��E�E�E�1回だけ！E// ????????????????????????????????????????????????????????????????????????
 static int32 ReadGenerationOrderFromBlueprint(const AActor* Actor)
 {
     static const FName GenName(TEXT("GenerationOrder"));
@@ -76,10 +73,6 @@ static int32 ReadGenerationOrderFromBlueprint(const AActor* Actor)
 
     return TNumericLimits<int32>::Max();
 }
-
-// ????????????????????????????????????????????????????????????????????????
-// Subsystem Lifecycle
-// ????????????????????????????????????????????????????????????????????????
 
 void UTurnCorePhaseManager::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -130,7 +123,6 @@ void UTurnCorePhaseManager::CoreObservationPhase(const FIntPoint& PlayerCell)
         return;
     }
 
-    // ★★★ 修正 (2025-11-11): 距離場更新前に古い予約をクリア（AI待機問題修正） ★★★
     if (UWorld* World = GetWorld())
     {
         if (UGridOccupancySubsystem* GridOccupancy = World->GetSubsystem<UGridOccupancySubsystem>())
@@ -186,25 +178,18 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
 
     UGridOccupancySubsystem* GridOccupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>();
 
-    // ★★★ CRITICAL FIX (2025-11-11): ターン番号を設定して古い予約を削除 ★★★
     if (GridOccupancy)
     {
-        // ターン番号を取得（TurnManager から）
         int32 CurrentTurnId = 0;
         if (AGameTurnManagerBase* TurnManager = ResolveTurnManager())
         {
-            // ★★★ FIX (2025-11-11): GetCurrentTurnIndex() を使用（CurrentTurnId は増分されない） ★★★
             CurrentTurnId = TurnManager->GetCurrentTurnIndex();
         }
 
-        // ターン番号を設定
         GridOccupancy->SetCurrentTurnId(CurrentTurnId);
-
-        // 古い予約を削除
         GridOccupancy->PurgeOutdatedReservations(CurrentTurnId);
     }
 
-    // ★★★ 二相コミット: MovePhase開始 (2025-11-11) ★★★
     if (GridOccupancy)
     {
         GridOccupancy->BeginMovePhase();
@@ -247,12 +232,10 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
             LiveCurrentCell = Intent.CurrentCell;
         }
 
-        // ★★★ FIX (2025-11-12): 攻撃インテントは移動しないので NextCell を CurrentCell に修正 ★★★
-        // 攻撃者の現在地を ConflictResolver で占有し続けるため
         FIntPoint ResolvedNextCell = Intent.NextCell;
         if (Intent.AbilityTag.MatchesTag(RogueGameplayTags::AI_Intent_Attack))
         {
-            ResolvedNextCell = LiveCurrentCell;  // 攻撃時は移動しない
+            ResolvedNextCell = LiveCurrentCell;
             UE_LOG(LogTemp, Verbose,
                 TEXT("[TurnCore] Attack intent detected: %s stays at (%d,%d) (original NextCell=(%d,%d))"),
                 *GetNameSafe(Actor), LiveCurrentCell.X, LiveCurrentCell.Y, Intent.NextCell.X, Intent.NextCell.Y);
@@ -298,22 +281,17 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
 
     if (AGameTurnManagerBase* TurnManager = ResolveTurnManager())
     {
-        for (FResolvedAction& Action : Resolved)  // ★ const 削除（修正可能にする）
+        for (FResolvedAction& Action : Resolved)
         {
-            // ★★★ CRITICAL FIX (2025-11-11): 敗者（bIsWait=true）の予約を作成しない ★★★
-            // 理由: 敗者は移動しないため、予約は不要。
-            //       残った予約が他Actorの移動を妨げる可能性がある。
             if (!Action.bIsWait)
             {
                 const bool bReserved = TurnManager->RegisterResolvedMove(Action.SourceActor.Get(), Action.NextCell);
                 if (!bReserved)
                 {
-                    // ★★★ CRITICAL FIX (2025-11-11): 予約失敗 → 移動をキャンセル ★★★
                     UE_LOG(LogTemp, Error,
                         TEXT("[TurnCore] RegisterResolvedMove FAILED for %s -> (%d,%d) - MARKING AS WAIT (no movement)"),
                         *GetNameSafe(Action.SourceActor.Get()), Action.NextCell.X, Action.NextCell.Y);
 
-                    // 予約失敗したActorは移動させない（敗者扱い）
                     Action.bIsWait = true;
                 }
             }
@@ -336,14 +314,12 @@ void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& Reso
 {
     for (const FResolvedAction& Action : ResolvedActions)
     {
-        // ★★★ CRITICAL FIX (2025-11-10): NULL Actor ガード ★★★
         if (!Action.SourceActor)
         {
             UE_LOG(LogTurnCore, Error, TEXT("[Execute] Skip: SourceActor is None"));
             continue;
         }
 
-        // ★★★ CRITICAL FIX (2025-11-11): bIsWait=true（敗者/予約失敗）はスキップ ★★★
         if (Action.bIsWait)
         {
             UE_LOG(LogTurnCore, Verbose,
@@ -377,7 +353,6 @@ void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& Reso
         EventData.Instigator = Action.SourceActor;
         EventData.Target = Action.SourceActor;
 
-        // ☁E�E�E�E�E☁ENextCellをエンコードしてEventMagnitudeに設宁E☁E�E�E�E�E☁E
         if (Action.NextCell != FIntPoint(-1, -1))
         {
             const int32 EncodedCell = TurnCommandEncoding::PackCell(Action.NextCell.X, Action.NextCell.Y);
@@ -388,7 +363,6 @@ void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& Reso
                 Action.NextCell.X, Action.NextCell.Y, EventData.EventMagnitude);
         }
 
-        // ★★★ FIX: Sending ability event log（2025-11-11）★★★
         UE_LOG(LogTurnCore, Log,
             TEXT("[Execute] Sending ability event: Intent=%s, Event=%s, Actor=%s, Cell=(%d,%d)"),
             *Action.FinalAbilityTag.ToString(),
@@ -410,7 +384,6 @@ void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& Reso
             NumActivated);
     }
 
-    // ★★★ 二相コミット: MovePhase終了 (2025-11-11) ★★★
     UGridOccupancySubsystem* GridOccupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>();
     if (GridOccupancy)
     {
@@ -430,13 +403,8 @@ void UTurnCorePhaseManager::CoreCleanupPhase()
     UE_LOG(LogTemp, Log, TEXT("[TurnCore] CleanupPhase: Complete"));
 }
 
-// ????????????????????????????????????????????????????????????????????????
-// TimeSlot対応：高速実行ラチE�E�E�E��E�E�E��E�E�E�E�E�E�E�E2.4完�E版！E
-// ????????????????????????????????????????????????????????????????????????
-
 const FGameplayTag& UTurnCorePhaseManager::Tag_Move()
 {
-    // ☁E�E�E�E�E☁ESparky修正: 静的ローカル変数で参�Eを返す ☁E�E�E�E�E☁E
     static const FGameplayTag Tag = RogueGameplayTags::AI_Intent_Move;
     return Tag;
 }
@@ -495,9 +463,6 @@ void UTurnCorePhaseManager::BucketizeIntentsBySlot(
         OutBuckets[Intent.TimeSlot].Add(Intent);
     }
 }
-// ????????????????????????????????????????????????????????????????????????
-// ExecuteMovePhaseWithSlots�E�E�E�E�E�E�E�完�E版！E
-// ????????????????????????????????????????????????????????????????????????
 
 int32 UTurnCorePhaseManager::ExecuteMovePhaseWithSlots(
     const TArray<FEnemyIntent>& AllIntents,
@@ -562,7 +527,6 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
 
     if (AllIntents.Num() == 0)
     {
-        // ☁E変更: Verbose ↁELog
         UE_LOG(LogTemp, Log, TEXT("[ExecuteAttackPhaseWithSlots] No intents"));
         return 0;
     }
@@ -594,7 +558,6 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
 
         if (Attacks.Num() == 0)
         {
-            // ☁E変更: Verbose ↁELog
             UE_LOG(LogTemp, Log, TEXT("[Attack Slot %d] No attacks"), Slot);
             continue;
         }
@@ -607,7 +570,6 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
 
         for (const FEnemyIntent& Intent : Attacks)
         {
-            // ★★★ FIX: 無効なアクターをスキップ（2025-11-11）★★★
             AActor* IntentActor = Intent.Actor.Get();
             if (!IntentActor || !IsValid(IntentActor))
             {
@@ -619,17 +581,13 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
 
             FResolvedAction Action;
             Action.ActorID = ActorRegistry ? ActorRegistry->GetStableID(IntentActor) : FStableActorID{};
-            Action.Actor = IntentActor;  // ★★★ FIX: TWeakObjectPtr を設定（AttackPhaseExecutorSubsystem が使用）
+            Action.Actor = IntentActor;
             Action.SourceActor = IntentActor;
             Action.FinalAbilityTag = AttackTag;
-            // ★★★ FIX: AbilityTag にも正しい EventTag を設定（2025-11-11）★★★
-            // AttackPhaseExecutorSubsystem は AbilityTag を使用するため
             Action.AbilityTag = RogueGameplayTags::GameplayEvent_Intent_Attack;
             Action.NextCell = Intent.NextCell;
             Action.TimeSlot = Slot;
 
-            // ★★★ FIX (2025-11-11): Intent.Target を TargetData に変換 ★★★
-            // AI決定時に保存されたターゲットをGA_MeleeAttackに渡す
             if (AActor* TargetActor = Intent.Target.Get())
             {
                 FGameplayAbilityTargetData_SingleTargetHit* TargetData = new FGameplayAbilityTargetData_SingleTargetHit();
@@ -642,7 +600,7 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
                 UE_LOG(LogTemp, Log, TEXT("[Attack Slot %d] %s -> Target: %s"),
                     Slot, *GetNameSafe(IntentActor), *GetNameSafe(TargetActor));
             }
-            else if (AActor* TargetActorAlt = Intent.TargetActor)  // 互換性のため
+            else if (AActor* TargetActorAlt = Intent.TargetActor)
             {
                 FGameplayAbilityTargetData_SingleTargetHit* TargetData = new FGameplayAbilityTargetData_SingleTargetHit();
                 FHitResult HitResult;
@@ -663,12 +621,6 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
             SlotActions.Add(Action);
         }
 
-        // ★★★ REMOVED: 即座のイベント送出を削除（2025-11-11）★★★
-        // AttackPhaseExecutorSubsystem が逐次実行を担当するため、ここでの送出は不要
-        // 二重トリガーによる NumActivated=0 エラーを防ぐ
-
-        // ★★★ FIX: OutActions に追加する前に無効アクターを再度フィルタリング（2025-11-11）★★★
-        // FResolvedAction.Actor は TWeakObjectPtr であり、生成後に無効になる可能性がある
         TArray<FResolvedAction> ValidActions;
         ValidActions.Reserve(SlotActions.Num());
         for (const FResolvedAction& Action : SlotActions)
@@ -734,10 +686,6 @@ void UTurnCorePhaseManager::CoreThinkPhaseWithTimeSlots(
 // TurnCorePhaseManager.cpp
 
 #include "AbilitySystemGlobals.h"
-
-// ????????????????????????????????????????????????????????????????????????
-// ResolveASC (Enhanced)
-// ????????????????????????????????????????????????????????????????????????
 
 UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
 {
@@ -869,13 +817,6 @@ UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
 }
 
 
-// ????????????????????????????????????????????????????????????????????????
-// GAS 準備完亁E�E�E�E��E�E�E�ェチE�E�E�E��E�E�E�
-// ????????????????????????????????????????????????????????????????????????
-
-// ????????????????????????????????????????????????????????????????????????
-// GAS 準備完亁E�E�E�E��E�E�E�ェチE�E�E�E��E�E�E��E�E�E�E�E�E�E�EE 5.6 対応！E
-// ????????????????????????????????????????????????????????????????????????
 
 bool UTurnCorePhaseManager::IsGASReady(AActor* Actor)
 {
@@ -884,19 +825,12 @@ bool UTurnCorePhaseManager::IsGASReady(AActor* Actor)
         return false;
     }
 
-    // ────────────────────────────────────────────────────────────────────
-    // Step 1: ASC を取征E
-    // ────────────────────────────────────────────────────────────────────
-
     UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Actor);
     if (!ASC)
     {
         return false;
     }
 
-    // ────────────────────────────────────────────────────────────────────
-    // Step 2: ActorInfo が有効か確誁E
-    // ────────────────────────────────────────────────────────────────────
 
     const FGameplayAbilityActorInfo* Info = ASC->AbilityActorInfo.Get();
     if (!Info || !Info->AvatarActor.IsValid())
@@ -905,12 +839,6 @@ bool UTurnCorePhaseManager::IsGASReady(AActor* Actor)
         return false;
     }
 
-    // ────────────────────────────────────────────────────────────────────
-    // Step 3: 能力が1つ以上付与されてぁE�E�E�E��E�E�E�か確認！EE 5.6 対応！E
-    // ────────────────────────────────────────────────────────────────────
-
-    // UE 5.6: GetActivatableAbilities() は直接 TArray<FGameplayAbilitySpec> を返す
-    // .Items プロパティは存在しなぁE�E�E�E��E�E�E�め削除
     const TArray<FGameplayAbilitySpec>& Abilities = ASC->GetActivatableAbilities();
 
     if (Abilities.Num() == 0)
@@ -937,7 +865,6 @@ bool UTurnCorePhaseManager::AllEnemiesReady(const TArray<AActor*>& Enemies) cons
         else
         {
             NotReadyCount++;
-            // 最初�E数体�Eみ詳細ログ�E�E�E�E�E�E�E�ログ氾濫防止�E�E�E�E�E�E�E�E
             if (NotReadyCount <= 3)
             {
                 UE_LOG(LogTemp, Verbose, TEXT("[TurnCore] AllEnemiesReady: %s not ready yet"),

@@ -104,8 +104,6 @@ UGA_MoveBase::UGA_MoveBase(const FObjectInitializer& ObjectInitializer)
 	ActivationBlockedTags.AddTag(RogueGameplayTags::State_Action_InProgress.GetTag());
 	ActivationBlockedTags.AddTag(RogueGameplayTags::State_Ability_Executing.GetTag());
 
-	// ★★★ ActivationOwnedTags: GASが自動的にタグを管理 ★★★
-	// ActivateAbility で自動追加、EndAbility で自動削除される
 	ActivationOwnedTags.AddTag(RogueGameplayTags::State_Action_InProgress.GetTag());
 	ActivationOwnedTags.AddTag(TagStateMoving);
 
@@ -138,19 +136,12 @@ bool UGA_MoveBase::ShouldRespondToEvent(
 	const FGameplayAbilityActorInfo* ActorInfo,
 	const FGameplayEventData* Payload) const
 {
-	// ★★★ ChatGPT提案: イベント応答の軽量チェック (2025-11-11) ★★★
-	// HandleGameplayEvent returned 0 問題を解決するため、
-	// イベントに応答する前に軽量な検証を行う。
-	// 重い検証（目的地、経路、壁衝突など）はActivateAbilityで実行される。
-
 	if (!Payload)
 	{
 		UE_LOG(LogMoveVerbose, Verbose, TEXT("[GA_MoveBase] ShouldRespondToEvent: Payload is null"));
 		return false;
 	}
 
-	// ★★★ EventTag検証: GameplayEvent.Intent.Move のみ応答 ★★★
-	// AbilityTriggersに登録されているタグとPayloadのEventTagが一致するか確認
 	if (!Payload->EventTag.MatchesTagExact(RogueGameplayTags::GameplayEvent_Intent_Move))
 	{
 		UE_LOG(LogMoveVerbose, Verbose,
@@ -160,7 +151,6 @@ bool UGA_MoveBase::ShouldRespondToEvent(
 		return false;
 	}
 
-	// EventMagnitudeが有効範囲内かチェック（TurnCommandEncoding形式）
 	const int32 RawMagnitude = FMath::RoundToInt(Payload->EventMagnitude);
 	if (RawMagnitude < TurnCommandEncoding::kDirBase)
 	{
@@ -170,15 +160,12 @@ bool UGA_MoveBase::ShouldRespondToEvent(
 		return false;
 	}
 
-	// ActorInfoの有効性チェック
 	if (!ActorInfo || !ActorInfo->AvatarActor.IsValid())
 	{
 		UE_LOG(LogMoveVerbose, Verbose, TEXT("[GA_MoveBase] ShouldRespondToEvent: Invalid ActorInfo"));
 		return false;
 	}
 
-	// ★★★ 目的地の詳細検証は起動後に実施するため、ここではtrueを返す ★★★
-	// Payload->TargetData / Misc に何もなくても、ActivateAbilityで解決できる設計
 	UE_LOG(LogMoveVerbose, Log,
 		TEXT("[GA_MoveBase] ShouldRespondToEvent: ✅ Passed all checks (Actor=%s, EventTag=%s, Magnitude=%d)"),
 		*GetNameSafe(ActorInfo->AvatarActor.Get()),
@@ -196,10 +183,6 @@ void UGA_MoveBase::ActivateAbility(
 {
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
-	// ★★★ ActivationOwnedTags を使用するため、GASが自動でタグを管理する ★★★
-	// Super::ActivateAbility() の中で State_Action_InProgress が自動追加される
-
-	// ☁E�E☁ESparky診断�E�アビリチE��起動確誁E☁E�E☁E
 	AActor* Avatar = GetAvatarActorFromActorInfo();
 	int32 TeamId = -1;
 	if (AUnitBase* Unit = Cast<AUnitBase>(Avatar))
@@ -229,7 +212,6 @@ void UGA_MoveBase::ActivateAbility(
 		return;
 	}
 
-	// ★★★ TurnId を EventData.OptionalObject から取得（2025-11-09） ★★★
 	if (const AGameTurnManagerBase* TurnManager = Cast<AGameTurnManagerBase>(TriggerEventData->OptionalObject.Get()))
 	{
 		MoveTurnId = TurnManager->GetCurrentTurnIndex();
@@ -239,7 +221,6 @@ void UGA_MoveBase::ActivateAbility(
 	}
 	else
 	{
-		// フォールバック: BarrierSubsystem から取得
 		if (UTurnActionBarrierSubsystem* Barrier = GetBarrierSubsystem())
 		{
 			MoveTurnId = Barrier->GetCurrentTurnId();
@@ -366,14 +347,12 @@ void UGA_MoveBase::ActivateAbility(
 	{
 		UE_LOG(LogTurnManager, VeryVerbose,
 			TEXT("[GA_MoveBase] Direction quantized to grid: Step=(%d,%d)"),
-			Step.X, Step.Y);
+			Step.X, 		Step.Y);
 	}
 
-	// ★★★ 予約セル優先、なければ計算値を使用（フォールバック） ★★★
 	const FIntPoint CalculatedCell = CurrentCell + Step;
 	const FIntPoint NextCell = (ReservedCell.X >= 0 && ReservedCell.Y >= 0) ? ReservedCell : CalculatedCell;
 
-	// ★★★ NextCellをキャッシュ（OnMoveFinishedで使用） ★★★
 	CachedNextCell = NextCell;
 
 	// ★★★ デバッグログ：予約 vs 計算 vs 実際の移動先 ★★★
@@ -415,8 +394,6 @@ void UGA_MoveBase::ActivateAbility(
 		return;
 	}
 
-	// ★★★ FIX: 移動検証が成功したので、ここで Barrier に登録（2025-11-11）★★★
-	// 早期終了（検証失敗）時には Barrier に登録されないため、未完了アクションが残らない
 	if (!RegisterBarrier(Avatar))
 	{
 		UE_LOG(LogTurnManager, Warning, TEXT("[GA_MoveBase] Barrier subsystem not found"));
@@ -435,9 +412,6 @@ void UGA_MoveBase::ActivateAbility(
 		}
 	}
 
-	// ★★★ FIX: GridToWorld(CachedNextCell)で正しい目的地セル中心を計算 (2025-11-09) ★★★
-	// 従来: CalculateNextTilePosition(CurrentLocation, StepDir2D) → 現在位置ベースで計算（位置ズレの原因）
-	// 修正後: PathFinder->GridToWorld(CachedNextCell) → セル座標から直接計算（OnMoveFinishedと同じ方式）
 	const FVector DestWorldLoc = PathFinder->GridToWorld(CachedNextCell);
 	NextTileStep = SnapToCellCenterFixedZ(DestWorldLoc, FixedZ);
 	NextTileStep.Z = FixedZ;
@@ -459,16 +433,6 @@ void UGA_MoveBase::ActivateAbility(
 		return;
 	}
 
-	// ★★★ DISABLED: プレイヤー回転を無効化（カメラ視点変化を防止） (2025-11-09) ★★★
-	// TBSゲームでは固定視点が望ましい。プレイヤーを回転させるとカメラも追従して視点が変わる。
-	// 以前の実装:
-	//   const float DesiredRotation = RoundYawTo45Degrees(...);
-	//   Avatar->SetActorRotation(FRotator(0.f, DesiredYaw, 0.f), ETeleportType::TeleportPhysics);
-	//
-	// もし向きを表現したい場合は、アニメーションブループリント側で方向を取得して
-	// メッシュのみを回転させる（アクター本体は回転させない）方式が推奨される。
-
-	// Walkability check
 	if (!IsTileWalkable(NextTileStep, Unit))
 	{
 		UE_LOG(LogTurnManager, Warning,
@@ -520,9 +484,6 @@ void UGA_MoveBase::CancelAbility(
 {
 	UE_LOG(LogMoveVerbose, Verbose, TEXT("[GA_MoveBase] Ability cancelled"));
 
-	// ★★★ ActivationOwnedTags を使用するため、GASが自動でタグを削除する ★★★
-	// Super::CancelAbility() の中で State_Action_InProgress が自動削除される
-
 	Super::CancelAbility(Handle, ActorInfo, ActivationInfo, bReplicateCancelAbility);
 }
 
@@ -565,13 +526,10 @@ void UGA_MoveBase::EndAbility(
 		ASC->RemoveLooseGameplayTag(RogueGameplayTags::Event_Dungeon_Step);
 	}
 
-	// ☁E�E☁ESparky修正: 状態を保存してからBarrierに通知�E�クリア前に�E�E��E☁E�E☁E
 	const int32 SavedTurnId = MoveTurnId;
 	const FGuid SavedActionId = MoveActionId;
 	AActor* SavedAvatar = GetAvatarActorFromActorInfo();
 
-	// ★★★FIX: bBarrierRegistered チェックを追加して確実に CompleteAction を呼ぶ（2025-11-11）★★★
-	// Barrier登録済みの場合は必ず完了通知を送る（ターン進行停止の防止）
 	if (bBarrierRegistered)
 	{
 		if (UWorld* World = GetWorld())
@@ -588,7 +546,6 @@ void UGA_MoveBase::EndAbility(
 				}
 				else
 				{
-					// 万が一 ActionID が無効な場合でも警告を出す
 					UE_LOG(LogTurnManager, Warning,
 						TEXT("[GA_MoveBase] ⚠ Barrier registered but ActionID invalid: Actor=%s, TurnId=%d, ActionId=%s"),
 						*GetNameSafe(SavedAvatar), SavedTurnId, *SavedActionId.ToString());
@@ -606,22 +563,14 @@ void UGA_MoveBase::EndAbility(
 		}
 	}
 
-	// ★★★ ActivationOwnedTags を使用するため、GASが自動でタグを削除する ★★★
-	// Super::EndAbility() の中で State_Action_InProgress が自動削除される
-
-	// ☁E�E☁ESparky修正: CompletedTurnIdForEventを設定！EendCompletionEventで使用�E�E☁E�E☁E
 	CompletedTurnIdForEvent = SavedTurnId;
-
-	// ☁E�E☁E重要E Super::EndAbility()の前にMoveTurnIdをクリアしなぁE��E☁E�E☁E
-	// 基底クラスがSendCompletionEventを呼ぶ可能性があめE
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 
-	// ☁E�E☁ESparky修正: Super::EndAbility()の後にクリア ☁E�E☁E
 	MoveTurnId = INDEX_NONE;
 	MoveActionId.Invalidate();
 	CompletedTurnIdForEvent = INDEX_NONE;
-	bBarrierRegistered = false; // ☁E�E☁EHotfix: 次回�EアビリチE��起動で再登録可能にする ☁E�E☁E
+	bBarrierRegistered = false;
 
 	bIsEnding = false;
 }
@@ -634,13 +583,12 @@ void UGA_MoveBase::SendCompletionEvent(bool bTimedOut)
             ? CompletedTurnIdForEvent
             : MoveTurnId;
 
-        // ☁E�E☁ESparky修正: 無効なTurnIdでイベントを送信しなぁE☁E�E☁E
         if (NotifiedTurnId == INDEX_NONE || NotifiedTurnId < 0)
         {
             UE_LOG(LogTurnManager, Error,
-                TEXT("[SendCompletionEvent] ☁E�E☁EINVALID TurnId=%d, NOT sending completion event! (Actor=%s)"),
+                TEXT("[SendCompletionEvent] INVALID TurnId=%d, NOT sending completion event! (Actor=%s)"),
                 NotifiedTurnId, *GetNameSafe(GetAvatarActorFromActorInfo()));
-            return;  // イベント送信を中止
+            return;
         }
 
         UE_LOG(LogTurnManager, Warning,
@@ -650,7 +598,7 @@ void UGA_MoveBase::SendCompletionEvent(bool bTimedOut)
         FGameplayEventData EventData;
         EventData.Instigator = GetAvatarActorFromActorInfo();
         EventData.OptionalObject = this;
-        EventData.EventMagnitude = static_cast<float>(NotifiedTurnId);  // ☁E�E☁ESparky修正: 直接使用�E�EMath::Maxなし！E☁E�E☁E
+        EventData.EventMagnitude = static_cast<float>(NotifiedTurnId);
         EventData.EventTag = RogueGameplayTags::Gameplay_Event_Turn_Ability_Completed;
 
         ASC->HandleGameplayEvent(RogueGameplayTags::Gameplay_Event_Turn_Ability_Completed, &EventData);
@@ -885,10 +833,6 @@ void UGA_MoveBase::BindMoveFinishedDelegate()
 
 void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
 {
-    // ☁E�E☁E二重通知防止: Barrier通知は EndAbility() でのみ行う ☁E�E☁E
-    // OnMoveFinished ↁEEndAbility の頁E��呼ばれるため、ここでは Barrier を触らなぁE
-
-    // TurnId変更の検�E�E�デバッグログのみ�E�E
     if (UWorld* World = GetWorld())
     {
         if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
@@ -935,13 +879,7 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
             MoveTurnId);
 
         CachedFirstLoc = SnappedLoc;
-        // ★★★ REMOVED: UpdateGridState(CachedFirstLoc, 1); ← レガシーコード削除 (2025-11-09)
-        // このレガシー呼び出しがWalkable値3を占有値1に上書きし、次ターンで地形ブロック判定を破壊していた。
-        // 占有管理はUpdateOccupancy（OccupancySubsystem）で既に行われているため、この呼び出しは冗長かつ有害。
-        // GridCostはあくまで「地形の通行コスト/Walkable状態」を表し、占有状態とは別チャンネルで管理すべき。
-        // UpdateGridState(CachedFirstLoc, 1);  // ← LEGACY CODE REMOVED
 
-        // ★★★ 2025-11-11: GridOccupancySubsystem更新 + 失敗時ロールバック ★★★
         if (UWorld* World = GetWorld())
         {
             if (UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>())
@@ -1176,20 +1114,18 @@ bool UGA_MoveBase::RegisterBarrier(AActor* Avatar)
 		return false;
 	}
 
-	// ☁E�E☁EHotfix: 二重登録防止ガーチE☁E�E☁E
 	if (bBarrierRegistered)
 	{
 		UE_LOG(LogTurnManager, Warning,
 			TEXT("[GA_MoveBase] RegisterBarrier called again for %s - already registered with ActionId=%s"),
 			*Avatar->GetName(), *MoveActionId.ToString());
-		return true; // 既に登録済みなのでtrueを返す
+		return true;
 	}
 
 	if (UWorld* World = Avatar->GetWorld())
 	{
 		if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
 		{
-			// ★★★ TurnId が未設定の場合のみフォールバック取得（2025-11-09） ★★★
 			if (MoveTurnId == INDEX_NONE)
 			{
 				MoveTurnId = Barrier->GetCurrentTurnId();

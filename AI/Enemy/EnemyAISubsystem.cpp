@@ -5,7 +5,7 @@
 #include "Grid/GridPathfindingLibrary.h"
 #include "Grid/GridOccupancySubsystem.h"
 #include "Turn/TurnCorePhaseManager.h"
-#include "Kismet/GameplayStatics.h"  // ★★★ PathFinder検索用 ★★★
+#include "Kismet/GameplayStatics.h"
 #include "AbilitySystemInterface.h"
 #include "GenericTeamAgentInterface.h"
 #include "../../ProjectDiagnostics.h"
@@ -33,8 +33,6 @@ void UEnemyAISubsystem::BuildObservations(
     const FIntPoint PlayerGrid = PathFinder->WorldToGrid(Player->GetActorLocation());
     UE_LOG(LogEnemyAI, Log, TEXT("[BuildObservations] PlayerGrid=(%d, %d)"), PlayerGrid.X, PlayerGrid.Y);
 
-    // ★★★ 重要：DistanceFieldを更新 ★★★
-    // これがないとGetNextStepTowardsPlayerが常に現在セルを返してしまう
     if (UWorld* World = GetWorld())
     {
         if (UTurnCorePhaseManager* TurnCore = World->GetSubsystem<UTurnCorePhaseManager>())
@@ -59,7 +57,6 @@ void UEnemyAISubsystem::BuildObservations(
     {
         AActor* Enemy = Enemies[i];
 
-        // ★★★ 重要：Enemyの有効性チェック ★★★
         if (!IsValid(Enemy))
         {
             UE_LOG(LogEnemyAI, Log, TEXT("[BuildObservations] Enemy[%d] is invalid, skipping"), i);
@@ -77,7 +74,6 @@ void UEnemyAISubsystem::BuildObservations(
         OutObs.Add(Obs);
         ++ValidEnemies;
 
-        // ★★★ デバッグ：最初の3体のみログ出力 ★★★
         if (i < 3)
         {
             UE_LOG(LogEnemyAI, Log,
@@ -90,13 +86,10 @@ void UEnemyAISubsystem::BuildObservations(
         TEXT("[BuildObservations] ==== RESULT ==== Generated %d observations (Valid=%d, Invalid=%d)"),
         OutObs.Num(), ValidEnemies, InvalidEnemies);
 
-    // ★ 診断：BuildObservations後のGridOccupancy状態をサンプリング
-    // ★★★ 引数で渡されたPathFinderを使用（自前取得を削除） ★★★
     if (UWorld* World = GetWorld())
     {
         if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
         {
-            // プレイヤー周辺のグリッド状態をサンプリング
             int32 SampleRadius = 3;
             int32 BlockedCount = 0;
             int32 TotalCells = (SampleRadius * 2 + 1) * (SampleRadius * 2 + 1);
@@ -106,7 +99,6 @@ void UEnemyAISubsystem::BuildObservations(
                 for (int32 dy = -SampleRadius; dy <= SampleRadius; ++dy)
                 {
                     FIntPoint SampleCell = PlayerGrid + FIntPoint(dx, dy);
-                    // ★★★ 引数のPathFinderの統合APIを使用 ★★★
                     if (PathFinder && !PathFinder->IsCellWalkable(SampleCell))
                     {
                         BlockedCount++;
@@ -118,11 +110,9 @@ void UEnemyAISubsystem::BuildObservations(
                 TEXT("[BuildObservations] GridOccupancy SAMPLE: %d/%d cells blocked around player (%d,%d)"),
                 BlockedCount, TotalCells, PlayerGrid.X, PlayerGrid.Y);
 
-            // 敵の位置が占有されているか確認
             for (int32 i = 0; i < FMath::Min(3, OutObs.Num()); ++i)
             {
                 const FEnemyObservation& Obs = OutObs[i];
-                // ★★★ 引数のPathFinderの統合APIを使用 ★★★
                 bool bEnemyOccupied = PathFinder && !PathFinder->IsCellWalkable(Obs.GridPosition);
                 UE_LOG(LogEnemyAI, Verbose,
                     TEXT("[BuildObservations] Enemy[%d] at (%d,%d): SelfOccupied=%d"),
@@ -147,7 +137,6 @@ void UEnemyAISubsystem::CollectIntents(
         TEXT("[CollectIntents] ==== START ==== Observations=%d, Enemies=%d"),
         Obs.Num(), Enemies.Num());
 
-    // ★★★ 重要：サイズ一致チェック ★★★
     if (Obs.Num() != Enemies.Num())
     {
         UE_LOG(LogEnemyAI, Error,
@@ -163,7 +152,6 @@ void UEnemyAISubsystem::CollectIntents(
     {
         AActor* Enemy = Enemies[i];
 
-        // ★★★ Enemyの有効性チェック ★★★
         if (!IsValid(Enemy))
         {
             UE_LOG(LogEnemyAI, Warning, TEXT("[CollectIntents] Enemy[%d] is invalid, skipping"), i);
@@ -173,7 +161,6 @@ void UEnemyAISubsystem::CollectIntents(
         FEnemyIntent Intent = ComputeIntent(Enemy, Obs[i]);
         OutIntents.Add(Intent);
 
-        // ★★★ Intent統計 ★★★
         if (Intent.AbilityTag.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"))))
         {
             ++WaitIntents;
@@ -183,7 +170,6 @@ void UEnemyAISubsystem::CollectIntents(
             ++ValidIntents;
         }
 
-        // ★★★ デバッグ：最初の3体のみログ出力 ★★★
         if (i < 3)
         {
             UE_LOG(LogEnemyAI, Log,
@@ -211,7 +197,6 @@ FEnemyIntent UEnemyAISubsystem::ComputeIntent(
         return Intent;
     }
 
-    // ★★★ EnemyThinkerBase に委譲 ★★★
     UEnemyThinkerBase* Thinker = Enemy->FindComponentByClass<UEnemyThinkerBase>();
 
     if (Thinker)
@@ -225,7 +210,6 @@ FEnemyIntent UEnemyAISubsystem::ComputeIntent(
     }
     else
     {
-        // ★★★ デフォルト：待機 ★★★
         Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"));
 
         UE_LOG(LogEnemyAI, Warning,
@@ -235,10 +219,6 @@ FEnemyIntent UEnemyAISubsystem::ComputeIntent(
 
     return Intent;
 }
-
-//------------------------------------------------------------------------------
-// ★★★ Phase 4: Enemy収集（2025-11-09） ★★★
-//------------------------------------------------------------------------------
 
 void UEnemyAISubsystem::CollectAllEnemies(
     AActor* PlayerPawn,
@@ -255,7 +235,6 @@ void UEnemyAISubsystem::CollectAllEnemies(
 
     UE_LOG(LogEnemyAI, Log, TEXT("[CollectAllEnemies] ==== START ===="));
 
-    // ★★★ APawnで検索（includeが不要） ★★★
     TArray<AActor*> Found;
     UGameplayStatics::GetAllActorsOfClass(World, APawn::StaticClass(), Found);
 
@@ -270,21 +249,18 @@ void UEnemyAISubsystem::CollectAllEnemies(
 
     for (AActor* A : Found)
     {
-        // ★★★ Nullチェック ★★★
         if (!IsValid(A))
         {
             continue;
         }
 
-        // ★★★ プレイヤーを除外 ★★★
         if (A == PlayerPawn)
         {
             UE_LOG(LogEnemyAI, Verbose, TEXT("[CollectAllEnemies] Skipping PlayerPawn: %s"), *A->GetName());
             continue;
         }
 
-        // ★★★ TeamID判定 ★★★
-        int32 TeamId = 255; // Default: NoTeam
+        int32 TeamId = 255;
         if (const IGenericTeamAgentInterface* TeamAgent = Cast<IGenericTeamAgentInterface>(A))
         {
             TeamId = TeamAgent->GetGenericTeamId().GetId();
@@ -294,9 +270,8 @@ void UEnemyAISubsystem::CollectAllEnemies(
             TeamId = Controller->GetGenericTeamId().GetId();
         }
 
-        const bool bByTeam = (TeamId == 2 || TeamId == 255); // 敵チーム or NoTeam
+        const bool bByTeam = (TeamId == 2 || TeamId == 255);
 
-        // ★★★ GameplayTag判定 ★★★
         UAbilitySystemComponent* ASC = nullptr;
         if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(A))
         {
@@ -304,10 +279,8 @@ void UEnemyAISubsystem::CollectAllEnemies(
         }
         const bool bByGTag = (ASC && ASC->HasMatchingGameplayTag(GT_Enemy));
 
-        // ★★★ ActorTag判定 ★★★
         const bool bByActorTag = A->Tags.Contains(ActorTagEnemy);
 
-        // ★★★ いずれかの条件を満たせば敵として認識 ★★★
         if (bByGTag || bByTeam || bByActorTag)
         {
             OutEnemies.Add(A);
@@ -316,7 +289,6 @@ void UEnemyAISubsystem::CollectAllEnemies(
             if (bByTeam) ++NumByTeam;
             if (bByActorTag) ++NumByActorTag;
 
-            // ★★★ デバッグ：最初の3体のみログ ★★★
             const int32 Index = OutEnemies.Num() - 1;
             if (Index < 3)
             {
@@ -331,7 +303,6 @@ void UEnemyAISubsystem::CollectAllEnemies(
         TEXT("[CollectAllEnemies] ==== RESULT ==== found=%d  collected=%d  byGTag=%d  byTeam=%d  byActorTag=%d"),
         Found.Num(), OutEnemies.Num(), NumByTag, NumByTeam, NumByActorTag);
 
-    // ★★★ エラー検出：敵が1体も見つからない場合 ★★★
     if (OutEnemies.Num() == 0 && Found.Num() > 1)
     {
         UE_LOG(LogEnemyAI, Warning,

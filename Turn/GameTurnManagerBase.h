@@ -229,40 +229,16 @@ public:
     virtual void CollectEnemies_Implementation();
 
     UFUNCTION(BlueprintNativeEvent, Category = "Turn|Enemy")
-    void BuildObservations();
-    virtual void BuildObservations_Implementation();
-
-    UFUNCTION(BlueprintNativeEvent, Category = "Turn|Enemy")
     void CollectIntents();
     virtual void CollectIntents_Implementation();
 
-    UFUNCTION(BlueprintNativeEvent, Category = "Turn|Enemy")
-    FEnemyIntent ComputeEnemyIntent(AActor* Enemy, const FEnemyObservation& Observation);
-    virtual FEnemyIntent ComputeEnemyIntent_Implementation(AActor* Enemy, const FEnemyObservation& Observation);
-
-    UFUNCTION(BlueprintNativeEvent, Category = "Turn|Enemy")
-    void ExecuteEnemyMoves();
-    virtual void ExecuteEnemyMoves_Implementation();
-
-    UFUNCTION(BlueprintNativeEvent, Category = "Turn|Enemy")
-    void ExecuteEnemyAttacks();
-    virtual void ExecuteEnemyAttacks_Implementation();
 
     //==========================================================================
     // Yangus Ability Related
     //==========================================================================
 
-
-    UFUNCTION(BlueprintCallable, Category = "Turn|Yangus")
-    void NotifyAbilityStarted();
-
-    UFUNCTION(BlueprintCallable, Category = "Turn|Yangus")
-    void OnAbilityCompleted();
-
     UFUNCTION(BlueprintImplementableEvent, Category = "Turn|Yangus")
     void OnAllAbilitiesCompleted();
-
-    void ExecuteSimultaneousMoves();
 
     //==========================================================================
     // Ally Turn・・lueprintNativeEvent・・    //==========================================================================
@@ -299,10 +275,6 @@ public:
 
     //==========================================================================
     // Ability Completion・・lueprintNativeEvent・・    //==========================================================================
-
-    UFUNCTION(BlueprintNativeEvent, Category = "Turn|Utility")
-    void WaitForAbilityCompletion();
-    virtual void WaitForAbilityCompletion_Implementation();
 
     //==========================================================================
     // System Hooks・・lueprintNativeEvent・・    //==========================================================================
@@ -510,12 +482,6 @@ public:
     UFUNCTION(BlueprintCallable, Category="Turn|Flow")
     void NotifyPlayerPossessed(APawn* NewPawn);
 
-    UFUNCTION(BlueprintCallable, Category="Turn|Flow")
-    void OpenInputWindowForPlayer();
-
-    UFUNCTION(BlueprintCallable, Category="Turn|Flow")
-    void CloseInputWindowForPlayer();
-
     /** Apply wait input gate to player ASC */
     void ApplyWaitInputGate(bool bOpen);
 
@@ -549,7 +515,7 @@ protected:
     // Phase 4: Turn Advance Condition
     //==========================================================================
 
-    bool CanAdvanceTurn(int32 TurnId) const;
+    bool CanAdvanceTurn(int32 TurnId, bool* OutBarrierQuiet = nullptr, int32* OutInProgressCount = nullptr) const;
 
     //==========================================================================
     // Turn State Variables
@@ -607,18 +573,6 @@ protected:
     void ExecutePlayerMove();
     void OnPlayerMoveAccepted();
     
-    // NOTE: ActionExecutorSubsystem's SendPlayerMove is deprecated
-    bool SendPlayerMove(const FPlayerCommand& Command);
-    
-    // NOTE: MoveConflictRuleSet's functions are deprecated
-    /** Determine move priority for an actor based on its tags */
-    int32 GetMovePriority(const FGameplayTagContainer& ActorTags) const;
-    
-    /** Check if two actors can swap positions */
-    bool CanSwapActors(const FGameplayTagContainer& ActorA, const FGameplayTagContainer& ActorB) const;
-    
-    /** Check if a pusher actor can push a pushed actor */
-    bool CanPushActor(const FGameplayTagContainer& Pusher, const FGameplayTagContainer& Pushed) const;
 
     //==========================================================================
     // Dynamic Delegate Handlers
