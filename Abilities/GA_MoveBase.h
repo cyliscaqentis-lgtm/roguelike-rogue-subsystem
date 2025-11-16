@@ -222,6 +222,7 @@ private:
      * RegisterBarrier()が同一インスタンスで褁E��回呼ばれても登録は1回�Eみ
      */
     bool bBarrierRegistered = false;
+    bool bBarrierActionCompleted = false;
 
     /**
      * ★★★ Token方式: Barrier完了トークン（冪等Complete用）
@@ -238,6 +239,7 @@ private:
      * ★★★ Token方式: ワールドからBarrier取得（キャッシュ付き）
      */
     UTurnActionBarrierSubsystem* GetBarrierSubsystem() const;
+    void CompleteBarrierAction(AActor* Actor, int32 TurnId, const FGuid& ActionId);
 
     //--------------------------------------------------------------------------
     // State.Moving 繧�E�繧�E�・亥・襍ｷ蜍暮亟豁E��・・    //--------------------------------------------------------------------------

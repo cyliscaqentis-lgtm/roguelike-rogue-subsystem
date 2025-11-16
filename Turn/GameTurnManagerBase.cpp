@@ -1677,121 +1677,56 @@ if (CachedPathFinder.IsValid())
             CurrentCell.X + static_cast<int32>(Command.Direction.X),
             CurrentCell.Y + static_cast<int32>(Command.Direction.Y));
 
-const bool bTerrainBlocked = !CachedPathFinder->IsCellWalkableIgnoringActor(TargetCell, PlayerPawn);
+        // ★★★ New: Use unified validation API (2025-11-16 refactoring) ★★★
+        // CodeRevision: INC-2025-00015-R1 (Refactored to use IsMoveValid) (2025-11-16 13:55)
+        FString FailureReason;
+        const bool bMoveValid = CachedPathFinder->IsMoveValid(CurrentCell, TargetCell, PlayerPawn, FailureReason);
 
-bool bCornerCutting = false;
-        const int32 AbsDirX = FMath::Abs(FMath::RoundToInt(Command.Direction.X));
-        const int32 AbsDirY = FMath::Abs(FMath::RoundToInt(Command.Direction.Y));
-        const bool bIsDiagonalMove = (AbsDirX == 1 && AbsDirY == 1);
-
-        if (bIsDiagonalMove)
-        {
-            
-            const FIntPoint Side1 = CurrentCell + FIntPoint(static_cast<int32>(Command.Direction.X), 0);  
-            const FIntPoint Side2 = CurrentCell + FIntPoint(0, static_cast<int32>(Command.Direction.Y));  
-            const bool bSide1Walkable = CachedPathFinder->IsCellWalkableIgnoringActor(Side1, PlayerPawn);
-            const bool bSide2Walkable = CachedPathFinder->IsCellWalkableIgnoringActor(Side2, PlayerPawn);
-
-if (!bSide1Walkable || !bSide2Walkable)
-            {
-                bCornerCutting = true;
-                UE_LOG(LogTurnManager, Warning,
-                    TEXT("[MovePrecheck] CORNER CUTTING BLOCKED: (%d,%d)->(%d,%d) - at least one shoulder blocked [Side1=(%d,%d) Walkable=%d, Side2=(%d,%d) Walkable=%d]"),
-                    CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y,
-                    Side1.X, Side1.Y, bSide1Walkable, Side2.X, Side2.Y, bSide2Walkable);
-            }
-            else
-            {
-                UE_LOG(LogTurnManager, Verbose,
-                    TEXT("[MovePrecheck] Diagonal move OK: (%d,%d)->(%d,%d) - both shoulders clear [Side1=(%d,%d) Walkable=%d, Side2=(%d,%d) Walkable=%d]"),
-                    CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y,
-                    Side1.X, Side1.Y, bSide1Walkable, Side2.X, Side2.Y, bSide2Walkable);
-            }
-        }
-
-        bool bOccupied = false;
+        // Swap detection handled separately (ConflictResolver processes it, but we detect here for logging)
         bool bSwapDetected = false;
-        AActor* OccupyingActor = nullptr;
-        UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>();
-        if (OccSys)
+        if (!bMoveValid && FailureReason.Contains(TEXT("occupied")))
         {
-            OccupyingActor = OccSys->GetActorAtCell(TargetCell);
-            if (OccupyingActor == PlayerPawn)
+            if (UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>())
             {
-                OccupyingActor = nullptr;
-            }
-        }
-
-        if (!OccupyingActor && CachedPathFinder.IsValid())
-        {
-            for (const TObjectPtr<AActor>& Enemy : CachedEnemies)
-            {
-        if (!Enemy || Enemy.Get() == PlayerPawn)
+                AActor* OccupyingActor = OccSys->GetActorAtCell(TargetCell);
+                if (OccupyingActor && OccupyingActor != PlayerPawn)
                 {
-                    continue;
-                }
-
-                const FIntPoint EnemyCell = CachedPathFinder->WorldToGrid(Enemy->GetActorLocation());
-                if (EnemyCell == TargetCell)
-                {
-                    OccupyingActor = Enemy.Get();
-                    UE_LOG(LogTurnManager, Warning,
-                        TEXT("[MovePrecheck] Spatial occupancy detected: %s is at (%d,%d)"),
-                        *GetNameSafe(OccupyingActor), TargetCell.X, TargetCell.Y);
-                    break;
-                }
-            }
-        }
-
-        if (OccupyingActor && OccupyingActor != PlayerPawn)
-        {
-            bOccupied = true;
-
-            if (UEnemyTurnDataSubsystem* EnemyTurnDataSys = World->GetSubsystem<UEnemyTurnDataSubsystem>())
-            {
-                const FEnemyIntent* Intent = nullptr;
-                for (const FEnemyIntent& I : EnemyTurnDataSys->Intents)
-                {
-                    if (I.Actor.Get() == OccupyingActor)
+                    if (UEnemyTurnDataSubsystem* EnemyTurnDataSys = World->GetSubsystem<UEnemyTurnDataSubsystem>())
                     {
-                        Intent = &I;
-                        break;
+                        for (const FEnemyIntent& Intent : EnemyTurnDataSys->Intents)
+                        {
+                            if (Intent.Actor.Get() == OccupyingActor && Intent.NextCell == CurrentCell)
+                            {
+                                bSwapDetected = true;
+                                UE_LOG(LogTurnManager, Warning,
+                                    TEXT("[MovePrecheck] SWAP DETECTED: Player (%d,%d)->(%d,%d), Enemy %s (%d,%d)->(%d,%d)"),
+                                    CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y,
+                                    *GetNameSafe(OccupyingActor),
+                                    TargetCell.X, TargetCell.Y, Intent.NextCell.X, Intent.NextCell.Y);
+                                break;
+                            }
+                        }
                     }
                 }
-
-                if (Intent && Intent->NextCell == CurrentCell)
-                {
-                    bSwapDetected = true;
-                    UE_LOG(LogTurnManager, Warning,
-                        TEXT("[MovePrecheck] SWAP DETECTED: Player (%d,%d)->(%d,%d), Enemy %s (%d,%d)->(%d,%d)"),
-                        CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y,
-                        *GetNameSafe(OccupyingActor),
-                        TargetCell.X, TargetCell.Y, Intent->NextCell.X, Intent->NextCell.Y);
-                }
             }
         }
 
-if (bTerrainBlocked || bOccupied || bCornerCutting)
+if (!bMoveValid)
         {
-            const TCHAR* BlockReason = bCornerCutting ? TEXT("corner_cutting") :
-                                       bTerrainBlocked ? TEXT("terrain") :
+            // FailureReasonから原因を判定
+            const TCHAR* BlockReason = FailureReason.Contains(TEXT("Corner cutting")) ? TEXT("corner_cutting") :
+                                       FailureReason.Contains(TEXT("terrain")) ? TEXT("terrain") :
+                                       FailureReason.Contains(TEXT("distance")) ? TEXT("invalid_distance") :
                                        bSwapDetected ? TEXT("swap") : TEXT("occupied");
-            UE_LOG(LogTurnManager, Warning,
-                TEXT("[MovePrecheck] BLOCKED by %s: Cell (%d,%d) | From=(%d,%d) | Applying FACING ONLY (No Turn)"),
-                BlockReason, TargetCell.X, TargetCell.Y, CurrentCell.X, CurrentCell.Y);
 
-const int32 TargetCost = CachedPathFinder->GetGridCost(TargetCell.X, TargetCell.Y);
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[MovePrecheck] BLOCKED: %s | Cell (%d,%d) | From=(%d,%d) | Applying FACING ONLY (No Turn)"),
+                *FailureReason, TargetCell.X, TargetCell.Y, CurrentCell.X, CurrentCell.Y);
+
+            const int32 TargetCost = CachedPathFinder->GetGridCost(TargetCell.X, TargetCell.Y);
             UE_LOG(LogTurnManager, Warning,
                 TEXT("[MovePrecheck] Target cell (%d,%d) GridCost=%d (expected: 3=Walkable, -1=Blocked)"),
                 TargetCell.X, TargetCell.Y, TargetCost);
-
-if (!bTerrainBlocked && bOccupied && OccupyingActor)
-            {
-                UE_LOG(LogTurnManager, Warning,
-                    TEXT("[MovePrecheck] Occupied by: %s%s"),
-                    *GetNameSafe(OccupyingActor),
-                    bSwapDetected ? TEXT(" (SWAP detected)") : TEXT(""));
-            }
 
 const FIntPoint Directions[4] = {
                 FIntPoint(1, 0),   
@@ -1994,8 +1929,7 @@ TArray<FEnemyObservation> Observations;
                     FEnemyObservation Obs;
                     Obs.GridPosition = CachedPathFinder->WorldToGrid(Enemy->GetActorLocation());
                     Obs.PlayerGridPosition = PlayerDestination;
-                    Obs.DistanceInTiles = FMath::Abs(Obs.GridPosition.X - PlayerDestination.X) +
-                        FMath::Abs(Obs.GridPosition.Y - PlayerDestination.Y);
+                    Obs.DistanceInTiles = FGridUtils::ChebyshevDistance(Obs.GridPosition, PlayerDestination);
 
                     Observations.Add(Obs);
                 }

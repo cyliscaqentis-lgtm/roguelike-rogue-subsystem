@@ -1,10 +1,12 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
+// EnemyAISubsystem.cpp
 #include "AI/Enemy/EnemyAISubsystem.h"
 #include "AI/Enemy/EnemyThinkerBase.h"
 #include "Grid/GridPathfindingLibrary.h"
 #include "Grid/GridOccupancySubsystem.h"
 #include "Turn/TurnCorePhaseManager.h"
+#include "Utility/GridUtils.h"  // CodeRevision: INC-2025-00016-R1 (2025-11-16 14:00)
 #include "Kismet/GameplayStatics.h"
 #include "AbilitySystemInterface.h"
 #include "GenericTeamAgentInterface.h"
@@ -67,9 +69,8 @@ void UEnemyAISubsystem::BuildObservations(
         FEnemyObservation Obs;
         Obs.GridPosition = PathFinder->WorldToGrid(Enemy->GetActorLocation());
         Obs.PlayerGridPosition = PlayerGrid;
-        const int32 DeltaX = FMath::Abs(Obs.GridPosition.X - PlayerGrid.X);
-        const int32 DeltaY = FMath::Abs(Obs.GridPosition.Y - PlayerGrid.Y);
-        Obs.DistanceInTiles = FMath::Max(DeltaX, DeltaY);
+        // CodeRevision: INC-2025-00016-R1 (Use FGridUtils::ChebyshevDistance) (2025-11-16 14:00)
+        Obs.DistanceInTiles = FGridUtils::ChebyshevDistance(Obs.GridPosition, PlayerGrid);
 
         OutObs.Add(Obs);
         ++ValidEnemies;

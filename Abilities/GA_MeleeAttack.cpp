@@ -1,3 +1,4 @@
+// GA_MeleeAttack.cpp
 #include "Abilities/GA_MeleeAttack.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemBlueprintLibrary.h"
@@ -144,8 +145,6 @@ void UGA_MeleeAttack::ActivateAbility(
                 *GetNameSafe(GetAvatarActorFromActorInfo()));
         }
     }
-
-    // 入力を一時無効化（プレイヤー操作のみ）
     if (ActorInfo && ActorInfo->AvatarActor.IsValid())
     {
         if (APawn* Pawn = Cast<APawn>(ActorInfo->AvatarActor.Get()))

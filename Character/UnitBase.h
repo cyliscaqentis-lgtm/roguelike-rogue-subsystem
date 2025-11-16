@@ -16,12 +16,8 @@ class ALyraPlayerState;
 class UUnitMovementComponent;
 class UUnitUIComponent;
 
-UENUM(BlueprintType)
-enum class EUnitMoveStatus : uint8
-{
-    Idle,
-    Moving
-};
+// ★★★ 削除（2025-11-16リファクタリング）: EUnitMoveStatus は不要 ★★★
+// MovementComp->IsMoving() で代替
 
 // ★★★ C++専用デリゲート（UCLASS の前に宣言） ★★★
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnMoveFinished, AUnitBase*);
@@ -105,15 +101,6 @@ public:
     float GridSize = 100.f;
 
     // ===== 移動設定 =====
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unit|Movement")
-    float PixelsPerSec = 300.f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unit|Movement")
-    float MinPixelsPerSec = 150.f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unit|Movement")
-    float MaxPixelsPerSec = 1200.f;
-
     // ★★★ 重要：Blueprintでtrueに設定されていても、C++で強制的にfalseにします ★★★
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Unit|Movement", meta = (AllowPrivateAccess = "true"))
     bool bSkipMoveAnimation = false;
@@ -235,9 +222,8 @@ protected:
     virtual void OnRep_Controller() override;
     void RefreshTeamFromController();
 
-    // 移動制御
-    void StartNextLeg();
-    void UpdateMove(float DeltaSeconds);
+    // ★★★ 移動制御：MovementCompに委譲（2025-11-16リファクタリング） ★★★
+    // StartNextLeg() と UpdateMove() は削除 - MovementComp が内部で処理
 
     // ビジュアル制御
     void EnsureDynamicMaterial();
@@ -250,14 +236,9 @@ protected:
     bool bGrantedAbilitySets = false;
 
 protected:
-    // 移動状態
-    UPROPERTY()
-    TArray<FVector> PathArray;
-
-    int32 MoveCounter = 0;
-    EUnitMoveStatus MoveStatus = EUnitMoveStatus::Idle;
-    FVector LegStart{}, LegEnd{};
-    float LegAlpha = 0.f;
+    // ★★★ 移動状態：MovementCompに移行（2025-11-16リファクタリング） ★★★
+    // PathArray, MoveCounter, MoveStatus, LegStart, LegEnd, LegAlpha は削除
+    // 移動状態は UUnitMovementComponent が管理
 
     // ビジュアル状態
     UPROPERTY()

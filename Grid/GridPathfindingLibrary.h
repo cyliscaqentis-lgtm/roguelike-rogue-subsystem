@@ -143,6 +143,26 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Grid|Walkability")
     bool IsCellWalkableAtWorldPosition(const FVector& WorldPos) const;
 
+    //==========================================================================
+    // ★★★ New Addition: Unified Movement Validation API ★★★
+    // CodeRevision: INC-2025-00015-R1 (Unified validation API) (2025-11-16 13:55)
+    //==========================================================================
+
+    /**
+     * Validates move legality (terrain, corner-cutting, occupancy, Chebyshev distance)
+     * @param From Starting cell
+     * @param To Target cell
+     * @param MovingActor Actor attempting to move
+     * @param OutFailureReason Failure reason if invalid (empty on success)
+     * @return true if move is valid
+     */
+    UFUNCTION(BlueprintCallable, Category = "Grid|Validation")
+    bool IsMoveValid(
+        const FIntPoint& From,
+        const FIntPoint& To,
+        AActor* MovingActor,
+        FString& OutFailureReason) const;
+
     // ==================== 内部実装（新名前） ====================
 
     /** 地形専用：占有状態には絶対に使わないこと */

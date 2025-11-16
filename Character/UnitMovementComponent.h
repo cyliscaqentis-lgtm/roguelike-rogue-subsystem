@@ -12,6 +12,7 @@
 
 class AUnitBase;
 class AGridPathfindingLibrary;
+struct FUnitStatBlock;
 
 /** 移動完了デリゲート */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnUnitMoveFinished, AUnitBase*, Unit);
@@ -90,6 +91,17 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Unit|Movement")
 	float GetMoveSpeed() const { return MoveSpeed; }
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement")
+	float PixelsPerSec = 300.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement")
+	float MinPixelsPerSec = 150.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement")
+	float MaxPixelsPerSec = 1200.f;
+
+	void UpdateSpeedFromStats(const FUnitStatBlock& StatBlock);
 
 	// ========== Events ==========
 

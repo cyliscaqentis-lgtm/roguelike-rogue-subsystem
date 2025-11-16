@@ -4,6 +4,7 @@
 #include "AI/Enemy/EnemyThinkerBase.h"
 #include "Turn/DistanceFieldSubsystem.h"
 #include "Grid/GridPathfindingLibrary.h"
+#include "Utility/GridUtils.h"  // CodeRevision: INC-2025-00016-R1 (2025-11-16 14:00)
 #include "Kismet/GameplayStatics.h"
 #include "../../Grid/GridPathfindingLibrary.h"
 #include "../../Turn/GameTurnManagerBase.h"
@@ -244,9 +245,8 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
     int32 DistanceToPlayer = ObservationDistance;
 
     const FIntPoint CurrentEnemyCell = Intent.CurrentCell;
-    const int32 ChebyshevDistance = FMath::Max(
-        FMath::Abs(CurrentEnemyCell.X - PlayerGridCell.X),
-        FMath::Abs(CurrentEnemyCell.Y - PlayerGridCell.Y));
+    // CodeRevision: INC-2025-00016-R1 (Use FGridUtils::ChebyshevDistance) (2025-11-16 14:00)
+    const int32 ChebyshevDistance = FGridUtils::ChebyshevDistance(CurrentEnemyCell, PlayerGridCell);
     if (DistanceToPlayer != ChebyshevDistance)
     {
         UE_LOG(LogTurnManager, Log,
@@ -290,6 +290,41 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
             UE_LOG(LogTemp, Warning,
                 TEXT("[ComputeIntent] %s: DistanceField not available, staying put"),
                 *GetNameSafe(GetOwner()));
+        }
+
+        // ★★★ CodeRevision: INC-2025-00016-R1 (Add IsMoveValid validation) (2025-11-16 14:00) ★★★
+        // Validate move using unified API before committing to intent
+        if (Intent.NextCell != Intent.CurrentCell)
+        {
+            AGridPathfindingLibrary* PathFinder = nullptr;
+            for (TActorIterator<AGridPathfindingLibrary> It(World); It; ++It)
+            {
+                PathFinder = *It;
+                break;
+            }
+
+            if (PathFinder)
+            {
+                FString FailureReason;
+                const bool bMoveValid = PathFinder->IsMoveValid(
+                    Intent.CurrentCell,
+                    Intent.NextCell,
+                    GetOwner(),
+                    FailureReason);
+
+                if (!bMoveValid)
+                {
+                    UE_LOG(LogTurnManager, Warning,
+                        TEXT("[ComputeIntent] %s: MOVE rejected by validation: %s | From=(%d,%d) To=(%d,%d)"),
+                        *GetNameSafe(GetOwner()), *FailureReason,
+                        Intent.CurrentCell.X, Intent.CurrentCell.Y,
+                        Intent.NextCell.X, Intent.NextCell.Y);
+
+                    // Fallback to wait if move is invalid
+                    Intent.NextCell = Intent.CurrentCell;
+                    Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"));
+                }
+            }
         }
 
         if (Intent.NextCell == Intent.CurrentCell)

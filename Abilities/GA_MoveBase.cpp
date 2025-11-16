@@ -532,33 +532,21 @@ void UGA_MoveBase::EndAbility(
 
 	if (bBarrierRegistered)
 	{
-		if (UWorld* World = GetWorld())
-		{
-			if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
-			{
-				// ActionID方式での完了通知
-				if (SavedAvatar && SavedTurnId != INDEX_NONE && SavedActionId.IsValid())
-				{
-					Barrier->CompleteAction(SavedAvatar, SavedTurnId, SavedActionId);
-					UE_LOG(LogTurnManager, Log,
-						TEXT("[GA_MoveBase] Barrier notified: Actor=%s, TurnId=%d, ActionId=%s"),
-						*GetNameSafe(SavedAvatar), SavedTurnId, *SavedActionId.ToString());
-				}
-				else
-				{
-					UE_LOG(LogTurnManager, Warning,
-						TEXT("[GA_MoveBase] ⚠ Barrier registered but ActionID invalid: Actor=%s, TurnId=%d, ActionId=%s"),
-						*GetNameSafe(SavedAvatar), SavedTurnId, *SavedActionId.ToString());
-				}
+		CompleteBarrierAction(SavedAvatar, SavedTurnId, SavedActionId);
 
-				// ★★★ Token方式: 冪等Complete ★★★
-				if (HasAuthority(&ActivationInfo) && BarrierToken.IsValid())
-				{
-					Barrier->CompleteActionToken(BarrierToken);
-					UE_LOG(LogTurnManager, Verbose,
-						TEXT("[GA_MoveBase] Token completed: %s"), *BarrierToken.ToString());
-					BarrierToken.Invalidate();
-				}
+		if (HasAuthority(&ActivationInfo) && BarrierToken.IsValid())
+		{
+			if (UTurnActionBarrierSubsystem* Barrier = GetBarrierSubsystem())
+			{
+				Barrier->CompleteActionToken(BarrierToken);
+				UE_LOG(LogTurnManager, Verbose,
+					TEXT("[GA_MoveBase] Token completed: %s"), *BarrierToken.ToString());
+				BarrierToken.Invalidate();
+			}
+			else
+			{
+				UE_LOG(LogTurnManager, Warning,
+					TEXT("[GA_MoveBase] Token completion requested but Barrier subsystem unavailable"));
 			}
 		}
 	}
@@ -571,6 +559,7 @@ void UGA_MoveBase::EndAbility(
 	MoveActionId.Invalidate();
 	CompletedTurnIdForEvent = INDEX_NONE;
 	bBarrierRegistered = false;
+	bBarrierActionCompleted = false;
 
 	bIsEnding = false;
 }
@@ -918,26 +907,28 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
             }
         }
 
-        UE_LOG(LogTurnManager, Log,
-            TEXT("[MoveComplete] Unit %s reached destination, GA_MoveBase ending (TurnId=%d)"),
-            *GetNameSafe(Unit), MoveTurnId);
-    }
+	UE_LOG(LogTurnManager, Log,
+		TEXT("[MoveComplete] Unit %s reached destination, GA_MoveBase ending (TurnId=%d)"),
+		*GetNameSafe(Unit), MoveTurnId);
+	}
 
-    if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
-    {
-        TagCountBefore = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress.GetTag());
-    }
+	CompleteBarrierAction(Unit, MoveTurnId, MoveActionId);
 
-    EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, false);
+	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
+	{
+		TagCountBefore = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress.GetTag());
+	}
 
-    if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
-    {
-        TagCountAfter = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress.GetTag());
-    }
+	EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, false);
 
-    UE_LOG(LogTurnManager, Verbose,
-        TEXT("[MoveComplete] InProgress tag count (Actor=%s): %d -> %d"),
-        *GetNameSafe(Unit), TagCountBefore, TagCountAfter);
+	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
+	{
+		TagCountAfter = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress.GetTag());
+	}
+
+	UE_LOG(LogTurnManager, Verbose,
+		TEXT("[MoveComplete] InProgress tag count (Actor=%s): %d -> %d"),
+		*GetNameSafe(Unit), TagCountBefore, TagCountAfter);
 }
 
 void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
@@ -1136,6 +1127,7 @@ bool UGA_MoveBase::RegisterBarrier(AActor* Avatar)
 
 			MoveActionId = Barrier->RegisterAction(Avatar, MoveTurnId);
 			bBarrierRegistered = true;
+			bBarrierActionCompleted = false;
 			UE_LOG(LogTurnManager, Log,
 				TEXT("[RegisterBarrier] Registered: TurnId=%d, ActionId=%s (Actor=%s)"),
 				MoveTurnId, *MoveActionId.ToString(), *Avatar->GetName());
@@ -1144,4 +1136,35 @@ bool UGA_MoveBase::RegisterBarrier(AActor* Avatar)
 	}
 
 	return false;
+}
+
+void UGA_MoveBase::CompleteBarrierAction(AActor* Actor, int32 TurnId, const FGuid& ActionId)
+{
+	if (!bBarrierRegistered || bBarrierActionCompleted)
+	{
+		return;
+	}
+
+	if (!Actor || TurnId == INDEX_NONE || !ActionId.IsValid())
+	{
+		UE_LOG(LogTurnManager, Warning,
+			TEXT("[GA_MoveBase] ⚠ Barrier registered but ActionID invalid: Actor=%s, TurnId=%d, ActionId=%s"),
+			*GetNameSafe(Actor), TurnId, *ActionId.ToString());
+		return;
+	}
+
+	if (UTurnActionBarrierSubsystem* Barrier = GetBarrierSubsystem())
+	{
+		Barrier->CompleteAction(Actor, TurnId, ActionId);
+		UE_LOG(LogTurnManager, Log,
+			TEXT("[GA_MoveBase] Barrier notified: Actor=%s, TurnId=%d, ActionId=%s"),
+			*GetNameSafe(Actor), TurnId, *ActionId.ToString());
+		bBarrierActionCompleted = true;
+	}
+	else
+	{
+		UE_LOG(LogTurnManager, Warning,
+			TEXT("[GA_MoveBase] Barrier subsystem missing when completing action: Actor=%s TurnId=%d"),
+			*GetNameSafe(Actor), TurnId);
+	}
 }

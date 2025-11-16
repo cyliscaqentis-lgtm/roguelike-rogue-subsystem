@@ -253,10 +253,17 @@ void AUnitBase::BeginPlay()
     // PostInitializeComponents() で登録したコールバックが自動的に呼ばれる
 
     // Debug: Log initial state before BeginPlay modifications
+    UE_LOG(LogUnitBase, Verbose,
+        TEXT("[BeginPlay] %s: BEFORE - bSkipMoveAnimation=%d, PixelsPerSec=%.1f, TickEnabled=%d"),
+        *GetName(), bSkipMoveAnimation, PixelsPerSec, PrimaryActorTick.bCanEverTick);
+
     SetActorTickEnabled(true);
 
     // Force bSkipMoveAnimation to false (animation should always be enabled)
     bSkipMoveAnimation = false;
+    UE_LOG(LogUnitBase, Verbose,
+        TEXT("[BeginPlay] %s: AFTER - FORCED bSkipMoveAnimation=FALSE, PixelsPerSec=%.1f, TickEnabled=%d"),
+        *GetName(), PixelsPerSec, IsActorTickEnabled());
 
     // Initialize dynamic material
     EnsureDynamicMaterial();
@@ -323,8 +330,7 @@ void AUnitBase::RefreshTeamFromController()
 }
 
 //------------------------------------------------------------------------------
-// MoveUnit - Delegate to MovementComponent (2025-11-16 refactoring)
-// CodeRevision: INC-2025-00015-R1 (Simplified to delegate to UUnitMovementComponent) (2025-11-16 13:55)
+// MoveUnit - MovementComponentに委譲（2025-11-16リファクタリング）
 //------------------------------------------------------------------------------
 void AUnitBase::MoveUnit(const TArray<FVector>& InPath)
 {
@@ -338,16 +344,186 @@ void AUnitBase::MoveUnit(const TArray<FVector>& InPath)
         TEXT("[MoveUnit] %s: Delegating to MovementComponent (PathNum=%d)"),
         *GetName(), InPath.Num());
 
-    // ★★★ Movement processing fully delegated to MovementComponent ★★★
+    // ★★★ 移動処理をMovementComponentに完全に委譲 ★★★
     MovementComp->MoveUnit(InPath);
 }
 
+//------------------------------------------------------------------------------
+// StartNextLeg - Start next leg of movement path
+//------------------------------------------------------------------------------
+void AUnitBase::StartNextLeg()
+{
+    // 笘・・笘・繝代せ縺檎ｵゆｺ・＠縺溘ｉ螳御ｺ・夂衍 笘・・笘・
+    if (!PathArray.IsValidIndex(MoveCounter))
+    {
+        MoveStatus = EUnitMoveStatus::Idle;
+        CurrentVelocity = FVector::ZeroVector;
+
+        // ✅ 移動完了時にTickを無効化
+        SetActorTickEnabled(false);
+
+        UE_LOG(LogUnitBase, Verbose,
+            TEXT("[MoveComplete] %s finished MoveUnit path"), *GetName());
+
+        UE_LOG(LogUnitBase, Log,
+            TEXT("[MoveComplete] Unit %s MOVE ANIMATION COMPLETED! (Broadcast OnMoveFinished)"),
+            *GetName());
+
+        // ★★★ 2025-11-10: 移動完了後にGridOccupancySubsystemを更新（プレイヤー・敵共通） ★★★
+        if (UWorld* World = GetWorld())
+        {
+            if (AGridPathfindingLibrary* PathFinder = Cast<AGridPathfindingLibrary>(
+                UGameplayStatics::GetActorOfClass(World, AGridPathfindingLibrary::StaticClass())))
+            {
+                if (UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>())
+                {
+                    // ★★★ BUGFIX [INC-2025-00002]: Use GetActorLocation() since actor is already at destination ★★★
+                    // PathArray may be truncated by CurrentMovementRange, so Last() is unreliable
+                    const FIntPoint DestinationCell = PathFinder->WorldToGrid(GetActorLocation());
+                    bool bUpdateSuccess = OccSys->UpdateActorCell(this, DestinationCell);
+                    if (bUpdateSuccess)
+                    {
+                        UE_LOG(LogUnitBase, Log,
+                            TEXT("[MoveComplete] GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
+                            *GetName(), DestinationCell.X, DestinationCell.Y);
+                    }
+                    else
+                    {
+                        UE_LOG(LogUnitBase, Error,
+                            TEXT("[MoveComplete] CRITICAL: GridOccupancy update FAILED for %s to (%d,%d) - cell occupied!"),
+                            *GetName(), DestinationCell.X, DestinationCell.Y);
+                    }
+                }
+            }
+        }
+
+        // Broadcast move finished event
+        OnMoveFinished.Broadcast(this);
+
+        UE_LOG(LogUnitBase, Log, TEXT("[StartNextLeg] %s: Movement completed!"), *GetName());
+        return;
+    }
+
+    // Set start and end positions for this leg
+    LegStart = GetActorLocation();
+    LegEnd = PathArray[MoveCounter];
+    LegEnd.Z = LegStart.Z; // 2D movement
+
+    // Skip if distance is too small
+    const float Distance = FVector::Dist2D(LegStart, LegEnd);
+    if (Distance < 0.1f)
+    {
+        ++MoveCounter;
+        StartNextLeg(); // Recursively move to next leg
+        return;
+    }
+
+    LegAlpha = 0.f;
+    MoveStatus = EUnitMoveStatus::Moving;
+    
+    // Force bSkipMoveAnimation to false (animation should always be enabled)
+    bSkipMoveAnimation = false;
+
+    // Debug: Log StartNextLeg call details
+    UE_LOG(LogUnitBase, Warning,
+        TEXT("[StartNextLeg] %s: bSkipMoveAnimation=%d (FORCED FALSE), Distance=%.1f, Start=%s, End=%s"),
+        *GetName(), bSkipMoveAnimation, Distance, *LegStart.ToCompactString(), *LegEnd.ToCompactString());
+
+    // Handle instant teleport case (should not happen)
+    if (bSkipMoveAnimation)
+    {
+        UE_LOG(LogUnitBase, Warning,
+            TEXT("[StartNextLeg] %s: INSTANT TELEPORT (bSkipMoveAnimation=TRUE) - THIS SHOULD NOT HAPPEN!"),
+            *GetName());
+        SetActorLocation(LegEnd);
+        ++MoveCounter;
+        StartNextLeg(); // Recursive
+    }
+    else
+    {
+        // Verbose: Log smooth animation start
+        UE_LOG(LogUnitBase, Verbose,
+            TEXT("[StartNextLeg] %s: Smooth animation started (bSkipMoveAnimation=FALSE, Dist=%.1f, Speed=%.1f)"),
+            *GetName(), Distance, PixelsPerSec);
+    }
+}
 
 //------------------------------------------------------------------------------
-// ★★★ Removed (2025-11-16 refactoring): StartNextLeg() and UpdateMove() ★★★
-// Movement processing completely migrated to UUnitMovementComponent
-// CodeRevision: INC-2025-00015-R1 (Removed 171 lines of duplicate logic) (2025-11-16 13:55)
+// UpdateMove - Update movement interpolation
 //------------------------------------------------------------------------------
+void AUnitBase::UpdateMove(float DeltaSeconds)
+{
+    const float Dist = FVector::Dist2D(LegStart, LegEnd);
+    const float Duration = FMath::Max(0.001f, Dist / PixelsPerSec);
+    const float OldAlpha = LegAlpha;
+    LegAlpha = FMath::Min(1.f, LegAlpha + DeltaSeconds / Duration);
+
+    const FVector OldLoc = GetActorLocation();
+    const FVector NewLoc = FMath::Lerp(LegStart, LegEnd, LegAlpha);
+
+    // 速度と向きを計算して更新
+    if (DeltaSeconds > 0.f)
+    {
+        CurrentVelocity = (NewLoc - OldLoc) / DeltaSeconds;
+
+        // 停止している場合は向きを変えない
+        if (!CurrentVelocity.IsNearlyZero())
+        {
+            // Z軸の傾きを無視した水平な向きを計算
+            const FRotator NewRotation = FRotator(0.f, CurrentVelocity.Rotation().Yaw, 0.f);
+            SetActorRotation(NewRotation);
+        }
+    }
+    else
+    {
+        CurrentVelocity = FVector::ZeroVector;
+    }
+
+    SetActorLocation(NewLoc, false);
+    const FVector ActualLoc = GetActorLocation();
+
+    // Debug: Log first few updates
+    static int32 UpdateCount = 0;
+    if (UpdateCount < 5)
+    {
+        const FString OldLocStr = OldLoc.ToCompactString();
+        const FString NewLocStr = NewLoc.ToCompactString();
+        const FString ActualLocStr = ActualLoc.ToCompactString();
+
+        UE_LOG(LogUnitBase, Verbose,
+            TEXT("[UpdateMove] %s: Alpha %.3f -> %.3f, OldLoc=%s, NewLoc=%s, ActualLoc=%s, Moved=%.2f"),
+            *GetName(), OldAlpha, LegAlpha,
+            *OldLocStr, *NewLocStr, *ActualLocStr,
+            FVector::Dist(OldLoc, ActualLoc));
+        UpdateCount++;
+    }
+
+    // Debug: Log movement parameters at start
+    if (LegAlpha < 0.1f)
+    {
+        UE_LOG(LogUnitBase, Verbose,
+            TEXT("[UpdateMove] %s: Distance=%.1f, Duration=%.2fs, Speed=%.1f units/s"),
+            *GetName(), Dist, Duration, PixelsPerSec);
+    }
+
+    // Check distance to target
+    const float DistToTarget = FVector::Dist2D(GetActorLocation(), LegEnd);
+
+    // Debug: Log distance check details
+    UE_LOG(LogUnitBase, Verbose,
+        TEXT("[UpdateMove] %s: DistToTarget=%.2f, DistanceSnap=%.2f, LegAlpha=%.3f, Reached=%d"),
+        *GetName(), DistToTarget, DistanceSnap, LegAlpha,
+        (DistToTarget <= DistanceSnap || LegAlpha >= 1.f) ? 1 : 0);
+
+    if (DistToTarget <= DistanceSnap || LegAlpha >= 1.f)
+    {
+        UE_LOG(LogUnitBase, Log,
+            TEXT("[UpdateMove] %s: TARGET REACHED! Calling StartNextLeg (MoveCounter=%d, PathArray.Num=%d)"),
+            *GetName(), MoveCounter, PathArray.Num());
+        ++MoveCounter;
+        StartNextLeg();
+    }
+}
 
 //------------------------------------------------------------------------------
 // Ensure dynamic material is initialized
@@ -392,6 +568,23 @@ void AUnitBase::UpdateValidSelectionColor()
         : FLinearColor(0.062f, 0.085f, 1.f, 1.f); // Blue (player)
 
     DynMat->SetVectorParameterValue(Param_ValidSelection, ValidColor);
+}
+
+void AUnitBase::ApplyMovementSpeedFromStats()
+{
+    const float StatSpeed =
+        (StatBlock.CurrentSpeed > KINDA_SMALL_NUMBER) ? StatBlock.CurrentSpeed :
+        (StatBlock.MaxSpeed > KINDA_SMALL_NUMBER ? StatBlock.MaxSpeed : PixelsPerSec);
+
+    const float TargetSpeed = FMath::Clamp(StatSpeed, MinPixelsPerSec, MaxPixelsPerSec);
+    if (!FMath::IsNearlyEqual(TargetSpeed, PixelsPerSec))
+    {
+        UE_LOG(LogUnitBase, Display,
+            TEXT("[MovementSpeed] %s: PixelsPerSec %.1f -> %.1f (Stat=%.1f)"),
+            *GetName(), PixelsPerSec, TargetSpeed, StatSpeed);
+    }
+
+    PixelsPerSec = TargetSpeed;
 }
 
 //------------------------------------------------------------------------------
@@ -531,10 +724,7 @@ void AUnitBase::SetStatVars()
     CurrentMagicResist = StatBlock.CurrentMagicResist;
     CurrentMagicPenetration = StatBlock.CurrentMagicPenetration;
 
-    if (MovementComp)
-    {
-        MovementComp->UpdateSpeedFromStats(StatBlock);
-    }
+    ApplyMovementSpeedFromStats();
 
     UE_LOG(LogUnitBase, Log, TEXT("SetStatVars: Team=%d, MovementRange=%d"), Team, CurrentMovementRange);
 }

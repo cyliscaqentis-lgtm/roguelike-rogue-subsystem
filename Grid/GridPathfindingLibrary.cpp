@@ -8,13 +8,13 @@
 #include "Kismet/GameplayStatics.h"
 #include "HAL/PlatformStackWalk.h"
 #include "Misc/DateTime.h"
-#include "Grid/GridOccupancySubsystem.h"  // 笘�E・笘�EIsCellWalkable逕ｨ 笘�E・笘�E
+#include "Grid/GridOccupancySubsystem.h"
 #include "Misc/ScopeLock.h"
 #include "Grid/DungeonFloorGenerator.h"
 #include "Utility/GridUtils.h"
 #include "../ProjectDiagnostics.h"
 
-// 笘�E・笘�E逶�E�譟ｻ繝｢繝ｼ繝�E畑繧�E�繝ｭ繝ｼ繝�EΝ螟画焁E笘�E・笘�E
+// Normalize dungeon-generated cell values for navigation
 namespace
 {
     /** Normalize dungeon-generated cell values for navigation. */
@@ -60,8 +60,8 @@ static bool DoesCellContainBlockingActor(const UGridOccupancySubsystem* Occupanc
     return false;
 }
 
-static bool GGridAuditEnabled = true;   // 蠢・�E�√�E蠢懊§縺�E�荳譎ら┌蜉�E�蛹門庁E
-static FCriticalSection GridAuditCS;    // 荳�E�陦梧嶌縺崎ｾ�E�縺�E�縺後≠繧後�E讀懁E��縺�E�縺溘ａE
+static bool GGridAuditEnabled = true;   // Enable audit mode for temporary debugging
+static FCriticalSection GridAuditCS;    // Critical section for thread-safe audit logging
 
 AGridPathfindingLibrary::AGridPathfindingLibrary()
 {
@@ -73,26 +73,26 @@ void AGridPathfindingLibrary::BeginPlay()
 {
     Super::BeginPlay();
 
-    // 笘�E・笘�E驥崎ｦ・�E�夊�E蜍募・譛溷喧繧堤┌蜉�E�蛹厁E��・ameTurnManager縺梧・遉ｺ逧・↓蛻晁E��蛹悶☁E��具�E�・笘�E・笘�E
-    // BeginPlay縺�E�縺�E�閾�E�蜍募・譛溷喧縺�E�蜑企勁縺励∝､夜Κ縺九ｉ縺�E�InitializeFromParams()蜻�E�縺�E�蜁E��縺励・縺�E�繧定ｨ�E�蜿�E�
+    // NOTE: Grid initialization is handled by GameTurnManager or external systems
+    // InitializeFromParams() is called by external systems after BeginPlay
     
     if (GridWidth > 0 && GridHeight > 0 && GridCells.Num() > 0)
     {
-        // 譌｢縺�E�蛻晁E��蛹匁E��医∩・・ameTurnManager縺九ｉ縺�E�蜻�E�縺�E�蜁E��縺暦�E�・
+        // Already initialized by GameTurnManager
         UE_LOG(LogGridPathfinding, Log, 
             TEXT("[GridPathfinding] BeginPlay: Already initialized (GridWidth=%d, GridHeight=%d, GridCells.Num()=%d, TileSize=%d, Origin=%s)"),
             GridWidth, GridHeight, GridCells.Num(), TileSize, *Origin.ToCompactString());
     }
     else
     {
-        // 縺�E�縺�E�蛻晁E��蛹悶�E�E��後※縺・↑縺・�E�・ameTurnManager縺悟ｾ後〒蛻晁E��蛹悶☁E��具�E�・
+        // Not initialized yet; waiting for external initialization (e.g., GameTurnManager)
         UE_LOG(LogGridPathfinding, Warning, 
             TEXT("[GridPathfinding] BeginPlay: Not initialized yet. Waiting for external initialization (e.g., GameTurnManager)."));
     }
 }
 
 
-// ==================== 蛻晁E��蛹悶・險�E�螳・====================
+// ==================== Grid Initialization ====================
 
 void AGridPathfindingLibrary::InitializeGrid(const TArray<int32>& InGridCost, const FVector& InMapSize, int32 InTileSizeCM)
 {
@@ -100,7 +100,7 @@ void AGridPathfindingLibrary::InitializeGrid(const TArray<int32>& InGridCost, co
     GridHeight = FMath::Max(0, FMath::RoundToInt(InMapSize.Y));
     TileSize = FMath::Max(1, InTileSizeCM);
 
-    // 笘�E・笘�EOrigin 縺�E�蛻晁E��蛹・笘�E・笘�E
+    // Initialize origin
     Origin = FVector::ZeroVector;
 
     const int32 Num = GridWidth * GridHeight;
@@ -127,7 +127,7 @@ void AGridPathfindingLibrary::InitializeFromParams(const FGridInitParams& Params
 {
     InitializeGrid(Params.GridCostArray, Params.MapSize, Params.TileSizeCM);
 
-    // 笘�E・笘�EOrigin險�E�螳・笘�E・笘�E
+    // Set origin
     Origin = Params.Origin;
 
     UE_LOG(LogGridPathfinding, Log, TEXT("[GridPathfinding] Origin set to: %s"), *Origin.ToCompactString());
@@ -135,9 +135,9 @@ void AGridPathfindingLibrary::InitializeFromParams(const FGridInitParams& Params
 
 void AGridPathfindingLibrary::SetGridCost(int32 X, int32 Y, int32 Cost)
 {
-    if (!GGridAuditEnabled) { /* 逶�E�譟ｻ繧�E�繝輔�E繧芽�E��E�驥丞喧 */ }
+    if (!GGridAuditEnabled) { /* Audit mode disabled */ }
 
-    // 笘�E蜈･蜉帙�E遽・峁E���Eぉ繝�EぁE
+    // Input bounds check
     if (!InBounds(X, Y, GridWidth, GridHeight))
     {
         UE_LOG(LogGridPathfinding, Error,
@@ -147,11 +147,11 @@ void AGridPathfindingLibrary::SetGridCost(int32 X, int32 Y, int32 Cost)
 
     const int32 Index = ToIndex(X, Y, GridWidth);
 
-    // 笘�E譌｢蟁E���E�繧貞�E縺�E�隱�E�繧・育屮譟ｻ逕ｨ・・
+    // Store previous value for audit logging
     const int32 Before =
         (GridCells.IsValidIndex(Index) ? GridCells[Index] : INT32_MIN);
 
-    // 笘�E譖ｸ縺崎ｾ�E�縺�E�縺�E�逶�E�蜑阪〒繝ｭ繝�Eけ�E亥�E�夐㍾繧�E�繝ｬ繝�Eラ縺�E�繧峨�E�E��薙〒蜷梧凾譖ｸ縺崎ｾ�E�縺�E�讀懁E���E・
+    // Lock to prevent race conditions in multi-threaded writes
     FScopeLock _lock(&GridAuditCS);
 
     UE_LOG(LogGridPathfinding, Warning,
@@ -163,7 +163,7 @@ void AGridPathfindingLibrary::SetGridCost(int32 X, int32 Y, int32 Cost)
     {
         GridCells[Index] = Cost;
 
-        // 笘�E譖ｸ縺肴綾縺礼�E��E�隱・
+        // Verify write succeeded by reading back
         const int32 ReadBack = GridCells[Index];
         if (ReadBack != Cost)
         {
@@ -172,21 +172,21 @@ void AGridPathfindingLibrary::SetGridCost(int32 X, int32 Y, int32 Cost)
                 Cost, ReadBack, X, Y, Index);
         }
 
-        // 笘�E螢・�E�・0諠�E�螳夲�E�俁E�E 0 縺�E�荳肴�E��E�荳頑嶌縺阪�E�窶應ｺ倶�E��E�窶昴→縺励※隧�E�邏ｰ蜁E��蜉�E
+        // Detect suspicious wall-to-floor transitions (wall cost < 0, floor cost == 0)
         if (Before < 0 && Cost == 0)
         {
             UE_LOG(LogGridPathfinding, Error,
                 TEXT("  ���圷 WALL竊�E DETECTED at Cell(%d,%d) Index=%d"), X, Y, Index);
 
-            // 繧�E�繝ｼ繝ｫ繧�E�繧�E�繝茨�E�磯未謨�E�/繝輔ぃ繧�E�繝ｫ/陦鯉ｼ・
+            // Log call site information (function/file/line)
             UE_LOG(LogGridPathfinding, Error,
                 TEXT("  CallSite: %s (%s:%d)"),
                 ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(__FILE__), __LINE__);
 
-            // 繧�E�繧�E�繝�Eけ繝医Ξ繝ｼ繧�E�繧剁E���E�縺斐�E蜷舌￥
+            // Dump stack trace
             FDebug::DumpStackTraceToLog(ELogVerbosity::Error);
 
-            // 縺�E�縺・〒縺�E�繧�E�繝ｪ繝�Eラ竊�EΡ繝ｼ繝ｫ繝峨√Ρ繝ｼ繝ｫ繝俁E�E繧�E�繝ｪ繝�Eラ縺�E�蠕蠕ｩ讀懁E���E�繧貞瑞縺・
+            // Test round-trip conversion: Grid -> World -> Grid
             const FVector TestWorld = GridToWorld(FIntPoint{X, Y});
             const FIntPoint RoundTrip = WorldToGrid(TestWorld);
             UE_LOG(LogGridPathfinding, Error,
@@ -222,7 +222,7 @@ int32 AGridPathfindingLibrary::ReturnGridStatus(const FVector& InputVector) cons
     FIntPoint GridPos = WorldToGridInternal(InputVector);
     int32 Cost = GetGridCost(GridPos.X, GridPos.Y);
 
-    // 繝ｭ繧�E�繝ｬ繝吶Ν譛驕ｩ蛹・ 騾夊｡悟庁E���E� VeryVerbose縲√ヶ繝ｭ繝�Eけ縺�E� Warning縲∫焚蟶�E�縺�E�縺�E� Error
+    // Log level adaptation: Walkable=VeryVerbose, Blocked=Warning, Invalid=Error
     if (Cost >= 0)
     {
         UE_LOG(LogGridPathfinding, VeryVerbose,
@@ -246,7 +246,7 @@ int32 AGridPathfindingLibrary::ReturnGridStatus(const FVector& InputVector) cons
 }
 
 
-// ==================== 繝代せ繝輔ぃ繧�E�繝ｳ繝�EぁE��ｳ繧�E� ====================
+// ==================== Pathfinding Functions ====================
 
 int32 AGridPathfindingLibrary::CalculateHeuristic(int32 x0, int32 y0, int32 x1, int32 y1, EGridHeuristic Mode)
 {
@@ -562,7 +562,7 @@ bool AGridPathfindingLibrary::FindPathIgnoreEndpoints(
     return bResult;
 }
 
-// ==================== 隕夜㍽讀懁E��E====================
+// ==================== Vision Detection ====================
 
 FGridVisionResult AGridPathfindingLibrary::DetectInExpandingVision(
     const FVector& CenterWorld,
@@ -667,7 +667,7 @@ FGridVisionResult AGridPathfindingLibrary::DetectInRadius(
     return Result;
 }
 
-// ==================== 蜻�E�蝗ｲ讀懁E���E� ====================
+// ==================== Adjacent Tile Search ====================
 
 FGridSurroundResult AGridPathfindingLibrary::SearchAdjacentTiles(
     const FVector& CenterWorld,
@@ -785,7 +785,7 @@ bool AGridPathfindingLibrary::HasLineOfSight(const FVector& StartWorld, const FV
     return IsVisibleFromPoint(Start, End);
 }
 
-// ==================== 繝ｦ繝ｼ繝�EぁE��ｪ繝�EぁE====================
+// ==================== Utility Functions ====================
 
 FIntPoint AGridPathfindingLibrary::WorldToGrid(const FVector& WorldPos) const
 {
@@ -801,11 +801,11 @@ int32 AGridPathfindingLibrary::GetManhattanDistance(const FVector& PosA, const F
 {
     const FIntPoint A = WorldToGridInternal(PosA);
     const FIntPoint B = WorldToGridInternal(PosB);
-    // ★★★ 最適化: GridUtils使用（重複コード削除 2025-11-09）
+    // ★★★ Optimization: Use GridUtils (duplicate code removed 2025-11-09)
     return FGridUtils::ManhattanDistance(A, B);
 }
 
-// ==================== 蜀・Κ繝倥Ν繝代・ ====================
+// ==================== Internal Helpers ====================
 
 FIntPoint AGridPathfindingLibrary::WorldToGridInternal(const FVector& W) const
 {
@@ -918,27 +918,27 @@ void AGridPathfindingLibrary::GetActorsAtGridPosition(const FIntPoint& GridPos, 
     }
 }
 
-// ==================== 霍晞屬險育�E�・====================
+// ==================== Static Distance Functions ====================
 
 int32 AGridPathfindingLibrary::GetChebyshevDistance(FIntPoint A, FIntPoint B)
 {
-    // ★★★ 最適化: GridUtils使用（重複コード削除 2025-11-09）
+    // ★★★ Optimization: Use GridUtils (duplicate code removed 2025-11-09)
     return FGridUtils::ChebyshevDistance(A, B);
 }
 
 int32 AGridPathfindingLibrary::GetManhattanDistanceGrid(FIntPoint A, FIntPoint B)
 {
-    // ★★★ 最適化: GridUtils使用（重複コード削除 2025-11-09）
+    // ★★★ Optimization: Use GridUtils (duplicate code removed 2025-11-09)
     return FGridUtils::ManhattanDistance(A, B);
 }
 
 int32 AGridPathfindingLibrary::GetEuclideanDistanceGrid(FIntPoint A, FIntPoint B)
 {
-    // ★★★ 最適化: GridUtils使用（重複コード削除 2025-11-09）
+    // ★★★ Optimization: Use GridUtils (duplicate code removed 2025-11-09)
     return FMath::RoundToInt(FGridUtils::EuclideanDistance(A, B));
 }
 
-// ==================== 譁E��隕城未謨�E� ====================
+// ==================== Grid Status Query ====================
 
 int32 AGridPathfindingLibrary::ReturnGridStatusIgnoringSelf(const FVector& InputVector, AActor* IgnoreActor) const
 {
@@ -959,7 +959,7 @@ int32 AGridPathfindingLibrary::ReturnGridStatusIgnoringSelf(const FVector& Input
     return Cost;
 }
 
-// ==================== 繝�Eヰ繝�Eげ繝ｻ繧�E�繝｢繝ｼ繧�E�繝�Eせ繝�E====================
+// ==================== Debug/Smoke Test ====================
 
 void AGridPathfindingLibrary::GridSmokeTest()
 {
@@ -990,7 +990,7 @@ void AGridPathfindingLibrary::GridSmokeTest()
     }
 }
 
-// ==================== 逶�E�譟ｻ繝｢繝ｼ繝�E畑繧�E�繝槭Φ繝�E====================
+// ==================== Audit Mode Commands ====================
 
 void AGridPathfindingLibrary::GridAuditEnable(int32 bEnable)
 {
@@ -1010,7 +1010,7 @@ void AGridPathfindingLibrary::GridAuditProbe(int32 X, int32 Y)
 }
 
 
-// ==================== 邨�E�蜷・PI・域雰AI遘ｻ蜍輔ヶ繝ｭ繝�Eけ菫�E�豁E��・・====================
+// ==================== Unified Movement Validation API for AI Blocking ====================
 
 bool AGridPathfindingLibrary::IsCellWalkable(const FIntPoint& Cell) const
 {
@@ -1036,15 +1036,15 @@ bool AGridPathfindingLibrary::IsCellWalkable(const FIntPoint& Cell) const
 
 bool AGridPathfindingLibrary::IsCellWalkableIgnoringActor(const FIntPoint& Cell, AActor* IgnoreActor) const
 {
-    // ★★★ CRITICAL FIX (2025-11-11): 本当に Actor を無視（地形のみチェック） ★★★
-    // このメソッドの名前通り、占有状態はチェックせず、地形のみをチェックする
+    // ★★★ CRITICAL FIX (2025-11-11): Truly ignore Actor (check terrain only) ★★★
+    // As the method name suggests, check terrain only without checking occupancy
     const int32 TerrainCost = GetGridCost(Cell.X, Cell.Y);
     if (TerrainCost < 0)
     {
-        return false;  // 地形が通行不可
+        return false;  // Terrain is not walkable
     }
 
-    // 占有状態はチェックしない（呼び出し側で別途チェックする）
+    // Do not check occupancy (caller checks separately)
     return true;
 }
 
@@ -1052,6 +1052,88 @@ bool AGridPathfindingLibrary::IsCellWalkableAtWorldPosition(const FVector& World
 {
     const FIntPoint Cell = WorldToGrid(WorldPos);
     return IsCellWalkable(Cell);
+}
+
+//==========================================================================
+// ★★★ New Addition: Unified Movement Validation API Implementation ★★★
+// CodeRevision: INC-2025-00015-R1 (Unified validation API) (2025-11-16 13:55)
+//==========================================================================
+
+bool AGridPathfindingLibrary::IsMoveValid(
+    const FIntPoint& From,
+    const FIntPoint& To,
+    AActor* MovingActor,
+    FString& OutFailureReason) const
+{
+    OutFailureReason.Empty();
+
+    // 1. Chebyshev distance check (only 1 cell movement allowed)
+    const int32 ChebyshevDist = FGridUtils::ChebyshevDistance(From, To);
+    if (ChebyshevDist != 1)
+    {
+        OutFailureReason = FString::Printf(
+            TEXT("Invalid distance: Chebyshev distance is %d (must be 1)"),
+            ChebyshevDist);
+        return false;
+    }
+
+    // 2. Terrain check
+    if (!IsCellWalkableIgnoringActor(To, MovingActor))
+    {
+        OutFailureReason = TEXT("Target cell terrain is not walkable");
+        return false;
+    }
+
+    // 3. Corner cutting check (diagonal moves only)
+    const int32 DeltaX = To.X - From.X;
+    const int32 DeltaY = To.Y - From.Y;
+    const bool bIsDiagonalMove = (FMath::Abs(DeltaX) == 1 && FMath::Abs(DeltaY) == 1);
+
+    if (bIsDiagonalMove)
+    {
+        const FIntPoint Side1 = From + FIntPoint(DeltaX, 0);
+        const FIntPoint Side2 = From + FIntPoint(0, DeltaY);
+        const bool bSide1Walkable = IsCellWalkableIgnoringActor(Side1, MovingActor);
+        const bool bSide2Walkable = IsCellWalkableIgnoringActor(Side2, MovingActor);
+
+        if (!bSide1Walkable || !bSide2Walkable)
+        {
+            OutFailureReason = FString::Printf(
+                TEXT("Corner cutting blocked: Side1(%d,%d)=%d Side2(%d,%d)=%d"),
+                Side1.X, Side1.Y, bSide1Walkable ? 1 : 0,
+                Side2.X, Side2.Y, bSide2Walkable ? 1 : 0);
+            return false;
+        }
+    }
+
+    // 4. Occupancy check (via GridOccupancySubsystem)
+    if (UWorld* World = GetWorld())
+    {
+        if (UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>())
+        {
+            AActor* Occupant = OccSys->GetActorAtCell(To);
+            if (Occupant && Occupant != MovingActor)
+            {
+                OutFailureReason = FString::Printf(
+                    TEXT("Cell occupied by %s"),
+                    *GetNameSafe(Occupant));
+                return false;
+            }
+
+            // Reservation check (ignore own reservations)
+            if (OccSys->IsCellReserved(To))
+            {
+                if (!OccSys->IsReservationOwnedByActor(MovingActor, To))
+                {
+                    OutFailureReason = TEXT("Cell reserved by another actor");
+                    return false;
+                }
+            }
+        }
+    }
+
+    // All checks passed
+    return true;
 }
 
 

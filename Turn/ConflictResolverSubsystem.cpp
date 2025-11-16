@@ -126,29 +126,26 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                 Action.SourceActor = Winner.Actor;  // ★★★ CRITICAL FIX (2025-11-11): SourceActor を設定
                 Action.CurrentCell = Winner.CurrentCell;
 
-                // ★★★ スワップに関与している場合は Wait に変換 ★★★
+                // ★★★ CodeRevision: INC-2025-00017-R1 (Allow swap moves) (2025-11-16 14:10) ★★★
+                // Swap moves are now ALLOWED instead of blocked
                 AActor* WinnerActorPtr = Winner.Actor;
+                Action.FinalAbilityTag = Winner.AbilityTag;
+                Action.NextCell = Winner.Cell;
+                Action.bIsWait = false;
+
                 if (SwapActors.Contains(WinnerActorPtr))
                 {
-                    Action.bIsWait = true;
-                    Action.FinalAbilityTag = RogueGameplayTags::AI_Intent_Wait;
-                    Action.NextCell = Winner.CurrentCell;  // 移動しない
-                    Action.ResolutionReason = TEXT("Blocked by swap detection");
-                    UE_LOG(LogConflictResolver, Warning,
-                        TEXT("[SWAP BLOCK] %s at (%d,%d) prevented from swapping"),
-                        *GetNameSafe(WinnerActorPtr), Winner.CurrentCell.X, Winner.CurrentCell.Y);
+                    Action.ResolutionReason = TEXT("Swap move allowed");
+                    UE_LOG(LogConflictResolver, Log,
+                        TEXT("[SWAP ALLOWED] %s at (%d,%d) → (%d,%d)"),
+                        *GetNameSafe(WinnerActorPtr), Winner.CurrentCell.X, Winner.CurrentCell.Y,
+                        Winner.Cell.X, Winner.Cell.Y);
                 }
-                else
-                {
-                    Action.FinalAbilityTag = Winner.AbilityTag;
-                    Action.NextCell = Winner.Cell;
-                    Action.bIsWait = false;
 
-                    // ★★★ CRITICAL FIX (2025-11-11): 勝者の予約を confirmed にマーク ★★★
-                    if (GridOccupancy)
-                    {
-                        GridOccupancy->MarkReservationCommitted(WinnerActorPtr, CurrentTurnId);
-                    }
+                // ★★★ CRITICAL FIX (2025-11-11): 勝者の予約を confirmed にマーク ★★★
+                if (GridOccupancy)
+                {
+                    GridOccupancy->MarkReservationCommitted(WinnerActorPtr, CurrentTurnId);
                 }
 
                 ResolvedActions.Add(Action);
@@ -178,31 +175,30 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
             WinnerAction.SourceActor = Winner.Actor;  // ★★★ CRITICAL FIX (2025-11-11): SourceActor を設定
             WinnerAction.CurrentCell = Winner.CurrentCell;
 
-            // ★★★ 勝者でもスワップに関与している場合は Wait に変換 ★★★
+            // ★★★ CodeRevision: INC-2025-00017-R1 (Allow swap moves) (2025-11-16 14:10) ★★★
+            // Contest winners can participate in swaps (no longer blocked)
             AActor* WinnerActorPtr = Winner.Actor;
+            WinnerAction.FinalAbilityTag = Winner.AbilityTag;
+            WinnerAction.NextCell = Winner.Cell;
+            WinnerAction.bIsWait = false;
+
             if (SwapActors.Contains(WinnerActorPtr))
             {
-                WinnerAction.bIsWait = true;
-                WinnerAction.FinalAbilityTag = RogueGameplayTags::AI_Intent_Wait;
-                WinnerAction.NextCell = Winner.CurrentCell;
-                WinnerAction.ResolutionReason = FString::Printf(TEXT("Swap-blocked at cell (%d, %d)"), Cell.X, Cell.Y);
-                UE_LOG(LogConflictResolver, Warning,
-                    TEXT("[SWAP BLOCK] Contest winner %s at (%d,%d) blocked by swap"),
-                    *GetNameSafe(WinnerActorPtr), Winner.CurrentCell.X, Winner.CurrentCell.Y);
+                WinnerAction.ResolutionReason = FString::Printf(TEXT("Swap move allowed at cell (%d, %d)"), Cell.X, Cell.Y);
+                UE_LOG(LogConflictResolver, Log,
+                    TEXT("[SWAP ALLOWED] Contest winner %s at (%d,%d) → (%d,%d)"),
+                    *GetNameSafe(WinnerActorPtr), Winner.CurrentCell.X, Winner.CurrentCell.Y, Winner.Cell.X, Winner.Cell.Y);
             }
             else
             {
-                WinnerAction.FinalAbilityTag = Winner.AbilityTag;
-                WinnerAction.NextCell = Winner.Cell;
-                WinnerAction.bIsWait = false;
                 WinnerAction.ResolutionReason = FString::Printf(TEXT("Won contest for cell (%d, %d)"), Cell.X, Cell.Y);
                 UE_LOG(LogConflictResolver, Log, TEXT("Winner for (%d, %d) is %s"), Cell.X, Cell.Y, *GetNameSafe(WinnerActorPtr));
+            }
 
-                // ★★★ CRITICAL FIX (2025-11-11): 勝者の予約を confirmed にマーク ★★★
-                if (GridOccupancy)
-                {
-                    GridOccupancy->MarkReservationCommitted(WinnerActorPtr, CurrentTurnId);
-                }
+            // ★★★ CRITICAL FIX (2025-11-11): 勝者の予約を confirmed にマーク ★★★
+            if (GridOccupancy)
+            {
+                GridOccupancy->MarkReservationCommitted(WinnerActorPtr, CurrentTurnId);
             }
 
             ResolvedActions.Add(WinnerAction);

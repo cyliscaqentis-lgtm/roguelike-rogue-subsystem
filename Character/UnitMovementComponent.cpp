@@ -5,6 +5,7 @@
 // ============================================================================
 
 #include "Character/UnitMovementComponent.h"
+#include "Character/UnitStatBlock.h"
 #include "Character/UnitBase.h"
 #include "Grid/GridPathfindingLibrary.h"
 #include "GameFramework/Actor.h"
@@ -23,6 +24,7 @@ UUnitMovementComponent::UUnitMovementComponent()
 	ArrivalThreshold = 10.0f;
 	bUseSmoothMovement = true;
 	InterpSpeed = 5.0f;
+	PixelsPerSec = MoveSpeed;
 }
 
 void UUnitMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -115,7 +117,26 @@ void UUnitMovementComponent::CancelMovement()
 void UUnitMovementComponent::SetMoveSpeed(float NewSpeed)
 {
 	MoveSpeed = FMath::Max(0.0f, NewSpeed);
+	PixelsPerSec = MoveSpeed;
 	UE_LOG(LogTemp, Log, TEXT("[UnitMovementComponent] Move speed set to %.2f"), MoveSpeed);
+}
+
+void UUnitMovementComponent::UpdateSpeedFromStats(const FUnitStatBlock& StatBlock)
+{
+	const float StatSpeed =
+		(StatBlock.CurrentSpeed > KINDA_SMALL_NUMBER) ? StatBlock.CurrentSpeed :
+		(StatBlock.MaxSpeed > KINDA_SMALL_NUMBER ? StatBlock.MaxSpeed : PixelsPerSec);
+
+	const float TargetSpeed = FMath::Clamp(StatSpeed, MinPixelsPerSec, MaxPixelsPerSec);
+	if (!FMath::IsNearlyEqual(TargetSpeed, PixelsPerSec))
+	{
+		UE_LOG(LogTemp, Display,
+			TEXT("[UnitMovementComponent] UpdateSpeedFromStats: PixelsPerSec %.1f -> %.1f (Stat=%.1f)"),
+			PixelsPerSec, TargetSpeed, StatSpeed);
+	}
+
+	PixelsPerSec = TargetSpeed;
+	MoveSpeed = PixelsPerSec;
 }
 
 //------------------------------------------------------------------------------
@@ -154,12 +175,12 @@ void UUnitMovementComponent::UpdateMovement(float DeltaTime)
 	if (bUseSmoothMovement)
 	{
 		// スムーズな補間移動
-		NewLocation = FMath::VInterpConstantTo(CurrentLocation, TargetLocation, DeltaTime, MoveSpeed);
+		NewLocation = FMath::VInterpConstantTo(CurrentLocation, TargetLocation, DeltaTime, PixelsPerSec);
 	}
 	else
 	{
 		// 直線移動
-		const float MoveDistance = MoveSpeed * DeltaTime;
+		const float MoveDistance = PixelsPerSec * DeltaTime;
 		NewLocation = CurrentLocation + Direction * FMath::Min(MoveDistance, DistanceToTarget);
 	}
 
