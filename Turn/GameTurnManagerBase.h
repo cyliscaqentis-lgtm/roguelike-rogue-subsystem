@@ -21,6 +21,7 @@ class UEnemyAISubsystem;
 class UTurnActionBarrierSubsystem;
 class UAbilitySystemComponent;
 class AGridPathfindingLibrary;
+class UGridPathfindingSubsystem;
 class AUnitBase;
 class AUnitManager;
 class URogueDungeonSubsystem;
@@ -39,6 +40,18 @@ class ADungeonFloorGenerator;
 class UDungeonConfigAsset;
 struct FTurnContext;
 class ATBSLyraGameMode;
+
+USTRUCT()
+struct FManualMoveBarrierInfo
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    int32 TurnId = INDEX_NONE;
+
+    UPROPERTY()
+    FGuid ActionId;
+};
 
 // NOTE: Enemy phase patch ID
 static constexpr int32 kEnemyPhasePatchID = 20251030;
@@ -103,6 +116,10 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Turn|Services")
     AGridPathfindingLibrary* GetCachedPathFinder() const;
+
+    /** Get GridPathfindingSubsystem (new subsystem-based access) */
+    UFUNCTION(BlueprintPure, Category = "Turn|Services")
+    class UGridPathfindingSubsystem* GetGridPathfindingSubsystem() const;
 
 
     // CodeRevision: INC-2025-00017-R1 (Remove wrapper functions - Phase 4) (2025-11-16 15:25)
@@ -340,8 +357,8 @@ public:
     // BP Exposed Members
     //==========================================================================
 
-    UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Turn|Legacy")
-    TObjectPtr<APawn> CachedPlayerPawn = nullptr;
+    // CodeRevision: INC-2025-00029-R1 (Removed CachedPlayerPawn - Use UGameplayStatics::GetPlayerPawn() instead) (2025-11-16 00:00)
+    // Removed: TObjectPtr<APawn> CachedPlayerPawn = nullptr;
 
     UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Turn|Legacy")
     TObjectPtr<UDebugObserverCSV> DebugObserverCSV = nullptr;
@@ -539,7 +556,7 @@ protected:
     void HandleManualMoveFinished(AUnitBase* Unit);
     void RegisterManualMoveDelegate(AUnitBase* Unit, bool bIsPlayerFallback);
     void FinalizePlayerMove(AActor* CompletedActor);
-    TMap<AUnitBase*, FDelegateHandle> ActiveMoveDelegates;
+    TSet<TWeakObjectPtr<AUnitBase>> ActiveMoveDelegates;
     TSet<TWeakObjectPtr<AUnitBase>> PendingPlayerFallbackMoves;
     void ExecuteAttacks();
     void EndEnemyTurn();
@@ -657,6 +674,15 @@ private:
     mutable TWeakObjectPtr<AActor> CachedPlayerActor;
 
     FTimerHandle AbilityWaitTimerHandle;
+
+    /** Sequential phase tracking */
+    // CodeRevision: INC-2025-00023-R1 (Handle sequential attack -> move transitions) (2025-11-17 19:15)
+    bool bSequentialModeActive = false;
+    bool bSequentialMovePhaseStarted = false;
+
+    /** Pending barrier registrations for manual enemy moves */
+    UPROPERTY()
+    TMap<TWeakObjectPtr<AUnitBase>, FManualMoveBarrierInfo> PendingMoveActionRegistrations;
 
     //==========================================================================
     // Internal Initialization

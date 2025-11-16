@@ -148,6 +148,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unit|Movement", meta = (EditCondition = "bUseSmoothMovement"))
 	float InterpSpeed = 5.0f;
 
+	/** グリッド更新再試行用タイマーハンドル */
+	UPROPERTY(Transient)
+	FTimerHandle GridUpdateRetryHandle;
+
 	// ========== Internal Methods ==========
 
 	/**

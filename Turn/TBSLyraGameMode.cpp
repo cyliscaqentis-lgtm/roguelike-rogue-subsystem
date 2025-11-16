@@ -110,12 +110,15 @@ FWorldVariables ATBSLyraGameMode::GetWorldVariables() const
 	return Out;
 }
 
+// CodeRevision: INC-2025-00027-R1 (Remove PathFinder spawning - Phase 2.5) (2025-11-16 00:00)
+// PathFinder is now a UWorldSubsystem, no longer needs to be spawned as an Actor
 void ATBSLyraGameMode::SpawnBootstrapActors()
 {
 	UWorld* World = GetWorld();
 	check(World);
 
-	// PathFinderとUnitManagerはGameTurnManagerが所有・生成するため、ここでは生成しない
+	// PathFinder is now UGridPathfindingSubsystem (automatically created by World)
+	// UnitManager is still spawned as Actor (GameTurnManager manages it)
 	// DungeonSubsystemのみ取得（SubsystemはWorldが所有）
 	if (!Dgn)
 	{
@@ -123,10 +126,10 @@ void ATBSLyraGameMode::SpawnBootstrapActors()
 		ensure(Dgn);
 	}
 
-	TBSLyraGameMode_Private::EnsureSingletonActor<AGridPathfindingLibrary>(World, TEXT("PathFinder"));
+	// PathFinder Actor spawning removed - use GetWorld()->GetSubsystem<UGridPathfindingSubsystem>() instead
 	TBSLyraGameMode_Private::EnsureSingletonActor<AUnitManager>(World, TEXT("UnitManager"));
 
-	DIAG_LOG(Log, TEXT("[TBSLyraGameMode] SpawnBootstrapActors: Dgn=%p (PathFinder/UnitManager ensured)"),
+	DIAG_LOG(Log, TEXT("[TBSLyraGameMode] SpawnBootstrapActors: Dgn=%p (PathFinder is now Subsystem, UnitManager ensured)"),
 		static_cast<void*>(Dgn.Get()));
 }
 

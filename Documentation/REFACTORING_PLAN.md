@@ -410,3 +410,212 @@ public:
 - `AGridPathfindingLibrary` の責務がパス探索と地形情報に特化し、`UGridOccupancySubsystem` との役割分担が明確になる。
 - コードの重複が排除され、保守性が向上する。
 - `FGridUtils` のようなユーティリティクラスの利用が促進され、一貫したコーディングスタイルが維持される。
+
+---
+
+## 8. Gameplay Ability の責務分離 (GA_MoveBase) [STATUS: 完了]
+
+### 現状の問題分析
+`GA_MoveBase` をはじめとするGameplay Abilityクラスが、`UTurnActionBarrierSubsystem` や `UGridOccupancySubsystem` などのグローバルなサブシステムを直接参照・呼び出している。これにより、以下の問題が発生していた。
+- **密結合**: アビリティが特定のターン管理システムやグリッドシステムに強く依存しており、再利用性や独立性が損なわれていた。
+- **責務の不整合**: 移動完了後のグリッド更新処理や、アクション完了の通知といった、本来はアビリティの責務外であるべき処理をアビリティ自身が実行していた。
+
+**実装前の状況**:
+このリファクタリング実施前、`GA_MoveBase.h` および `GA_MoveBase.cpp` には以下のメンバー変数と関数が残存していた。
+
+*   **残存していたメンバー変数:**
+    *   `int32 MoveTurnId;`
+    *   `FGuid MoveActionId;`
+    *   `bool bBarrierRegistered;`
+    *   `bool bBarrierActionCompleted;`
+    *   `FGuid BarrierToken;`
+    *   `mutable TWeakObjectPtr<UTurnActionBarrierSubsystem> CachedBarrier;`
+    *   `mutable TWeakObjectPtr<AActor> CachedBarrierAvatar;`
+
+*   **残存していた関数宣言:**
+    *   `UTurnActionBarrierSubsystem* GetBarrierSubsystem() const;`
+    *   `void CompleteBarrierAction(...);`
+    *   `bool RegisterBarrier(...);`
+    *   `void UpdateOccupancy(...);`
+
+### リファクタリング方針
+1.  **依存関係の逆転**: アビリティがサブシステムを直接呼び出すのではなく、アビリティは自身の状態をGameplay Tagで表現するに留める。サブシステム側がそのタグを監視し、必要な処理を行うように設計を変更する。
+2.  **責務の移譲**: 物理的な移動に責任を持つ `UUnitMovementComponent` が、移動完了後のグリッド占有情報更新の責務も担うようにする。
+
+---
+
+### 実装完了内容
+
+#### Phase 1: `UUnitMovementComponent` の責務追加 [完了]
+**実装日**: 2025-11-17
+
+**実装内容**:
+- `Character/UnitMovementComponent.h`に`FTimerHandle GridUpdateRetryHandle`を追加
+- `Character/UnitMovementComponent.cpp`の`FinishMovement()`関数を修正
+- `OnMoveFinished.Broadcast()`を呼び出す**前**に、グリッド更新ロジックを実装
+- `FPathFinderUtils::GetCachedPathFinder()`を使用してPathFinderを取得
+- `UGridOccupancySubsystem::UpdateActorCell()`を呼び出してグリッド更新
+- 更新失敗時（競合など）は0.1秒後に再試行するタイマーを設定
+- 必要なインクルード（`GridOccupancySubsystem.h`, `PathFinderUtils.h`, `TimerManager.h`）を追加
+
+#### Phase 2: `GA_MoveBase` の責務削減 [完了]
+**実装日**: 2025-11-17
+
+**実装内容**:
+- `GA_MoveBase::OnMoveFinished()`からグリッド更新処理（行887-923）を削除
+- `UpdateOccupancy()`関数の実装（行719-739）を削除
+- `UpdateOccupancy()`関数の宣言を`GA_MoveBase.h`から削除
+- `UpdateGridState()`から`UpdateOccupancy()`呼び出しを削除し、コメントで説明を追加
+
+#### Phase 3: `GA_MoveBase` からのバリア管理削除 [完了]
+**実装日**: 2025-11-17
+
+**実装内容**:
+- `GA_MoveBase.h`から以下のメンバー変数を削除:
+  - `int32 MoveTurnId;`
+  - `FGuid MoveActionId;`
+  - `bool bBarrierRegistered;`
+  - `bool bBarrierActionCompleted;`
+  - `FGuid BarrierToken;`
+  - `mutable TWeakObjectPtr<UTurnActionBarrierSubsystem> CachedBarrier;`
+  - `mutable TWeakObjectPtr<AActor> CachedBarrierAvatar;`
+- `GA_MoveBase.h`から以下の関数宣言を削除:
+  - `UTurnActionBarrierSubsystem* GetBarrierSubsystem() const;`
+  - `void CompleteBarrierAction(...);`
+  - `bool RegisterBarrier(...);`
+- `GA_MoveBase.cpp`から以下の実装を削除:
+  - `GetBarrierSubsystem()`の実装
+  - `CompleteBarrierAction()`の実装
+  - `RegisterBarrier()`の実装
+- `ActivateAbility()`内のバリア関連呼び出しを削除:
+  - `RegisterBarrier()`呼び出しを削除
+  - `Barrier->RegisterActionOnce()`呼び出しを削除
+  - `MoveTurnId`の取得処理を`CompletedTurnIdForEvent`用に簡略化
+- `EndAbility()`内のバリア関連呼び出しを削除:
+  - `CompleteBarrierAction()`呼び出しを削除
+  - `Barrier->CompleteActionToken()`呼び出しを削除
+  - バリア関連のメンバー変数のリセット処理を簡略化
+- `OnMoveFinished()`関数を簡略化:
+  - グリッド更新処理とバリア処理を削除
+  - 位置のスナップ処理のみ残し、`EndAbility()`を呼び出すだけのシンプルな実装に変更
+- `SendCompletionEvent()`を修正:
+  - `MoveTurnId`への参照を削除し、`CompletedTurnIdForEvent`のみを使用
+
+#### Phase 4: 依存関係の整理 [完了]
+**実装日**: 2025-11-17
+
+**実装内容**:
+- `GA_MoveBase.cpp`から`TurnActionBarrierSubsystem.h`のインクルードを削除
+- `GA_MoveBase.h`から`UTurnActionBarrierSubsystem`の前方宣言を削除
+- `GridOccupancySubsystem`は`GetReservedCellForActor()`で使用されているため残存
+
+---
+
+### 実装結果
+
+**削除されたコード**:
+- バリア管理関連のメンバー変数: 7個
+- バリア管理関連の関数: 3個
+- グリッド更新処理: `OnMoveFinished()`内の約40行
+- 不要なインクルード: 1個
+- 不要な前方宣言: 1個
+
+**追加されたコード**:
+- `UnitMovementComponent`へのグリッド更新処理: 約30行
+- タイマーハンドルメンバー変数: 1個
+
+**期待される効果**:
+- `GA_MoveBase`の責務が「移動アビリティの実行」に限定され、コードが簡潔になった
+- `UnitMovementComponent`が移動に関連するすべての処理（物理移動＋グリッド更新）を担当し、責務が明確になった
+- バリア管理が`GA_MoveBase`から分離され、再利用性が向上した
+
+---
+
+### 過去の修正指示（参考）
+
+#### Phase 1: `UUnitMovementComponent` の責務追加
+**目的**: 移動を完了したコンポーネント自身が、グリッド占有情報を更新する責務を持つようにする。
+
+1.  **対象ファイル**: `Character/UnitMovementComponent.cpp`
+2.  **修正箇所**: `FinishMovement()` 関数
+3.  **修正内容**: `OnMoveFinished.Broadcast(OwnerUnit);` を呼び出す**前**に、グリッド更新ロジックを実装する。これには、競合時の再試行ロジックも含まれる。
+
+    ```cpp
+    // UUnitMovementComponent::FinishMovement() の実装を修正
+
+    void UUnitMovementComponent::FinishMovement()
+    {
+        bIsMoving = false;
+
+        AUnitBase* OwnerUnit = GetOwnerUnit();
+        if (OwnerUnit)
+        {
+            if (UWorld* World = GetWorld())
+            {
+                if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
+                {
+                    // FPathFinderUtils.h のインクルードが必要な場合がある
+                    const AGridPathfindingLibrary* PathFinder = FPathFinderUtils::GetCachedPathFinder(World);
+                    if (PathFinder)
+                    {
+                        const FIntPoint FinalCell = PathFinder->WorldToGrid(OwnerUnit->GetActorLocation());
+                        if (!Occupancy->UpdateActorCell(OwnerUnit, FinalCell))
+                        {
+                            // 更新が失敗した場合（競合など）、短時間後に再試行する
+                            FTimerHandle RetryHandle;
+                            World->GetTimerManager().SetTimer(RetryHandle, this, &UUnitMovementComponent::FinishMovement, 0.1f, false);
+                            return; // ここで処理を中断し、再試行に任せる
+                        }
+                    }
+                }
+            }
+        }
+
+        CurrentPath.Empty();
+        CurrentPathIndex = 0;
+        SetComponentTickEnabled(false);
+        OnMoveFinished.Broadcast(OwnerUnit);
+        UE_LOG(LogTemp, Log, TEXT("[UnitMovementComponent] Movement finished"));
+    }
+    ```
+
+---
+
+#### Phase 2: `GA_MoveBase` の責務削減
+**目的**: `GA_MoveBase` からサブシステムへの直接参照をすべて削除し、アビリティを自己完結させる。
+
+1.  **対象ファイル**: `Abilities/GA_MoveBase.h`
+2.  **修正内容**: 
+    -   以下のバリア管理用のメンバー変数を**削除**する。
+        ```cpp
+        int32 MoveTurnId;
+        FGuid MoveActionId;
+        bool bBarrierRegistered;
+        bool bBarrierActionCompleted;
+        FGuid BarrierToken;
+        mutable TWeakObjectPtr<UTurnActionBarrierSubsystem> CachedBarrier;
+        ```
+    -   以下の関数宣言を**削除**する。
+        ```cpp
+        UTurnActionBarrierSubsystem* GetBarrierSubsystem() const;
+        void CompleteBarrierAction(...);
+        bool RegisterBarrier(...);
+        void UpdateOccupancy(...);
+        ```
+
+3.  **対象ファイル**: `Abilities/GA_MoveBase.cpp`
+4.  **修正内容**: 
+    -   上記で削除した関数の実装をすべて**削除**する。
+    -   `ActivateAbility` 内のバリア関連の呼び出し (`RegisterBarrier`, `Barrier->RegisterActionOnce` など) をすべて**削除**する。
+    -   `EndAbility` 内のバリア関連の呼び出し (`CompleteBarrierAction`, `Barrier->CompleteActionToken` など) をすべて**削除**する。
+    -   `OnMoveFinished` 関数内の処理を、`EndAbility` を呼び出すだけのシンプルなものに**書き換える**。グリッド更新ロジックはすべて**削除**する。
+        ```cpp
+        void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
+        {
+            UE_LOG(LogTurnManager, Log,
+                TEXT("[MoveComplete] Unit %s reached destination, GA_MoveBase ending."),
+                *GetNameSafe(Unit));
+
+            EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, false);
+        }
+        ```

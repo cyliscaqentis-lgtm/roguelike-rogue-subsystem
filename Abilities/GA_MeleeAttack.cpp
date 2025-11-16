@@ -173,9 +173,10 @@ void UGA_MeleeAttack::ActivateAbility(
 
             if (!ToTarget.IsNearlyZero())
             {
-                const FVector DirectionToTarget = ToTarget.GetSafeNormal();
-                const FRotator NewRotation = FRotationMatrix::MakeFromY(DirectionToTarget).Rotator();
-                Avatar->SetActorRotation(NewRotation);
+            const FVector DirectionToTarget = ToTarget.GetSafeNormal();
+            // CodeRevision: INC-2025-00022-R1 (Correct melee attack rotation) (2025-11-17 19:00)
+            const FRotator NewRotation = DirectionToTarget.Rotation();
+            Avatar->SetActorRotation(NewRotation);
 
                 UE_LOG(LogTemp, Log, TEXT("[GA_MeleeAttack] %s: Rotated to face target %s (Yaw=%.1f)"),
                     *GetNameSafe(Avatar), *GetNameSafe(TargetUnit), NewRotation.Yaw);

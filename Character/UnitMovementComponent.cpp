@@ -8,7 +8,10 @@
 #include "Character/UnitStatBlock.h"
 #include "Character/UnitBase.h"
 #include "Grid/GridPathfindingLibrary.h"
+#include "Grid/GridOccupancySubsystem.h"
+#include "Utility/PathFinderUtils.h"
 #include "GameFramework/Actor.h"
+#include "TimerManager.h"
 #include "../ProjectDiagnostics.h"
 
 //------------------------------------------------------------------------------
@@ -200,6 +203,38 @@ void UUnitMovementComponent::MoveToNextWaypoint()
 void UUnitMovementComponent::FinishMovement()
 {
 	bIsMoving = false;
+
+	AUnitBase* OwnerUnit = GetOwnerUnit();
+	if (OwnerUnit)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
+			{
+				const AGridPathfindingLibrary* PathFinder = FPathFinderUtils::GetCachedPathFinder(World);
+				if (PathFinder)
+				{
+					const FIntPoint FinalCell = PathFinder->WorldToGrid(OwnerUnit->GetActorLocation());
+					if (!Occupancy->UpdateActorCell(OwnerUnit, FinalCell))
+					{
+						// 更新が失敗した場合（競合など）、短時間後に再試行する
+						World->GetTimerManager().SetTimer(
+							GridUpdateRetryHandle,
+							this,
+							&UUnitMovementComponent::FinishMovement,
+							0.1f,
+							false);
+						return; // ここで処理を中断し、再試行に任せる
+					}
+
+					UE_LOG(LogTemp, Verbose,
+						TEXT("[UnitMovementComponent] GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
+						*GetNameSafe(OwnerUnit), FinalCell.X, FinalCell.Y);
+				}
+			}
+		}
+	}
+
 	CurrentPath.Empty();
 	CurrentPathIndex = 0;
 
@@ -207,7 +242,6 @@ void UUnitMovementComponent::FinishMovement()
 	SetComponentTickEnabled(false);
 
 	// イベント配信
-	AUnitBase* OwnerUnit = GetOwnerUnit();
 	OnMoveFinished.Broadcast(OwnerUnit);
 
 	UE_LOG(LogTemp, Log, TEXT("[UnitMovementComponent] Movement finished"));

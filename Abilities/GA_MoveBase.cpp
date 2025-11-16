@@ -13,7 +13,7 @@
 #include "Rogue/Character/UnitMovementComponent.h"
 #include "Rogue/Grid/GridOccupancySubsystem.h"
 #include "Rogue/Grid/GridPathfindingLibrary.h"
-#include "Rogue/Turn/TurnActionBarrierSubsystem.h"
+#include "Rogue/Grid/GridPathfindingSubsystem.h"
 #include "Rogue/Utility/RogueGameplayTags.h"
 #include "Turn/GameTurnManagerBase.h"
 #include "Utility/PathFinderUtils.h"
@@ -213,28 +213,20 @@ void UGA_MoveBase::ActivateAbility(
 		return;
 	}
 
+	// CodeRevision: INC-2025-00018-R3 (Remove barrier management - Phase 3) (2025-11-17)
+	// TurnId retrieval simplified - only from TurnManager for CompletedTurnIdForEvent
 	if (const AGameTurnManagerBase* TurnManager = Cast<AGameTurnManagerBase>(TriggerEventData->OptionalObject.Get()))
 	{
-		MoveTurnId = TurnManager->GetCurrentTurnIndex();
+		CompletedTurnIdForEvent = TurnManager->GetCurrentTurnIndex();
 		UE_LOG(LogTurnManager, Log,
 			TEXT("[GA_MoveBase] TurnId retrieved from TurnManager: %d (Actor=%s)"),
-			MoveTurnId, *GetNameSafe(Avatar));
+			CompletedTurnIdForEvent, *GetNameSafe(Avatar));
 	}
 	else
 	{
-		if (UTurnActionBarrierSubsystem* Barrier = GetBarrierSubsystem())
-		{
-			MoveTurnId = Barrier->GetCurrentTurnId();
-			UE_LOG(LogTurnManager, Warning,
-				TEXT("[GA_MoveBase] TurnId fallback from Barrier: %d (Actor=%s)"),
-				MoveTurnId, *GetNameSafe(Avatar));
-		}
-		else
-		{
-			UE_LOG(LogTurnManager, Error,
-				TEXT("[GA_MoveBase] Failed to retrieve TurnId - TurnManager and Barrier not available"));
-			MoveTurnId = INDEX_NONE;
-		}
+		CompletedTurnIdForEvent = INDEX_NONE;
+		UE_LOG(LogTurnManager, Warning,
+			TEXT("[GA_MoveBase] TurnManager not available in TriggerEventData - CompletedTurnIdForEvent set to INDEX_NONE"));
 	}
 
 	// ★★★ Magnitude 検証（TurnCommandEncoding 範囲チェック） ★★★
@@ -270,9 +262,6 @@ void UGA_MoveBase::ActivateAbility(
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
-
-	// ★★★ DEFERRED: Barrier登録は移動検証成功後に実行（早期終了時の登録漏れ対策）★★★
-	// RegisterBarrier と RegisterActionOnce は Line 382 以降に移動
 
 	UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
 	if (ASC)
@@ -395,23 +384,8 @@ void UGA_MoveBase::ActivateAbility(
 		return;
 	}
 
-	if (!RegisterBarrier(Avatar))
-	{
-		UE_LOG(LogTurnManager, Warning, TEXT("[GA_MoveBase] Barrier subsystem not found"));
-	}
-
-	// ★★★ Token方式: 一度だけ登録（冪等） ★★★
-	if (HasAuthority(&ActivationInfo))
-	{
-		if (UTurnActionBarrierSubsystem* Barrier = GetBarrierSubsystem())
-		{
-			// bBarrierRegistered は既存の RegisterBarrier() で設定されるため、
-			// Token登録は常に実行する（別トラッキング）
-			Barrier->RegisterActionOnce(GetAvatarActorFromActorInfo(), /*out*/BarrierToken);
-			UE_LOG(LogTurnManager, Verbose,
-				TEXT("[GA_MoveBase] Token registered: %s"), *BarrierToken.ToString());
-		}
-	}
+	// CodeRevision: INC-2025-00018-R3 (Remove barrier management - Phase 3) (2025-11-17)
+	// Barrier registration removed - handled by other systems
 
 	const FVector DestWorldLoc = PathFinder->GridToWorld(CachedNextCell);
 	NextTileStep = SnapToCellCenterFixedZ(DestWorldLoc, FixedZ);
@@ -531,41 +505,12 @@ void UGA_MoveBase::EndAbility(
 		ASC->RemoveLooseGameplayTag(RogueGameplayTags::Event_Dungeon_Step);
 	}
 
-	const int32 SavedTurnId = MoveTurnId;
-	const FGuid SavedActionId = MoveActionId;
-	AActor* SavedAvatar = GetAvatarActorFromActorInfo();
-
-	if (bBarrierRegistered)
-	{
-		CompleteBarrierAction(SavedAvatar, SavedTurnId, SavedActionId);
-
-		if (HasAuthority(&ActivationInfo) && BarrierToken.IsValid())
-		{
-			if (UTurnActionBarrierSubsystem* Barrier = GetBarrierSubsystem())
-			{
-				Barrier->CompleteActionToken(BarrierToken);
-				UE_LOG(LogTurnManager, Verbose,
-					TEXT("[GA_MoveBase] Token completed: %s"), *BarrierToken.ToString());
-				BarrierToken.Invalidate();
-			}
-			else
-			{
-				UE_LOG(LogTurnManager, Warning,
-					TEXT("[GA_MoveBase] Token completion requested but Barrier subsystem unavailable"));
-			}
-		}
-	}
-
-	CompletedTurnIdForEvent = SavedTurnId;
+	// CodeRevision: INC-2025-00018-R3 (Remove barrier management - Phase 3) (2025-11-17)
+	// Barrier completion removed - handled by other systems
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 
-	MoveTurnId = INDEX_NONE;
-	MoveActionId.Invalidate();
 	CompletedTurnIdForEvent = INDEX_NONE;
-	bBarrierRegistered = false;
-	bBarrierActionCompleted = false;
-	CachedBarrierAvatar.Reset();
 
 	bIsEnding = false;
 }
@@ -574,9 +519,7 @@ void UGA_MoveBase::SendCompletionEvent(bool bTimedOut)
 {
     if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
     {
-        const int32 NotifiedTurnId = (CompletedTurnIdForEvent != INDEX_NONE)
-            ? CompletedTurnIdForEvent
-            : MoveTurnId;
+        const int32 NotifiedTurnId = CompletedTurnIdForEvent;
 
         if (NotifiedTurnId == INDEX_NONE || NotifiedTurnId < 0)
         {
@@ -713,29 +656,8 @@ void UGA_MoveBase::UpdateGridState(const FVector& Position, int32 Value)
 
 	const FVector Snapped = SnapToCellCenter(Position);
 	PathFinder->GridChangeVector(Snapped, Value);
-	UpdateOccupancy(GetAvatarActorFromActorInfo(), PathFinder->WorldToGrid(Snapped));
-}
-
-void UGA_MoveBase::UpdateOccupancy(AActor* UnitActor, const FIntPoint& NewCell)
-{
-	if (!UnitActor)
-	{
-		return;
-	}
-
-	if (UWorld* World = UnitActor->GetWorld())
-	{
-		if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
-		{
-			// ★★★ DEBUG: Log occupancy update (2025-11-09) ★★★
-			const FIntPoint OldCell = Occupancy->GetCellOfActor(UnitActor);
-			UE_LOG(LogTurnManager, Warning,
-				TEXT("[UpdateOccupancy] ★ Actor=%s | OLD=(%d,%d) → NEW=(%d,%d)"),
-				*GetNameSafe(UnitActor), OldCell.X, OldCell.Y, NewCell.X, NewCell.Y);
-
-			Occupancy->UpdateActorCell(UnitActor, NewCell);
-		}
-	}
+	// CodeRevision: INC-2025-00018-R2 (Remove UpdateOccupancy call - grid update moved to UnitMovementComponent) (2025-11-17)
+	// UpdateOccupancy() removed - grid occupancy update is now handled by UnitMovementComponent::FinishMovement()
 }
 
 float UGA_MoveBase::RoundYawTo45Degrees(float Yaw)
@@ -743,6 +665,9 @@ float UGA_MoveBase::RoundYawTo45Degrees(float Yaw)
 	return FMath::RoundToInt(Yaw / 45.0f) * 45.0f;
 }
 
+// CodeRevision: INC-2025-00027-R1 (Add Subsystem access - Phase 2.4) (2025-11-16 00:00)
+// GetPathFinder() is deprecated - use GetGridPathfindingSubsystem() instead
+// Kept for backward compatibility during migration
 const AGridPathfindingLibrary* UGA_MoveBase::GetPathFinder() const
 {
 	// ★★★ 最適化: PathFinderUtils使用（重複コード削除）
@@ -757,25 +682,12 @@ const AGridPathfindingLibrary* UGA_MoveBase::GetPathFinder() const
 	return nullptr;
 }
 
-UTurnActionBarrierSubsystem* UGA_MoveBase::GetBarrierSubsystem() const
+UGridPathfindingSubsystem* UGA_MoveBase::GetGridPathfindingSubsystem() const
 {
-	if (CachedBarrier.IsValid())
+	if (UWorld* World = GetWorld())
 	{
-		return CachedBarrier.Get();
+		return World->GetSubsystem<UGridPathfindingSubsystem>();
 	}
-
-	const AActor* Avatar = GetAvatarActorFromActorInfo();
-	if (!Avatar)
-	{
-		return nullptr;
-	}
-
-	if (UWorld* World = Avatar->GetWorld())
-	{
-		CachedBarrier = World->GetSubsystem<UTurnActionBarrierSubsystem>();
-		return CachedBarrier.Get();
-	}
-
 	return nullptr;
 }
 
@@ -837,113 +749,42 @@ void UGA_MoveBase::BindMoveFinishedDelegate()
 
 void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
 {
-    if (UWorld* World = GetWorld())
-    {
-        if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
-        {
-            const int32 CurrentTurnId = Barrier->GetCurrentTurnId();
-            if (MoveTurnId != INDEX_NONE && MoveTurnId != CurrentTurnId)
-            {
-                UE_LOG(LogTurnManager, Warning,
-                    TEXT("[OnMoveFinished] TurnId mismatch detected: MoveTurnId=%d, CurrentTurnId=%d (Actor=%s)"),
-                    MoveTurnId, CurrentTurnId, *GetNameSafe(Unit));
-                UE_LOG(LogTurnManager, Warning,
-                    TEXT("[OnMoveFinished] Barrier notification will be handled by EndAbility() with TurnId=%d"),
-                    MoveTurnId);
-            }
-        }
-    }
+	// CodeRevision: INC-2025-00018-R3 (Remove barrier management and grid update - Phase 3) (2025-11-17)
+	// Grid update moved to UnitMovementComponent::FinishMovement()
+	// Barrier management removed - handled by other systems
 
-    int32 TagCountBefore = -1;
-    int32 TagCountAfter = -1;
+	const AGridPathfindingLibrary* PathFinder = GetPathFinder();
+	if (Unit && PathFinder)
+	{
+		// Position snap to cell center
+		const float FixedZ = ComputeFixedZ(Unit, PathFinder);
+		const FVector DestWorldLoc = PathFinder->GridToWorld(CachedNextCell);
+		const FVector SnappedLoc = SnapToCellCenterFixedZ(DestWorldLoc, FixedZ);
+		const FVector LocationBefore = Unit->GetActorLocation();
 
-    const AGridPathfindingLibrary* PathFinder = GetPathFinder();
-    if (Unit)
-    {
-        // ★★★ DEBUG: Log position BEFORE setting (2025-11-09) ★★★
-        const FVector LocationBefore = Unit->GetActorLocation();
-        const FIntPoint GridBefore = PathFinder ? PathFinder->WorldToGrid(LocationBefore) : FIntPoint::ZeroValue;
+		// CodeRevision: INC-2025-00022-R1 (Update actor rotation on move finish) (2025-11-17 19:00)
+		FVector MoveDirection = SnappedLoc - LocationBefore;
+		MoveDirection.Z = 0.0f;
+		if (!MoveDirection.IsNearlyZero())
+		{
+			const float TargetYaw = MoveDirection.Rotation().Yaw;
+			FRotator NewRotation = Unit->GetActorRotation();
+			NewRotation.Yaw = TargetYaw;
+			Unit->SetActorRotation(NewRotation);
+			UE_LOG(LogTurnManager, Log,
+				TEXT("[OnMoveFinished] Actor %s rotated to Yaw=%.1f"),
+				*GetNameSafe(Unit), TargetYaw);
+		}
 
-        // ★★★ FIX: PathFinder->GridToWorld()で移動先セルの中心座標を計算 ★★★
-        const float FixedZ = ComputeFixedZ(Unit, PathFinder);
-        const FVector DestWorldLoc = PathFinder ? PathFinder->GridToWorld(CachedNextCell) : Unit->GetActorLocation();
-        const FVector SnappedLoc = SnapToCellCenterFixedZ(DestWorldLoc, FixedZ);
-        Unit->SetActorLocation(SnappedLoc, false, nullptr, ETeleportType::TeleportPhysics);
-
-        // ★★★ DEBUG: Log position AFTER setting (2025-11-09) ★★★
-        const FVector LocationAfter = Unit->GetActorLocation();
-        const FIntPoint GridAfter = PathFinder ? PathFinder->WorldToGrid(LocationAfter) : FIntPoint::ZeroValue;
-
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[OnMoveFinished] ★ POSITION UPDATE: Actor=%s | BEFORE=Grid(%d,%d) World(%s) | DestCell=(%d,%d) | AFTER=Grid(%d,%d) World(%s) | TurnId=%d"),
-            *GetNameSafe(Unit),
-            GridBefore.X, GridBefore.Y, *LocationBefore.ToCompactString(),
-            CachedNextCell.X, CachedNextCell.Y,
-            GridAfter.X, GridAfter.Y, *LocationAfter.ToCompactString(),
-            MoveTurnId);
-
-        CachedFirstLoc = SnappedLoc;
-
-        if (UWorld* World = GetWorld())
-        {
-            if (UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>())
-            {
-                bool bUpdateSuccess = OccSys->UpdateActorCell(Unit, GridAfter);
-                if (!bUpdateSuccess)
-                {
-                    UE_LOG(LogTurnManager, Warning,
-                        TEXT("[OnMoveFinished] GridOccupancy update FAILED for %s to (%d,%d) - Retrying in 0.1s (Race Condition)"),
-                        *GetNameSafe(Unit), GridAfter.X, GridAfter.Y);
-
-                    FTimerHandle RetryHandle;
-                    TWeakObjectPtr<UGA_MoveBase> WeakAbility(this);
-                    TWeakObjectPtr<AUnitBase> WeakUnit(Unit);
-                    World->GetTimerManager().SetTimer(
-                        RetryHandle,
-                        FTimerDelegate::CreateLambda([WeakAbility, WeakUnit]()
-                        {
-                            if (UGA_MoveBase* RetryAbility = WeakAbility.Get())
-                            {
-                                if (AUnitBase* RetryUnit = WeakUnit.Get())
-                                {
-                                    RetryAbility->OnMoveFinished(RetryUnit);
-                                }
-                            }
-                        }),
-                        0.1f,
-                        false);
-
-                    return;
-                }
-
-                UE_LOG(LogTurnManager, Log,
-                    TEXT("[OnMoveFinished] GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
-                    *GetNameSafe(Unit), GridAfter.X, GridAfter.Y);
-            }
-        }
+		Unit->SetActorLocation(SnappedLoc, false, nullptr, ETeleportType::TeleportPhysics);
+		CachedFirstLoc = SnappedLoc;
+	}
 
 	UE_LOG(LogTurnManager, Log,
-		TEXT("[MoveComplete] Unit %s reached destination, GA_MoveBase ending (TurnId=%d)"),
-		*GetNameSafe(Unit), MoveTurnId);
-	}
-
-	CompleteBarrierAction(Unit, MoveTurnId, MoveActionId);
-
-	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
-	{
-		TagCountBefore = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress.GetTag());
-	}
+		TEXT("[MoveComplete] Unit %s reached destination, GA_MoveBase ending."),
+		*GetNameSafe(Unit));
 
 	EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, false);
-
-	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
-	{
-		TagCountAfter = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress.GetTag());
-	}
-
-	UE_LOG(LogTurnManager, Verbose,
-		TEXT("[MoveComplete] InProgress tag count (Actor=%s): %d -> %d"),
-		*GetNameSafe(Unit), TagCountBefore, TagCountAfter);
 }
 
 void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
@@ -1113,78 +954,4 @@ void UGA_MoveBase::DebugDumpAround(const FIntPoint& Center)
 bool UGA_MoveBase::ShouldSkipAnimation_Implementation()
 {
 	return false;
-}
-
-bool UGA_MoveBase::RegisterBarrier(AActor* Avatar)
-{
-	if (!Avatar)
-	{
-		return false;
-	}
-
-	if (bBarrierRegistered)
-	{
-		UE_LOG(LogTurnManager, Warning,
-			TEXT("[GA_MoveBase] RegisterBarrier called again for %s - already registered with ActionId=%s"),
-			*Avatar->GetName(), *MoveActionId.ToString());
-		return true;
-	}
-
-	if (UWorld* World = Avatar->GetWorld())
-	{
-		if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
-		{
-			if (MoveTurnId == INDEX_NONE)
-			{
-				MoveTurnId = Barrier->GetCurrentTurnId();
-				UE_LOG(LogTurnManager, Warning,
-					TEXT("[RegisterBarrier] TurnId fallback: %d (Actor=%s)"),
-					MoveTurnId, *Avatar->GetName());
-			}
-
-			MoveActionId = Barrier->RegisterAction(Avatar, MoveTurnId);
-			bBarrierRegistered = true;
-			CachedBarrierAvatar = Avatar;
-			bBarrierActionCompleted = false;
-			UE_LOG(LogTurnManager, Log,
-				TEXT("[RegisterBarrier] Registered: TurnId=%d, ActionId=%s (Actor=%s)"),
-				MoveTurnId, *MoveActionId.ToString(), *Avatar->GetName());
-			return true;
-		}
-	}
-
-	return false;
-}
-
-void UGA_MoveBase::CompleteBarrierAction(AActor* Actor, int32 TurnId, const FGuid& ActionId)
-{
-	if (!bBarrierRegistered || bBarrierActionCompleted)
-	{
-		return;
-	}
-
-	AActor* Avatar = Actor ? Actor : CachedBarrierAvatar.Get();
-	if (!Avatar || TurnId == INDEX_NONE || !ActionId.IsValid())
-	{
-		UE_LOG(LogTurnManager, Warning,
-			TEXT("[GA_MoveBase] ⚠ Barrier registered but Action context invalid: Actor=%s, TurnId=%d, ActionId=%s"),
-			*GetNameSafe(Avatar), TurnId, *ActionId.ToString());
-		return;
-	}
-
-	if (UTurnActionBarrierSubsystem* Barrier = GetBarrierSubsystem())
-	{
-		Barrier->CompleteAction(Avatar, TurnId, ActionId);
-		UE_LOG(LogTurnManager, Log,
-			TEXT("[GA_MoveBase] Barrier notified: Actor=%s, TurnId=%d, ActionId=%s"),
-			*GetNameSafe(Avatar), TurnId, *ActionId.ToString());
-		bBarrierActionCompleted = true;
-		CachedBarrierAvatar.Reset();
-	}
-	else
-	{
-		UE_LOG(LogTurnManager, Warning,
-			TEXT("[GA_MoveBase] Barrier subsystem missing when completing action: Actor=%s TurnId=%d"),
-			*GetNameSafe(Avatar), TurnId);
-	}
 }

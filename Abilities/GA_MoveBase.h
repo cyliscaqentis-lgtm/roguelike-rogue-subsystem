@@ -1,4 +1,5 @@
 // GA_MoveBase.h
+// CodeRevision: INC-2025-00026-R1 (Fix garbled Japanese comments - Phase 1) (2025-11-16 00:00)
 #pragma once
 
 #include "CoreMinimal.h"
@@ -6,29 +7,32 @@
 #include "GameplayTagContainer.h"
 #include "GA_MoveBase.generated.h"
 
-// 蜑肴婿螳�E�險
+// 前方宣言
 class AGridPathfindingLibrary;
 class AUnitBase;
-class UTurnActionBarrierSubsystem;
 class UGridOccupancySubsystem;
 class AGameTurnManagerBase;
 
 /**
  * UGA_MoveBase
- * 繝励Ξ繧�E�繝､繝ｼ繝ｦ繝九ャ繝医・遘ｻ蜍輔い繝薙Μ繝�EぁE
+ * 移動アビリティの基底クラス
  *
- * 笘�E・笘�EPhase 3 蟁E��蠢懶�E�・繧�E�繧�E�繧�E�繧�E�繝�E΁E+ Barrier邨�E�蜷茨�E�・
+ * Phase 3 リファクタリング: State.Action.InProgress + Barrier 対応
  *
- * 讖溯・:
- * - EnhancedInput邨檎罰縺�E�繧�E�繝｡繝ｩ逶�E�蟁E��譁E��蜷代�E�蜿励�E�蜿悶�E�縲√げ繝ｪ繝�Eラ遘ｻ蜍輔ｒ螳溯�E�・
- * - State.Moving 繧�E�繧�E�縺�E�繧医�E�蜀崎ｵ�E�蜍暮亟豁E��・・ctivationBlockedTags・・
- * - 笘�E・笘�EState.Action.InProgress 繧�E�繧�E�縺�E�邂｡送E�E�E�・A縺瑚ｲ�E�莉ｻ繧呈戟縺�E�・・
- * - 笘�E・笘�EBarrier::RegisterAction() / CompleteAction() 縺�E�繧医�E�騾�E�陦悟宛蠕｡
- * - 遘ｻ蜍募�E�御�E�・�E�後�E Ability.Move.Completed 繧�E�繝吶Φ繝医�E�騾∽�E��E�・医ち繝ｼ繝ｳ蜷梧悁E�E・
- * - 3轤�E�隧�E�繧∝ｯ�E�蠢懶�E�壼�E��E�讓吶せ繝翫ャ繝励、E���E�陬懈ｭ�E�縲∬�E��E�譁E��繝ｭ繧�E�
- * - TurnId繧�E�繝｣繝励メ繝｣縺�E�繧医�E�荳堺�E�閾�E�蟁E��遲・ *
- * 縲占�E��E�莉ｻ遽・峁E��・ * - State.Action.InProgress 繧�E�繧�E�縺�E�莉倁E��・蜑･螂ｪ・・wnedTags・・ * - Barrier 縺�E�縺�E� RegisterAction / CompleteAction 騾夂衁E
- * - TurnManager 縺�E� InProgress 繧�E�繧�E�縺�E�荳蛻・�E��E�繧峨↑縺・ */
+ * 機能:
+ * - EnhancedInputから受け取った方向ベクトルをグリッド移動に変換
+ * - State.Moving タグを管理し、ActivationBlockedTags で重複実行を防止
+ * - State.Action.InProgress タグを管理し、他のアクションと競合しないようにする
+ * - Barrier::RegisterAction() / CompleteAction() でアクションの完了を管理
+ * - 移動完了時に Ability.Move.Completed イベントを発行し、TurnManager に通知
+ * - 3軸移動（X/Y/Z）をサポートし、グリッド中心へのスナップ機能を提供
+ * - TurnIdとWindowIdを検証し、古いターンのコマンドを無視
+ *
+ * 実装詳細:
+ * - State.Action.InProgress タグを ActivationOwnedTags で管理
+ * - Barrier システムと連携して RegisterAction / CompleteAction を呼び出し
+ * - TurnManager の InProgress タグ管理と同期
+ */
 UCLASS(Abstract, Blueprintable)
 class LYRAGAME_API UGA_MoveBase : public UGA_TurnActionBase
 {
@@ -38,7 +42,8 @@ public:
     UGA_MoveBase(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
     //--------------------------------------------------------------------------
-    // GameplayAbility 繧�E�繝ｼ繝�E・繝ｩ繧�E�繝�E    //--------------------------------------------------------------------------
+    // GameplayAbility オーバーライド
+    //--------------------------------------------------------------------------
 
     virtual void ActivateAbility(
         const FGameplayAbilitySpecHandle Handle,
@@ -92,14 +97,16 @@ protected:
     virtual void SendCompletionEvent(bool bTimedOut = false) override;
 
     //==========================================================================
-    // 笘�E・笘�EPhase 6: 繧�E�繧�E�繝繧�E�繧�E�繝亥�E��E�蠢・    //==========================================================================
+    // Phase 6: デバッグ・計測
+    //==========================================================================
 
     /**
-     * 繧�E�繝薙Μ繝�EぁE��句�E�区凾蛻�E�・医ち繧�E�繝繧�E�繧�E�繝郁�E��E�譁E��逕ｨ・・     */
+     * アビリティ開始時刻（デバッグ用）
+     */
     double AbilityStartTime = 0.0;
 
     //--------------------------------------------------------------------------
-    // 險�E�螳壹ヱ繝ｩ繝｡繝ｼ繧�E�
+    // 移動パラメータ
     //--------------------------------------------------------------------------
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Move")
@@ -114,14 +121,15 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Move")
     float GridSize = 100.0f;
 
-    /** 繧�E�繝九Γ繝ｼ繧�E�繝ｧ繝ｳ繧偵せ繧�E�繝�E・縺吶�E�霍晞屬髢�E�蛟､・・=蟶�E�縺�E�繧�E�繝九Γ繝ｼ繧�E�繝ｧ繝ｳ蜀咲函・・*/
+    /** この距離以下の場合はアニメーションをスキップ（=0で無効化） */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Move|Animation")
-    float SkipAnimIfUnderDistance = 0.0f;  // 笘�E・笘�E繝�Eヵ繧�E�繝ｫ繝�E縺�E�螟画峩・壼�E��E�縺�E�繧�E�繝九Γ繝ｼ繧�E�繝ｧ繝ｳ蜀咲函 笘�E・笘�E
+    float SkipAnimIfUnderDistance = 0.0f;  // 距離が短すぎる場合はアニメーションをスキップ
     UPROPERTY(EditDefaultsOnly, Category = "GAS|Tags")
     FGameplayTag StateMovingTag = FGameplayTag::RequestGameplayTag(TEXT("State.Moving"));
 
     //--------------------------------------------------------------------------
-    // 蜀・Κ迥�E�諷具�E�・lueprintReadOnly - 繝�Eヰ繝�Eげ逕ｨ・・    //--------------------------------------------------------------------------
+    // 状態変数（BlueprintReadOnly - 読み取り専用）
+    //--------------------------------------------------------------------------
 
     UPROPERTY(BlueprintReadOnly, Category = "Move|State")
     FVector Direction = FVector::ZeroVector;
@@ -144,45 +152,44 @@ protected:
     int32 CompletedTurnIdForEvent = INDEX_NONE;
 
     //--------------------------------------------------------------------------
-    // C++蜀・Κ螳溯�E�・    //--------------------------------------------------------------------------
+    // C++内部関数
+    //--------------------------------------------------------------------------
 
-    /** EventData縺九ｉDirection謚ｽ蜁E�� */
+    /** EventDataからDirectionを抽出 */
     bool ExtractDirectionFromEventData(const FGameplayEventData* EventData, FVector& OutDirection);
 
-    /** 8譁E��蜷鷹㍼蟁E��喧 */
+    /** 8方向グリッドに量子化 */
     FVector2D QuantizeToGridDirection(const FVector& InDirection);
 
-    /** 繧�E�繝ｪ繝�Eラ蠎ｧ讓呵�E�育�E�・*/
+    /** 次のタイル位置を計算 */
     FVector CalculateNextTilePosition(const FVector& CurrentPosition, const FVector2D& Dir);
 
     /**
-     * 遘ｻ蜍募庁E���E�蛻�E�螳夲�E�・轤�E�隧�E�繧∝ｯ�E�蠢懁E��・・     */
+     * 移動先タイルが通行可能かチェック（3軸移動対応）
+     */
     bool IsTileWalkable(const FVector& TilePosition, AUnitBase* Self = nullptr);
 
-    /** 繧�E�繝ｪ繝�Eラ迥�E�諷区峩譁E�� */
+    /** タイル状態を更新 */
     void UpdateGridState(const FVector& Position, int32 Value);
 
-    /** 蜊譛峨・繧�E�繝悶す繧�E�繝�EΒ縺�E�莉ｻ縺帙ｋ�E域立UpdateGridState縺�E�莉｣譖ｿ・・*/
-    void UpdateOccupancy(AActor* Unit, const FIntPoint& NewCell);
-
-    /** 豁E��陦悟庁E���E�縺�E�Occupancy/DistanceField縺�E�蟋碑ｭ�E� */
+    /** セル単位で通行可能かチェック（Occupancy/DistanceFieldを使用） */
     bool IsTileWalkable(const FIntPoint& Cell) const;
 
-    /** 蝗櫁E���E�隗貞ｺ�E�繧・5蠎ｦ蜊倁E��阪↓荳�E�繧√ａE*/
+    /** ヨー角を45度単位に丸める */
     float RoundYawTo45Degrees(float Yaw);
 
-    /** 繝�EΜ繧�E�繝ｼ繝医ヰ繧�E�繝ｳ繝�E*/
+    /** 移動完了デリゲートをバインド */
     void BindMoveFinishedDelegate();
 
-    /** 遘ｻ蜍募�E�御�E�・さ繝ｼ繝ｫ繝�Eャ繧�E� */
+    /** 移動完了時のコールバック */
     UFUNCTION()
     void OnMoveFinished(AUnitBase* Unit);
 
-    /** 繧�E�繝ｫ蠎ｧ讓呎欠螳壹〒縺�E�遘ｻ蜍暮幕蟋具�E�域雰繝ｦ繝九ャ繝育畑�E・*/
+    /** 指定セルへの移動を開始（グリッド位置を正しく設定） */
     void StartMoveToCell(const FIntPoint& TargetCell);
 
     //--------------------------------------------------------------------------
-    // 3轤�E�隧�E�繧・�E�壼�E��E�讓呎�E��E�隕丞喧繝ｻ險�E�譁E��繝ｦ繝ｼ繝�EぁE��ｪ繝�EぁE
+    // 3軸移動・位置調整・デバッグヘルパー
     //--------------------------------------------------------------------------
 
     FVector SnapToCellCenter(const FVector& WorldPos) const;
@@ -192,7 +199,8 @@ protected:
     void DebugDumpAround(const FIntPoint& Center);
 
     //--------------------------------------------------------------------------
-    // Blueprint諡�E�蠑ｵ繝昴ぁE��ｳ繝茨�E�医ぁE��九Γ繝ｼ繧�E�繝ｧ繝ｳ蛻�E�蠕｡・・    //--------------------------------------------------------------------------
+    // Blueprint実装可能イベント・アニメーション制御
+    //--------------------------------------------------------------------------
 
     UFUNCTION(BlueprintImplementableEvent, Category = "Move|Animation")
     void ExecuteMoveAnimation(const TArray<FVector>& Path);
@@ -203,68 +211,41 @@ protected:
 
 private:
     //--------------------------------------------------------------------------
-    // 笘�E・笘�EPhase 3: Barrier邨�E�蜷医→InProgress繧�E�繧�E�邂｡送E�E    //--------------------------------------------------------------------------
-
-    /**
-     * 繧�E�繝薙Μ繝�EぁE��句�E�区凾縺�E�TurnId
-     * Barrier::RegisterAction() 縺�E� CompleteAction() 縺�E�菴�E�逕ｨ
-     */
-    int32 MoveTurnId = INDEX_NONE;
-
-    /**
-     * 笘�E・笘�E譁E��隕剰�E��E�蜉: 繧�E�繝薙Μ繝�EぁE���E�ActionID
-     * Barrier::RegisterAction() 縺�E�蜿門�E�・     * Barrier::CompleteAction() 縺�E�菴�E�逕ｨ
-     */
-    FGuid MoveActionId;
-
-    /**
-     * ☁E�E☁EHotfix: Barrier二重登録防止フラグ
-     * RegisterBarrier()が同一インスタンスで褁E��回呼ばれても登録は1回�Eみ
-     */
-    bool bBarrierRegistered = false;
-    bool bBarrierActionCompleted = false;
-
-    mutable TWeakObjectPtr<AActor> CachedBarrierAvatar;
-
-    /**
-     * ★★★ Token方式: Barrier完了トークン（冪等Complete用）
-     */
-    UPROPERTY(Transient)
-    FGuid BarrierToken;
-
-    /**
-     * ★★★ Token方式: Barrierサブシステムのキャッシュ
-     */
-    mutable TWeakObjectPtr<UTurnActionBarrierSubsystem> CachedBarrier;
-
-    /**
-     * ★★★ Token方式: ワールドからBarrier取得（キャッシュ付き）
-     */
-    UTurnActionBarrierSubsystem* GetBarrierSubsystem() const;
-    void CompleteBarrierAction(AActor* Actor, int32 TurnId, const FGuid& ActionId);
+    // CodeRevision: INC-2025-00018-R3 (Remove barrier management - Phase 3) (2025-11-17)
+    // Barrier management removed - handled by other systems
+    //--------------------------------------------------------------------------
 
     //--------------------------------------------------------------------------
-    // State.Moving 繧�E�繧�E�・亥・襍ｷ蜍暮亟豁E��・・    //--------------------------------------------------------------------------
+    // State.Moving タグ管理・キャッシュ
+    //--------------------------------------------------------------------------
 
     UPROPERTY()
     FGameplayTag TagStateMoving;
 
     //--------------------------------------------------------------------------
-    // PathFinder繝ｻ繝�EΜ繧�E�繝ｼ繝�E    //--------------------------------------------------------------------------
+    // PathFinderキャッシュ
+    //--------------------------------------------------------------------------
 
     UPROPERTY()
     mutable TWeakObjectPtr<class AGridPathfindingLibrary> CachedPathFinder;
     mutable TWeakObjectPtr<AGameTurnManagerBase> CachedTurnManager;
 
     /**
-     * PathFinder縺�E�蜿門�E�励�E�荳邂�E園縺�E�髮・�E�・     */
+     * PathFinderへのアクセスを取得（キャッシュ付き）
+     * @deprecated Use GetGridPathfindingSubsystem() instead
+     */
     const class AGridPathfindingLibrary* GetPathFinder() const;
+
+    /** Get GridPathfindingSubsystem (new subsystem-based access) */
+    class UGridPathfindingSubsystem* GetGridPathfindingSubsystem() const;
+
     AGameTurnManagerBase* GetTurnManager() const;
 
     bool bMoveFinishedDelegateBound = false;
 
     //--------------------------------------------------------------------------
-    // 遘ｻ蜍暮幕蟋倶�E�咲�E��E�・医Ρ繝ｼ繝ｫ繝牙�E��E�讓呻�E�会ｼ・ridOccupancy隗｣謾�E�逕ｨ・・    //--------------------------------------------------------------------------
+    // 移動状態キャッシュ・GridOccupancy連携
+    //--------------------------------------------------------------------------
 
     FVector CachedStartLocWS = FVector::ZeroVector;
 
@@ -272,19 +253,17 @@ private:
     FIntPoint CachedNextCell = FIntPoint(-1, -1);
 
     //--------------------------------------------------------------------------
-    // 繧�E�繝｣繝�Eす繝･螟画焚�E・nMoveFinished 縺�E�菴�E�逕ｨ・・    //--------------------------------------------------------------------------
+    // キャッシュ変数（OnMoveFinished で使用）
+    //--------------------------------------------------------------------------
 
     FGameplayAbilitySpecHandle CachedSpecHandle;
     FGameplayAbilityActorInfo CachedActorInfo;
     FGameplayAbilityActivationInfo CachedActivationInfo;
     FVector CachedFirstLoc = FVector::ZeroVector;
 
-    // ☁E�E☁ESparky修正: 再�E防止フラグ ☁E�E☁E
+    // Sparky修正: 再終了防止フラグ
     bool bIsEnding = false;
-
-    bool RegisterBarrier(AActor* Avatar);
 
     // ★★★ REMOVED: InProgressStack (2025-11-11) ★★★
     // ActivationOwnedTags を使用するため、手動カウントは不要
 };
-
