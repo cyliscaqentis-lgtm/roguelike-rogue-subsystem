@@ -9,7 +9,6 @@
 #include "Grid/AABB.h"
 #include "Components/BoxComponent.h"
 #include "Containers/Queue.h"
-#include "Turn/TurnEventDispatcher.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogRogueDungeon, Log, All);
 
@@ -94,16 +93,6 @@ void URogueDungeonSubsystem::StartGenerate(const URogueFloorConfigData* Cfg)
     float Reachability;
     FloorGenerator->GetGenerationStats(RoomCount, WalkableCount, Reachability);
     UE_LOG(LogTemp, Display, TEXT("[RogueSubsystem] Generate DONE (Rooms=%d, Walkable=%d, Reach=%.1f%%)"), RoomCount, WalkableCount, Reachability * 100.0f);
-
-    // ★★★ コアシステム: OnFloorReady配信（2025-11-09） ★★★
-    // EventDispatcher経由で配信を試みる
-    if (UWorld* World = GetWorld())
-    {
-        if (auto* EventDispatcher = World->GetSubsystem<UTurnEventDispatcher>())
-        {
-            EventDispatcher->BroadcastFloorReady(this);
-        }
-    }
 
     // 既存のデリゲートも維持（後方互換性）
     OnGridReady.Broadcast(this);

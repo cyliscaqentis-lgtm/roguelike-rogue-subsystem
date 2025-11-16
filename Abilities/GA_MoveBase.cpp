@@ -195,6 +195,31 @@ void UGA_MoveBase::ActivateAbility(
 		TEXT("[GA_MoveBase] ABILITY ACTIVATED: Actor=%s, Team=%d"),
 		*GetNameSafe(Avatar), TeamId);
 
+	// CodeRevision: INC-2025-00030-R3 (Add Barrier sync to GA_MoveBase) (2025-11-17 01:00)
+	// P1: Fix turn hang - Register player move with TurnActionBarrierSubsystem
+	bBarrierRegistered = false;
+	MoveTurnId = INDEX_NONE;
+	MoveActionId.Invalidate();
+
+	if (Avatar)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
+			{
+				MoveTurnId = Barrier->GetCurrentTurnId();
+				MoveActionId = Barrier->RegisterAction(Avatar, MoveTurnId);
+				bBarrierRegistered = MoveActionId.IsValid();
+
+				UE_LOG(LogTurnManager, Log,
+					TEXT("[GA_MoveBase] Registered with Barrier: Turn=%d ActionId=%s Registered=%d"),
+					MoveTurnId,
+					*MoveActionId.ToString(),
+					bBarrierRegistered ? 1 : 0);
+			}
+		}
+	}
+
 	CachedSpecHandle = Handle;
 	if (ActorInfo)
 	{
@@ -802,6 +827,27 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
 	UE_LOG(LogTurnManager, Log,
 		TEXT("[MoveComplete] Unit %s reached destination, GA_MoveBase ending."),
 		*GetNameSafe(Unit));
+
+	// CodeRevision: INC-2025-00030-R3 (Add Barrier sync to GA_MoveBase) (2025-11-17 01:00)
+	// P1: Fix turn hang - Complete the registered barrier action before ending the ability
+	if (bBarrierRegistered && MoveActionId.IsValid())
+	{
+		if (UWorld* World = GetWorld())
+		{
+			if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
+			{
+				Barrier->CompleteAction(Unit, MoveTurnId, MoveActionId);
+				UE_LOG(LogTurnManager, Log,
+					TEXT("[GA_MoveBase] Barrier completed for %s (ActionId=%s)"),
+					*GetNameSafe(Unit),
+					*MoveActionId.ToString());
+			}
+		}
+
+		bBarrierRegistered = false;
+		MoveActionId.Invalidate();
+		MoveTurnId = INDEX_NONE;
+	}
 
 	EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, false);
 }

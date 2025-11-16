@@ -42,34 +42,23 @@ private:
 
 ---
 
-#### 1.2 UTurnEventDispatcher (Subsystem)
-**責務**: ターンイベントの配信
+#### 1.2 UTurnEventDispatcher (Subsystem) [削除済み]
+**削除日**: 2025-11-17
+**理由**: 購読者が存在せず、イベントが配信されても実行されない未使用コードのため削除。
 
-```cpp
-UCLASS()
-class UTurnEventDispatcher : public UWorldSubsystem
-{
-    GENERATED_BODY()
+**削除前の責務**: ターンイベントの配信
 
-public:
-    UPROPERTY(BlueprintAssignable)
-    FOnTurnStarted OnTurnStarted;
+**削除された機能**:
+- `BroadcastTurnStarted()` - ターン開始イベント配信
+- `BroadcastTurnEnded()` - ターン終了イベント配信
+- `BroadcastPlayerInputReceived()` - プレイヤー入力受信イベント配信
+- `BroadcastFloorReady()` - フロア準備完了イベント配信
+- `BroadcastPhaseChanged()` - フェーズ変更イベント配信
+- `BroadcastActionExecuted()` - アクション実行イベント配信
 
-    UPROPERTY(BlueprintAssignable)
-    FOnPlayerInputReceived OnPlayerInputReceived;
-
-    UPROPERTY(BlueprintAssignable)
-    FOnFloorReady OnFloorReady;
-
-    void BroadcastTurnStarted(int32 TurnIndex);
-    void BroadcastPhaseChanged(FGameplayTag NewPhase);
-};
-```
-
-**移行元**:
-- `OnTurnStarted`デリゲート
-- `OnPlayerInputReceived`デリゲート
-- `OnFloorReady`デリゲート
+**代替手段**:
+- `URogueDungeonSubsystem::OnGridReady` デリゲートは維持されており、フロア準備完了通知に使用可能
+- その他のイベントは直接的な呼び出しで管理されている
 
 ---
 
@@ -121,9 +110,6 @@ public:
     TObjectPtr<UTurnCommandHandler> CommandHandler;
 
     UPROPERTY()
-    TObjectPtr<UTurnEventDispatcher> EventDispatcher;
-
-    UPROPERTY()
     TObjectPtr<UTurnDebugSubsystem> DebugSubsystem;
 
     UPROPERTY()
@@ -148,12 +134,12 @@ private:
 
 #### Phase 1: Subsystem作成
 1. `UTurnCommandHandler`作成
-2. `UTurnEventDispatcher`作成
+2. ~~`UTurnEventDispatcher`作成~~ [削除済み 2025-11-17]
 3. `UTurnDebugSubsystem`作成
 
 #### Phase 2: メソッド移行
 1. コマンド処理→`UTurnCommandHandler`
-2. イベント配信→`UTurnEventDispatcher`
+2. ~~イベント配信→`UTurnEventDispatcher`~~ [削除済み 2025-11-17]
 3. デバッグ機能→`UTurnDebugSubsystem`
 
 #### Phase 3: 依存関係整理

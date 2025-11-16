@@ -77,14 +77,6 @@ bool UTurnCommandHandler::ValidateCommand(const FPlayerCommand& Command) const
 	return true;
 }
 
-void UTurnCommandHandler::ApplyCommand(const FPlayerCommand& Command)
-{
-	UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Applying command TurnId=%d, Tag=%s"),
-		Command.TurnId, *Command.CommandTag.ToString());
-
-	UE_LOG(LogTurnManager, Verbose, TEXT("[TurnCommandHandler] Command applied successfully"));
-}
-
 void UTurnCommandHandler::MarkCommandAsAccepted(const FPlayerCommand& Command)
 {
 	LastAcceptedCommands.Add(Command.TurnId, Command);
@@ -103,34 +95,6 @@ void UTurnCommandHandler::BeginInputWindow(int32 WindowId)
 	bInputWindowOpen = true;
 
 	UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Input window opened: WindowId=%d"), WindowId);
-}
-
-void UTurnCommandHandler::EndInputWindow()
-{
-	bInputWindowOpen = false;
-
-	UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Input window closed: WindowId=%d"), CurrentInputWindowId);
-}
-
-//------------------------------------------------------------------------------
-// Command History
-//------------------------------------------------------------------------------
-
-bool UTurnCommandHandler::GetLastAcceptedCommand(int32 TurnId, FPlayerCommand& OutCommand) const
-{
-	const FPlayerCommand* Found = LastAcceptedCommands.Find(TurnId);
-	if (Found)
-	{
-		OutCommand = *Found;
-		return true;
-	}
-	return false;
-}
-
-void UTurnCommandHandler::ClearCommandHistory()
-{
-	LastAcceptedCommands.Empty();
-	UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Command history cleared"));
 }
 
 //------------------------------------------------------------------------------

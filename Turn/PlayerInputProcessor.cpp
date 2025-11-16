@@ -2,7 +2,6 @@
 
 #include "PlayerInputProcessor.h"
 #include "Turn/TurnFlowCoordinator.h"
-#include "Turn/TurnEventDispatcher.h"
 #include "Net/UnrealNetwork.h"
 #include "AbilitySystemGlobals.h"
 #include "AbilitySystemComponent.h"
@@ -108,27 +107,6 @@ void UPlayerInputProcessor::ProcessPlayerCommand(const FPlayerCommand& Command)
 
 	UE_LOG(LogTemp, Log,
 		TEXT("[PlayerInputProcessor] Command cached (window still open for retry)"));
-}
-
-void UPlayerInputProcessor::NotifyPlayerInputReceived()
-{
-	UE_LOG(LogTemp, Log, TEXT("[PlayerInputProcessor] PlayerInputReceived notification"));
-
-	// デリゲート通知（TurnEventDispatcher経由）
-	UWorld* World = GetWorld();
-	if (World)
-	{
-		if (UTurnEventDispatcher* EventDispatcher = World->GetSubsystem<UTurnEventDispatcher>())
-		{
-			EventDispatcher->BroadcastPlayerInputReceived();
-		}
-	}
-
-	// 二重進行防止：入力受付を閉じる
-	if (bWaitingForPlayerInput)
-	{
-		CloseInputWindow();
-	}
 }
 
 bool UPlayerInputProcessor::IsValidWindowId(int32 WindowId) const

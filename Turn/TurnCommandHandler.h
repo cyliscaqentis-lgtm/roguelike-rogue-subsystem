@@ -15,7 +15,7 @@ class APlayerControllerBase;
 
 /**
  * プレイヤーコマンド処理を担当するSubsystem
- * 責務: コマンド検証、受理、適用
+ * 責務: コマンド検証、受理マーク、入力ウィンドウ管理
  */
 UCLASS()
 class LYRAGAME_API UTurnCommandHandler : public UWorldSubsystem
@@ -46,13 +46,6 @@ public:
 	bool ValidateCommand(const FPlayerCommand& Command) const;
 
 	/**
-	 * コマンドを適用
-	 * @param Command 適用するコマンド
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Turn|Command")
-	void ApplyCommand(const FPlayerCommand& Command);
-
-	/**
 	 * ★★★ コマンドを"受理済み"としてマーク (2025-11-10) ★★★
 	 * MovePrecheck成功後にのみ呼ばれる。
 	 * これにより、拒否時の再入力がDuplicate扱いされなくなる。
@@ -67,33 +60,6 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Turn|Command")
 	void BeginInputWindow(int32 WindowId);
-
-	/**
-	 * 入力ウィンドウを終了
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Turn|Command")
-	void EndInputWindow();
-
-	/**
-	 * 最後に受理されたコマンドを取得
-	 * @param TurnId ターンID
-	 * @param OutCommand 出力先
-	 * @return コマンドが存在した場合true
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Turn|Command")
-	bool GetLastAcceptedCommand(int32 TurnId, FPlayerCommand& OutCommand) const;
-
-	/**
-	 * 現在の入力ウィンドウIDを取得
-	 */
-	UFUNCTION(BlueprintPure, Category = "Turn|Command")
-	int32 GetCurrentInputWindowId() const { return CurrentInputWindowId; }
-
-	/**
-	 * すべてのコマンド履歴をクリア
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Turn|Command")
-	void ClearCommandHistory();
 
 protected:
 	// ========== Internal State ==========

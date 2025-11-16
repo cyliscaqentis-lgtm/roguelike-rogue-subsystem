@@ -10,7 +10,6 @@
 #include "AI/Enemy/EnemyTurnDataSubsystem.h"
 #include "Turn/TurnSystemTypes.h"
 #include "Turn/TurnCommandHandler.h"
-#include "Turn/TurnEventDispatcher.h"
 #include "Turn/TurnDebugSubsystem.h"
 #include "Turn/TurnFlowCoordinator.h"
 #include "Turn/PlayerInputProcessor.h"
@@ -148,7 +147,6 @@ void AGameTurnManagerBase::InitializeTurnSystem()
     if (World)
     {
         CommandHandler = World->GetSubsystem<UTurnCommandHandler>();
-        EventDispatcher = World->GetSubsystem<UTurnEventDispatcher>();
         DebugSubsystem = World->GetSubsystem<UTurnDebugSubsystem>();
         TurnFlowCoordinator = World->GetSubsystem<UTurnFlowCoordinator>();
         PlayerInputProcessor = World->GetSubsystem<UPlayerInputProcessor>();
@@ -156,10 +154,6 @@ void AGameTurnManagerBase::InitializeTurnSystem()
         if (!CommandHandler)
         {
             UE_LOG(LogTurnManager, Error, TEXT("Failed to get UTurnCommandHandler subsystem"));
-        }
-        if (!EventDispatcher)
-        {
-            UE_LOG(LogTurnManager, Error, TEXT("Failed to get UTurnEventDispatcher subsystem"));
         }
         if (!DebugSubsystem)
         {
@@ -174,9 +168,8 @@ void AGameTurnManagerBase::InitializeTurnSystem()
             UE_LOG(LogTurnManager, Error, TEXT("Failed to get UPlayerInputProcessor subsystem"));
         }
 
-        UE_LOG(LogTurnManager, Log, TEXT("Subsystems initialized: CommandHandler=%s, EventDispatcher=%s, DebugSubsystem=%s, TurnFlowCoordinator=%s, PlayerInputProcessor=%s"),
+        UE_LOG(LogTurnManager, Log, TEXT("Subsystems initialized: CommandHandler=%s, DebugSubsystem=%s, TurnFlowCoordinator=%s, PlayerInputProcessor=%s"),
             CommandHandler ? TEXT("OK") : TEXT("FAIL"),
-            EventDispatcher ? TEXT("OK") : TEXT("FAIL"),
             DebugSubsystem ? TEXT("OK") : TEXT("FAIL"),
             TurnFlowCoordinator ? TEXT("OK") : TEXT("FAIL"),
             PlayerInputProcessor ? TEXT("OK") : TEXT("FAIL"));
@@ -319,10 +312,22 @@ EnemyAISubsystem = GetWorld()->GetSubsystem<UEnemyAISubsystem>();
     {
         if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
         {
-            
-            Barrier->OnAllMovesFinished.RemoveDynamic(this, &ThisClass::OnAllMovesFinished);
-            Barrier->OnAllMovesFinished.AddDynamic(this, &ThisClass::OnAllMovesFinished);
-            UE_LOG(LogTurnManager, Log, TEXT("InitializeTurnSystem: Barrier delegate bound"));
+            // CodeRevision: INC-2025-00030-R5 (Split attack/move phase completion handlers) (2025-11-17 02:00)
+            Barrier->OnAllMovesFinished.RemoveDynamic(this, &ThisClass::HandleMovePhaseCompleted);
+            Barrier->OnAllMovesFinished.AddDynamic(this, &ThisClass::HandleMovePhaseCompleted);
+            UE_LOG(LogTurnManager, Log, TEXT("InitializeTurnSystem: Barrier delegate bound to HandleMovePhaseCompleted"));
+
+            if (UAttackPhaseExecutorSubsystem* ExecutorSubsystem = World->GetSubsystem<UAttackPhaseExecutorSubsystem>())
+            {
+                AttackExecutor = ExecutorSubsystem;
+                AttackExecutor->OnFinished.RemoveDynamic(this, &ThisClass::HandleAttackPhaseCompleted);
+                AttackExecutor->OnFinished.AddDynamic(this, &ThisClass::HandleAttackPhaseCompleted);
+                UE_LOG(LogTurnManager, Log, TEXT("InitializeTurnSystem: AttackExecutor delegate bound"));
+            }
+            else
+            {
+                UE_LOG(LogTurnManager, Warning, TEXT("InitializeTurnSystem: AttackPhaseExecutorSubsystem not found"));
+            }
         }
         else
         {
@@ -633,38 +638,6 @@ UGridPathfindingSubsystem* AGameTurnManagerBase::GetGridPathfindingSubsystem() c
 // CodeRevision: INC-2025-00017-R1 (Remove unused wrapper functions - Phase 1) (2025-11-16 15:00)
 // Removed: BuildAllObservations() - unused wrapper function
 
-// CodeRevision: INC-2025-00028-R1 (Replace CurrentTurnIndex with CurrentTurnId - Phase 3.1) (2025-11-16 00:00)
-void AGameTurnManagerBase::NotifyPlayerInputReceived()
-{
-    UE_LOG(LogTurnManager, Log, TEXT("[Turn%d]NotifyPlayerInputReceived"), CurrentTurnId);
-
-if (PlayerInputProcessor)
-    {
-        PlayerInputProcessor->NotifyPlayerInputReceived();
-    }
-
-    if (EventDispatcher)
-    {
-        EventDispatcher->BroadcastPlayerInputReceived();
-    }
-    else
-    {
-        UE_LOG(LogTurnManager, Warning, TEXT("UTurnEventDispatcher not available"));
-    }
-
-if (WaitingForPlayerInput)
-    {
-        WaitingForPlayerInput = false;
-        ApplyWaitInputGate(false);
-
-if (CommandHandler)
-        {
-            CommandHandler->EndInputWindow();
-        }
-    }
-    ContinueTurnAfterInput();
-}
-
 // CodeRevision: INC-2025-00017-R1 (Remove unused wrapper functions - Phase 1 & 3) (2025-11-16 15:00)
 // Removed: SendGameplayEventWithResult() - unused wrapper function
 // Removed: GetPlayerController_TBS() - unused wrapper function
@@ -692,11 +665,6 @@ void AGameTurnManagerBase::BeginPhase(FGameplayTag PhaseTag)
     FGameplayTag OldPhase = CurrentPhase;
     CurrentPhase = PhaseTag;
     PhaseStartTime = FPlatformTime::Seconds();
-
-if (EventDispatcher)
-    {
-        EventDispatcher->BroadcastPhaseChanged(OldPhase, PhaseTag);
-    }
 
 if (DebugSubsystem)
     {
@@ -930,11 +898,6 @@ if (TurnFlowCoordinator)
         // CodeRevision: INC-2025-00030-R1 (Removed CurrentTurnIndex synchronization - use TurnFlowCoordinator directly) (2025-11-16 00:00)
     }
 
-if (EventDispatcher)
-    {
-        EventDispatcher->BroadcastTurnEnded(PreviousTurnId);
-    }
-
 bEndTurnPosted = false;
 
     UE_LOG(LogTurnManager, Log,
@@ -975,15 +938,6 @@ int32 SavedCount = 0;
 bTurnContinuing = false;
 
 // CodeRevision: INC-2025-00028-R1 (Replace CurrentTurnIndex with CurrentTurnId - Phase 3.1) (2025-11-16 00:00)
-if (EventDispatcher)
-    {
-        EventDispatcher->BroadcastTurnStarted(CurrentTurnId);
-    }
-    else
-    {
-        UE_LOG(LogTurnManager, Warning, TEXT("UTurnEventDispatcher not available"));
-    }
-
     UE_LOG(LogTurnManager, Log,
         TEXT("[AdvanceTurnAndRestart] OnTurnStarted broadcasted for turn %d"),
         CurrentTurnId);
@@ -998,15 +952,6 @@ void AGameTurnManagerBase::StartFirstTurn()
     bTurnStarted = true;
 
 // CodeRevision: INC-2025-00028-R1 (Replace CurrentTurnIndex with CurrentTurnId - Phase 3.1) (2025-11-16 00:00)
-if (EventDispatcher)
-    {
-        EventDispatcher->BroadcastTurnStarted(CurrentTurnId);
-    }
-    else
-    {
-        UE_LOG(LogTurnManager, Warning, TEXT("UTurnEventDispatcher not available"));
-    }
-
     UE_LOG(LogTurnManager, Log, TEXT("StartFirstTurn: OnTurnStarted broadcasted for turn %d"), CurrentTurnId);
 
 OnTurnStartedHandler(CurrentTurnId);
@@ -2213,10 +2158,9 @@ void AGameTurnManagerBase::ExecuteAttacks()
                 TEXT("[Turn %d] ExecuteAttacks: %d attack actions resolved"),
                 CurrentTurnId, AttackActions.Num());
 
-            if (UAttackPhaseExecutorSubsystem* AttackExecutor = World->GetSubsystem<UAttackPhaseExecutorSubsystem>())
+            if (UAttackPhaseExecutorSubsystem* AttackExecutorSubsystem = World->GetSubsystem<UAttackPhaseExecutorSubsystem>())
             {
-
-AttackExecutor->BeginSequentialAttacks(AttackActions, CurrentTurnId);
+                AttackExecutorSubsystem->BeginSequentialAttacks(AttackActions, CurrentTurnId);
             }
         }
     }
@@ -2568,48 +2512,31 @@ const int32 DirX = FMath::RoundToInt(CachedPlayerCommand.Direction.X);
     }
 }
 
-void AGameTurnManagerBase::OnAllMovesFinished(int32 FinishedTurnId)
+// CodeRevision: INC-2025-00030-R5 (Split attack/move phase completion handlers) (2025-11-17 02:00)
+void AGameTurnManagerBase::HandleMovePhaseCompleted(int32 FinishedTurnId)
 {
     if (!HasAuthority())
     {
-        UE_LOG(LogTurnManager, Warning, TEXT("GameTurnManager::OnAllMovesFinished: Not authority"));
+        UE_LOG(LogTurnManager, Warning, TEXT("GameTurnManager::HandleMovePhaseCompleted: Not authority"));
         return;
     }
 
-if (FinishedTurnId != CurrentTurnId)
+    if (FinishedTurnId != CurrentTurnId)
     {
-        UE_LOG(LogTurnManager, Warning, TEXT("GameTurnManager::OnAllMovesFinished: Stale TurnId (%d != %d)"),
+        UE_LOG(LogTurnManager, Warning, TEXT("GameTurnManager::HandleMovePhaseCompleted: Stale TurnId (%d != %d)"),
             FinishedTurnId, CurrentTurnId);
         return;
     }
 
-    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Barrier complete - all moves finished"), FinishedTurnId);
+    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Barrier complete - all move actions finished"), FinishedTurnId);
 
-bPlayerMoveInProgress = false;
-
-ApplyWaitInputGate(false);
+    bPlayerMoveInProgress = false;
+    ApplyWaitInputGate(false);
 
     UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] All flags/gates cleared, advancing turn"), FinishedTurnId);
 
-    if (bSequentialModeActive)
+    if (bSequentialModeActive && bIsInMoveOnlyPhase)
     {
-        if (!bIsInMoveOnlyPhase)
-        {
-            UE_LOG(LogTurnManager, Warning,
-                TEXT("[Turn %d] Sequential attack phase complete, dispatching move-only phase"), FinishedTurnId);
-            if (UWorld* World = GetWorld())
-            {
-                if (UEnemyTurnDataSubsystem* EnemyTurnDataSys = World->GetSubsystem<UEnemyTurnDataSubsystem>())
-                {
-                    EnemyTurnDataSys->ConvertAttacksToWait();
-                }
-            }
-            bSequentialMovePhaseStarted = true;
-            bIsInMoveOnlyPhase = true;
-            ExecuteMovePhase(true);
-            return;
-        }
-
         bSequentialModeActive = false;
         bSequentialMovePhaseStarted = false;
         bIsInMoveOnlyPhase = false;
@@ -2617,7 +2544,70 @@ ApplyWaitInputGate(false);
             TEXT("[Turn %d] Sequential move phase complete, ending enemy turn"), FinishedTurnId);
     }
 
-    EndEnemyTurn();
+    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Move phase complete, scheduling EndEnemyTurn to avoid race condition"), FinishedTurnId);
+    // CodeRevision: INC-2025-00030-R6 (Delay EndEnemyTurn to avoid GA_MoveBase race) (2025-11-17 02:55)
+    UWorld* World = GetWorld();
+    if (World)
+    {
+        const float DelaySeconds = 0.1f;
+        World->GetTimerManager().SetTimer(
+            EndEnemyTurnDelayHandle,
+            this,
+            &AGameTurnManagerBase::EndEnemyTurn,
+            DelaySeconds,
+            false);
+        UE_LOG(LogTurnManager, Log,
+            TEXT("[Turn %d] EndEnemyTurn scheduled in %.2f seconds to avoid race with GA_MoveBase"), FinishedTurnId, DelaySeconds);
+    }
+    else
+    {
+        EndEnemyTurn();
+    }
+}
+
+// CodeRevision: INC-2025-00030-R5 (Split attack/move phase completion handlers) (2025-11-17 02:00)
+void AGameTurnManagerBase::HandleAttackPhaseCompleted(int32 FinishedTurnId)
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    if (FinishedTurnId != CurrentTurnId)
+    {
+        UE_LOG(LogTurnManager, Warning, TEXT("GameTurnManager::HandleAttackPhaseCompleted: Stale TurnId (%d != %d)"),
+            FinishedTurnId, CurrentTurnId);
+        return;
+    }
+
+    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] AttackExecutor complete - attack phase finished"), FinishedTurnId);
+
+    if (bSequentialModeActive)
+    {
+        if (!bIsInMoveOnlyPhase)
+        {
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[Turn %d] Sequential attack phase complete, dispatching move-only phase"), FinishedTurnId);
+
+            if (UWorld* World = GetWorld())
+            {
+                if (UEnemyTurnDataSubsystem* EnemyTurnDataSys = World->GetSubsystem<UEnemyTurnDataSubsystem>())
+                {
+                    EnemyTurnDataSys->ConvertAttacksToWait();
+                }
+            }
+
+            bSequentialMovePhaseStarted = true;
+            bIsInMoveOnlyPhase = true;
+            ExecuteMovePhase(true);
+            return;
+        }
+        else
+        {
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[Turn %d] HandleAttackPhaseCompleted: Move-only phase already active"), FinishedTurnId);
+        }
+    }
 }
 
 void AGameTurnManagerBase::EndEnemyTurn()
@@ -3336,6 +3326,8 @@ bool AGameTurnManagerBase::DispatchResolvedMove(const FResolvedAction& Action)
         return false;
     }
 
+    // CodeRevision: INC-2025-00030-R4 (Fix Barrier desync for Wait actions) (2025-11-17 01:00)
+    // P1: Register wait actions with the barrier and complete them immediately.
     if (Action.NextCell == FIntPoint(-1, -1) || Action.NextCell == Action.CurrentCell)
     {
         ReleaseMoveReservation(Unit);
@@ -3447,16 +3439,6 @@ TWeakObjectPtr<AActor> ActorKey(Unit);
         }
     }
 
-if (EventDispatcher)
-    {
-        const FGameplayTag MoveActionTag = FGameplayTag::RequestGameplayTag(FName("GameplayEvent.Intent.Move"));
-        const int32 UnitID = Unit->GetUniqueID();
-        UE_LOG(LogTurnManager, Verbose,
-            TEXT("[DispatchResolvedMove] Broadcasting move start notification for Unit %d at (%d,%d)->(%d,%d)"),
-            UnitID, Action.CurrentCell.X, Action.CurrentCell.Y, Action.NextCell.X, Action.NextCell.Y);
-        EventDispatcher->BroadcastActionExecuted(UnitID, MoveActionTag, true);
-    }
-
     return true;
 }
 
@@ -3561,15 +3543,6 @@ const TArray<FGameplayAbilitySpec>& Specs = ASC->GetActivatableAbilities();
         UE_LOG(LogTurnManager, Log,
             TEXT("[TriggerPlayerMove] Player move ability triggered toward (%d,%d)"),
             Action.NextCell.X, Action.NextCell.Y);
-
-if (EventDispatcher)
-        {
-            const int32 UnitID = Unit->GetUniqueID();
-            UE_LOG(LogTurnManager, Verbose,
-                TEXT("[TriggerPlayerMove] Broadcasting move start notification for Unit %d at (%d,%d)->(%d,%d)"),
-                UnitID, Action.CurrentCell.X, Action.CurrentCell.Y, Action.NextCell.X, Action.NextCell.Y);
-            EventDispatcher->BroadcastActionExecuted(UnitID, EventData.EventTag, true);
-        }
 
         return true;
     }

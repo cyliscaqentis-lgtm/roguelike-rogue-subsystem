@@ -18,6 +18,7 @@
 
 class UEnemyTurnDataSubsystem;
 class UEnemyAISubsystem;
+class UAttackPhaseExecutorSubsystem;
 class UTurnActionBarrierSubsystem;
 class UAbilitySystemComponent;
 // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
@@ -28,7 +29,6 @@ class URogueDungeonSubsystem;
 class UDebugObserverCSV;
 class UTurnCorePhaseManager;
 class UTurnCommandHandler;
-class UTurnEventDispatcher;
 class UTurnDebugSubsystem;
 class UTurnFlowCoordinator;
 class UPlayerInputProcessor;
@@ -140,8 +140,12 @@ public:
     // Barrier Related
     //==========================================================================
 
+    // CodeRevision: INC-2025-00030-R5 (Split attack/move phase completion handlers) (2025-11-17 02:00)
     UFUNCTION()
-    void OnAllMovesFinished(int32 FinishedTurnId);
+    void HandleMovePhaseCompleted(int32 FinishedTurnId);
+
+    UFUNCTION()
+    void HandleAttackPhaseCompleted(int32 FinishedTurnId);
 
     //==========================================================================
     // Turn System Initialization
@@ -156,9 +160,6 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Turn|Flow")
     void ContinueTurnAfterInput();
-
-    UFUNCTION(BlueprintCallable, Category = "Turn|Player")
-    void NotifyPlayerInputReceived();
 
     UFUNCTION(BlueprintCallable, Category = "Turn|Flow")
     void AdvanceTurnAndRestart();
@@ -598,6 +599,10 @@ protected:
     UPROPERTY()
     TObjectPtr<UEnemyAISubsystem> EnemyAISubsystem = nullptr;
 
+    // CodeRevision: INC-2025-00030-R5 (Split attack/move phase completion handlers) (2025-11-17 02:00)
+    UPROPERTY(Transient)
+    TObjectPtr<UAttackPhaseExecutorSubsystem> AttackExecutor = nullptr;
+
     // NOTE: ActionExecutorSubsystem and TurnPhaseManagerComponent are commented out
     // If these classes do not exist, please comment out or modify the corresponding code in the .cpp file.
     // UPROPERTY(Transient)
@@ -627,6 +632,7 @@ protected:
     
     FTimerHandle SubsystemRetryHandle;
     int32 SubsystemRetryCount = 0;
+    FTimerHandle EndEnemyTurnDelayHandle;
 
 private:
     //==========================================================================
@@ -636,10 +642,6 @@ private:
     /** Command processing subsystem */
     UPROPERTY(Transient)
     TObjectPtr<UTurnCommandHandler> CommandHandler = nullptr;
-
-    /** Event dispatching subsystem */
-    UPROPERTY(Transient)
-    TObjectPtr<UTurnEventDispatcher> EventDispatcher = nullptr;
 
     /** Debug subsystem */
     UPROPERTY(Transient)

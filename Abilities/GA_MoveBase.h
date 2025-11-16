@@ -245,6 +245,12 @@ private:
 
     bool bMoveFinishedDelegateBound = false;
 
+    // CodeRevision: INC-2025-00030-R3 (Add Barrier sync to GA_MoveBase) (2025-11-17 01:00)
+    // P1: Fix turn hang by synchronizing player move with TurnActionBarrierSubsystem
+    FGuid MoveActionId;
+    int32 MoveTurnId = -1;
+    bool bBarrierRegistered = false;
+
     //--------------------------------------------------------------------------
     // 移動状態キャッシュ・GridOccupancy連携
     //--------------------------------------------------------------------------
