@@ -20,7 +20,7 @@ class UEnemyTurnDataSubsystem;
 class UEnemyAISubsystem;
 class UTurnActionBarrierSubsystem;
 class UAbilitySystemComponent;
-class AGridPathfindingLibrary;
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 class UGridPathfindingSubsystem;
 class AUnitBase;
 class AUnitManager;
@@ -104,6 +104,12 @@ public:
     UFUNCTION(BlueprintPure, Category = "Turn")
     int32 GetCurrentTurnId() const { return CurrentTurnId; }
 
+    UFUNCTION(BlueprintPure, Category = "Turn")
+    int32 GetCurrentTurnIndex() const;
+
+    UFUNCTION(BlueprintPure, Category = "Turn")
+    int32 GetCurrentInputWindowId() const;
+
     // CodeRevision: INC-2025-00030-R1 (Remove legacy accessors - use TurnFlowCoordinator instead) (2025-11-16 00:00)
     // Removed: GetCurrentInputWindowId() - use TurnFlowCoordinator->GetCurrentInputWindowId() instead
     // Removed: GetCurrentTurnIndex() - use TurnFlowCoordinator->GetCurrentTurnIndex() instead
@@ -112,8 +118,9 @@ public:
     // PathFinder Accessor
     //==========================================================================
 
+    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
     UFUNCTION(BlueprintPure, Category = "Turn|Services")
-    AGridPathfindingLibrary* GetCachedPathFinder() const;
+    UGridPathfindingSubsystem* GetCachedPathFinder() const;
 
     /** Get GridPathfindingSubsystem (new subsystem-based access) */
     UFUNCTION(BlueprintPure, Category = "Turn|Services")
@@ -417,15 +424,16 @@ public:
     bool bPlayerPossessed = false;
 
 
+    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
     UPROPERTY(Transient)
-    TWeakObjectPtr<AGridPathfindingLibrary> CachedPathFinder;
+    TWeakObjectPtr<UGridPathfindingSubsystem> CachedPathFinder;
 
 
     UFUNCTION()
     void HandleDungeonReady(URogueDungeonSubsystem* InDungeonSys); // Calls InitializeTurnSystem()
 
     UPROPERTY()
-    TObjectPtr<AGridPathfindingLibrary> PathFinder = nullptr;
+    TObjectPtr<UGridPathfindingSubsystem> PathFinder = nullptr;
 
     UPROPERTY()
     TObjectPtr<AUnitManager> UnitMgr = nullptr;
@@ -527,7 +535,8 @@ protected:
     // Helper Functions
     //==========================================================================
 
-    AGridPathfindingLibrary* FindPathFinder(UWorld* World) const;
+    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+    UGridPathfindingSubsystem* FindPathFinder(UWorld* World) const;
     UAbilitySystemComponent* GetPlayerASC() const;
 
     /** Try to start the first turn after ASC is ready */
@@ -544,6 +553,7 @@ protected:
     void ExecuteSequentialPhase();
     void ExecuteSimultaneousPhase();
     void ExecuteMovePhase(bool bSkipAttackCheck = false);
+    UFUNCTION()
     void HandleManualMoveFinished(AUnitBase* Unit);
     void RegisterManualMoveDelegate(AUnitBase* Unit, bool bIsPlayerFallback);
     void FinalizePlayerMove(AActor* CompletedActor);
@@ -670,6 +680,8 @@ private:
     // CodeRevision: INC-2025-00023-R1 (Handle sequential attack -> move transitions) (2025-11-17 19:15)
     bool bSequentialModeActive = false;
     bool bSequentialMovePhaseStarted = false;
+    UPROPERTY()
+    bool bIsInMoveOnlyPhase = false;
 
     /** Pending barrier registrations for manual enemy moves */
     UPROPERTY()

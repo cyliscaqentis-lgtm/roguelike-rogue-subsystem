@@ -1,12 +1,12 @@
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 // EnemyThinkerBase.cpp
 #include "EnemyThinkerBase.h"
 #include "AbilitySystemComponent.h"
 #include "AI/Enemy/EnemyThinkerBase.h"
 #include "Turn/DistanceFieldSubsystem.h"
-#include "Grid/GridPathfindingLibrary.h"
+#include "Grid/GridPathfindingSubsystem.h"
 #include "Utility/GridUtils.h"  // CodeRevision: INC-2025-00016-R1 (2025-11-16 14:00)
 #include "Kismet/GameplayStatics.h"
-#include "../../Grid/GridPathfindingLibrary.h"
 #include "../../Turn/GameTurnManagerBase.h"
 #include "EngineUtils.h"
 
@@ -17,16 +17,16 @@ UEnemyThinkerBase::UEnemyThinkerBase()
 
 void UEnemyThinkerBase::BeginPlay()
 {
+    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
     Super::BeginPlay();
-    
+
     UWorld* World = GetWorld();
     if (World)
     {
-        for (TActorIterator<AGridPathfindingLibrary> It(World); It; ++It)
+        CachedPathFinder = World->GetSubsystem<UGridPathfindingSubsystem>();
+        if (CachedPathFinder.IsValid())
         {
-            CachedPathFinder = *It;
-            UE_LOG(LogTemp, Log, TEXT("[EnemyThinker] PathFinder cached: %s"), *CachedPathFinder->GetName());
-            break;
+            UE_LOG(LogTemp, Log, TEXT("[EnemyThinker] UGridPathfindingSubsystem cached"));
         }
     }
 }
@@ -55,8 +55,9 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
     UE_LOG(LogTemp, Warning, TEXT("[GetNextStep] ENTRY: EnemyCell=(%d,%d)"),
         Intent.CurrentCell.X, Intent.CurrentCell.Y);
 
-    const AGridPathfindingLibrary* GridPathfinding = CachedPathFinder.Get();
-    
+    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+    const UGridPathfindingSubsystem* GridPathfinding = CachedPathFinder.Get();
+
     if (GridPathfinding)
     {
         bool bCurrentWalkable = GridPathfinding->IsCellWalkableIgnoringActor(Intent.CurrentCell, Intent.Actor.Get());
@@ -143,7 +144,8 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
         UE_LOG(LogTemp, Verbose,
             TEXT("[Thinker] %s FindPath CALL Start=(%d,%d) End=(%d,%d)"),
             *GetNameSafe(GetOwner()), Intent.CurrentCell.X, Intent.CurrentCell.Y, Intent.NextCell.X, Intent.NextCell.Y);
-        bPathFound = GridPathfinding->FindPathIgnoreEndpoints(StartWorld, EndWorld, DebugPath, true, EGridHeuristic::MaxDXDY, 200000, true);
+        // CodeRevision: INC-2025-00030-R2 (Fix MaxDXDY -> Chebyshev heuristic) (2025-11-17 00:40)
+        bPathFound = GridPathfinding->FindPathIgnoreEndpoints(StartWorld, EndWorld, DebugPath, true, EGridHeuristic::Chebyshev, 200000, true);
         PathLen = DebugPath.Num();
         UE_LOG(LogTemp, Verbose,
             TEXT("[Thinker] %s FindPath RESULT Success=%d PathLen=%d"),
@@ -295,15 +297,11 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
         }
 
         // ★★★ CodeRevision: INC-2025-00016-R1 (Add IsMoveValid validation) (2025-11-16 14:00) ★★★
+        // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
         // Validate move using unified API before committing to intent
         if (Intent.NextCell != Intent.CurrentCell)
         {
-            AGridPathfindingLibrary* PathFinder = nullptr;
-            for (TActorIterator<AGridPathfindingLibrary> It(World); It; ++It)
-            {
-                PathFinder = *It;
-                break;
-            }
+            UGridPathfindingSubsystem* PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>();
 
             if (PathFinder)
             {
@@ -382,14 +380,11 @@ FIntPoint UEnemyThinkerBase::GetCurrentGridPosition() const
             return FIntPoint(0, 0);
         }
 
-        for (TActorIterator<AGridPathfindingLibrary> It(World); It; ++It)
+        // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+        if (UGridPathfindingSubsystem* GridLib = World->GetSubsystem<UGridPathfindingSubsystem>())
         {
-            AGridPathfindingLibrary* GridLib = *It;
-            if (GridLib)
-            {
-                FVector WorldLocation = Owner->GetActorLocation();
-                return GridLib->WorldToGrid(WorldLocation);
-            }
+            FVector WorldLocation = Owner->GetActorLocation();
+            return GridLib->WorldToGrid(WorldLocation);
         }
 
         FVector WorldLocation = Owner->GetActorLocation();

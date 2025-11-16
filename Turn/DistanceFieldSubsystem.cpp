@@ -1,8 +1,9 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 #include "DistanceFieldSubsystem.h"
 #include "../Grid/GridOccupancySubsystem.h"
-#include "../Grid/GridPathfindingLibrary.h"
+#include "../Grid/GridPathfindingSubsystem.h"
 #include "../ProjectDiagnostics.h"  // ☁E E☁EDIAG_LOG用 ☁E E☁E
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
@@ -28,13 +29,12 @@ void UDistanceFieldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
     
-    // ☁E E☁EPathFinderをキャチE  ュ E  E期化時に存在しなぁE  合 E遁E  取得！E☁E E☁E
-    TArray<AActor*> FoundActors;
-    UGameplayStatics::GetAllActorsOfClass(GetWorld(), AGridPathfindingLibrary::StaticClass(), FoundActors);
-    if (FoundActors.Num() > 0)
+    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+    // Cache UGridPathfindingSubsystem
+    CachedPathFinder = GetWorld()->GetSubsystem<UGridPathfindingSubsystem>();
+    if (CachedPathFinder.IsValid())
     {
-        CachedPathFinder = Cast<AGridPathfindingLibrary>(FoundActors[0]);
-        UE_LOG(LogTemp, Log, TEXT("[DistanceField] PathFinder cached: %s"), *CachedPathFinder->GetName());
+        UE_LOG(LogTemp, Log, TEXT("[DistanceField] UGridPathfindingSubsystem cached"));
     }
     // ☁E E☁E警告削除 E  E期化頁E  によりPathFinderがまだ存在しなぁE  合があるが、GetPathFinder()で遁E  取得される ☁E E☁E
     
@@ -120,8 +120,9 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(const FIntPoint& Playe
     const int32 MaxCells = GTS_DF_MaxCells;
     const bool bDiagonal = !!GTS_DF_AllowDiag;
 
-    // ☁E E☁EキャチE  ュからPathFinderを取征E☁E E☁E
-    const AGridPathfindingLibrary* GridPathfinding = GetPathFinder();
+    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+    // Get PathFinder from cache
+    const UGridPathfindingSubsystem* GridPathfinding = GetPathFinder();
     if (!GridPathfinding)
     {
         UE_LOG(LogTemp, Error, TEXT("[DistanceField] GridPathfindingLibrary not found"));
@@ -363,8 +364,9 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(const FIntPoint& Fro
 
 bool UDistanceFieldSubsystem::IsWalkable(const FIntPoint& Cell, AActor* IgnoreActor) const
 {
-    // ☁E E☁EキャチE  ュからPathFinderを取征E☁E E☁E
-    const AGridPathfindingLibrary* GridPathfinding = GetPathFinder();
+    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+    // Get PathFinder from cache
+    const UGridPathfindingSubsystem* GridPathfinding = GetPathFinder();
     if (!GridPathfinding)
     {
         UE_LOG(LogTemp, Error, TEXT("[IsWalkable] GridPathfindingLibrary not found, returning false"));
@@ -422,17 +424,13 @@ bool UDistanceFieldSubsystem::EnsureCoverage(const FIntPoint& Abs)
 // PathFinder取得 Eルパ E
 //------------------------------------------------------------------------------
 
-AGridPathfindingLibrary* UDistanceFieldSubsystem::GetPathFinder() const
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+UGridPathfindingSubsystem* UDistanceFieldSubsystem::GetPathFinder() const
 {
     if (!CachedPathFinder.IsValid())
     {
-        // ☁E E☁EキャチE  ュが無効な場合 E再取得を試みめE☁E E☁E
-        TArray<AActor*> FoundActors;
-        UGameplayStatics::GetAllActorsOfClass(GetWorld(), AGridPathfindingLibrary::StaticClass(), FoundActors);
-        if (FoundActors.Num() > 0)
-        {
-            const_cast<UDistanceFieldSubsystem*>(this)->CachedPathFinder = Cast<AGridPathfindingLibrary>(FoundActors[0]);
-        }
+        // If cache is invalid, try to retrieve subsystem
+        const_cast<UDistanceFieldSubsystem*>(this)->CachedPathFinder = GetWorld()->GetSubsystem<UGridPathfindingSubsystem>();
     }
     return CachedPathFinder.Get();
 }

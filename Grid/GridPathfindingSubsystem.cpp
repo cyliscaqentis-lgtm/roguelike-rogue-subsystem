@@ -254,13 +254,14 @@ int32 UGridPathfindingSubsystem::CalculateHeuristic(int32 x0, int32 y0, int32 x1
     const int32 dx = FMath::Abs(x0 - x1);
     const int32 dy = FMath::Abs(y0 - y1);
 
+    // CodeRevision: INC-2025-00030-R2 (Fix MaxDXDY -> Chebyshev) (2025-11-17 00:40)
     switch (Mode)
     {
     case EGridHeuristic::Euclidean:
         return FMath::RoundToInt(10.f * FMath::Sqrt(float(dx * dx + dy * dy)));
-    case EGridHeuristic::MaxDXDY:
+    case EGridHeuristic::Chebyshev:  // Max distance (previously MaxDXDY)
         return 10 * FMath::Max(dx, dy);
-    default:
+    default:  // Manhattan
         return 10 * (dx + dy);
     }
 }

@@ -17,10 +17,11 @@
 #include "Character/LyraPawnExtensionComponent.h"
 #include "Character/LyraHealthComponent.h"
 #include "Character/LyraPawnData.h"
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 #include "Character/UnitMovementComponent.h"
 #include "Character/UnitUIComponent.h"
 #include "Grid/GridOccupancySubsystem.h"
-#include "Grid/GridPathfindingLibrary.h"
+#include "Grid/GridPathfindingSubsystem.h"
 #include "TimerManager.h"
 
 // Log category

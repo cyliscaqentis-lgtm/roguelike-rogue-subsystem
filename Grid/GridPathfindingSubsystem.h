@@ -8,9 +8,76 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
-#include "GridPathfindingLibrary.h" // Use types from the original library
 #include "../ProjectDiagnostics.h"
 #include "GridPathfindingSubsystem.generated.h"
+
+// CodeRevision: INC-2025-00030-R2 (Add missing type definitions) (2025-11-17 00:40)
+// Type definitions moved from GridPathfindingLibrary.h (which no longer exists)
+
+UENUM(BlueprintType)
+enum class EGridHeuristic : uint8
+{
+	Manhattan UMETA(DisplayName = "Manhattan"),
+	Euclidean UMETA(DisplayName = "Euclidean"),
+	Chebyshev UMETA(DisplayName = "Chebyshev")
+};
+
+USTRUCT(BlueprintType)
+struct FGridInitParams
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	TArray<int32> GridCostArray;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	FVector MapSize = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	int32 TileSizeCM = 100;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	FVector Origin = FVector::ZeroVector;
+};
+
+USTRUCT(BlueprintType)
+struct FGridVisionResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadWrite)
+	TArray<TObjectPtr<AActor>> DetectedActors;
+
+	UPROPERTY(BlueprintReadWrite)
+	TArray<TObjectPtr<AActor>> VisibleActors;
+
+	UPROPERTY(BlueprintReadWrite)
+	TArray<FIntPoint> VisibleCells;
+
+	UPROPERTY(BlueprintReadWrite)
+	TArray<FIntPoint> VisibleTiles;
+
+	UPROPERTY(BlueprintReadWrite)
+	int32 TotalTilesScanned = 0;
+};
+
+USTRUCT(BlueprintType)
+struct FGridSurroundResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadWrite)
+	TArray<TObjectPtr<AActor>> AdjacentActors;
+
+	UPROPERTY(BlueprintReadWrite)
+	TArray<FIntPoint> AdjacentCells;
+
+	UPROPERTY(BlueprintReadWrite)
+	TArray<FIntPoint> BlockedTiles;
+
+	UPROPERTY(BlueprintReadWrite)
+	TArray<FIntPoint> EmptyTiles;
+};
 
 // Forward declarations
 class AActor;

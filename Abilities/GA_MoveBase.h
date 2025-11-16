@@ -7,8 +7,9 @@
 #include "GameplayTagContainer.h"
 #include "GA_MoveBase.generated.h"
 
-// 前方宣言
-class AGridPathfindingLibrary;
+// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
+// Forward declarations
+class UGridPathfindingSubsystem;
 class AUnitBase;
 class UGridOccupancySubsystem;
 class AGameTurnManagerBase;
@@ -194,7 +195,8 @@ protected:
 
     FVector SnapToCellCenter(const FVector& WorldPos) const;
     FVector SnapToCellCenterFixedZ(const FVector& WorldPos, float FixedZ) const;
-    float ComputeFixedZ(const AUnitBase* Unit, const AGridPathfindingLibrary* PathFinder) const;
+    // CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
+    float ComputeFixedZ(const AUnitBase* Unit, const UGridPathfindingSubsystem* Pathfinding) const;
     FVector AlignZToGround(const FVector& WorldPos, float TraceUp = 200.0f, float TraceDown = 2000.0f) const;
     void DebugDumpAround(const FIntPoint& Center);
 
@@ -223,18 +225,18 @@ private:
     FGameplayTag TagStateMoving;
 
     //--------------------------------------------------------------------------
-    // PathFinderキャッシュ
+    // CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
+    // Removed CachedPathFinder - now using subsystem-based access
     //--------------------------------------------------------------------------
 
-    UPROPERTY()
-    mutable TWeakObjectPtr<class AGridPathfindingLibrary> CachedPathFinder;
     mutable TWeakObjectPtr<AGameTurnManagerBase> CachedTurnManager;
 
     /**
      * PathFinderへのアクセスを取得（キャッシュ付き）
+     * CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
      * @deprecated Use GetGridPathfindingSubsystem() instead
      */
-    const class AGridPathfindingLibrary* GetPathFinder() const;
+    const class UGridPathfindingSubsystem* GetPathFinder() const;
 
     /** Get GridPathfindingSubsystem (new subsystem-based access) */
     class UGridPathfindingSubsystem* GetGridPathfindingSubsystem() const;

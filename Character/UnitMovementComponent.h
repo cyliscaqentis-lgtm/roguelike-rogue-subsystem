@@ -11,7 +11,7 @@
 #include "UnitMovementComponent.generated.h"
 
 class AUnitBase;
-class AGridPathfindingLibrary;
+class UGridPathfindingSubsystem;
 struct FUnitStatBlock;
 
 /** 移動完了デリゲート */
@@ -48,12 +48,12 @@ public:
 	void MoveUnit(const TArray<FVector>& Path);
 
 	/**
-	 * グリッドパスで移動
-	 * @param GridPath グリッドパス
-	 * @param PathFinder PathFinder参照
+	 * Move unit along grid path
+	 * CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
+	 * @param GridPath Grid path to follow
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Unit|Movement")
-	void MoveUnitAlongGridPath(const TArray<FIntPoint>& GridPath, AGridPathfindingLibrary* PathFinder);
+	void MoveUnitAlongGridPath(const TArray<FIntPoint>& GridPath);
 
 	/**
 	 * 移動を中断

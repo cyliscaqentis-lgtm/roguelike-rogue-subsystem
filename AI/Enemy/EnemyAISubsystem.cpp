@@ -1,9 +1,10 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 // EnemyAISubsystem.cpp
 #include "AI/Enemy/EnemyAISubsystem.h"
 #include "AI/Enemy/EnemyThinkerBase.h"
-#include "Grid/GridPathfindingLibrary.h"
+#include "Grid/GridPathfindingSubsystem.h"
 #include "Grid/GridOccupancySubsystem.h"
 #include "Turn/TurnCorePhaseManager.h"
 #include "Utility/GridUtils.h"  // CodeRevision: INC-2025-00016-R1 (2025-11-16 14:00)
@@ -12,10 +13,11 @@
 #include "GenericTeamAgentInterface.h"
 #include "../../ProjectDiagnostics.h"
 
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 void UEnemyAISubsystem::BuildObservations(
     const TArray<AActor*>& Enemies,
     AActor* Player,
-    AGridPathfindingLibrary* PathFinder,
+    UGridPathfindingSubsystem* PathFinder,
     TArray<FEnemyObservation>& OutObs)
 {
     OutObs.Empty(Enemies.Num());

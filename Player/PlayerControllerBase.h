@@ -6,9 +6,10 @@
 #include "Turn/TurnSystemTypes.h"
 #include "PlayerControllerBase.generated.h"
 
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 // 前方宣言
 class AGameTurnManagerBase;
-class AGridPathfindingLibrary;
+class UGridPathfindingSubsystem;
 class UInputAction;
 class UInputMappingContext;
 
@@ -47,9 +48,10 @@ public:
     UFUNCTION(Exec)
     void GridSmokeTest();
 
+    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
     /** グリッドパスファインダーへの参照（UnitManagerからアクセス可能） */
     UPROPERTY(BlueprintReadWrite, Category = "TBS|Turn")
-    TObjectPtr<AGridPathfindingLibrary> PathFinder = nullptr;
+    TObjectPtr<UGridPathfindingSubsystem> PathFinder = nullptr;
 
     /**
      * ★★★ クライアント通知: 移動コマンドが拒否された (2025-11-09)

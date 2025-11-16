@@ -1,6 +1,6 @@
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 #include "Turn/GameTurnManagerBase.h"
-#include "TBSLyraGameMode.h"  
-#include "Grid/GridPathfindingLibrary.h"
+#include "TBSLyraGameMode.h"
 #include "Grid/GridPathfindingSubsystem.h"
 #include "Character/UnitManager.h"
 #include "Grid/URogueDungeonSubsystem.h"
@@ -27,10 +27,10 @@
 #include "AI/Ally/AllyTurnDataSubsystem.h"
 #include "Character/EnemyUnitBase.h"
 #include "Character/UnitBase.h"
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 #include "AI/Enemy/EnemyThinkerBase.h"
 #include "AI/Enemy/EnemyAISubsystem.h"
 #include "Debug/DebugObserverCSV.h"
-#include "Grid/GridPathfindingLibrary.h"
 #include "Player/PlayerControllerBase.h" 
 #include "Net/UnrealNetwork.h"           
 #include "Turn/TurnActionBarrierSubsystem.h"          
@@ -289,12 +289,12 @@ else
         }
     }
     
-    UE_LOG(LogTurnManager, Warning,
-        TEXT("[CollectEnemies] ==== RESULT ==== found=%d  collected=%d  byGTag=%d  byTeam=%d  byActorTag=%d"),
-        Found.Num(), CachedEnemiesForTurnForTurn.Num(), NumByTag, NumByTeam, NumByActorTag);
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[CollectEnemies] ==== RESULT ==== found=%d  collected=%d  byGTag=%d  byTeam=%d  byActorTag=%d"),
+            Found.Num(), CachedEnemiesForTurn.Num(), NumByTag, NumByTeam, NumByActorTag);
 }
 
-UE_LOG(LogTurnManager, Log, TEXT("InitializeTurnSystem: CollectEnemies completed (%d enemies)"), CachedEnemiesForTurnForTurn.Num());
+UE_LOG(LogTurnManager, Log, TEXT("InitializeTurnSystem: CollectEnemies completed (%d enemies)"), CachedEnemiesForTurn.Num());
 
 EnemyAISubsystem = GetWorld()->GetSubsystem<UEnemyAISubsystem>();
     if (!EnemyAISubsystem)
@@ -578,10 +578,9 @@ if (!Tag_AbilityMove.IsValid() || !Tag_TurnAbilityCompleted.IsValid())
     }
 }
 
-// CodeRevision: INC-2025-00027-R1 (Migrate to UGridPathfindingSubsystem - Phase 2.2) (2025-11-16 00:00)
-// GetCachedPathFinder() is deprecated - use GetGridPathfindingSubsystem() instead
-// Kept for backward compatibility during migration
-AGridPathfindingLibrary* AGameTurnManagerBase::GetCachedPathFinder() const
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+// Returns UGridPathfindingSubsystem
+UGridPathfindingSubsystem* AGameTurnManagerBase::GetCachedPathFinder() const
 {
     // Try to get from cached reference first
     if (IsValid(PathFinder.Get()))
@@ -591,34 +590,35 @@ AGridPathfindingLibrary* AGameTurnManagerBase::GetCachedPathFinder() const
 
     if (CachedPathFinder.IsValid())
     {
-        AGridPathfindingLibrary* PF = CachedPathFinder.Get();
+        UGridPathfindingSubsystem* PF = CachedPathFinder.Get();
         const_cast<AGameTurnManagerBase*>(this)->PathFinder = PF;
         return PF;
     }
 
-    // Fallback: search for Actor in world (legacy behavior)
-    TArray<AActor*> FoundActors;
-    UGameplayStatics::GetAllActorsOfClass(GetWorld(), AGridPathfindingLibrary::StaticClass(), FoundActors);
-    if (FoundActors.Num() > 0)
+    // Get subsystem from world
+    UWorld* World = GetWorld();
+    if (World)
     {
-        AGridPathfindingLibrary* PF = Cast<AGridPathfindingLibrary>(FoundActors[0]);
-        const_cast<AGameTurnManagerBase*>(this)->CachedPathFinder = PF;
-        const_cast<AGameTurnManagerBase*>(this)->PathFinder = PF;
-        return PF;
-    }
-
-    if (ATBSLyraGameMode* GM = GetWorld()->GetAuthGameMode<ATBSLyraGameMode>())
-    {
-        AGridPathfindingLibrary* PF = GM->GetPathFinder();
-        if (IsValid(PF))
+        UGridPathfindingSubsystem* PF = World->GetSubsystem<UGridPathfindingSubsystem>();
+        if (PF)
         {
-            const_cast<AGameTurnManagerBase*>(this)->PathFinder = PF;
             const_cast<AGameTurnManagerBase*>(this)->CachedPathFinder = PF;
+            const_cast<AGameTurnManagerBase*>(this)->PathFinder = PF;
             return PF;
         }
     }
 
     return nullptr;
+}
+
+int32 AGameTurnManagerBase::GetCurrentTurnIndex() const
+{
+    return TurnFlowCoordinator ? TurnFlowCoordinator->GetCurrentTurnIndex() : CurrentTurnId;
+}
+
+int32 AGameTurnManagerBase::GetCurrentInputWindowId() const
+{
+    return TurnFlowCoordinator ? TurnFlowCoordinator->GetCurrentInputWindowId() : 0;
 }
 
 UGridPathfindingSubsystem* AGameTurnManagerBase::GetGridPathfindingSubsystem() const
@@ -726,7 +726,7 @@ for (UObject* Obj : DebugObservers)
         if (Obj && Obj->Implements<UDebugObserver>())
         {
             TArray<AActor*> EnemyActors;
-            GetCachedEnemiesForTurn(EnemyActors);
+            GetCachedEnemies(EnemyActors);
             IDebugObserver::Execute_OnPhaseStarted(Obj, PhaseTag, EnemyActors);
         }
     }
@@ -837,13 +837,12 @@ void AGameTurnManagerBase::OnItemSystemUpdate_Implementation(const FTurnContext&
     UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] OnItemSystemUpdate called (Blueprint)"), CurrentTurnId);
 }
 
-void AGameTurnManagerBase::GetCachedEnemiesForTurn(TArray<AActor*>& OutEnemies) const
+void AGameTurnManagerBase::GetCachedEnemies(TArray<AActor*>& OutEnemies) const
 {
-    // CodeRevision: INC-2025-00030-R1 (Use CachedEnemiesForTurnForTurn instead of CachedEnemiesForTurn) (2025-11-16 00:00)
     OutEnemies.Reset();
-    OutEnemies.Reserve(CachedEnemiesForTurnForTurn.Num());
+    OutEnemies.Reserve(CachedEnemiesForTurn.Num());
 
-    for (const TObjectPtr<AActor>& Enemy : CachedEnemiesForTurnForTurn)
+    for (const TObjectPtr<AActor>& Enemy : CachedEnemiesForTurn)
     {
         if (Enemy)
         {
@@ -1821,6 +1820,7 @@ if (UWorld* WorldPtr = GetWorld())
     }
 }
 
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 void AGameTurnManagerBase::ResolveOrSpawnPathFinder()
 {
     UWorld* World = GetWorld();
@@ -1830,45 +1830,22 @@ void AGameTurnManagerBase::ResolveOrSpawnPathFinder()
         return;
     }
 
-if (IsValid(PathFinder))
+    if (IsValid(PathFinder.Get()))
     {
         return;
     }
 
-TArray<AActor*> Found;
-    UGameplayStatics::GetAllActorsOfClass(World, AGridPathfindingLibrary::StaticClass(), Found);
-    if (Found.Num() > 0)
-    {
-        PathFinder = Cast<AGridPathfindingLibrary>(Found[0]);
-        CachedPathFinder = PathFinder;
-        UE_LOG(LogTurnManager, Log, TEXT("ResolveOrSpawnPathFinder: Found existing PathFinder: %s"), *GetNameSafe(PathFinder));
-        return;
-    }
-
-if (ATBSLyraGameMode* GM = World->GetAuthGameMode<ATBSLyraGameMode>())
-    {
-        PathFinder = GM->GetPathFinder();
-        if (IsValid(PathFinder))
-        {
-            CachedPathFinder = PathFinder;
-            UE_LOG(LogTurnManager, Log, TEXT("ResolveOrSpawnPathFinder: Got PathFinder from GameMode: %s"), *GetNameSafe(PathFinder));
-            return;
-        }
-    }
-
-UE_LOG(LogTurnManager, Warning, TEXT("ResolveOrSpawnPathFinder: Spawning PathFinder as fallback (GameMode should have created it)"));
-    FActorSpawnParameters Params;
-    Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-    PathFinder = World->SpawnActor<AGridPathfindingLibrary>(AGridPathfindingLibrary::StaticClass(), FTransform::Identity, Params);
+    // Get UGridPathfindingSubsystem (subsystems are automatically created by engine)
+    PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>();
     CachedPathFinder = PathFinder;
 
-    if (IsValid(PathFinder))
+    if (IsValid(PathFinder.Get()))
     {
-        UE_LOG(LogTurnManager, Log, TEXT("ResolveOrSpawnPathFinder: Spawned PathFinder: %s"), *GetNameSafe(PathFinder));
+        UE_LOG(LogTurnManager, Log, TEXT("ResolveOrSpawnPathFinder: Retrieved UGridPathfindingSubsystem"));
     }
     else
     {
-        UE_LOG(LogTurnManager, Error, TEXT("ResolveOrSpawnPathFinder: Failed to spawn PathFinder!"));
+        UE_LOG(LogTurnManager, Error, TEXT("ResolveOrSpawnPathFinder: Failed to get UGridPathfindingSubsystem!"));
     }
 }
 
@@ -1920,19 +1897,15 @@ UE_LOG(LogTurnManager, Log, TEXT("ResolveOrSpawnUnitManager: Spawning UnitManage
     }
 }
 
-AGridPathfindingLibrary* AGameTurnManagerBase::FindPathFinder(UWorld* World) const
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+UGridPathfindingSubsystem* AGameTurnManagerBase::FindPathFinder(UWorld* World) const
 {
     if (!World)
     {
         return nullptr;
     }
 
-    for (TActorIterator<AGridPathfindingLibrary> It(World); It; ++It)
-    {
-        return *It;
-    }
-
-    return nullptr;
+    return World->GetSubsystem<UGridPathfindingSubsystem>();
 }
 
 // CodeRevision: INC-2025-00029-R1 (Replace CachedPlayerPawn with GetPlayerPawn() - Phase 3.2) (2025-11-16 00:00)
@@ -2162,9 +2135,9 @@ void AGameTurnManagerBase::ExecuteSequentialPhase()
     }
 
     UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] ==== Sequential Phase (Attack -> Move) ===="), CurrentTurnId);
+    bIsInMoveOnlyPhase = false;
 
-ExecuteAttacks();  
-
+    ExecuteAttacks();
 }
 
 void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Payload)
@@ -2620,11 +2593,10 @@ ApplyWaitInputGate(false);
 
     if (bSequentialModeActive)
     {
-        if (!bSequentialMovePhaseStarted)
+        if (!bIsInMoveOnlyPhase)
         {
             UE_LOG(LogTurnManager, Warning,
                 TEXT("[Turn %d] Sequential attack phase complete, dispatching move-only phase"), FinishedTurnId);
-            // CodeRevision: INC-2025-00030-R1 (Use GetWorld()->GetSubsystem<>() instead of cached member) (2025-11-16 00:00)
             if (UWorld* World = GetWorld())
             {
                 if (UEnemyTurnDataSubsystem* EnemyTurnDataSys = World->GetSubsystem<UEnemyTurnDataSubsystem>())
@@ -2633,17 +2605,19 @@ ApplyWaitInputGate(false);
                 }
             }
             bSequentialMovePhaseStarted = true;
+            bIsInMoveOnlyPhase = true;
             ExecuteMovePhase(true);
             return;
         }
 
         bSequentialModeActive = false;
         bSequentialMovePhaseStarted = false;
+        bIsInMoveOnlyPhase = false;
         UE_LOG(LogTurnManager, Log,
             TEXT("[Turn %d] Sequential move phase complete, ending enemy turn"), FinishedTurnId);
     }
 
-    EndEnemyTurn();  
+    EndEnemyTurn();
 }
 
 void AGameTurnManagerBase::EndEnemyTurn()
@@ -2737,7 +2711,7 @@ if (APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0))
     }
 
 TArray<AActor*> Enemies;
-    GetCachedEnemiesForTurn(Enemies);
+    GetCachedEnemies(Enemies);
     AllUnits.Append(Enemies);
 
     int32 TotalInProgress = 0;
@@ -3341,13 +3315,6 @@ bool AGameTurnManagerBase::DispatchResolvedMove(const FResolvedAction& Action)
         return false;
     }
 
-if (Action.bIsWait)
-    {
-        UE_LOG(LogTurnManager, Log, TEXT("[DispatchResolvedMove] Skipping wait action for %s (conflict loser)"),
-            *GetNameSafe(Action.Actor.Get()));
-        return false;
-    }
-
     AActor* SourceActor = Action.SourceActor ? Action.SourceActor.Get() : nullptr;
     if (!SourceActor && Action.Actor.IsValid())
     {
@@ -3372,21 +3339,28 @@ if (Action.bIsWait)
     if (Action.NextCell == FIntPoint(-1, -1) || Action.NextCell == Action.CurrentCell)
     {
         ReleaseMoveReservation(Unit);
+
         if (UWorld* World = GetWorld())
         {
-                if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
+            if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
+            {
+                const int32 RegisteredTurnId = Barrier->GetCurrentTurnId();
+                const FGuid ActionId = Barrier->RegisterAction(Unit, RegisteredTurnId);
+                if (ActionId.IsValid())
                 {
-                    const int32 RegisteredTurnId = Barrier->GetCurrentTurnId();
-                    const FGuid ActionId = Barrier->RegisterAction(Unit, RegisteredTurnId);
-                    if (ActionId.IsValid())
-                    {
-                        Barrier->CompleteAction(Unit, RegisteredTurnId, ActionId);
+                    Barrier->CompleteAction(Unit, RegisteredTurnId, ActionId);
                     UE_LOG(LogTurnManager, Verbose,
                         TEXT("[DispatchResolvedMove] Registered+Completed WAIT action: Actor=%s TurnId=%d ActionId=%s"),
-                        *GetNameSafe(Unit), CurrentTurnId, *ActionId.ToString());
+                        *GetNameSafe(Unit), RegisteredTurnId, *ActionId.ToString());
+                }
+                else
+                {
+                    UE_LOG(LogTurnManager, Warning,
+                        TEXT("[DispatchResolvedMove] Failed to register WAIT action for %s"), *GetNameSafe(Unit));
                 }
             }
         }
+
         return false;
     }
 
@@ -3408,7 +3382,8 @@ TWeakObjectPtr<AActor> ActorKey(Unit);
         return false;
     }
 
-    AGridPathfindingLibrary* LocalPathFinder = GetCachedPathFinder();
+    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+    UGridPathfindingSubsystem* LocalPathFinder = GetCachedPathFinder();
     if (!LocalPathFinder)
     {
         UE_LOG(LogTurnManager, Error, TEXT("[ResolvedMove] PathFinder missing"));
@@ -3432,13 +3407,13 @@ TWeakObjectPtr<AActor> ActorKey(Unit);
             return true;
         }
 
-UE_LOG(LogTurnManager, Error,
+        UE_LOG(LogTurnManager, Error,
             TEXT("[ResolvedMove] ❁EPlayer GA trigger failed - Move BLOCKED (GAS-only path enforced)"));
         ReleaseMoveReservation(Unit);
         return false;
     }
 
-const FVector StartWorld = Unit->GetActorLocation();
+    const FVector StartWorld = Unit->GetActorLocation();
     const FVector EndWorld = LocalPathFinder->GridToWorld(Action.NextCell, StartWorld.Z);
 
     TArray<FVector> PathPoints;

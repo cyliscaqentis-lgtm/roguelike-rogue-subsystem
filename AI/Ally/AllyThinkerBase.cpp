@@ -3,9 +3,10 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 // =============================================================================
 
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 #include "AI/Ally/AllyThinkerBase.h"
 #include "AI/Ally/AllyTurnDataSubsystem.h"
-#include "Grid/GridPathfindingLibrary.h"
+#include "Grid/GridPathfindingSubsystem.h"
 #include "Turn/TurnSystemTypes.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"

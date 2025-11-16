@@ -8,10 +8,11 @@
 #include "Components/CapsuleComponent.h"
 
 // ===== あなたのプロジェクト固有のヘッダ =====
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 #include "Grid/AABB.h"
 #include "Character/UnitBase.h"
 #include "Character/EnemyUnitBase.h"
-#include "Grid/GridPathfindingLibrary.h"
+#include "Grid/GridPathfindingSubsystem.h"
 #include "Grid/GridOccupancySubsystem.h"
 #include "Player/PlayerControllerBase.h"
 #include "Debug/DebugObserverCSV.h"
@@ -21,9 +22,10 @@
 #include "GenericTeamAgentInterface.h"
 #include "GameFramework/PlayerState.h"
 
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 namespace UnitManager_Private
 {
-	static void OccupyInitialCell(UWorld* World, AGridPathfindingLibrary* PathFinder, AActor* Actor)
+	static void OccupyInitialCell(UWorld* World, UGridPathfindingSubsystem* PathFinder, AActor* Actor)
 	{
 		if (!World || !PathFinder || !Actor)
 		{

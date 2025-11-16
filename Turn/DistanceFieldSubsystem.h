@@ -55,9 +55,10 @@ private:
     bool IsWalkable(const FIntPoint& Cell, AActor* IgnoreActor = nullptr) const;  // ★★★ 修正 (2025-11-11): AI待機問題修正のためIgnoreActor追加
     bool CanMoveDiagonal(const FIntPoint& From, const FIntPoint& To) const;
     
-    // ★★★ PathFinderのキャッシュ（初期化時に取得） ★★★
+    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+    // Replaced AGridPathfindingLibrary with UGridPathfindingSubsystem
     UPROPERTY(Transient)
-    TWeakObjectPtr<class AGridPathfindingLibrary> CachedPathFinder;
+    TWeakObjectPtr<class UGridPathfindingSubsystem> CachedPathFinder;
 
     // ★★★ 内部実装：共通ロジック ★★★
     void UpdateDistanceFieldInternal(const FIntPoint& PlayerCell,
@@ -69,6 +70,7 @@ private:
     FIntPoint PlayerPosition;
     FGridBounds Bounds;  // ★★★ 距離場の絶対座標範囲 ★★★
     
+    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
     // ★★★ PathFinder取得ヘルパー ★★★
-    class AGridPathfindingLibrary* GetPathFinder() const;
+    class UGridPathfindingSubsystem* GetPathFinder() const;
 };

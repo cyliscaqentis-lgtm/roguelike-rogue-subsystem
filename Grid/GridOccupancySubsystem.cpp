@@ -1,6 +1,7 @@
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 // GridOccupancySubsystem.cpp
 #include "GridOccupancySubsystem.h"
-#include "Grid/GridPathfindingLibrary.h"
+#include "Grid/GridPathfindingSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 
 void UGridOccupancySubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -794,15 +795,9 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
         return;
     }
 
-    // PathFinder を取得（FPathFinderUtils を想定）
-    // 注：プロジェクトの PathFinder 取得方法に合わせて調整
-    AGridPathfindingLibrary* PathFinder = nullptr;
-    TArray<AActor*> PathFinders;
-    UGameplayStatics::GetAllActorsOfClass(World, AGridPathfindingLibrary::StaticClass(), PathFinders);
-    if (PathFinders.Num() > 0)
-    {
-        PathFinder = Cast<AGridPathfindingLibrary>(PathFinders[0]);
-    }
+    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+    // Get UGridPathfindingSubsystem
+    UGridPathfindingSubsystem* PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>();
 
     if (!PathFinder)
     {

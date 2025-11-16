@@ -4,10 +4,11 @@
 // UnitBaseから分離（2025-11-09）
 // ============================================================================
 
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 #include "Character/UnitMovementComponent.h"
 #include "Character/UnitStatBlock.h"
 #include "Character/UnitBase.h"
-#include "Grid/GridPathfindingLibrary.h"
+#include "Grid/GridPathfindingSubsystem.h"
 #include "Grid/GridOccupancySubsystem.h"
 #include "Utility/PathFinderUtils.h"
 #include "GameFramework/Actor.h"
@@ -66,11 +67,20 @@ void UUnitMovementComponent::MoveUnit(const TArray<FVector>& Path)
 	UE_LOG(LogTemp, Log, TEXT("[UnitMovementComponent] Movement started with %d waypoints"), Path.Num());
 }
 
-void UUnitMovementComponent::MoveUnitAlongGridPath(const TArray<FIntPoint>& GridPath, AGridPathfindingLibrary* PathFinder)
+// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
+void UUnitMovementComponent::MoveUnitAlongGridPath(const TArray<FIntPoint>& GridPath)
 {
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[UnitMovementComponent] World not available"));
+		return;
+	}
+
+	UGridPathfindingSubsystem* PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>();
 	if (!PathFinder)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[UnitMovementComponent] MoveUnitAlongGridPath called with null PathFinder"));
+		UE_LOG(LogTemp, Error, TEXT("[UnitMovementComponent] UGridPathfindingSubsystem not available"));
 		return;
 	}
 
@@ -80,7 +90,7 @@ void UUnitMovementComponent::MoveUnitAlongGridPath(const TArray<FIntPoint>& Grid
 		return;
 	}
 
-	// グリッドパスをワールド座標に変換
+	// Convert grid path to world coordinates
 	TArray<FVector> WorldPath;
 	WorldPath.Reserve(GridPath.Num());
 
@@ -207,12 +217,12 @@ void UUnitMovementComponent::FinishMovement()
 	AUnitBase* OwnerUnit = GetOwnerUnit();
 	if (OwnerUnit)
 	{
+		// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
 		if (UWorld* World = GetWorld())
 		{
 			if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
 			{
-				const AGridPathfindingLibrary* PathFinder = FPathFinderUtils::GetCachedPathFinder(World);
-				if (PathFinder)
+				if (UGridPathfindingSubsystem* PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>())
 				{
 					const FIntPoint FinalCell = PathFinder->WorldToGrid(OwnerUnit->GetActorLocation());
 					if (!Occupancy->UpdateActorCell(OwnerUnit, FinalCell))

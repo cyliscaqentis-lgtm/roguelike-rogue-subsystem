@@ -13,7 +13,8 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Grid/GridOccupancySubsystem.h"
-#include "Grid/GridPathfindingLibrary.h"
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+#include "Grid/GridPathfindingSubsystem.h"
 #include "EngineUtils.h"
 #include "Math/RotationMatrix.h"
 
@@ -24,22 +25,19 @@ struct FTargetFacingInfo
     FIntPoint ReservedCell = FIntPoint(-1, -1);
 };
 
-static AGridPathfindingLibrary* FindGridLibrary(UWorld* World)
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+static UGridPathfindingSubsystem* FindGridLibrary(UWorld* World)
 {
     if (!World)
     {
         return nullptr;
     }
 
-    for (TActorIterator<AGridPathfindingLibrary> It(World); It; ++It)
-    {
-        return *It;
-    }
-
-    return nullptr;
+    return World->GetSubsystem<UGridPathfindingSubsystem>();
 }
 
-static FTargetFacingInfo ComputeTargetFacingInfo(AActor* Target, UWorld* World, AGridPathfindingLibrary* GridLib)
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+static FTargetFacingInfo ComputeTargetFacingInfo(AActor* Target, UWorld* World, UGridPathfindingSubsystem* GridLib)
 {
     FTargetFacingInfo Result;
     if (!Target)
@@ -157,8 +155,9 @@ void UGA_MeleeAttack::ActivateAbility(
         }
     }
 
+    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
     UWorld* World = GetWorld();
-    AGridPathfindingLibrary* GridLib = FindGridLibrary(World);
+    UGridPathfindingSubsystem* GridLib = FindGridLibrary(World);
     const FTargetFacingInfo FacingInfo = ComputeTargetFacingInfo(TargetUnit, World, GridLib);
     UpdateCachedTargetLocation(FacingInfo.Location, FacingInfo.ReservedCell, GridLib);
     FVector TargetFacingLocation = FacingInfo.Location;
@@ -327,8 +326,9 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
         }
     }
 
+    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
     UWorld* World = GetWorld();
-    AGridPathfindingLibrary* GridLib = FindGridLibrary(World);
+    UGridPathfindingSubsystem* GridLib = FindGridLibrary(World);
     const FTargetFacingInfo FacingInfo = ComputeTargetFacingInfo(Target, World, GridLib);
     FVector TargetFacingLocation = FacingInfo.Location;
     int32 DistanceInTiles = -1;
@@ -439,7 +439,8 @@ void UGA_MeleeAttack::EndAbility(
     bHasCachedTargetCell = false;
 }
 
-void UGA_MeleeAttack::UpdateCachedTargetLocation(const FVector& Location, const FIntPoint& ReservedCell, const AGridPathfindingLibrary* GridLib)
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+void UGA_MeleeAttack::UpdateCachedTargetLocation(const FVector& Location, const FIntPoint& ReservedCell, const UGridPathfindingSubsystem* GridLib)
 {
     CachedTargetLocation = Location;
     bHasCachedTargetCell = false;

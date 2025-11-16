@@ -5,10 +5,11 @@
 #include "Character/UnitStatBlock.h"
 #include "UnitManager.generated.h"
 
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 // ===== 前方宣言 =====
 class AAABB;
 class AUnitBase;
-class AGridPathfindingLibrary;
+class UGridPathfindingSubsystem;
 class APlayerControllerBase;
 class UDebugObserverCSV;
 class ULyraPawnData;
@@ -28,8 +29,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Init")
 	FVector MapSize = FVector::ZeroVector; // タイル数（X,Y）想定
 
+	// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Init")
-	TObjectPtr<AGridPathfindingLibrary> PathFinder = nullptr;
+	TObjectPtr<UGridPathfindingSubsystem> PathFinder = nullptr;
 
 	// ===== CSVログ出力用（オプション）=====
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Init")

@@ -9,10 +9,10 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 #include "Rogue/Character/UnitBase.h"
 #include "Rogue/Character/UnitMovementComponent.h"
 #include "Rogue/Grid/GridOccupancySubsystem.h"
-#include "Rogue/Grid/GridPathfindingLibrary.h"
 #include "Rogue/Grid/GridPathfindingSubsystem.h"
 #include "Rogue/Utility/RogueGameplayTags.h"
 #include "Turn/GameTurnManagerBase.h"
@@ -271,10 +271,11 @@ void UGA_MoveBase::ActivateAbility(
 		return;
 	}
 
-	const AGridPathfindingLibrary* PathFinder = GetPathFinder();
-	if (!PathFinder)
+	// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
+	UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
+	if (!Pathfinding)
 	{
-		UE_LOG(LogTurnManager, Error, TEXT("[GA_MoveBase] PathFinder not available"));
+		UE_LOG(LogTurnManager, Error, TEXT("[GA_MoveBase] GridPathfindingSubsystem not available"));
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
@@ -310,12 +311,12 @@ void UGA_MoveBase::ActivateAbility(
 		return;
 	}
 
-	const float FixedZ = ComputeFixedZ(Unit, PathFinder);
+	const float FixedZ = ComputeFixedZ(Unit, Pathfinding);
 	FVector CurrentLocation = SnapToCellCenterFixedZ(Avatar->GetActorLocation(), FixedZ);
 	Avatar->SetActorLocation(CurrentLocation, false, nullptr, ETeleportType::TeleportPhysics);
 	CachedStartLocWS = CurrentLocation;
 	CachedFirstLoc = CurrentLocation;
-	const FIntPoint CurrentCell = PathFinder->WorldToGrid(CurrentLocation);
+	const FIntPoint CurrentCell = Pathfinding->WorldToGrid(CurrentLocation);
 
 	// ★★★ 予約セル取得（SSOT: Single Source of Truth） ★★★
 	FIntPoint ReservedCell(-1, -1);
@@ -391,7 +392,7 @@ void UGA_MoveBase::ActivateAbility(
 		}
 	}
 
-	if (!PathFinder->IsCellWalkableIgnoringActor(NextCell, Unit))
+	if (!Pathfinding->IsCellWalkableIgnoringActor(NextCell, Unit))
 	{
 		UE_LOG(LogTurnManager, Warning,
 			TEXT("[GA_MoveBase] Cell (%d,%d) is blocked by terrain; aborting move"),
@@ -403,7 +404,7 @@ void UGA_MoveBase::ActivateAbility(
 	// CodeRevision: INC-2025-00018-R3 (Remove barrier management - Phase 3) (2025-11-17)
 	// Barrier registration removed - handled by other systems
 
-	const FVector DestWorldLoc = PathFinder->GridToWorld(CachedNextCell);
+	const FVector DestWorldLoc = Pathfinding->GridToWorld(CachedNextCell);
 	NextTileStep = SnapToCellCenterFixedZ(DestWorldLoc, FixedZ);
 	NextTileStep.Z = FixedZ;
 
@@ -629,29 +630,31 @@ FVector UGA_MoveBase::CalculateNextTilePosition(const FVector& CurrentPosition, 
 	return CurrentPosition + StepDelta;
 }
 
+// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
 bool UGA_MoveBase::IsTileWalkable(const FVector& TilePosition, AUnitBase* Self)
 {
-    const AGridPathfindingLibrary* PathFinder = GetPathFinder();
-    if (!PathFinder)
+    UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
+    if (!Pathfinding)
     {
         return false;
     }
 
-    const FIntPoint Cell = PathFinder->WorldToGrid(TilePosition);
+    const FIntPoint Cell = Pathfinding->WorldToGrid(TilePosition);
     AActor* ActorToIgnore = Self ? static_cast<AActor*>(Self) : const_cast<AActor*>(GetAvatarActorFromActorInfo());
-    return PathFinder->IsCellWalkableIgnoringActor(Cell, ActorToIgnore);
+    return Pathfinding->IsCellWalkableIgnoringActor(Cell, ActorToIgnore);
 }
 
+// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
 bool UGA_MoveBase::IsTileWalkable(const FIntPoint& Cell) const
 {
-    const AGridPathfindingLibrary* PathFinder = GetPathFinder();
-    if (!PathFinder)
+    UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
+    if (!Pathfinding)
     {
         return false;
     }
 
     AActor* IgnoreActor = const_cast<AActor*>(GetAvatarActorFromActorInfo());
-    if (!PathFinder->IsCellWalkableIgnoringActor(Cell, IgnoreActor))
+    if (!Pathfinding->IsCellWalkableIgnoringActor(Cell, IgnoreActor))
     {
         UE_LOG(LogTurnManager, Verbose,
             TEXT("[IsTileWalkable] Cell (%d,%d) blocked for %s."),
@@ -662,16 +665,17 @@ bool UGA_MoveBase::IsTileWalkable(const FIntPoint& Cell) const
     return true;
 }
 
+// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
 void UGA_MoveBase::UpdateGridState(const FVector& Position, int32 Value)
 {
-	AGridPathfindingLibrary* PathFinder = const_cast<AGridPathfindingLibrary*>(GetPathFinder());
-	if (!PathFinder)
+	UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
+	if (!Pathfinding)
 	{
 		return;
 	}
 
 	const FVector Snapped = SnapToCellCenter(Position);
-	PathFinder->GridChangeVector(Snapped, Value);
+	Pathfinding->GridChangeVector(Snapped, Value);
 	// CodeRevision: INC-2025-00018-R2 (Remove UpdateOccupancy call - grid update moved to UnitMovementComponent) (2025-11-17)
 	// UpdateOccupancy() removed - grid occupancy update is now handled by UnitMovementComponent::FinishMovement()
 }
@@ -682,17 +686,15 @@ float UGA_MoveBase::RoundYawTo45Degrees(float Yaw)
 }
 
 // CodeRevision: INC-2025-00027-R1 (Add Subsystem access - Phase 2.4) (2025-11-16 00:00)
+// CodeRevision: INC-2025-00030-R1 (Remove CachedPathFinder dependency) (2025-11-16 23:55)
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 // GetPathFinder() is deprecated - use GetGridPathfindingSubsystem() instead
 // Kept for backward compatibility during migration
-const AGridPathfindingLibrary* UGA_MoveBase::GetPathFinder() const
+const UGridPathfindingSubsystem* UGA_MoveBase::GetPathFinder() const
 {
-	// ★★★ 最適化: PathFinderUtils使用（重複コード削除）
 	if (const UWorld* World = GetWorld())
 	{
-		return FPathFinderUtils::GetCachedPathFinder(
-			const_cast<UWorld*>(World),
-			const_cast<TWeakObjectPtr<AGridPathfindingLibrary>*>(&CachedPathFinder)
-		);
+		return FPathFinderUtils::GetCachedPathFinder(const_cast<UWorld*>(World));
 	}
 
 	return nullptr;
@@ -768,13 +770,14 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
 	// CodeRevision: INC-2025-00018-R3 (Remove barrier management and grid update - Phase 3) (2025-11-17)
 	// Grid update moved to UnitMovementComponent::FinishMovement()
 	// Barrier management removed - handled by other systems
+	// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
 
-	const AGridPathfindingLibrary* PathFinder = GetPathFinder();
-	if (Unit && PathFinder)
+	UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
+	if (Unit && Pathfinding)
 	{
 		// Position snap to cell center
-		const float FixedZ = ComputeFixedZ(Unit, PathFinder);
-		const FVector DestWorldLoc = PathFinder->GridToWorld(CachedNextCell);
+		const float FixedZ = ComputeFixedZ(Unit, Pathfinding);
+		const FVector DestWorldLoc = Pathfinding->GridToWorld(CachedNextCell);
 		const FVector SnappedLoc = SnapToCellCenterFixedZ(DestWorldLoc, FixedZ);
 		const FVector LocationBefore = Unit->GetActorLocation();
 
@@ -813,10 +816,11 @@ void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
 		return;
 	}
 
-	const AGridPathfindingLibrary* PathFinder = GetPathFinder();
-    if (!PathFinder)
+	// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
+	UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
+    if (!Pathfinding)
     {
-        UE_LOG(LogTurnManager, Error, TEXT("[GA_MoveBase] StartMoveToCell failed: PathFinder missing"));
+        UE_LOG(LogTurnManager, Error, TEXT("[GA_MoveBase] StartMoveToCell failed: GridPathfindingSubsystem missing"));
         EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, true);
         return;
     }
@@ -847,11 +851,11 @@ void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
             TargetCell.X, TargetCell.Y);
     }
 
-	const float FixedZ = ComputeFixedZ(Unit, PathFinder);
+	const float FixedZ = ComputeFixedZ(Unit, Pathfinding);
 	FVector StartPos = SnapToCellCenterFixedZ(Unit->GetActorLocation(), FixedZ);
 	Unit->SetActorLocation(StartPos, false, nullptr, ETeleportType::TeleportPhysics);
-	const FIntPoint CurrentCell = PathFinder->WorldToGrid(StartPos);
-	const FVector EndPos = PathFinder->GridToWorld(TargetCell, FixedZ);
+	const FIntPoint CurrentCell = Pathfinding->WorldToGrid(StartPos);
+	const FVector EndPos = Pathfinding->GridToWorld(TargetCell, FixedZ);
 	const float TotalDistance = FVector::Dist(StartPos, EndPos);
 
 	if (TotalDistance < KINDA_SMALL_NUMBER)
@@ -882,38 +886,41 @@ void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
 	Unit->MoveUnit(PathPoints);
 }
 
+// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
 FVector UGA_MoveBase::SnapToCellCenter(const FVector& WorldPos) const
 {
-	const AGridPathfindingLibrary* PathFinder = GetPathFinder();
-	if (!PathFinder)
+	UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
+	if (!Pathfinding)
 	{
 		return WorldPos;
 	}
 
-	const FIntPoint Cell = PathFinder->WorldToGrid(WorldPos);
-	return PathFinder->GridToWorld(Cell, WorldPos.Z);
+	const FIntPoint Cell = Pathfinding->WorldToGrid(WorldPos);
+	return Pathfinding->GridToWorld(Cell, WorldPos.Z);
 }
 
+// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
 FVector UGA_MoveBase::SnapToCellCenterFixedZ(const FVector& WorldPos, float FixedZ) const
 {
-	const AGridPathfindingLibrary* PathFinder = GetPathFinder();
-	if (!PathFinder)
+	UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
+	if (!Pathfinding)
 	{
 		return FVector(WorldPos.X, WorldPos.Y, FixedZ);
 	}
 
-	const FIntPoint Cell = PathFinder->WorldToGrid(WorldPos);
-	return PathFinder->GridToWorld(Cell, FixedZ);
+	const FIntPoint Cell = Pathfinding->WorldToGrid(WorldPos);
+	return Pathfinding->GridToWorld(Cell, FixedZ);
 }
 
-float UGA_MoveBase::ComputeFixedZ(const AUnitBase* Unit, const AGridPathfindingLibrary* PathFinder) const
+// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
+float UGA_MoveBase::ComputeFixedZ(const AUnitBase* Unit, const UGridPathfindingSubsystem* Pathfinding) const
 {
 	const float HalfHeight = (Unit && Unit->GetCapsuleComponent())
 		? Unit->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()
 		: 0.f;
 
-	float PlaneZ = PathFinder ? PathFinder->GetNavPlaneZ() : 0.f;
-	if (!PathFinder && Unit)
+	float PlaneZ = Pathfinding ? Pathfinding->GetNavPlaneZ() : 0.f;
+	if (!Pathfinding && Unit)
 	{
 		PlaneZ = Unit->GetActorLocation().Z - HalfHeight;
 	}
@@ -940,11 +947,12 @@ FVector UGA_MoveBase::AlignZToGround(const FVector& WorldPos, float TraceUp, flo
 	return WorldPos;
 }
 
+// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
 void UGA_MoveBase::DebugDumpAround(const FIntPoint& Center)
 {
 #if !UE_BUILD_SHIPPING
-	const AGridPathfindingLibrary* PathFinder = GetPathFinder();
-	if (!PathFinder)
+	UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
+	if (!Pathfinding)
 	{
 		return;
 	}
@@ -957,7 +965,7 @@ void UGA_MoveBase::DebugDumpAround(const FIntPoint& Center)
 			const FIntPoint Cell(Center.X + DeltaX, Center.Y + DeltaY);
 			// CodeRevision: INC-2025-00021-R1 (Replace IsCellWalkable with IsCellWalkableIgnoringActor - Phase 2.4) (2025-11-17 15:05)
 			// Debug code: only terrain check needed
-			const bool bWalkable = PathFinder->IsCellWalkableIgnoringActor(Cell, nullptr);
+			const bool bWalkable = Pathfinding->IsCellWalkableIgnoringActor(Cell, nullptr);
 			Row += FString::Printf(TEXT("%s%2d "),
 				(DeltaX == 0 && DeltaY == 0) ? TEXT("[") : TEXT(" "),
 				bWalkable ? 1 : 0);

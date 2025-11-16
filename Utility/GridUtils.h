@@ -6,9 +6,10 @@
 
 #pragma once
 
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "Rogue/Grid/GridPathfindingLibrary.h"
+#include "Rogue/Grid/GridPathfindingSubsystem.h"
 
 /**
  * グリッド関連の共通ユーティリティ
@@ -23,10 +24,11 @@ public:
      * @param Cell グリッドセル座標
      * @param PathFinder PathFinderインスタンス
      */
+    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
     static void SnapActorToGridCell(
         AActor* Actor,
         const FIntPoint& Cell,
-        AGridPathfindingLibrary* PathFinder
+        UGridPathfindingSubsystem* PathFinder
     )
     {
         if (!Actor || !PathFinder)

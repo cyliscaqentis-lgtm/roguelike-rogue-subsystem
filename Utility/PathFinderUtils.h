@@ -1,32 +1,31 @@
 // ============================================================================
 // PathFinderUtils.h
-// 重複していたPathFinder取得処理の共通化
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+// Migrated from AGridPathfindingLibrary to UGridPathfindingSubsystem
 // 作成日: 2025-11-09
 // ============================================================================
 
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Kismet/GameplayStatics.h"
-
-class AGridPathfindingLibrary;
+#include "Grid/GridPathfindingSubsystem.h"
 
 /**
  * PathFinder取得の共通ユーティリティ
- * 以前は9ファイルで重複していた処理を統一
+ * UGridPathfindingSubsystem取得の統一インターフェース
  */
 class FPathFinderUtils
 {
 public:
     /**
-     * PathFinderをキャッシュ付きで取得
+     * UGridPathfindingSubsystemをキャッシュ付きで取得
      * @param World ワールド
      * @param OutCached キャッシュされた参照（オプション）
-     * @return PathFinderインスタンス（見つからない場合はnullptr）
+     * @return UGridPathfindingSubsystem（見つからない場合はnullptr）
      */
-    static AGridPathfindingLibrary* GetCachedPathFinder(
+    static UGridPathfindingSubsystem* GetCachedPathFinder(
         UWorld* World,
-        TWeakObjectPtr<AGridPathfindingLibrary>* OutCached = nullptr
+        TWeakObjectPtr<UGridPathfindingSubsystem>* OutCached = nullptr
     )
     {
         if (!World)
@@ -40,10 +39,8 @@ public:
             return OutCached->Get();
         }
 
-        // GetActorOfClassで検索
-        AGridPathfindingLibrary* PathFinder = Cast<AGridPathfindingLibrary>(
-            UGameplayStatics::GetActorOfClass(World, AGridPathfindingLibrary::StaticClass())
-        );
+        // Get subsystem from world
+        UGridPathfindingSubsystem* PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>();
 
         // キャッシュに保存
         if (PathFinder && OutCached)

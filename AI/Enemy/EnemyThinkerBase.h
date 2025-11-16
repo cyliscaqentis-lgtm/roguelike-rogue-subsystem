@@ -62,9 +62,10 @@ protected:
     // キャッシュ
     //--------------------------------------------------------------------------
     
+    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
     /** PathFinderのキャッシュ（BeginPlayで取得） */
     UPROPERTY(Transient)
-    TWeakObjectPtr<class AGridPathfindingLibrary> CachedPathFinder;
+    TWeakObjectPtr<class UGridPathfindingSubsystem> CachedPathFinder;
 
     //--------------------------------------------------------------------------
     // アビリティ射程取得（マス単位）

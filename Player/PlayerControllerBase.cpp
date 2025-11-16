@@ -4,7 +4,8 @@
 #include "Player/PlayerControllerBase.h"
 #include "Turn/GameTurnManagerBase.h"
 // #include "Turn/TurnManagerSubsystem.h"  // ★★★ 統合完了により削除 ★★★
-#include "Grid/GridPathfindingLibrary.h"
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+#include "Grid/GridPathfindingSubsystem.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Camera/PlayerCameraManager.h"
@@ -723,29 +724,22 @@ void APlayerControllerBase::Server_TurnFacing_Implementation(FVector2D Direction
 // Debug Commands (Exec Functions)
 //------------------------------------------------------------------------------
 
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 void APlayerControllerBase::GridSmokeTest()
 {
     UE_LOG(LogTemp, Warning, TEXT("[PlayerController] GridSmokeTest command received"));
 
     if (UWorld* World = GetWorld())
     {
-        bool bFound = false;
-        for (TActorIterator<AGridPathfindingLibrary> It(World); It; ++It)
+        UGridPathfindingSubsystem* PathSys = World->GetSubsystem<UGridPathfindingSubsystem>();
+        if (PathSys)
         {
-            AGridPathfindingLibrary* PathLib = *It;
-            if (PathLib)
-            {
-                UE_LOG(LogTemp, Warning, TEXT("[PlayerController] Calling GridSmokeTest on: %s"), *PathLib->GetName());
-                PathLib->GridSmokeTest();
-                bFound = true;
-                return;
-            }
+            UE_LOG(LogTemp, Warning, TEXT("[PlayerController] Calling GridSmokeTest on UGridPathfindingSubsystem"));
+            PathSys->GridSmokeTest();
         }
-
-        if (!bFound)
+        else
         {
-            UE_LOG(LogTemp, Error, TEXT("[PlayerController] GridPathfindingLibrary not found in level"));
-            UE_LOG(LogTemp, Error, TEXT("[PlayerController] Make sure BP_GridPathfindingLibrary is placed in the level"));
+            UE_LOG(LogTemp, Error, TEXT("[PlayerController] UGridPathfindingSubsystem not found"));
         }
     }
     else

@@ -8,7 +8,8 @@
 #include "../../ProjectDiagnostics.h"
 #include "EnemyAISubsystem.generated.h"
 
-class AGridPathfindingLibrary;
+// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+class UGridPathfindingSubsystem;
 class UTurnCorePhaseManager;
 
 /**
@@ -34,7 +35,7 @@ public:
 	void BuildObservations(
 		const TArray<AActor*>& Enemies,
 		AActor* Player,
-		AGridPathfindingLibrary* PathFinder,
+		UGridPathfindingSubsystem* PathFinder,
 		TArray<FEnemyObservation>& OutObs);
 
 	/**
