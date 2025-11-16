@@ -95,17 +95,19 @@ void UEnemyAISubsystem::BuildObservations(
             int32 BlockedCount = 0;
             int32 TotalCells = (SampleRadius * 2 + 1) * (SampleRadius * 2 + 1);
             
-            for (int32 dx = -SampleRadius; dx <= SampleRadius; ++dx)
-            {
-                for (int32 dy = -SampleRadius; dy <= SampleRadius; ++dy)
+                for (int32 dx = -SampleRadius; dx <= SampleRadius; ++dx)
                 {
-                    FIntPoint SampleCell = PlayerGrid + FIntPoint(dx, dy);
-                    if (PathFinder && !PathFinder->IsCellWalkable(SampleCell))
+                    for (int32 dy = -SampleRadius; dy <= SampleRadius; ++dy)
                     {
-                        BlockedCount++;
+                        FIntPoint SampleCell = PlayerGrid + FIntPoint(dx, dy);
+                        // CodeRevision: INC-2025-00021-R1 (Replace IsCellWalkable with IsCellWalkableIgnoringActor - Phase 2.3) (2025-11-17 15:05)
+                        // Debug code: only terrain check needed
+                        if (PathFinder && !PathFinder->IsCellWalkableIgnoringActor(SampleCell, nullptr))
+                        {
+                            BlockedCount++;
+                        }
                     }
                 }
-            }
             
             UE_LOG(LogEnemyAI, Verbose,
                 TEXT("[BuildObservations] GridOccupancy SAMPLE: %d/%d cells blocked around player (%d,%d)"),
@@ -114,7 +116,9 @@ void UEnemyAISubsystem::BuildObservations(
             for (int32 i = 0; i < FMath::Min(3, OutObs.Num()); ++i)
             {
                 const FEnemyObservation& Obs = OutObs[i];
-                bool bEnemyOccupied = PathFinder && !PathFinder->IsCellWalkable(Obs.GridPosition);
+                // CodeRevision: INC-2025-00021-R1 (Replace IsCellWalkable with IsCellWalkableIgnoringActor - Phase 2.3) (2025-11-17 15:05)
+                // Debug code: only terrain check needed
+                bool bEnemyOccupied = PathFinder && !PathFinder->IsCellWalkableIgnoringActor(Obs.GridPosition, nullptr);
                 UE_LOG(LogEnemyAI, Verbose,
                     TEXT("[BuildObservations] Enemy[%d] at (%d,%d): SelfOccupied=%d"),
                     i, Obs.GridPosition.X, Obs.GridPosition.Y, bEnemyOccupied ? 1 : 0);

@@ -105,24 +105,14 @@ public:
     AGridPathfindingLibrary* GetCachedPathFinder() const;
 
 
-    UFUNCTION(BlueprintCallable, Category="Dungeon|Access")
-    URogueDungeonSubsystem* GetDungeonSystem() const { return DungeonSystem; }
+    // CodeRevision: INC-2025-00017-R1 (Remove wrapper functions - Phase 4) (2025-11-16 15:25)
+    // Removed: GetDungeonSystem() - use DungeonSystem member directly
+    // Removed: GetFloorGenerator() - use DungeonSystem->GetFloorGenerator() directly
 
-    /** Access the FloorGenerator */
-    UFUNCTION(BlueprintCallable, Category="Dungeon|Access")
-    ADungeonFloorGenerator* GetFloorGenerator() const;
-
-    /** Ensure floor is generated (e.g., for a specific floor index) */
-    UFUNCTION(BlueprintCallable, Category="Dungeon|Flow")
-    bool EnsureFloorGenerated(int32 FloorIndex);
-
-    /** Advance to the next floor (FloorIndex++) */
-    UFUNCTION(BlueprintCallable, Category="Dungeon|Flow")
-    bool NextFloor();
-
-    /** Warp player to the stair-up location */
-    UFUNCTION(BlueprintCallable, Category="Dungeon|Flow")
-    void WarpPlayerToStairUp(AActor* Player);
+    // CodeRevision: INC-2025-00017-R1 (Remove unused wrapper functions - Phase 1) (2025-11-16 15:00)
+    // Removed: EnsureFloorGenerated() - unused wrapper function
+    // Removed: NextFloor() - unused wrapper function
+    // Removed: WarpPlayerToStairUp() - unimplemented wrapper function
 
     //==========================================================================
     // Barrier Related
@@ -183,32 +173,20 @@ public:
      */
     void ClearResidualInProgressTags();
 
-    UFUNCTION(BlueprintCallable, Category = "Turn|Enemy")
-    void BuildAllObservations();
-
-    UFUNCTION(BlueprintCallable, Category = "Turn|Utility")
-    bool SendGameplayEventWithResult(AActor* Target, FGameplayTag EventTag, const FGameplayEventData& Payload);
-
-    UFUNCTION(BlueprintCallable, Category = "Turn|Utility")
-    void SendGameplayEvent(AActor* Target, FGameplayTag EventTag, const FGameplayEventData& Payload);
-
-    UFUNCTION(BlueprintPure, Category = "Turn|Utility")
-    APlayerController* GetPlayerController_TBS() const;
-
-    UFUNCTION(BlueprintPure, Category = "Turn|Utility")
-    APawn* GetPlayerPawnCachedOrFetch();
-
-    UFUNCTION(BlueprintPure, Category = "Turn|Utility")
-    APawn* GetPlayerPawn() const;
-
-    UFUNCTION(BlueprintPure, Category = "Turn|Utility")
-    AActor* GetPlayerActor() const;
+    // CodeRevision: INC-2025-00017-R1 (Remove unused wrapper functions - Phase 1 & 3) (2025-11-16 15:00)
+    // Removed: BuildAllObservations() - unused wrapper function
+    // Removed: SendGameplayEventWithResult() - unused wrapper function
+    // Removed: SendGameplayEvent() - unused wrapper function
+    // Removed: GetPlayerController_TBS() - unused wrapper function
+    // Removed: GetPlayerPawnCachedOrFetch() - unused wrapper function
+    // Removed: GetPlayerPawn() - replaced with direct UGameplayStatics call
+    // Removed: GetPlayerActor() - unused wrapper function
 
     UFUNCTION(BlueprintPure, Category = "Turn|State")
     void GetCachedEnemies(TArray<AActor*>& OutEnemies) const;
 
-    UFUNCTION(BlueprintPure, Category = "Turn|Yangus")
-    bool HasAnyAttackIntent() const;
+    // CodeRevision: INC-2025-00017-R1 (Remove wrapper functions - Phase 3) (2025-11-16 15:20)
+    // Removed: HasAnyAttackIntent() - replaced with direct EnemyTurnDataSubsystem access
 
     //==========================================================================
     // Player・・lueprintNativeEvent・・    //==========================================================================
@@ -224,13 +202,9 @@ public:
     //==========================================================================
     // Enemy Pipeline・・lueprintNativeEvent・・    //==========================================================================
 
-    UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Turn|Enemy")
-    void CollectEnemies();
-    virtual void CollectEnemies_Implementation();
-
-    UFUNCTION(BlueprintNativeEvent, Category = "Turn|Enemy")
-    void CollectIntents();
-    virtual void CollectIntents_Implementation();
+    // CodeRevision: INC-2025-00017-R1 (Remove wrapper functions - Phase 3) (2025-11-16 15:20)
+    // Removed: CollectEnemies() / CollectEnemies_Implementation() - replaced with direct EnemyAISubsystem call
+    // Removed: CollectIntents() / CollectIntents_Implementation() - replaced with direct EnemyAISubsystem call
 
 
     //==========================================================================
@@ -303,9 +277,8 @@ public:
     void OnItemSystemUpdate(const FTurnContext& Context);
     virtual void OnItemSystemUpdate_Implementation(const FTurnContext& Context);
 
-    UFUNCTION(BlueprintNativeEvent, Category = "Turn|Enemy")
-    void GetEnemyIntentsBP(TArray<FEnemyIntent>& OutIntents) const;
-    virtual void GetEnemyIntentsBP_Implementation(TArray<FEnemyIntent>& OutIntents) const;
+    // CodeRevision: INC-2025-00017-R1 (Remove wrapper functions - Phase 3) (2025-11-16 15:20)
+    // Removed: GetEnemyIntentsBP() / GetEnemyIntentsBP_Implementation() - replaced with direct EnemyTurnDataSubsystem access
 
     
 

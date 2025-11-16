@@ -34,31 +34,8 @@ namespace
     }
 }
 
-static bool DoesCellContainBlockingActor(const UGridOccupancySubsystem* Occupancy, const FIntPoint& Cell, AActor* IgnoreActor)
-{
-    if (!Occupancy)
-    {
-        return false;
-    }
-
-    if (AActor* Occupant = Occupancy->GetActorAtCell(Cell))
-    {
-        if (!IgnoreActor || Occupant != IgnoreActor)
-        {
-            return true;
-        }
-    }
-
-    if (Occupancy->IsCellReserved(Cell))
-    {
-        if (!IgnoreActor || !Occupancy->IsReservationOwnedByActor(IgnoreActor, Cell))
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
+// CodeRevision: INC-2025-00021-R1 (Remove DoesCellContainBlockingActor - Phase 2.5) (2025-11-17 15:10)
+// Removed: DoesCellContainBlockingActor() - only used by IsCellWalkable which is also removed
 
 static bool GGridAuditEnabled = true;   // Enable audit mode for temporary debugging
 static FCriticalSection GridAuditCS;    // Critical section for thread-safe audit logging
@@ -607,11 +584,27 @@ FGridVisionResult AGridPathfindingLibrary::DetectInExpandingVision(
             VisitedTiles.Add(TargetGrid);
             Result.VisibleTiles.Add(TargetGrid);
 
-            TArray<AActor*> Actors;
-            GetActorsAtGridPosition(TargetGrid, ActorClassFilter, Actors);
-            for (AActor* Actor : Actors)
+            // CodeRevision: INC-2025-00021-R1 (Replace GetActorsAtGridPosition with direct UGridOccupancySubsystem access - Phase 3.1) (2025-11-17 15:15)
+            // Direct access to UGridOccupancySubsystem without fallback
+            if (UWorld* World = GetWorld())
             {
-                Result.VisibleActors.Add(Actor);
+                if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
+                {
+                    if (AActor* Occupant = Occupancy->GetActorAtCell(TargetGrid))
+                    {
+                        if (!ActorClassFilter || Occupant->IsA(ActorClassFilter))
+                        {
+                            Result.VisibleActors.Add(Occupant);
+                        }
+                    }
+                    if (AActor* Reserved = Occupancy->GetReservationOwner(TargetGrid))
+                    {
+                        if (Reserved && (!ActorClassFilter || Reserved->IsA(ActorClassFilter)))
+                        {
+                            Result.VisibleActors.AddUnique(Reserved);
+                        }
+                    }
+                }
             }
         }
     }
@@ -654,11 +647,27 @@ FGridVisionResult AGridPathfindingLibrary::DetectInRadius(
 
             Result.VisibleTiles.Add(TargetGrid);
 
-            TArray<AActor*> Actors;
-            GetActorsAtGridPosition(TargetGrid, ActorClassFilter, Actors);
-            for (AActor* Actor : Actors)
+            // CodeRevision: INC-2025-00021-R1 (Replace GetActorsAtGridPosition with direct UGridOccupancySubsystem access - Phase 3.2) (2025-11-17 15:15)
+            // Direct access to UGridOccupancySubsystem without fallback
+            if (UWorld* World = GetWorld())
             {
-                Result.VisibleActors.Add(Actor);
+                if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
+                {
+                    if (AActor* Occupant = Occupancy->GetActorAtCell(TargetGrid))
+                    {
+                        if (!ActorClassFilter || Occupant->IsA(ActorClassFilter))
+                        {
+                            Result.VisibleActors.Add(Occupant);
+                        }
+                    }
+                    if (AActor* Reserved = Occupancy->GetReservationOwner(TargetGrid))
+                    {
+                        if (Reserved && (!ActorClassFilter || Reserved->IsA(ActorClassFilter)))
+                        {
+                            Result.VisibleActors.AddUnique(Reserved);
+                        }
+                    }
+                }
             }
         }
     }
@@ -702,16 +711,32 @@ FGridSurroundResult AGridPathfindingLibrary::SearchAdjacentTiles(
         }
         else
         {
-            TArray<AActor*> Actors;
-            GetActorsAtGridPosition(Target, ActorClassFilter, Actors);
-            if (Actors.Num() > 0)
+            // CodeRevision: INC-2025-00021-R1 (Replace GetActorsAtGridPosition with direct UGridOccupancySubsystem access - Phase 3.3) (2025-11-17 15:15)
+            // Direct access to UGridOccupancySubsystem without fallback
+            bool bFoundActor = false;
+            if (UWorld* World = GetWorld())
             {
-                for (AActor* Actor : Actors)
+                if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
                 {
-                    Result.AdjacentActors.Add(Actor);
+                    if (AActor* Occupant = Occupancy->GetActorAtCell(Target))
+                    {
+                        if (!ActorClassFilter || Occupant->IsA(ActorClassFilter))
+                        {
+                            Result.AdjacentActors.Add(Occupant);
+                            bFoundActor = true;
+                        }
+                    }
+                    if (AActor* Reserved = Occupancy->GetReservationOwner(Target))
+                    {
+                        if (Reserved && (!ActorClassFilter || Reserved->IsA(ActorClassFilter)))
+                        {
+                            Result.AdjacentActors.AddUnique(Reserved);
+                            bFoundActor = true;
+                        }
+                    }
                 }
             }
-            else
+            if (!bFoundActor)
             {
                 Result.EmptyTiles.Add(Target);
             }
@@ -721,62 +746,8 @@ FGridSurroundResult AGridPathfindingLibrary::SearchAdjacentTiles(
     return Result;
 }
 
-AActor* AGridPathfindingLibrary::GetActorAtPosition(
-    const FVector& WorldPos,
-    float SearchRadius,
-    TSubclassOf<AActor> ActorClassFilter) const
-{
-    if (SearchRadius < 0.f)
-    {
-        SearchRadius = TileSize * 0.5f;
-    }
-
-    UWorld* World = GetWorld();
-    if (!World)
-    {
-        return nullptr;
-    }
-
-    UClass* FilterClass = ActorClassFilter ? ActorClassFilter.Get() : AActor::StaticClass();
-
-    if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
-    {
-        const FIntPoint Cell = WorldToGridInternal(WorldPos);
-
-        if (AActor* Occupant = Occupancy->GetActorAtCell(Cell))
-        {
-            if (!FilterClass || Occupant->IsA(FilterClass))
-            {
-                return Occupant;
-            }
-        }
-
-        if (AActor* Reserved = Occupancy->GetReservationOwner(Cell))
-        {
-            if (Reserved && (!FilterClass || Reserved->IsA(FilterClass)))
-            {
-                return Reserved;
-            }
-        }
-    }
-
-    for (TActorIterator<AActor> It(World, FilterClass); It; ++It)
-    {
-        AActor* Actor = *It;
-        if (!Actor || Actor == this)
-        {
-            continue;
-        }
-
-        const float Dist = FVector::Dist2D(Actor->GetActorLocation(), WorldPos);
-        if (Dist <= SearchRadius)
-        {
-            return Actor;
-        }
-    }
-
-    return nullptr;
-}
+// CodeRevision: INC-2025-00021-R1 (Remove GetActorAtPosition - Phase 3.4) (2025-11-17 15:20)
+// Removed: GetActorAtPosition() - use UGridOccupancySubsystem::GetActorAtCell directly
 
 bool AGridPathfindingLibrary::HasLineOfSight(const FVector& StartWorld, const FVector& EndWorld) const
 {
@@ -863,101 +834,19 @@ bool AGridPathfindingLibrary::IsVisibleFromPoint(const FIntPoint& From, const FI
     return true;
 }
 
-void AGridPathfindingLibrary::GetActorsAtGridPosition(const FIntPoint& GridPos, TSubclassOf<AActor> ClassFilter, TArray<AActor*>& OutActors) const
-{
-    OutActors.Reset();
-
-    UWorld* World = GetWorld();
-    if (!World)
-    {
-        return;
-    }
-
-    UClass* FilterClass = ClassFilter ? ClassFilter.Get() : AActor::StaticClass();
-
-    if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
-    {
-        if (AActor* Occupant = Occupancy->GetActorAtCell(GridPos))
-        {
-            if (!FilterClass || Occupant->IsA(FilterClass))
-            {
-                OutActors.Add(Occupant);
-            }
-        }
-
-        if (AActor* Reserved = Occupancy->GetReservationOwner(GridPos))
-        {
-            if (Reserved && (!FilterClass || Reserved->IsA(FilterClass)))
-            {
-                OutActors.AddUnique(Reserved);
-            }
-        }
-
-        if (OutActors.Num() > 0)
-        {
-            return;
-        }
-    }
-
-    const FVector WorldPos = GridToWorldInternal(GridPos, 0.f);
-    const float SearchRadius = TileSize * 0.5f;
-
-    for (TActorIterator<AActor> It(World, FilterClass); It; ++It)
-    {
-        AActor* Actor = *It;
-        if (!Actor || Actor == this)
-        {
-            continue;
-        }
-
-        const float Dist = FVector::Dist2D(Actor->GetActorLocation(), WorldPos);
-        if (Dist <= SearchRadius)
-        {
-            OutActors.Add(Actor);
-        }
-    }
-}
+// CodeRevision: INC-2025-00021-R1 (Remove GetActorsAtGridPosition - Phase 3.5) (2025-11-17 15:25)
+// Removed: GetActorsAtGridPosition() - use UGridOccupancySubsystem::GetActorAtCell directly
 
 // ==================== Static Distance Functions ====================
 
-int32 AGridPathfindingLibrary::GetChebyshevDistance(FIntPoint A, FIntPoint B)
-{
-    // ★★★ Optimization: Use GridUtils (duplicate code removed 2025-11-09)
-    return FGridUtils::ChebyshevDistance(A, B);
-}
-
-int32 AGridPathfindingLibrary::GetManhattanDistanceGrid(FIntPoint A, FIntPoint B)
-{
-    // ★★★ Optimization: Use GridUtils (duplicate code removed 2025-11-09)
-    return FGridUtils::ManhattanDistance(A, B);
-}
-
-int32 AGridPathfindingLibrary::GetEuclideanDistanceGrid(FIntPoint A, FIntPoint B)
-{
-    // ★★★ Optimization: Use GridUtils (duplicate code removed 2025-11-09)
-    return FMath::RoundToInt(FGridUtils::EuclideanDistance(A, B));
-}
+// CodeRevision: INC-2025-00021-R1 (Remove static distance functions - Phase 4.1) (2025-11-17 15:35)
+// Removed: GetChebyshevDistance(), GetManhattanDistanceGrid(), GetEuclideanDistanceGrid()
+// Use FGridUtils::ChebyshevDistance, FGridUtils::ManhattanDistance, FGridUtils::EuclideanDistance directly
 
 // ==================== Grid Status Query ====================
 
-int32 AGridPathfindingLibrary::ReturnGridStatusIgnoringSelf(const FVector& InputVector, AActor* IgnoreActor) const
-{
-    FIntPoint GridPos = WorldToGridInternal(InputVector);
-    int32 Cost = GetGridCost(GridPos.X, GridPos.Y);
-
-    if (Cost == -1 && IgnoreActor)
-    {
-        AActor* Occupant = GetActorAtPosition(InputVector, TileSize * 0.5f, nullptr);
-        if (Occupant == IgnoreActor)
-        {
-            UE_LOG(LogGridPathfinding, Verbose, TEXT("[GridPathfinding] Self-occupied at %s, allowing pass"),
-                *InputVector.ToCompactString());
-            return 1;  // Walkable
-        }
-    }
-
-    return Cost;
-}
+// CodeRevision: INC-2025-00021-R1 (Remove ReturnGridStatusIgnoringSelf - Phase 3.6) (2025-11-17 15:30)
+// Removed: ReturnGridStatusIgnoringSelf() - unused function
 
 // ==================== Debug/Smoke Test ====================
 
@@ -1012,27 +901,8 @@ void AGridPathfindingLibrary::GridAuditProbe(int32 X, int32 Y)
 
 // ==================== Unified Movement Validation API for AI Blocking ====================
 
-bool AGridPathfindingLibrary::IsCellWalkable(const FIntPoint& Cell) const
-{
-    const int32 TerrainCost = GetGridCost(Cell.X, Cell.Y);
-    if (TerrainCost < 0)
-    {
-        return false;
-    }
-
-    if (UWorld* World = GetWorld())
-    {
-        if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
-        {
-            if (DoesCellContainBlockingActor(Occupancy, Cell, nullptr))
-            {
-                return false;
-            }
-        }
-    }
-
-    return true;
-}
+// CodeRevision: INC-2025-00021-R1 (Remove IsCellWalkable - Phase 2.5) (2025-11-17 15:10)
+// Removed: IsCellWalkable() - replaced with IsCellWalkableIgnoringActor + UGridOccupancySubsystem::IsCellOccupied
 
 bool AGridPathfindingLibrary::IsCellWalkableIgnoringActor(const FIntPoint& Cell, AActor* IgnoreActor) const
 {
@@ -1048,11 +918,8 @@ bool AGridPathfindingLibrary::IsCellWalkableIgnoringActor(const FIntPoint& Cell,
     return true;
 }
 
-bool AGridPathfindingLibrary::IsCellWalkableAtWorldPosition(const FVector& WorldPos) const
-{
-    const FIntPoint Cell = WorldToGrid(WorldPos);
-    return IsCellWalkable(Cell);
-}
+// CodeRevision: INC-2025-00021-R1 (Remove IsCellWalkableAtWorldPosition - Phase 1.1) (2025-11-17 15:00)
+// Removed: IsCellWalkableAtWorldPosition() - unused wrapper function
 
 //==========================================================================
 // ★★★ New Addition: Unified Movement Validation API Implementation ★★★
@@ -1135,6 +1002,7 @@ bool AGridPathfindingLibrary::IsMoveValid(
     // All checks passed
     return true;
 }
+
 
 
 

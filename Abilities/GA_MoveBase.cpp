@@ -10,6 +10,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Rogue/Character/UnitBase.h"
+#include "Rogue/Character/UnitMovementComponent.h"
 #include "Rogue/Grid/GridOccupancySubsystem.h"
 #include "Rogue/Grid/GridPathfindingLibrary.h"
 #include "Rogue/Turn/TurnActionBarrierSubsystem.h"
@@ -512,13 +513,17 @@ void UGA_MoveBase::EndAbility(
 		bWasCancelled ? 1 : 0,
 		Elapsed);
 
-	if (MoveFinishedHandle.IsValid())
+	// CodeRevision: INC-2025-00018-R1 (Bind move completion delegate through UnitMovementComponent) (2025-11-17 13:15)
+	if (bMoveFinishedDelegateBound)
 	{
 		if (AUnitBase* Unit = Cast<AUnitBase>(GetAvatarActorFromActorInfo()))
 		{
-			Unit->OnMoveFinished.Remove(MoveFinishedHandle);
+			if (UUnitMovementComponent* MovementComp = Unit->MovementComp.Get())
+			{
+				MovementComp->OnMoveFinished.RemoveDynamic(this, &UGA_MoveBase::OnMoveFinished);
+			}
 		}
-		MoveFinishedHandle.Reset();
+		bMoveFinishedDelegateBound = false;
 	}
 
 	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
@@ -795,7 +800,7 @@ AGameTurnManagerBase* UGA_MoveBase::GetTurnManager() const
 
 void UGA_MoveBase::BindMoveFinishedDelegate()
 {
-	if (MoveFinishedHandle.IsValid())
+	if (bMoveFinishedDelegateBound)
 	{
 		UE_LOG(LogTurnManager, Warning,
 			TEXT("[BindMoveFinishedDelegate] %s: Already bound, skipping"),
@@ -805,12 +810,21 @@ void UGA_MoveBase::BindMoveFinishedDelegate()
 
 	if (AUnitBase* Unit = Cast<AUnitBase>(GetAvatarActorFromActorInfo()))
 	{
-		MoveFinishedHandle = Unit->OnMoveFinished.AddUObject(this, &UGA_MoveBase::OnMoveFinished);
+		if (UUnitMovementComponent* MovementComp = Unit->MovementComp.Get())
+		{
+			// CodeRevision: INC-2025-00018-R1 (Bind move completion delegate through UnitMovementComponent) (2025-11-17 13:15)
+			MovementComp->OnMoveFinished.AddDynamic(this, &UGA_MoveBase::OnMoveFinished);
+			bMoveFinishedDelegateBound = true;
 
-		// Sparky diagnostic: Delegate bind success
-		UE_LOG(LogTurnManager, Log,
-			TEXT("[BindMoveFinishedDelegate] SUCCESS: Unit %s delegate bound to GA_MoveBase::OnMoveFinished (Handle IsValid=%d)"),
-			*GetNameSafe(Unit), MoveFinishedHandle.IsValid() ? 1 : 0);
+			UE_LOG(LogTurnManager, Log,
+				TEXT("[BindMoveFinishedDelegate] SUCCESS: Unit %s delegate bound to UnitMovementComponent::OnMoveFinished"),
+				*GetNameSafe(Unit));
+			return;
+		}
+
+		UE_LOG(LogTurnManager, Error,
+			TEXT("[BindMoveFinishedDelegate] FAILED: MovementComp missing for Unit %s - cannot bind OnMoveFinished"),
+			*GetNameSafe(Unit));
 	}
 	else
 	{
@@ -1084,7 +1098,9 @@ void UGA_MoveBase::DebugDumpAround(const FIntPoint& Center)
 		for (int32 DeltaX = -1; DeltaX <= 1; ++DeltaX)
 		{
 			const FIntPoint Cell(Center.X + DeltaX, Center.Y + DeltaY);
-			const bool bWalkable = PathFinder->IsCellWalkable(Cell);
+			// CodeRevision: INC-2025-00021-R1 (Replace IsCellWalkable with IsCellWalkableIgnoringActor - Phase 2.4) (2025-11-17 15:05)
+			// Debug code: only terrain check needed
+			const bool bWalkable = PathFinder->IsCellWalkableIgnoringActor(Cell, nullptr);
 			Row += FString::Printf(TEXT("%s%2d "),
 				(DeltaX == 0 && DeltaY == 0) ? TEXT("[") : TEXT(" "),
 				bWalkable ? 1 : 0);

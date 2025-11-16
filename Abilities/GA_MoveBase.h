@@ -261,7 +261,7 @@ private:
     const class AGridPathfindingLibrary* GetPathFinder() const;
     AGameTurnManagerBase* GetTurnManager() const;
 
-    FDelegateHandle MoveFinishedHandle;
+    bool bMoveFinishedDelegateBound = false;
 
     //--------------------------------------------------------------------------
     // 遘ｻ蜍暮幕蟋倶�E�咲�E��E�・医Ρ繝ｼ繝ｫ繝牙�E��E�讓呻�E�会ｼ・ridOccupancy隗｣謾�E�逕ｨ・・    //--------------------------------------------------------------------------

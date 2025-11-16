@@ -371,15 +371,10 @@ bool UDistanceFieldSubsystem::IsWalkable(const FIntPoint& Cell, AActor* IgnoreAc
         return false;
     }
 
-    // ☁E E☁E修正 (2025-11-11): IgnoreActorを老E Eした歩行可能性判定！EI征E  問題修正 E E☁E E☁E
-    if (IgnoreActor)
-    {
-        return GridPathfinding->IsCellWalkableIgnoringActor(Cell, IgnoreActor);
-    }
-    else
-    {
-        return GridPathfinding->IsCellWalkable(Cell);
-    }
+    // CodeRevision: INC-2025-00021-R1 (Replace IsCellWalkable with IsCellWalkableIgnoringActor - Phase 2.1) (2025-11-17 15:05)
+    // IsCellWalkable checks both terrain and occupancy, but here we only need terrain check
+    // Occupancy is handled separately by DistanceFieldSubsystem logic
+    return GridPathfinding->IsCellWalkableIgnoringActor(Cell, IgnoreActor);
 }
 
 bool UDistanceFieldSubsystem::CanMoveDiagonal(const FIntPoint& From, const FIntPoint& To) const

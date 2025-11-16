@@ -375,3 +375,38 @@ public:
 - `GameTurnManagerBase` の責務が「ターン進行の管理」にさらに限定され、クラスの見通しが良くなる。
 - 各サブシステムが持つべき責務が明確になり、コードの呼び出し関係が正常化される。
 - 不要な中間層がなくなることで、コードの可読性と保守性が向上する。
+
+---
+
+## 7. AGridPathfindingLibrary の責務分離
+
+### 現状の問題
+`AGridPathfindingLibrary` は、純粋なパス探索と地形コスト管理という責務を超えて、アクターの占有情報を問い合わせるロジックや、他のユーティリティクラス (`FGridUtils`) と重複する静的関数を抱えている。これにより、`UGridOccupancySubsystem` との責務の境界が曖昧になり、コードの重複を招いている。
+
+### 7.1 アクターの占有情報を問い合わせる重複関数の削除
+**問題**: `GetActorAtPosition` や `GetActorsAtGridPosition` は、`UGridOccupancySubsystem` に問い合わせた後、見つからない場合に自前で `TActorIterator` を用いてフォールバック検索を行っており、責務が重複している。アクターの占有に関する問い合わせは、`UGridOccupancySubsystem` が唯一の情報源であるべき。
+**修正方針**: これらの関数を削除し、呼び出し元が `UGridOccupancySubsystem::GetActorAtCell` などを直接使用するように修正する。
+**対象関数**:
+- `GetActorAtPosition`
+- `GetActorsAtGridPosition`
+
+### 7.2 責務が曖昧な歩行可能性チェック関数の削除
+**問題**: `IsCellWalkable` は地形コストとアクター占有の両方をチェックしており、責務が曖昧。`ReturnGridStatusIgnoringSelf` のような特殊ケース関数も、APIの責務が不明確であることを示している。
+**修正方針**: これらの関数を削除し、呼び出し元は `IsCellWalkableIgnoringActor`（地形のみ）と `UGridOccupancySubsystem::IsCellOccupied` を個別に呼び出すか、`IsMoveValid` のような高レベルAPIを使用するように修正する。
+**対象関数**:
+- `IsCellWalkable`
+- `IsCellWalkableAtWorldPosition`
+- `ReturnGridStatusIgnoringSelf`
+
+### 7.3 FGridUtils と重複する静的ユーティリティ関数の削除
+**問題**: `AGridPathfindingLibrary` に実装されている静的な距離計算関数は、`FGridUtils` の同名関数を呼び出しているだけのラッパーであり、完全に重複している。
+**修正方針**: これらの静的関数を `AGridPathfindingLibrary` から削除し、すべての呼び出し元が `FGridUtils` の静的関数を直接使用するように修正する。
+**対象関数**:
+- `GetChebyshevDistance`
+- `GetManhattanDistanceGrid`
+- `GetEuclideanDistanceGrid`
+
+### 期待される効果
+- `AGridPathfindingLibrary` の責務がパス探索と地形情報に特化し、`UGridOccupancySubsystem` との役割分担が明確になる。
+- コードの重複が排除され、保守性が向上する。
+- `FGridUtils` のようなユーティリティクラスの利用が促進され、一貫したコーディングスタイルが維持される。

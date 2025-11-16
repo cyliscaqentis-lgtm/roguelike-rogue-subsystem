@@ -73,7 +73,9 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
         int32 BlockedCount = 0;
         for (int i = 0; i < 4; ++i)
         {
-            bool bNeighborWalkable = GridPathfinding->IsCellWalkable(Neighbors[i]);
+            // CodeRevision: INC-2025-00021-R1 (Replace IsCellWalkable with IsCellWalkableIgnoringActor - Phase 2.2) (2025-11-17 15:05)
+            // Debug code: only terrain check needed
+            bool bNeighborWalkable = GridPathfinding->IsCellWalkableIgnoringActor(Neighbors[i], Intent.Actor.Get());
             if (!bNeighborWalkable) BlockedCount++;
             UE_LOG(LogTemp, Warning, TEXT("[PathFinder] Neighbor[%d]=(%d,%d): Walkable=%d"), 
                 i, Neighbors[i].X, Neighbors[i].Y, bNeighborWalkable ? 1 : 0);

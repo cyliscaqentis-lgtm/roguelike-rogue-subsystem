@@ -132,16 +132,14 @@ public:
 
     // ==================== 統合API（敵AI移動ブロック修正） ====================
 
-    /** 統合された歩行可能性判定（地形+占有） */
-    UFUNCTION(BlueprintCallable, Category = "Grid|Walkability")
-    bool IsCellWalkable(const FIntPoint& Cell) const;
+    // CodeRevision: INC-2025-00021-R1 (Remove IsCellWalkable - Phase 2.5) (2025-11-17 15:10)
+    // Removed: IsCellWalkable() - replaced with IsCellWalkableIgnoringActor + UGridOccupancySubsystem::IsCellOccupied
 
     UFUNCTION(BlueprintCallable, Category = "Grid|Walkability")
     bool IsCellWalkableIgnoringActor(const FIntPoint& Cell, AActor* IgnoreActor) const;
 
-    /** FVector版の歩行可能性判定 */
-    UFUNCTION(BlueprintCallable, Category = "Grid|Walkability")
-    bool IsCellWalkableAtWorldPosition(const FVector& WorldPos) const;
+    // CodeRevision: INC-2025-00021-R1 (Remove IsCellWalkableAtWorldPosition - Phase 1.1) (2025-11-17 15:00)
+    // Removed: IsCellWalkableAtWorldPosition() - unused wrapper function
 
     //==========================================================================
     // ★★★ New Addition: Unified Movement Validation API ★★★
@@ -213,11 +211,8 @@ public:
         bool bIncludeDiagonal = true,
         TSubclassOf<AActor> ActorClassFilter = nullptr) const;
 
-    UFUNCTION(BlueprintCallable, Category = "Pathfinding|Detection")
-    AActor* GetActorAtPosition(
-        const FVector& WorldPos,
-        float SearchRadius = -1.0f,
-        TSubclassOf<AActor> ActorClassFilter = nullptr) const;
+    // CodeRevision: INC-2025-00021-R1 (Remove GetActorAtPosition - Phase 3.4) (2025-11-17 15:20)
+    // Removed: GetActorAtPosition() - use UGridOccupancySubsystem::GetActorAtCell directly
 
     UFUNCTION(BlueprintPure, Category = "Pathfinding|Detection")
     bool HasLineOfSight(const FVector& StartWorld, const FVector& EndWorld) const;
@@ -265,25 +260,16 @@ public:
         );
     }
 
-    /** 自己占有を無視したグリッドステータス取得 */
-    UFUNCTION(BlueprintPure, Category = "Pathfinding|Utility")
-    int32 ReturnGridStatusIgnoringSelf(const FVector& InputVector, AActor* IgnoreActor) const;
+    // CodeRevision: INC-2025-00021-R1 (Remove ReturnGridStatusIgnoringSelf - Phase 3.6) (2025-11-17 15:30)
+    // Removed: ReturnGridStatusIgnoringSelf() - unused function
 
     //==========================================================================
     // ✅ 既存：マス単位距離計算（静的関数）
     //==========================================================================
 
-    /** チェビシェフ距離（8方向移動の標準） */
-    UFUNCTION(BlueprintPure, Category = "Grid|Distance", meta = (CompactNodeTitle = "Chebyshev"))
-    static int32 GetChebyshevDistance(FIntPoint A, FIntPoint B);
-
-    /** マンハッタン距離（4方向移動専用） */
-    UFUNCTION(BlueprintPure, Category = "Grid|Distance", meta = (CompactNodeTitle = "Manhattan"))
-    static int32 GetManhattanDistanceGrid(FIntPoint A, FIntPoint B);
-
-    /** ユークリッド距離（参考用） */
-    UFUNCTION(BlueprintPure, Category = "Grid|Distance", meta = (CompactNodeTitle = "Euclidean"))
-    static int32 GetEuclideanDistanceGrid(FIntPoint A, FIntPoint B);
+    // CodeRevision: INC-2025-00021-R1 (Remove static distance functions - Phase 4.1) (2025-11-17 15:35)
+    // Removed: GetChebyshevDistance(), GetManhattanDistanceGrid(), GetEuclideanDistanceGrid()
+    // Use FGridUtils::ChebyshevDistance, FGridUtils::ManhattanDistance, FGridUtils::EuclideanDistance directly
 
 protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pathfinding")
@@ -319,7 +305,8 @@ protected:
 
     static int32 CalculateHeuristic(int32 x0, int32 y0, int32 x1, int32 y1, EGridHeuristic Mode);
     bool IsVisibleFromPoint(const FIntPoint& From, const FIntPoint& To) const;
-    void GetActorsAtGridPosition(const FIntPoint& GridPos, TSubclassOf<AActor> ClassFilter, TArray<AActor*>& OutActors) const;
+    // CodeRevision: INC-2025-00021-R1 (Remove GetActorsAtGridPosition - Phase 3.5) (2025-11-17 15:25)
+    // Removed: GetActorsAtGridPosition() - use UGridOccupancySubsystem::GetActorAtCell directly
 
     static FORCEINLINE int32 ToIndex(int32 X, int32 Y, int32 W) { return Y * W + X; }
     static FORCEINLINE bool InBounds(int32 X, int32 Y, int32 W, int32 H) { return X >= 0 && Y >= 0 && X < W && Y < H; }
