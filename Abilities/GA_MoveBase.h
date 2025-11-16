@@ -16,23 +16,23 @@ class AGameTurnManagerBase;
 
 /**
  * UGA_MoveBase
- * 移動アビリティの基底クラス
+ * 移動アビリチE��の基底クラス
  *
- * Phase 3 リファクタリング: State.Action.InProgress + Barrier 対応
+ * Phase 3 リファクタリング: State.Action.InProgress + Barrier 対忁E
  *
- * 機能:
- * - EnhancedInputから受け取った方向ベクトルをグリッド移動に変換
- * - State.Moving タグを管理し、ActivationBlockedTags で重複実行を防止
- * - State.Action.InProgress タグを管理し、他のアクションと競合しないようにする
- * - Barrier::RegisterAction() / CompleteAction() でアクションの完了を管理
- * - 移動完了時に Ability.Move.Completed イベントを発行し、TurnManager に通知
- * - 3軸移動（X/Y/Z）をサポートし、グリッド中心へのスナップ機能を提供
- * - TurnIdとWindowIdを検証し、古いターンのコマンドを無視
+ * 機�E:
+ * - EnhancedInputから受け取った方向�EクトルをグリチE��移動に変換
+ * - State.Moving タグを管琁E��、ActivationBlockedTags で重褁E��行を防止
+ * - State.Action.InProgress タグを管琁E��、他�Eアクションと競合しなぁE��ぁE��する
+ * - Barrier::RegisterAction() / CompleteAction() でアクションの完亁E��管琁E
+ * - 移動完亁E��に Ability.Move.Completed イベントを発行し、TurnManager に通知
+ * - 3軸移動！E/Y/Z�E�をサポ�Eトし、グリチE��中忁E��のスナップ機�Eを提侁E
+ * - TurnIdとWindowIdを検証し、古ぁE��ーンのコマンドを無要E
  *
- * 実装詳細:
- * - State.Action.InProgress タグを ActivationOwnedTags で管理
- * - Barrier システムと連携して RegisterAction / CompleteAction を呼び出し
- * - TurnManager の InProgress タグ管理と同期
+ * 実裁E��細:
+ * - State.Action.InProgress タグめEActivationOwnedTags で管琁E
+ * - Barrier シスチE��と連携して RegisterAction / CompleteAction を呼び出ぁE
+ * - TurnManager の InProgress タグ管琁E��同期
  */
 UCLASS(Abstract, Blueprintable)
 class LYRAGAME_API UGA_MoveBase : public UGA_TurnActionBase
@@ -43,7 +43,7 @@ public:
     UGA_MoveBase(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
     //--------------------------------------------------------------------------
-    // GameplayAbility オーバーライド
+    // GameplayAbility オーバ�EライチE
     //--------------------------------------------------------------------------
 
     virtual void ActivateAbility(
@@ -69,10 +69,10 @@ public:
     );
 
     /**
-     * ★★★ ChatGPT提案: イベント応答の軽量チェック (2025-11-11) ★★★
-     * HandleGameplayEvent returned 0 問題を解決するため、
-     * イベントに応答する前に軽量な検証を行う。
-     * 重い検証はActivateAbilityで実行される。
+     * ☁E�E☁EChatGPT提桁E イベント応答�E軽量チェチE�� (2025-11-11) ☁E�E☁E
+     * HandleGameplayEvent returned 0 問題を解決するため、E
+     * イベントに応答する前に軽量な検証を行う、E
+     * 重い検証はActivateAbilityで実行される、E
      */
     virtual bool ShouldRespondToEvent(
         const FGameplayAbilityActorInfo* ActorInfo,
@@ -98,11 +98,11 @@ protected:
     virtual void SendCompletionEvent(bool bTimedOut = false) override;
 
     //==========================================================================
-    // Phase 6: デバッグ・計測
+    // Phase 6: チE��チE��・計測
     //==========================================================================
 
     /**
-     * アビリティ開始時刻（デバッグ用）
+     * アビリチE��開始時刻�E�デバッグ用�E�E
      */
     double AbilityStartTime = 0.0;
 
@@ -122,14 +122,14 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Move")
     float GridSize = 100.0f;
 
-    /** この距離以下の場合はアニメーションをスキップ（=0で無効化） */
+    /** こ�E距離以下�E場合�EアニメーションをスキチE�E�E�E0で無効化！E*/
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Move|Animation")
-    float SkipAnimIfUnderDistance = 0.0f;  // 距離が短すぎる場合はアニメーションをスキップ
+    float SkipAnimIfUnderDistance = 0.0f;  // 距離が短すぎる場合�EアニメーションをスキチE�E
     UPROPERTY(EditDefaultsOnly, Category = "GAS|Tags")
     FGameplayTag StateMovingTag = FGameplayTag::RequestGameplayTag(TEXT("State.Moving"));
 
     //--------------------------------------------------------------------------
-    // 状態変数（BlueprintReadOnly - 読み取り専用）
+    // 状態変数�E�ElueprintReadOnly - 読み取り専用�E�E
     //--------------------------------------------------------------------------
 
     UPROPERTY(BlueprintReadOnly, Category = "Move|State")
@@ -153,44 +153,43 @@ protected:
     int32 CompletedTurnIdForEvent = INDEX_NONE;
 
     //--------------------------------------------------------------------------
-    // C++内部関数
+    // C++冁E��関数
     //--------------------------------------------------------------------------
 
     /** EventDataからDirectionを抽出 */
-    bool ExtractDirectionFromEventData(const FGameplayEventData* EventData, FVector& OutDirection);
 
-    /** 8方向グリッドに量子化 */
+    /** 8方向グリチE��に量子化 */
     FVector2D QuantizeToGridDirection(const FVector& InDirection);
 
-    /** 次のタイル位置を計算 */
+    /** 次のタイル位置を計箁E*/
     FVector CalculateNextTilePosition(const FVector& CurrentPosition, const FVector2D& Dir);
 
     /**
-     * 移動先タイルが通行可能かチェック（3軸移動対応）
+     * 移動�Eタイルが通行可能かチェチE���E�E軸移動対応！E
      */
     bool IsTileWalkable(const FVector& TilePosition, AUnitBase* Self = nullptr);
 
     /** タイル状態を更新 */
     void UpdateGridState(const FVector& Position, int32 Value);
 
-    /** セル単位で通行可能かチェック（Occupancy/DistanceFieldを使用） */
+    /** セル単位で通行可能かチェチE���E�Eccupancy/DistanceFieldを使用�E�E*/
     bool IsTileWalkable(const FIntPoint& Cell) const;
 
     /** ヨー角を45度単位に丸める */
     float RoundYawTo45Degrees(float Yaw);
 
-    /** 移動完了デリゲートをバインド */
+    /** 移動完亁E��リゲートをバインチE*/
     void BindMoveFinishedDelegate();
 
-    /** 移動完了時のコールバック */
+    /** 移動完亁E��のコールバック */
     UFUNCTION()
     void OnMoveFinished(AUnitBase* Unit);
 
-    /** 指定セルへの移動を開始（グリッド位置を正しく設定） */
+    /** 持E��セルへの移動を開始（グリチE��位置を正しく設定！E*/
     void StartMoveToCell(const FIntPoint& TargetCell);
 
     //--------------------------------------------------------------------------
-    // 3軸移動・位置調整・デバッグヘルパー
+    // 3軸移動�E位置調整・チE��チE��ヘルパ�E
     //--------------------------------------------------------------------------
 
     FVector SnapToCellCenter(const FVector& WorldPos) const;
@@ -201,7 +200,7 @@ protected:
     void DebugDumpAround(const FIntPoint& Center);
 
     //--------------------------------------------------------------------------
-    // Blueprint実装可能イベント・アニメーション制御
+    // Blueprint実裁E��能イベント�Eアニメーション制御
     //--------------------------------------------------------------------------
 
     UFUNCTION(BlueprintImplementableEvent, Category = "Move|Animation")
@@ -218,7 +217,7 @@ private:
     //--------------------------------------------------------------------------
 
     //--------------------------------------------------------------------------
-    // State.Moving タグ管理・キャッシュ
+    // State.Moving タグ管琁E�EキャチE��ュ
     //--------------------------------------------------------------------------
 
     UPROPERTY()
@@ -232,7 +231,7 @@ private:
     mutable TWeakObjectPtr<AGameTurnManagerBase> CachedTurnManager;
 
     /**
-     * PathFinderへのアクセスを取得（キャッシュ付き）
+     * PathFinderへのアクセスを取得（キャチE��ュ付き�E�E
      * CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
      * @deprecated Use GetGridPathfindingSubsystem() instead
      */
@@ -252,16 +251,16 @@ private:
     bool bBarrierRegistered = false;
 
     //--------------------------------------------------------------------------
-    // 移動状態キャッシュ・GridOccupancy連携
+    // 移動状態キャチE��ュ・GridOccupancy連携
     //--------------------------------------------------------------------------
 
     FVector CachedStartLocWS = FVector::ZeroVector;
 
-    /** 移動先セル（OnMoveFinishedで正しい位置設定に使用） */
+    /** 移動�Eセル�E�EnMoveFinishedで正しい位置設定に使用�E�E*/
     FIntPoint CachedNextCell = FIntPoint(-1, -1);
 
     //--------------------------------------------------------------------------
-    // キャッシュ変数（OnMoveFinished で使用）
+    // キャチE��ュ変数�E�EnMoveFinished で使用�E�E
     //--------------------------------------------------------------------------
 
     FGameplayAbilitySpecHandle CachedSpecHandle;
@@ -269,9 +268,9 @@ private:
     FGameplayAbilityActivationInfo CachedActivationInfo;
     FVector CachedFirstLoc = FVector::ZeroVector;
 
-    // Sparky修正: 再終了防止フラグ
+    // Sparky修正: 再終亁E��止フラグ
     bool bIsEnding = false;
 
-    // ★★★ REMOVED: InProgressStack (2025-11-11) ★★★
-    // ActivationOwnedTags を使用するため、手動カウントは不要
+    // ☁E�E☁EREMOVED: InProgressStack (2025-11-11) ☁E�E☁E
+    // ActivationOwnedTags を使用するため、手動カウント�E不要E
 };

@@ -329,10 +329,10 @@ void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& Reso
 
         if (Action.bIsWait)
         {
+            // CodeRevision: INC-2025-00030-R7 (Keep wait actions flowing through TurnManager) (2025-11-17 01:50)
             UE_LOG(LogTurnCore, Verbose,
-                TEXT("[Execute] Skip: Actor=%s marked as bIsWait=true (loser or reservation failed)"),
+                TEXT("[Execute] Notice: Actor=%s marked as bIsWait=true (loser or reservation failed), still dispatching"),
                 *GetNameSafe(Action.SourceActor.Get()));
-            continue;
         }
 
         bool bHandledByTurnManager = false;

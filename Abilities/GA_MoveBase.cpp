@@ -169,7 +169,7 @@ bool UGA_MoveBase::ShouldRespondToEvent(
 	}
 
 	UE_LOG(LogMoveVerbose, Log,
-		TEXT("[GA_MoveBase] ShouldRespondToEvent: ✅ Passed all checks (Actor=%s, EventTag=%s, Magnitude=%d)"),
+		TEXT("[GA_MoveBase] ShouldRespondToEvent: ✁EPassed all checks (Actor=%s, EventTag=%s, Magnitude=%d)"),
 		*GetNameSafe(ActorInfo->AvatarActor.Get()),
 		*Payload->EventTag.ToString(),
 		RawMagnitude);
@@ -270,166 +270,45 @@ void UGA_MoveBase::ActivateAbility(
 			TEXT("[GA_MoveBase] TurnManager not available in TriggerEventData - CompletedTurnIdForEvent set to INDEX_NONE"));
 	}
 
-	// ★★★ Magnitude 検証（TurnCommandEncoding 範囲チェック） ★★★
-	const int32 RawMagnitude = FMath::RoundToInt(TriggerEventData->EventMagnitude);
-	if (RawMagnitude < TurnCommandEncoding::kDirBase)  // 1000未満は無効
-	{
-		UE_LOG(LogTurnManager, Error,
-			TEXT("[GA_MoveBase] ❌ INVALID MAGNITUDE: %d (expected >= %d, got %.2f) - Check GameTurnManager encoding!"),
-			RawMagnitude, TurnCommandEncoding::kDirBase, TriggerEventData->EventMagnitude);
-		UE_LOG(LogTurnManager, Error,
-			TEXT("[GA_MoveBase] Sender should use TurnCommandEncoding::PackDir() - ABORTING"));
-		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
-		return;
-	}
-	else
-	{
-		UE_LOG(LogTurnManager, Log,
-			TEXT("[GA_MoveBase] ✅ Magnitude validated: %d (range OK)"), RawMagnitude);
-	}
+	// ☁E�E☁EMagnitude 検証�E�EurnCommandEncoding 篁E��チェチE���E�E☁E�E☁E
+			const int32 RawMagnitude = FMath::RoundToInt(TriggerEventData->EventMagnitude);
+			FIntPoint TargetCell(-1, -1);
+			if (RawMagnitude >= TurnCommandEncoding::kCellBase)
+			{
+				int32 GridX = 0;
+				int32 GridY = 0;
+				if (TurnCommandEncoding::UnpackCell(RawMagnitude, GridX, GridY))
+				{
+					TargetCell = FIntPoint(GridX, GridY);
+				}
+			}
 
-	FVector EncodedDirection = FVector::ZeroVector;
-	if (!ExtractDirectionFromEventData(TriggerEventData, EncodedDirection))
-	{
-		UE_LOG(LogTurnManager, Error, TEXT("[GA_MoveBase] Failed to decode direction payload"));
-		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
-		return;
-	}
+			if (TargetCell.X == -1 || TargetCell.Y == -1)
+			{
+				UE_LOG(LogTurnManager, Error,
+					TEXT(\"[GA_MoveBase] ABORT: TriggerEventData missing resolved TargetCell (magnitude=%d)\"),
+					RawMagnitude);
+				EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+				return;
+			}
 
-	// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
-	UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
-	if (!Pathfinding)
-	{
-		UE_LOG(LogTurnManager, Error, TEXT("[GA_MoveBase] GridPathfindingSubsystem not available"));
-		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
-		return;
-	}
-
-	UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
-	if (ASC)
-	{
-		int32 CountBefore = ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress.GetTag());
-		DIAG_LOG(Log, TEXT("[GA_MoveBase] ActivateAbility: InProgress count before=%d"), CountBefore);
-		ASC->AddLooseGameplayTag(RogueGameplayTags::Event_Dungeon_Step);
-	}
-
-	AUnitBase* Unit = Cast<AUnitBase>(Avatar);
-	if (Unit)
-	{
-		Unit->bSkipMoveAnimation = ShouldSkipAnimation_Implementation();
-	}
-
-	if (EncodedDirection.Z < -0.5f)
-	{
-		const FIntPoint TargetCell(
-			FMath::RoundToInt(EncodedDirection.X),
-			FMath::RoundToInt(EncodedDirection.Y));
-
-		StartMoveToCell(TargetCell);
-		return;
-	}
-
-	if (!Avatar)
-	{
-		UE_LOG(LogTurnManager, Error, TEXT("[GA_MoveBase] Avatar actor is null"));
-		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
-		return;
-	}
-
-	const float FixedZ = ComputeFixedZ(Unit, Pathfinding);
-	FVector CurrentLocation = SnapToCellCenterFixedZ(Avatar->GetActorLocation(), FixedZ);
-	Avatar->SetActorLocation(CurrentLocation, false, nullptr, ETeleportType::TeleportPhysics);
-	CachedStartLocWS = CurrentLocation;
-	CachedFirstLoc = CurrentLocation;
-	const FIntPoint CurrentCell = Pathfinding->WorldToGrid(CurrentLocation);
-
-	// ★★★ 予約セル取得（SSOT: Single Source of Truth） ★★★
-	FIntPoint ReservedCell(-1, -1);
-	if (UWorld* World = GetWorld())
-	{
-		if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
-		{
-			ReservedCell = Occupancy->GetReservedCellForActor(Avatar);
-		}
-	}
-
-	FVector2D Dir2D(EncodedDirection.X, EncodedDirection.Y);
-	if (!Dir2D.Normalize())
-	{
-		UE_LOG(LogTurnManager, Warning, TEXT("[GA_MoveBase] Direction vector length is zero"));
-		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
-		return;
-	}
-
-	FIntPoint Step(
-		FMath::RoundToInt(Dir2D.X),
-		FMath::RoundToInt(Dir2D.Y));
-
-	bool bAxisAdjusted = false;
-	Step = GA_MoveBase_Private::QuantizeStepToGrid(Step, Dir2D, bAxisAdjusted);
-
-	if (Step == FIntPoint::ZeroValue)
-	{
-		UE_LOG(LogTurnManager, Warning, TEXT("[GA_MoveBase] Normalized direction truncated to zero step"));
-		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
-		return;
-	}
-
-	if (bAxisAdjusted)
-	{
-		UE_LOG(LogTurnManager, VeryVerbose,
-			TEXT("[GA_MoveBase] Direction quantized to grid: Step=(%d,%d)"),
-			Step.X, 		Step.Y);
-	}
-
-	const FIntPoint CalculatedCell = CurrentCell + Step;
-	const FIntPoint NextCell = (ReservedCell.X >= 0 && ReservedCell.Y >= 0) ? ReservedCell : CalculatedCell;
-
-	CachedNextCell = NextCell;
-
-	// ★★★ デバッグログ：予約 vs 計算 vs 実際の移動先 ★★★
-	UE_LOG(LogTurnManager, Warning,
-		TEXT("[GA_MoveBase] From=%s ReservedCell=%s CalculatedCell=%s NextCell=%s (using %s)"),
-		*CurrentCell.ToString(),
-		*ReservedCell.ToString(),
-		*CalculatedCell.ToString(),
-		*NextCell.ToString(),
-		(ReservedCell.X >= 0 && ReservedCell.Y >= 0) ? TEXT("RESERVED") : TEXT("CALCULATED"));
-
-	if (const AGameTurnManagerBase* TurnManager = GetTurnManager())
-	{
-		if (!TurnManager->IsMoveAuthorized(Unit, NextCell))
-		{
-			UE_LOG(LogTurnManager, Warning,
-				TEXT("[GA_MoveBase] ❌ AUTHORIZATION FAILED: %s → (%d,%d) | Reserved=%s Calculated=%s"),
-				*GetNameSafe(Unit),
-				NextCell.X, NextCell.Y,
-				*ReservedCell.ToString(),
-				*CalculatedCell.ToString());
-			EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
-			return;
-		}
-		else
-		{
+			CachedNextCell = TargetCell;
 			UE_LOG(LogTurnManager, Log,
-				TEXT("[GA_MoveBase] ✅ AUTHORIZED: %s → (%d,%d)"),
-				*GetNameSafe(Unit), NextCell.X, NextCell.Y);
-		}
-	}
+				TEXT(\"[GA_MoveBase] TargetCell resolved by ConflictResolver: From=%s -> Target=%s\"),
+				*CurrentCell.ToString(), *TargetCell.ToString());
 
-	if (!Pathfinding->IsCellWalkableIgnoringActor(NextCell, Unit))
-	{
-		UE_LOG(LogTurnManager, Warning,
-			TEXT("[GA_MoveBase] Cell (%d,%d) is blocked by terrain; aborting move"),
-			NextCell.X, NextCell.Y);
-		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
-		return;
-	}
+			if (!Pathfinding->IsCellWalkableIgnoringActor(TargetCell, Unit))
+			{
+				UE_LOG(LogTurnManager, Warning,
+					TEXT(\"[GA_MoveBase] Cell (%d,%d) is blocked by terrain; aborting move\"),
+					TargetCell.X, TargetCell.Y);
+				EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+				return;
+			}
 
-	// CodeRevision: INC-2025-00018-R3 (Remove barrier management - Phase 3) (2025-11-17)
-	// Barrier registration removed - handled by other systems
-
-	const FVector DestWorldLoc = Pathfinding->GridToWorld(CachedNextCell);
+			// CodeRevision: INC-2025-00018-R3 (Remove barrier management - Phase 3) (2025-11-17)
+			// Barrier registration removed - handled by other systems
+			const FVector DestWorldLoc = Pathfinding->GridToWorld(CachedNextCell);
 	NextTileStep = SnapToCellCenterFixedZ(DestWorldLoc, FixedZ);
 	NextTileStep.Z = FixedZ;
 
@@ -588,13 +467,6 @@ void UGA_MoveBase::SendCompletionEvent(bool bTimedOut)
     }
 }
 
-bool UGA_MoveBase::ExtractDirectionFromEventData(const FGameplayEventData* EventData, FVector& OutDirection)
-{
-	OutDirection = FVector::ZeroVector;
-	if (!EventData)
-	{
-		return false;
-	}
 
 	const int32 Magnitude = FMath::RoundToInt(EventData->EventMagnitude);
 	DIAG_LOG(Log, TEXT("[GA_MoveBase] ExtractDirection magnitude=%d (raw=%.2f)"),
@@ -876,7 +748,7 @@ void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
         ? TurnManager->HasReservationFor(Unit, TargetCell)
         : false;
 
-    // ★★★ Phase 5: Collision Prevention - Require reservation (2025-11-09) ★★★
+    // ☁E�E☁EPhase 5: Collision Prevention - Require reservation (2025-11-09) ☁E�E☁E
     // CRITICAL FIX: Units can ONLY move to cells reserved for them
     // This prevents overlapping by enforcing the reservation system
     if (!bTargetReserved)

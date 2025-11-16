@@ -1391,13 +1391,6 @@ APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
         return;
     }
 
-UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(PlayerPawn);
-    if (!ASC)
-    {
-        UE_LOG(LogTurnManager, Error, TEXT("[GameTurnManager] Player ASC not found"));
-        return;
-    }
-
 FGameplayEventData EventData;
     EventData.EventTag = Tag_AbilityMove; 
     EventData.Instigator = PlayerPawn;
@@ -1406,7 +1399,8 @@ FGameplayEventData EventData;
 
 const int32 DirX = FMath::RoundToInt(Command.Direction.X);
     const int32 DirY = FMath::RoundToInt(Command.Direction.Y);
-    EventData.EventMagnitude = static_cast<float>(TurnCommandEncoding::PackDir(DirX, DirY));
+    // CodeRevision: INC-2025-00030-R8 (Refactor GA_MoveBase SSOT) (2025-11-17 01:50)
+    EventData.EventMagnitude = static_cast<float>(TurnCommandEncoding::PackCell(Action.NextCell.X, Action.NextCell.Y));
 
     UE_LOG(LogTurnManager, Log,
         TEXT("[GameTurnManager] EventData prepared - Tag=%s, Magnitude=%.2f, Direction=(%.0f,%.0f)"),
@@ -1575,13 +1569,8 @@ return;
             TEXT("[GameTurnManager] PathFinder not available - Player reservation skipped"));
     }
 
-const int32 TriggeredCount = ASC->HandleGameplayEvent(EventData.EventTag, &EventData);
-
-    if (TriggeredCount > 0)
-    {
-        UE_LOG(LogTurnManager, Log, TEXT("[GameTurnManager] GAS activated for Move (count=%d)"), TriggeredCount);
-        bPlayerMoveInProgress = true;
-
+// CodeRevision: INC-2025-00030-R8 (Refactor GA_MoveBase SSOT) (2025-11-17 01:50)
+// Player move ability now triggers after ConflictResolver dispatch, so simply ack the command here.
 if (CommandHandler)
         {
             CommandHandler->MarkCommandAsAccepted(Command);
@@ -1607,12 +1596,6 @@ if (APlayerController* PC = Cast<APlayerController>(PlayerPawn->GetController())
         {
             UE_LOG(LogTurnManager, Error, TEXT("[GameTurnManager] PlayerInputProcessor not available for CloseInputWindow"));
         }
-    }
-    else
-    {
-        UE_LOG(LogTurnManager, Error, TEXT("[GameTurnManager] GAS activation failed - No abilities triggered"));
-        ApplyWaitInputGate(true);   
-    }
 
 CachedPlayerCommand = Command;
 
@@ -2481,13 +2464,13 @@ const int32 DirX = FMath::RoundToInt(CachedPlayerCommand.Direction.X);
         const int32 DirY = FMath::RoundToInt(CachedPlayerCommand.Direction.Y);
         EventData.EventMagnitude = static_cast<float>(TurnCommandEncoding::PackDir(DirX, DirY));
 
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("Turn %d: Sending GameplayEvent %s (Magnitude=%.2f, Direction=(%.0f,%.0f))"),
-            CurrentTurnId,
-            *EventData.EventTag.ToString(),
-            EventData.EventMagnitude,
-            CachedPlayerCommand.Direction.X,
-            CachedPlayerCommand.Direction.Y);
+    UE_LOG(LogTurnManager, Warning,
+        TEXT("Turn %d: Sending GameplayEvent %s (TargetCell=(%d,%d), Magnitude=%.0f)"),
+        CurrentTurnId,
+        *EventData.EventTag.ToString(),
+        Action.NextCell.X,
+        Action.NextCell.Y,
+        EventData.EventMagnitude);
 
         const int32 TriggeredCount = ASC->HandleGameplayEvent(EventData.EventTag, &EventData);
 
@@ -3533,13 +3516,15 @@ const TArray<FGameplayAbilitySpec>& Specs = ASC->GetActivatableAbilities();
     EventData.EventTag = RogueGameplayTags::GameplayEvent_Intent_Move;
     EventData.Instigator = Unit;
     EventData.Target = Unit;
-    EventData.EventMagnitude = static_cast<float>(TurnCommandEncoding::PackDir(DirX, DirY));
+    // CodeRevision: INC-2025-00030-R6 (Refactor GA_MoveBase SSOT) (2025-11-17 01:50)
+    EventData.EventMagnitude = static_cast<float>(TurnCommandEncoding::PackCell(Action.NextCell.X, Action.NextCell.Y));
     EventData.OptionalObject = this;
 
     const int32 TriggeredCount = ASC->HandleGameplayEvent(EventData.EventTag, &EventData);
     if (TriggeredCount > 0)
     {
         CachedPlayerCommand.Direction = FVector(static_cast<double>(DirX), static_cast<double>(DirY), 0.0);
+        bPlayerMoveInProgress = true;
         UE_LOG(LogTurnManager, Log,
             TEXT("[TriggerPlayerMove] Player move ability triggered toward (%d,%d)"),
             Action.NextCell.X, Action.NextCell.Y);
