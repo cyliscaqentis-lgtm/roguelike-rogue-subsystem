@@ -1318,7 +1318,14 @@ UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] ==== OnTurnStartedHandler END ==
 
 void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerCommand& Command)
 {
-    
+    // CodeRevision: INC-2025-1117E (Failsafe: Reset bPlayerMoveInProgress to prevent move drops) (2025-11-17 18:30)
+    if (bPlayerMoveInProgress)
+    {
+        // 本来ここに来るべきではないが、来た場合は警告を出し、状態をリセットして処理を続行する
+        UE_LOG(LogTurnManager, Warning, TEXT("[OnPlayerCommandAccepted] Failsafe: bPlayerMoveInProgress was true, forcing to false to prevent move drop."));
+        bPlayerMoveInProgress = false;
+    }
+
     UE_LOG(LogTurnManager, Warning, TEXT("[ROUTE CHECK] OnPlayerCommandAccepted_Implementation called!"));
 
 if (!HasAuthority())
@@ -1361,21 +1368,8 @@ if (Command.TurnId != CurrentTurnId && Command.TurnId != INDEX_NONE)
             return;
         }
 
-if (bPlayerMoveInProgress)
-        {
-            UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Move in progress, ignoring command"));
-
-// CodeRevision: INC-2025-00017-R1 (Replace GetPlayerPawn() wrapper - Phase 2) (2025-11-16 15:05)
-if (APlayerController* PC = Cast<APlayerController>(UGameplayStatics::GetPlayerPawn(GetWorld(), 0)->GetController()))
-            {
-                if (APlayerControllerBase* TPCB = Cast<APlayerControllerBase>(PC))
-                {
-                    TPCB->Client_NotifyMoveRejected();
-                }
-            }
-
-            return;
-        }
+        // CodeRevision: INC-2025-1117E (Removed redundant bPlayerMoveInProgress guard - replaced by failsafe at function start) (2025-11-17 18:30)
+        // Old guard block removed - the failsafe at the function start now handles this case by resetting the flag instead of rejecting the command
 
         if (!WaitingForPlayerInput)
         {
@@ -1759,7 +1753,80 @@ if (UWorld* WorldPtr = GetWorld())
             bSequentialModeActive = true;
             bSequentialMovePhaseStarted = false;
 
-            ExecuteSequentialPhase();
+            // CodeRevision: INC-2025-1117G-R1 (Cache resolved actions for sequential enemy flow) (2025-11-17 19:30)
+            CachedResolvedActions.Reset();
+
+            if (UWorld* LocalWorld = GetWorld())
+            {
+                UEnemyTurnDataSubsystem* EnemyData = LocalWorld->GetSubsystem<UEnemyTurnDataSubsystem>();
+                UTurnCorePhaseManager* PhaseManager = LocalWorld->GetSubsystem<UTurnCorePhaseManager>();
+
+                if (!EnemyData || !PhaseManager)
+                {
+                    UE_LOG(LogTurnManager, Error,
+                        TEXT("[Turn %d] Sequential cache: PhaseManager=%d, EnemyData=%d (missing subsystem)"),
+                        CurrentTurnId,
+                        PhaseManager != nullptr,
+                        EnemyData != nullptr);
+                    EndEnemyTurn();
+                }
+                else
+                {
+                    TArray<FEnemyIntent> AllIntents = EnemyData->Intents;
+
+                    if (APawn* LocalPlayerPawn = UGameplayStatics::GetPlayerPawn(LocalWorld, 0))
+                    {
+                        TWeakObjectPtr<AActor> PlayerKey(LocalPlayerPawn);
+                        if (const FIntPoint* PlayerNextCell = PendingMoveReservations.Find(PlayerKey))
+                        {
+                            if (CachedPathFinder.IsValid())
+                            {
+                                const FVector PlayerLoc = LocalPlayerPawn->GetActorLocation();
+                                const FIntPoint PlayerCurrentCell = CachedPathFinder->WorldToGrid(PlayerLoc);
+
+                                if (PlayerCurrentCell != *PlayerNextCell)
+                                {
+                                    FEnemyIntent PlayerIntent;
+                                    PlayerIntent.Actor = LocalPlayerPawn;
+                                    PlayerIntent.CurrentCell = PlayerCurrentCell;
+                                    PlayerIntent.NextCell = *PlayerNextCell;
+                                    PlayerIntent.AbilityTag = RogueGameplayTags::AI_Intent_Move;
+                                    PlayerIntent.BasePriority = 200;
+
+                                    AllIntents.Add(PlayerIntent);
+
+                                    UE_LOG(LogTurnManager, Log,
+                                        TEXT("[Turn %d] Added Player intent to cached resolver: (%d,%d)->(%d,%d)"),
+                                        CurrentTurnId, PlayerCurrentCell.X, PlayerCurrentCell.Y,
+                                        PlayerNextCell->X, PlayerNextCell->Y);
+                                }
+                            }
+                        }
+                    }
+
+                    UE_LOG(LogTurnManager, Log,
+                        TEXT("[Turn %d] Sequential cache: %d intents (%d enemies + player)"),
+                        CurrentTurnId, AllIntents.Num(), EnemyData->Intents.Num());
+
+                    CachedResolvedActions = PhaseManager->CoreResolvePhase(AllIntents);
+
+                    UE_LOG(LogTurnManager, Log,
+                        TEXT("[Turn %d] CoreResolvePhase produced %d cached actions"),
+                        CurrentTurnId, CachedResolvedActions.Num());
+
+                    if (APawn* LocalPlayerPawn = UGameplayStatics::GetPlayerPawn(LocalWorld, 0))
+                    {
+                        for (const FResolvedAction& Action : CachedResolvedActions)
+                        {
+                            if (Action.SourceActor && Action.SourceActor.Get() == LocalPlayerPawn)
+                            {
+                                DispatchResolvedMove(Action);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
         }
         else
         {
@@ -2149,13 +2216,120 @@ if (!HasAuthority())
 AActor* CompletedActor = Payload ? const_cast<AActor*>(Cast<AActor>(Payload->Instigator)) : nullptr;
     FinalizePlayerMove(CompletedActor);
 
-UE_LOG(LogTurnManager, Log,
+    if (bSequentialModeActive)
+    {
+        // CodeRevision: INC-2025-1117H-R1 (Consolidate sequential attack dispatch) (2025-11-17 19:10)
+        UE_LOG(LogTurnManager, Log,
+            TEXT("[Turn %d] OnPlayerMoveCompleted: Sequential flow - dispatching cached enemy attacks"),
+            CurrentTurnId);
+
+        const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
+        TArray<FResolvedAction> AttackActions;
+        AttackActions.Reserve(CachedResolvedActions.Num());
+        for (const FResolvedAction& Action : CachedResolvedActions)
+        {
+            if (Action.AbilityTag.MatchesTag(AttackTag) || Action.FinalAbilityTag.MatchesTag(AttackTag))
+            {
+                AttackActions.Add(Action);
+            }
+        }
+
+        if (AttackActions.IsEmpty())
+        {
+            ExecuteEnemyMoves_Sequential();
+        }
+        else
+        {
+            ExecuteAttacks(AttackActions);
+        }
+
+        return;
+    }
+
+    UE_LOG(LogTurnManager, Log,
         TEXT("Turn %d: Move completed, ending player phase (AP system not implemented)"),
         CurrentTurnId);
 
 }
 
-void AGameTurnManagerBase::ExecuteAttacks()
+void AGameTurnManagerBase::ExecuteEnemyMoves_Sequential()
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    if (CachedResolvedActions.Num() == 0)
+    {
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[Turn %d] ExecuteEnemyMoves_Sequential: No cached actions available"),
+            CurrentTurnId);
+        EndEnemyTurn();
+        return;
+    }
+
+    // CodeRevision: INC-2025-1117H-R1 (Centralized move dispatch) (2025-11-17 19:10)
+    const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
+    TArray<FResolvedAction> EnemyMoveActions;
+    EnemyMoveActions.Reserve(CachedResolvedActions.Num());
+
+    APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+
+    for (const FResolvedAction& Action : CachedResolvedActions)
+    {
+        AActor* SourceActor = Action.SourceActor.Get();
+        if (!SourceActor)
+        {
+            continue;
+        }
+
+        if (PlayerPawn && SourceActor == PlayerPawn)
+        {
+            continue;
+        }
+
+        if (Action.AbilityTag.MatchesTag(AttackTag) || Action.FinalAbilityTag.MatchesTag(AttackTag))
+        {
+            continue;
+        }
+
+        EnemyMoveActions.Add(Action);
+    }
+
+    if (EnemyMoveActions.IsEmpty())
+    {
+        UE_LOG(LogTurnManager, Log,
+            TEXT("[Turn %d] ExecuteEnemyMoves_Sequential: No enemy moves to dispatch"),
+            CurrentTurnId);
+        EndEnemyTurn();
+        return;
+    }
+
+    bSequentialMovePhaseStarted = true;
+    bIsInMoveOnlyPhase = true;
+
+    UE_LOG(LogTurnManager, Log,
+        TEXT("[Turn %d] Dispatching %d cached enemy moves sequentially"),
+        CurrentTurnId, EnemyMoveActions.Num());
+
+    DispatchMoveActions(EnemyMoveActions);
+}
+
+// CodeRevision: INC-2025-1117H-R1 (Centralized move dispatch) (2025-11-17 19:10)
+void AGameTurnManagerBase::DispatchMoveActions(const TArray<FResolvedAction>& ActionsToDispatch)
+{
+    if (!HasAuthority() || ActionsToDispatch.IsEmpty())
+    {
+        return;
+    }
+
+    for (const FResolvedAction& Action : ActionsToDispatch)
+    {
+        DispatchResolvedMove(Action);
+    }
+}
+
+void AGameTurnManagerBase::ExecuteAttacks(const TArray<FResolvedAction>& PreResolvedAttacks)
 {
     // CodeRevision: INC-2025-00030-R1 (Use GetWorld()->GetSubsystem<>() instead of cached member) (2025-11-16 00:00)
     UEnemyTurnDataSubsystem* EnemyTurnDataSys = GetWorld() ? GetWorld()->GetSubsystem<UEnemyTurnDataSubsystem>() : nullptr;
@@ -2182,24 +2356,60 @@ void AGameTurnManagerBase::ExecuteAttacks()
         TEXT("[Turn %d] ExecuteAttacks: Closing input gate (attack phase starts)"), CurrentTurnId);
     ApplyWaitInputGate(false);
 
-    if (UWorld* World = GetWorld())
+    UWorld* World = GetWorld();
+    const TArray<FResolvedAction>* AttackActionsPtr = nullptr;
+    TArray<FResolvedAction> GeneratedActions;
+
+    if (!PreResolvedAttacks.IsEmpty())
     {
-        if (UTurnCorePhaseManager* PM = World->GetSubsystem<UTurnCorePhaseManager>())
+        AttackActionsPtr = &PreResolvedAttacks;
+    }
+    else
+    {
+        if (World)
         {
-            TArray<FResolvedAction> AttackActions;
-            PM->ExecuteAttackPhaseWithSlots(
-                EnemyTurnDataSys->Intents,
-                AttackActions
-            );
-
-            UE_LOG(LogTurnManager, Log,
-                TEXT("[Turn %d] ExecuteAttacks: %d attack actions resolved"),
-                CurrentTurnId, AttackActions.Num());
-
-            if (UAttackPhaseExecutorSubsystem* AttackExecutorSubsystem = World->GetSubsystem<UAttackPhaseExecutorSubsystem>())
+            UTurnCorePhaseManager* PhaseManager = World->GetSubsystem<UTurnCorePhaseManager>();
+            if (PhaseManager)
             {
-                AttackExecutorSubsystem->BeginSequentialAttacks(AttackActions, CurrentTurnId);
+                PhaseManager->ExecuteAttackPhaseWithSlots(
+                    EnemyTurnDataSys->Intents,
+                    GeneratedActions
+                );
+                AttackActionsPtr = &GeneratedActions;
             }
+            else
+            {
+                UE_LOG(LogTurnManager, Error,
+                    TEXT("[Turn %d] ExecuteAttacks: TurnCorePhaseManager not found"),
+                    CurrentTurnId);
+            }
+        }
+    }
+
+    if (!AttackActionsPtr)
+    {
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[Turn %d] ExecuteAttacks: No attack actions available"),
+            CurrentTurnId);
+        return;
+    }
+
+    const TArray<FResolvedAction>& AttackActions = *AttackActionsPtr;
+    UE_LOG(LogTurnManager, Log,
+        TEXT("[Turn %d] ExecuteAttacks: Dispatching %d attack actions"),
+        CurrentTurnId, AttackActions.Num());
+
+    if (World)
+    {
+        if (UAttackPhaseExecutorSubsystem* AttackExecutorSubsystem = World->GetSubsystem<UAttackPhaseExecutorSubsystem>())
+        {
+            AttackExecutorSubsystem->BeginSequentialAttacks(AttackActions, CurrentTurnId);
+        }
+        else
+        {
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[Turn %d] ExecuteAttacks: AttackExecutorSubsystem missing"),
+                CurrentTurnId);
         }
     }
 }
@@ -2411,7 +2621,7 @@ EndEnemyTurn();
         }
     }
 
-PhaseManager->CoreExecutePhase(ResolvedActions);
+    DispatchMoveActions(ResolvedActions);
 
     UE_LOG(LogTurnManager, Log,
         TEXT("[Turn %d] ExecuteMovePhase complete - movements dispatched"),
@@ -2566,6 +2776,15 @@ const int32 DirX = FMath::RoundToInt(CachedPlayerCommand.Direction.X);
 // CodeRevision: INC-2025-00030-R5 (Split attack/move phase completion handlers) (2025-11-17 02:00)
 void AGameTurnManagerBase::HandleMovePhaseCompleted(int32 FinishedTurnId)
 {
+    // ★★★ START: 新しいガード処理 ★★★
+    // CodeRevision: INC-2025-1117F (Prevent move phase from triggering during sequential attack phase)
+    if (bSequentialModeActive && !bSequentialMovePhaseStarted)
+    {
+        UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] HandleMovePhaseCompleted: Ignoring barrier completion during sequential attack phase. Waiting for HandleAttackPhaseCompleted to start the move phase."), FinishedTurnId);
+        return;
+    }
+    // ★★★ END: 新しいガード処理 ★★★
+
     if (!HasAuthority())
     {
         UE_LOG(LogTurnManager, Warning, TEXT("GameTurnManager::HandleMovePhaseCompleted: Not authority"));
@@ -2586,13 +2805,17 @@ void AGameTurnManagerBase::HandleMovePhaseCompleted(int32 FinishedTurnId)
 
     UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] All flags/gates cleared, advancing turn"), FinishedTurnId);
 
-    if (bSequentialModeActive && bIsInMoveOnlyPhase)
+    if (bSequentialModeActive)
     {
         bSequentialModeActive = false;
         bSequentialMovePhaseStarted = false;
         bIsInMoveOnlyPhase = false;
+        CachedResolvedActions.Reset();
+        // CodeRevision: INC-2025-1117G-R1 (Sequential enemy turn helpers) (2025-11-17 19:30)
         UE_LOG(LogTurnManager, Log,
             TEXT("[Turn %d] Sequential move phase complete, ending enemy turn"), FinishedTurnId);
+        EndEnemyTurn();
+        return;
     }
 
     UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Move phase complete, calling EndEnemyTurn directly"), FinishedTurnId);
@@ -2624,17 +2847,11 @@ void AGameTurnManagerBase::HandleAttackPhaseCompleted(int32 FinishedTurnId)
             UE_LOG(LogTurnManager, Warning,
                 TEXT("[Turn %d] Sequential attack phase complete, dispatching move-only phase"), FinishedTurnId);
 
-            if (UWorld* World = GetWorld())
-            {
-                if (UEnemyTurnDataSubsystem* EnemyTurnDataSys = World->GetSubsystem<UEnemyTurnDataSubsystem>())
-                {
-                    EnemyTurnDataSys->ConvertAttacksToWait();
-                }
-            }
-
             bSequentialMovePhaseStarted = true;
             bIsInMoveOnlyPhase = true;
-            ExecuteMovePhase(true);
+
+            // CodeRevision: INC-2025-1117G-R1 (Sequential enemy turn helpers) (2025-11-17 19:30)
+            ExecuteEnemyMoves_Sequential();
             return;
         }
         else

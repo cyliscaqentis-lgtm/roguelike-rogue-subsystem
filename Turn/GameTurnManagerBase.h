@@ -560,7 +560,8 @@ protected:
     void FinalizePlayerMove(AActor* CompletedActor);
     TSet<TWeakObjectPtr<AUnitBase>> ActiveMoveDelegates;
     TSet<TWeakObjectPtr<AUnitBase>> PendingPlayerFallbackMoves;
-    void ExecuteAttacks();
+    // CodeRevision: INC-2025-1117H-R1 (Generalize attack execution) (2025-11-17 19:10)
+    void ExecuteAttacks(const TArray<FResolvedAction>& PreResolvedAttacks = TArray<FResolvedAction>());
     void EndEnemyTurn();
     void ExecutePlayerMove();
     void OnPlayerMoveAccepted();
@@ -658,7 +659,6 @@ private:
     //==========================================================================
     // Internal State Flags
     //==========================================================================
-
     // ★★★ Phase 4: Unused variable removal (2025-11-09) ★★★
     // Removed: CachedEnemiesWeak (unused)
     // Removed: RecollectEnemiesTimerHandle (unused)
@@ -685,6 +685,9 @@ private:
     UPROPERTY()
     bool bIsInMoveOnlyPhase = false;
 
+    // CodeRevision: INC-2025-1117G-R1 (Cache resolved actions for sequential enemy processing) (2025-11-17 19:30)
+    TArray<FResolvedAction> CachedResolvedActions;
+
     /** Pending barrier registrations for manual enemy moves */
     UPROPERTY()
     TMap<TWeakObjectPtr<AUnitBase>, FManualMoveBarrierInfo> PendingMoveActionRegistrations;
@@ -702,6 +705,10 @@ private:
     static int32 PackDirection(const FIntPoint& Dir);
     static FIntPoint UnpackDirection(int32 Magnitude);
 
+
+    void ExecuteEnemyMoves_Sequential();
+    // CodeRevision: INC-2025-1117H-R1 (Centralized move dispatch) (2025-11-17 19:10)
+    void DispatchMoveActions(const TArray<FResolvedAction>& ActionsToDispatch);
     // ★★★ Phase 4: Unused variable removal (2025-11-09) ★★★
     // Removed: bEnemyTurnEnding (unused)
 };

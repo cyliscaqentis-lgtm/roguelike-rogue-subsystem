@@ -66,7 +66,7 @@ namespace RogueGameplayTags
     UE_DEFINE_GAMEPLAY_TAG(GameplayEvent_Intent_Attack, "GameplayEvent.Intent.Attack");
     UE_DEFINE_GAMEPLAY_TAG(GameplayEvent_Intent_Wait, "GameplayEvent.Intent.Wait");
 
-    // State tags -------------------------------------------------------------
+// State tags -------------------------------------------------------------
     UE_DEFINE_GAMEPLAY_TAG(State_Ability_Executing, "State.Ability.Executing");
     UE_DEFINE_GAMEPLAY_TAG(State_Presentation_Dash, "State.Presentation.Dash");
     UE_DEFINE_GAMEPLAY_TAG(State_Moving, "State.Moving");

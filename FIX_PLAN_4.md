@@ -1,145 +1,81 @@
-# 最終修正計画書: AIサブシステムへのステート伝達バグの修正 (FIX_PLAN_4)
+# 修正計画書: INC-2025-1117E (v2 - 状態の強制リセット)
 
-## 1. 問題の概要
+## 1. 概要
 
-**現象:**
-これまでの修正により、`AGameTurnManagerBase` はターン開始時にプレイヤーの正しいグリッド座標を認識するようになった。しかし、その正しい座標が `UEnemyAISubsystem` に伝達されず、AIは依然として不正な座標 `(-1,-1)` を基に行動決定を行うため、ゲームがソフトロックする。
+- **インシデントID:** INC-2025-1117E
+- **問題:** プレイヤーの移動コマンドが受理されたにもかかわらず、特定のターン（Turn 1, Turn 3）で移動が実行されずドロップされる。
+- **原因:** `AGameTurnManagerBase` の状態フラグ `bPlayerMoveInProgress` が、前のターンの完了時に正しくリセットされず `true` のまま残存している。これにより、`DispatchResolvedMove` が新しい移動のトリガーを意図せずスキップしてしまう。
 
-**根本原因:**
-`AGameTurnManagerBase::OnTurnStartedHandler` は、プレイヤーの正しい座標をローカル変数に保持しているが、`UEnemyAISubsystem::BuildObservations` を呼び出す際にその変数を渡していない。`BuildObservations` は渡されなかった座標を内部で再計算しようとし、その際にバグの原因である物理座標 (`GetActorLocation`) を参照してしまうため、不正な座標が使われてしまう。
+## 2. 原因仮説と根拠
 
-## 2. 修正方針
+- **仮説:** 複数のユニットが関わる複雑なターン（同時移動や逐次移動）の完了処理において、`bPlayerMoveInProgress` フラグを `false` にリセットするロジックが、何らかのエッジケースによって実行されない、または上書きされている。
+- **根拠:**
+    - `DispatchResolvedMove` のコードを確認した結果、`bPlayerMoveInProgress` が `true` の場合にプレイヤーの移動をスキップするロジックが明確に存在する。
+    - Turn 1 と Turn 3 で移動がドロップするという事実は、この条件が満たされていることを示している。
+    - 正常に動作する Turn 0 との唯一の違いは、他のユニットのアクションが同時に存在するかどうかであるため、複数のアクションが絡むことで状態のリセットに失敗している可能性が極めて高い。
 
-`UEnemyAISubsystem::BuildObservations` の関数シグネチャを変更し、プレイヤーのグリッド座標を直接引数として受け取るようにする。これにより、`TurnManager` が持つ信頼できる座標情報を直接サブシステムに注入（Dependency Injection）し、サブシステム内での不要かつ危険な再計算を排除する。
+## 3. 修正方針案
 
-## 3. 実装計画
+プレイヤーからの新しい移動コマンドを受け付けた `OnPlayerCommandAccepted_Implementation` 関数の冒頭で、**いかなる場合でも `bPlayerMoveInProgress` フラグを `false` に強制リセットする**。
 
-### 手順 1: `UEnemyAISubsystem` の関数シグネチャ変更
+これにより、前のターンの状態がどうであれ、新しいコマンドが常にクリーンな状態で処理されることを保証する。
 
-#### **対象ファイル**
-*   `Source/LyraGame/Rogue/AI/Enemy/EnemyAISubsystem.h`
-*   `Source/LyraGame/Rogue/AI/Enemy/EnemyAISubsystem.cpp`
+- **修正対象ファイル:** `Source/LyraGame/Rogue/Turn/GameTurnManagerBase.cpp`
+- **修正対象関数:** `AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation`
 
-#### **変更内容**
-`BuildObservations` 関数のシグネチャを以下のように変更します。`AActor* Player` の引数を `const FIntPoint& PlayerGrid` に置き換えます。
+- **修正後 (イメージ):**
+  ```cpp
+  // GameTurnManagerBase.cpp
 
-##### **ヘッダファイル (.h) の変更**
-```cpp
-// EnemyAISubsystem.h
+  void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerCommand& Command)
+  {
+      // ★★★ START: 新しいフェイルセーフ処理 ★★★
+      if (bPlayerMoveInProgress)
+      {
+          UE_LOG(LogTurnManager, Warning, TEXT("[OnPlayerCommandAccepted] Failsafe: bPlayerMoveInProgress was true, forcing to false."));
+          bPlayerMoveInProgress = false;
+      }
+      // ★★★ END: 新しいフェイルセーフ処理 ★★★
 
-// 変更前 (Before)
-void BuildObservations(
-    const TArray<AActor*>& Enemies,
-    AActor* Player,
-    UGridPathfindingSubsystem* PathFinder,
-    TArray<FEnemyObservation>& OutObs);
+      UE_LOG(LogTurnManager, Warning, TEXT("[ROUTE CHECK] OnPlayerCommandAccepted_Implementation called!"));
 
-// 変更後 (After)
-void BuildObservations(
-    const TArray<AActor*>& Enemies,
-    const FIntPoint& PlayerGrid, // AActor* Player を FIntPoint に変更
-    UGridPathfindingSubsystem* PathFinder,
-    TArray<FEnemyObservation>& OutObs);
-```
+      if (!HasAuthority())
+      {
+          // (既存の処理が続く)
+      }
+      // ...
+  }
+  ```
+  *注: 既存の `if (bPlayerMoveInProgress)` の入力ガードは、このフェイルセーフ処理の後に続くため、意図通り機能しなくなります。より安全な実装は、既存のガードを削除し、この新しいリセットロジックに置き換えることです。ただし、まずは最小限の変更としてリセット処理を追加します。より良い実装は、既存のガードブロックを以下のように変更することです。*
 
-##### **ソースファイル (.cpp) の変更**
-```cpp
-// EnemyAISubsystem.cpp
+- **修正方針案 (改良版):**
+  ```cpp
+  // GameTurnManagerBase.cpp -> OnPlayerCommandAccepted_Implementation
 
-// 変更前 (Before)
-void UEnemyAISubsystem::BuildObservations(
-    const TArray<AActor*>& Enemies,
-    AActor* Player,
-    UGridPathfindingSubsystem* PathFinder,
-    TArray<FEnemyObservation>& OutObs)
-{
-    // ...
-    const FIntPoint PlayerGrid = PathFinder->WorldToGrid(Player->GetActorLocation()); // この行が問題
-    // ...
-}
+  // ... 関数の冒頭 ...
+  if (bPlayerMoveInProgress)
+  {
+      // 本来ここに来るべきではないが、来た場合は警告を出し、状態をリセットして処理を続行する
+      UE_LOG(LogTurnManager, Warning, TEXT("[OnPlayerCommandAccepted] Failsafe: bPlayerMoveInProgress was true, forcing to false to prevent move drop."));
+      bPlayerMoveInProgress = false;
+  }
 
-// 変更後 (After)
-void UEnemyAISubsystem::BuildObservations(
-    const TArray<AActor*>& Enemies,
-    const FIntPoint& PlayerGrid, // 引数を変更
-    UGridPathfindingSubsystem* PathFinder,
-    TArray<FEnemyObservation>& OutObs)
-{
-    // ...
-    // const FIntPoint PlayerGrid = PathFinder->WorldToGrid(Player->GetActorLocation()); // この行を完全に削除
-    UE_LOG(LogEnemyAI, Log, TEXT("[BuildObservations] PlayerGrid=(%d, %d)"), PlayerGrid.X, PlayerGrid.Y); // ログは引数の値を表示
-    // ...
-}
-```
-**注:** `BuildObservations` 内で `Player` アクターへの参照が他にないことを確認してください。もし他の目的で `Player` が必要であれば、引数を `(..., const FIntPoint& PlayerGrid, AActor* Player, ...)` のように両方渡す形にします。ログを見る限り、`PlayerGrid` の計算にしか使われていないため、置き換えが適切と判断します。
+  // 既存の入力ガードは削除、または上記に統合する
+  // if (bPlayerMoveInProgress) { return; } // ← このブロックは不要になる
 
----
+  // (以降の処理はそのまま)
+  ```
 
-### 手順 2: `AGameTurnManagerBase` の呼び出し箇所を修正
+## 4. 影響範囲
 
-#### **対象ファイル**
-*   `Source/LyraGame/Rogue/Turn/GameTurnManagerBase.cpp`
+- **プレイヤー移動の信頼性:** 過去のターンの状態異常によってプレイヤーの移動がドロップされる問題が根本的に解決され、入力した移動が確実に実行されるようになる。
+- **副作用のリスク:**
+    - 非常に低い。この関数が呼ばれるのは「プレイヤーが新しいコマンドを入力した」時点であり、その時点で `bPlayerMoveInProgress` が `true` であること自体が異常な状態であるため、これを `false` にリセットすることは論理的に正しい。
+    - 万が一、本当に移動中に次のコマンドが（ハッキングなどによって）送られてきた場合でも、後続の `TurnBarrier` や `ActivationBlockedTags` によってアビリティの多重起動は防止されるため、システム全体への影響は軽微。
 
-#### **変更内容**
-`OnTurnStartedHandler` 内で `EnemyAISys->BuildObservations` を呼び出している箇所を、新しい関数シグネチャに合わせて修正します。事前に取得した正しい `PlayerGrid` 変数を渡します。
+## 5. テスト方針
 
-##### **修正箇所**
-```cpp
-// GameTurnManagerBase.cpp -> OnTurnStartedHandler()
-
-// ...
-// この時点で PlayerGrid は正しい座標 (例: 15,16) を保持している
-const FIntPoint PlayerGrid = Occupancy->GetCellOfActor(PlayerPawn); 
-// ...
-
-// ...
-// さらに下の行で...
-if (EnemyAISys && EnemyTurnDataSys && CachedPathFinder.IsValid() && PlayerPawn && CachedEnemiesForTurn.Num() > 0)
-{
-    TArray<FEnemyObservation> PreliminaryObs;
-    
-    // 変更前 (Before)
-    // EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerPawn, CachedPathFinder.Get(), PreliminaryObs);
-
-    // 変更後 (After)
-    EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerGrid, CachedPathFinder.Get(), PreliminaryObs);
-
-    EnemyTurnDataSys->Observations = PreliminaryObs;
-    // ...
-}
-// ...
-```
-**注:** `OnPlayerCommandAccepted_Implementation` 内にも `BuildObservations` の呼び出しがあります。こちらも同様に修正が必要です。
-
----
-
-### 手順 3: （念のため）`OnPlayerCommandAccepted` 内の呼び出しも修正
-
-#### **対象ファイル**
-*   `Source/LyraGame/Rogue/Turn/GameTurnManagerBase.cpp`
-
-#### **変更内容**
-プレイヤーの入力後に敵の意図を再計算する `OnPlayerCommandAccepted_Implementation` 内の `BuildObservations` 呼び出しも、同様に修正します。
-
-##### **修正箇所**
-```cpp
-// GameTurnManagerBase.cpp -> OnPlayerCommandAccepted_Implementation()
-
-// ...
-// この関数内では、プレイヤーの移動先を PlayerDestination として計算している
-FIntPoint PlayerDestination = CurrentCell + Direction;
-// ...
-
-// ...
-// TArray<FEnemyObservation> Observations;
-// ...
-
-// 変更前 (Before)
-// EnemyAISys->BuildObservations(Enemies, PlayerPawn, CachedPathFinder.Get(), Observations);
-
-// 変更後 (After)
-EnemyAISys->BuildObservations(Enemies, PlayerDestination, CachedPathFinder.Get(), Observations);
-// ...
-```
-
-以上の修正により、`TurnManager` が一元的に管理する正しい座標が、常にAIサブシステムに伝達されるようになり、一連のバグが完全に解決されるはずです。
+- **手動テスト:**
+    - ログを提供したシナリオを再度実行し、`Turn 1` と `Turn 3` でプレイヤーの移動がドロップされずに正常に実行されることを確認する。
+    - ログを確認し、`[OnPlayerCommandAccepted] Failsafe:` の警告が出力されるかどうかを確認する（もし出力されれば、リセット漏れの根本原因が他にあることの証拠になる）。
+    - 複数ターンにわたって連続で移動しても、問題が再発しないことを確認する。

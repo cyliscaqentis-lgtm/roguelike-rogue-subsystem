@@ -142,7 +142,7 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 	BindASC(ASC);
 
 	FGameplayEventData Payload;
-	Payload.EventTag = Action.AbilityTag;
+	Payload.EventTag = RogueGameplayTags::GameplayEvent_Intent_Attack;
 	Payload.Instigator = Attacker;
 	Payload.TargetData = Action.TargetData;
 
@@ -169,7 +169,8 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 
 	UE_LOG(LogAttackPhase, Warning,
 		TEXT("[Turn %d] Sending GameplayEvent: Tag=%s (to %s)"),
-		TurnId, *Action.AbilityTag.ToString(), *Attacker->GetName());
+		TurnId, TEXT("GameplayEvent.Intent.Attack"), *Attacker->GetName());
+
 
 	const int32 TriggeredCount = ASC->HandleGameplayEvent(Payload.EventTag, &Payload);
 
@@ -178,17 +179,17 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 		UE_LOG(LogAttackPhase, Log,
 			TEXT("[Turn %d] Dispatched attack %d/%d: %s (Tag=%s)"),
 			TurnId, CurrentIndex + 1, Queue.Num(),
-			*Attacker->GetName(), *Action.AbilityTag.ToString());
+			*Attacker->GetName(), TEXT("GameplayEvent.Intent.Attack"));
 		}
 		else
 		{
 			UE_LOG(LogAttackPhase, Warning,
 				TEXT("[Turn %d] %s: %s failed to trigger any abilities"),
-				TurnId, *Attacker->GetName(), *Action.AbilityTag.ToString());
+				TurnId, *Attacker->GetName(), TEXT("GameplayEvent.Intent.Attack"));
 
 			UnbindCurrentASC();
-		CurrentIndex++;
-		DispatchNext();
+			CurrentIndex++;
+			DispatchNext();
 	}
 }
 

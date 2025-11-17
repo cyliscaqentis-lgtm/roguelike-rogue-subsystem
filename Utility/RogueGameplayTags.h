@@ -70,7 +70,7 @@ namespace RogueGameplayTags
     LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayEvent_Intent_Attack);
     LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayEvent_Intent_Wait);
 
-    // State tags -------------------------------------------------------------
+// State tags -------------------------------------------------------------
     LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Ability_Executing);
     LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Presentation_Dash);
     LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Moving);

@@ -6,6 +6,13 @@ When modifying code in this project, add a `CodeRevision` comment to track versi
 
 ## CodeRevision Log
 
+- `CodeRevision: INC-2025-1117G-R1` - Implement sequential enemy turn flow and caching per `FIX_PLAN_7.md` (2025-11-17 19:30)
+- `CodeRevision: INC-2025-1117H-R1` - Generalize `ExecuteAttacks` and add shared move dispatching per `FIX_PLAN_8.md` (2025-11-17 19:10)
+- `CodeRevision: INC-2025-1117DIAG-R1` - Added diagnostic ASC tag logging before sequential attacks to aid FIX_PLAN_10 investigation (2025-11-17 19:30)
+- `CodeRevision: INC-2025-1117-FINAL-FIX-R2` - Added `AI_Intent_Attack` asset tags so `GA_AttackBase` triggers now match the resolved intent tags (2025-11-17 19:50)
+- `CodeRevision: INC-2025-1117-FINAL-FIX-R3` - Added `State.Turn.Active` tag handling around the attack executor flow per `FIX_PLAN_13.md` (2025-11-17 20:00)
+- `CodeRevision: INC-2025-1117-ROLLBACK-R1` - Reverted attack tag adjustments to match asset expectations per `FIX_PLAN_15.md` (2025-11-17 20:20)
+- `CodeRevision: INC-2025-1117-FINAL-FIX-R1` - Fixed `GA_AttackBase` trigger tags to use `AI_Intent_Attack` so sequential attacks fire the right ability (2025-11-17 19:40)
 - `CodeRevision: INC-2025-00001-R1` - Added barrier notification before `AGameTurnManagerBase::EndEnemyTurn()` (barrier synchronization fix).
 - `CodeRevision: INC-2025-00001-R2` - Added `WindowId` ACK handling in `APlayerControllerBase::Client_ConfirmCommandAccepted_Implementation`.
 - `CodeRevision: INC-2025-00002-R1` - Added detailed pathfinding retry logic to `DistanceFieldSubsystem::GetNextStepTowardsPlayer()`.
