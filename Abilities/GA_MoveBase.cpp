@@ -373,9 +373,19 @@ void UGA_MoveBase::ActivateAbility(
 
 	if (!Pathfinding->IsCellWalkableIgnoringActor(TargetCell, Unit))
 	{
+		// デバッグ: なぜセルが歩行不可なのか詳細を出力
+		AActor* OccupyingActor = nullptr;
+		if (UGridOccupancySubsystem* Occupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
+		{
+			OccupyingActor = Occupancy->GetActorAtCell(TargetCell);
+		}
+
 		UE_LOG(LogTurnManager, Warning,
-			TEXT("[GA_MoveBase] Cell (%d,%d) is blocked for %s; aborting move"),
-			TargetCell.X, TargetCell.Y, *GetNameSafe(Unit));
+			TEXT("[GA_MoveBase] MOVEMENT BLOCKED: Actor=%s tried to move from Cell(%d,%d) to Cell(%d,%d), but target is NOT WALKABLE. Reason: %s"),
+			*GetNameSafe(Unit),
+			CurrentCell.X, CurrentCell.Y,
+			TargetCell.X, TargetCell.Y,
+			OccupyingActor ? *FString::Printf(TEXT("Cell occupied by %s"), *GetNameSafe(OccupyingActor)) : TEXT("Out of bounds or unwalkable terrain"));
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
@@ -404,9 +414,12 @@ void UGA_MoveBase::ActivateAbility(
 
 	if (!IsTileWalkable(NextTileStep, Unit))
 	{
+		// デバッグ: WorldPos ベースの歩行可能性チェック失敗
 		UE_LOG(LogTurnManager, Warning,
-			TEXT("[GA_MoveBase] Next tile %s is not walkable"),
-			*NextTileStep.ToCompactString());
+			TEXT("[GA_MoveBase] WALKABILITY CHECK FAILED: Actor=%s, NextTileWorldPos=%s (Cell=%d,%d) is not walkable (world position-based check)"),
+			*GetNameSafe(Unit),
+			*NextTileStep.ToCompactString(),
+			TargetCell.X, TargetCell.Y);
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}

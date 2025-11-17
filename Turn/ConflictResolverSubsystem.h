@@ -10,6 +10,8 @@
 #include "GameplayTagContainer.h"
 #include "ConflictResolverSubsystem.generated.h"
 
+class AGameTurnManagerBase;
+
 /**
  * UConflictResolverSubsystem: 予約テーブモﾆ衝突解決（v2.2 第7条・第17条）
  */
@@ -61,4 +63,7 @@ private:
 
     // Wait降格
     FResolvedAction CreateWaitAction(const FReservationEntry& Entry);
+    mutable TWeakObjectPtr<AGameTurnManagerBase> CachedTurnManager;
+    AGameTurnManagerBase* ResolveTurnManager() const;
+
 };

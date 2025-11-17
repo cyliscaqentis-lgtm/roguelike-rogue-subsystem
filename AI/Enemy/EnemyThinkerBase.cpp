@@ -286,6 +286,7 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
 
         if (UDistanceFieldSubsystem* DistanceField = World->GetSubsystem<UDistanceFieldSubsystem>())
         {
+            // CodeRevision: INC-2025-1124-R1 (Delegate move validation to CoreResolvePhase) (2025-11-24 09:30)
             Intent.NextCell = DistanceField->GetNextStepTowardsPlayer(Intent.CurrentCell, GetOwner());
         }
         else
@@ -294,37 +295,6 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
             UE_LOG(LogTemp, Warning,
                 TEXT("[ComputeIntent] %s: DistanceField not available, staying put"),
                 *GetNameSafe(GetOwner()));
-        }
-
-        // ★★★ CodeRevision: INC-2025-00016-R1 (Add IsMoveValid validation) (2025-11-16 14:00) ★★★
-        // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
-        // Validate move using unified API before committing to intent
-        if (Intent.NextCell != Intent.CurrentCell)
-        {
-            UGridPathfindingSubsystem* PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>();
-
-            if (PathFinder)
-            {
-                FString FailureReason;
-                const bool bMoveValid = PathFinder->IsMoveValid(
-                    Intent.CurrentCell,
-                    Intent.NextCell,
-                    GetOwner(),
-                    FailureReason);
-
-                if (!bMoveValid)
-                {
-                    UE_LOG(LogTurnManager, Warning,
-                        TEXT("[ComputeIntent] %s: MOVE rejected by validation: %s | From=(%d,%d) To=(%d,%d)"),
-                        *GetNameSafe(GetOwner()), *FailureReason,
-                        Intent.CurrentCell.X, Intent.CurrentCell.Y,
-                        Intent.NextCell.X, Intent.NextCell.Y);
-
-                    // Fallback to wait if move is invalid
-                    Intent.NextCell = Intent.CurrentCell;
-                    Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"));
-                }
-            }
         }
 
         if (Intent.NextCell == Intent.CurrentCell)

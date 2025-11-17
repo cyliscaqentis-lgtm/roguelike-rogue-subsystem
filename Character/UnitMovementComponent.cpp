@@ -183,6 +183,21 @@ void UUnitMovementComponent::UpdateMovement(float DeltaTime)
 		return;
 	}
 
+	// 移動方向への回転（滑らかに補間）
+	if (!Direction.IsNearlyZero())
+	{
+		FVector DirectionNoZ = Direction;
+		DirectionNoZ.Z = 0.0f; // 垂直成分を無視
+
+		if (!DirectionNoZ.IsNearlyZero())
+		{
+			const FRotator TargetRotation = DirectionNoZ.Rotation();
+			const FRotator CurrentRotation = Owner->GetActorRotation();
+			const FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, 10.0f);
+			Owner->SetActorRotation(NewRotation);
+		}
+	}
+
 	// 移動計算
 	FVector NewLocation;
 	if (bUseSmoothMovement)

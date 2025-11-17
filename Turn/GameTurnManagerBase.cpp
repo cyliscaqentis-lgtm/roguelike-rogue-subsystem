@@ -1716,25 +1716,18 @@ EnemyAI->CollectIntents(Observations, Enemies, Intents);
 // CodeRevision: INC-2025-00017-R1 (Replace HasAnyAttackIntent() wrapper - Phase 2) (2025-11-16 15:15)
 // Direct check for attack intent
 bool bHasAttack = false;
+// CodeRevision: INC-2025-1125-R1 (Derive bHasAttack from cached intents) (2025-11-25 12:00)
 // CodeRevision: INC-2025-00030-R1 (Use GetWorld()->GetSubsystem<>() instead of cached member) (2025-11-16 00:00)
 if (UWorld* WorldPtr = GetWorld())
 {
     if (UEnemyTurnDataSubsystem* EnemyTurnDataSys = WorldPtr->GetSubsystem<UEnemyTurnDataSubsystem>())
     {
-        if (EnemyTurnDataSys->Intents.Num() > 0)
-        {
-            const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
-            for (const FEnemyIntent& I : EnemyTurnDataSys->Intents)
-            {
-                if (I.AbilityTag.MatchesTag(AttackTag) && I.Actor.IsValid())
-                {
-                    bHasAttack = true;
-                    break;
-                }
-            }
-            }
-        }
+        bHasAttack = EnemyTurnDataSys->HasAttackIntent();
+        UE_LOG(LogTurnManager, Verbose,
+            TEXT("[Turn %d] EnemyTurnDataSubsystem reports %d intents | HasAttackIntent=%s"),
+            CurrentTurnId, EnemyTurnDataSys->Intents.Num(), bHasAttack ? TEXT("TRUE") : TEXT("FALSE"));
     }
+}
 
         UE_LOG(LogTurnManager, Log,
             TEXT("[Turn %d] bHasAttack=%s (Simultaneous movement %s)"),
@@ -2157,8 +2150,78 @@ void AGameTurnManagerBase::ExecuteSimultaneousPhase()
 
     UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] ==== Simultaneous Move Phase (No Attacks) ===="), CurrentTurnId);
 
-ExecuteMovePhase();  
+    // CodeRevision: INC-2025-1117K (Fix Turn 0 simultaneous movement bug) (2025-11-17 20:45)
+    // CoreResolvePhaseの呼び出しとDispatchResolvedMoveの直接実行
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] ExecuteSimultaneousPhase: World is null"), CurrentTurnId);
+        return;
+    }
 
+    UTurnCorePhaseManager* PhaseManager = World->GetSubsystem<UTurnCorePhaseManager>();
+    UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>();
+
+    if (!PhaseManager || !EnemyData)
+    {
+        UE_LOG(LogTurnManager, Error,
+            TEXT("[Turn %d] ExecuteSimultaneousPhase: PhaseManager or EnemyData not found"),
+            CurrentTurnId);
+        EndEnemyTurn();
+        return;
+    }
+
+    TArray<FEnemyIntent> AllIntents = EnemyData->Intents;
+
+    // プレイヤーのインテントを追加
+    APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(World, 0);
+    if (PlayerPawn && CachedPathFinder.IsValid())
+    {
+        const FVector PlayerLoc = PlayerPawn->GetActorLocation();
+        const FIntPoint PlayerCurrentCell = CachedPathFinder->WorldToGrid(PlayerLoc);
+
+        TWeakObjectPtr<AActor> PlayerKey(PlayerPawn);
+        if (const FIntPoint* PlayerNextCell = PendingMoveReservations.Find(PlayerKey))
+        {
+            if (PlayerCurrentCell != *PlayerNextCell)
+            {
+                FEnemyIntent PlayerIntent;
+                PlayerIntent.Actor = PlayerPawn;
+                PlayerIntent.CurrentCell = PlayerCurrentCell;
+                PlayerIntent.NextCell = *PlayerNextCell;
+                PlayerIntent.AbilityTag = RogueGameplayTags::AI_Intent_Move;
+                PlayerIntent.BasePriority = 200;
+
+                AllIntents.Add(PlayerIntent);
+
+                UE_LOG(LogTurnManager, Log,
+                    TEXT("[Turn %d] ExecuteSimultaneousPhase: Added Player intent (%d,%d)->(%d,%d)"),
+                    CurrentTurnId, PlayerCurrentCell.X, PlayerCurrentCell.Y,
+                    PlayerNextCell->X, PlayerNextCell->Y);
+            }
+        }
+    }
+
+    UE_LOG(LogTurnManager, Log,
+        TEXT("[Turn %d] ExecuteSimultaneousPhase: Processing %d intents via CoreResolvePhase"),
+        CurrentTurnId, AllIntents.Num());
+
+    // CoreResolvePhaseを呼び出し
+    TArray<FResolvedAction> ResolvedActions = PhaseManager->CoreResolvePhase(AllIntents);
+
+    UE_LOG(LogTurnManager, Log,
+        TEXT("[Turn %d] ExecuteSimultaneousPhase: CoreResolvePhase produced %d resolved actions"),
+        CurrentTurnId, ResolvedActions.Num());
+
+    // 直後にDispatchResolvedMoveをループ実行
+    for (const FResolvedAction& Action : ResolvedActions)
+    {
+        DispatchResolvedMove(Action);
+    }
+
+    UE_LOG(LogTurnManager, Log,
+        TEXT("[Turn %d] ExecuteSimultaneousPhase complete - %d movements dispatched"),
+        CurrentTurnId, ResolvedActions.Num());
 }
 
 
@@ -2288,12 +2351,14 @@ void AGameTurnManagerBase::ExecuteEnemyMoves_Sequential()
             continue;
         }
 
-        if (Action.AbilityTag.MatchesTag(AttackTag) || Action.FinalAbilityTag.MatchesTag(AttackTag))
+        // CodeRevision: INC-2025-1117I (Filter by actual movement, not by intent tag) (2025-11-17 20:00)
+        // CoreResolvePhaseによって移動が割り当てられた全てのアクションを判定
+        // 元のインテント（AI_Intent_Move/Attack/Wait）に関わらず、
+        // CurrentCellとNextCellが異なれば移動アクションとして処理
+        if (Action.CurrentCell != Action.NextCell)
         {
-            continue;
+            EnemyMoveActions.Add(Action);
         }
-
-        EnemyMoveActions.Add(Action);
     }
 
     if (EnemyMoveActions.IsEmpty())
@@ -2328,6 +2393,13 @@ void AGameTurnManagerBase::DispatchMoveActions(const TArray<FResolvedAction>& Ac
         DispatchResolvedMove(Action);
     }
 }
+
+// CodeRevision: INC-2025-1125-R1 (Expose sequential flag for resolver checks) (2025-11-25 12:00)
+bool AGameTurnManagerBase::IsSequentialModeActive() const
+{
+    return bSequentialModeActive;
+}
+
 
 void AGameTurnManagerBase::ExecuteAttacks(const TArray<FResolvedAction>& PreResolvedAttacks)
 {
@@ -2510,18 +2582,14 @@ if (EnemyData->Intents.Num() == 0)
 
 // CodeRevision: INC-2025-00017-R1 (Replace HasAnyAttackIntent() wrapper - Phase 2) (2025-11-16 15:15)
 // Direct check for attack intent
+// CodeRevision: INC-2025-1125-R1 (Use HasAttackIntent for fallback attack gating) (2025-11-25 12:00)
 bool bHasAttack = false;
-if (EnemyData && EnemyData->Intents.Num() > 0)
+if (EnemyData)
 {
-    const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
-    for (const FEnemyIntent& I : EnemyData->Intents)
-    {
-        if (I.AbilityTag.MatchesTag(AttackTag) && I.Actor.IsValid())
-        {
-            bHasAttack = true;
-            break;
-        }
-    }
+    bHasAttack = EnemyData->HasAttackIntent();
+    UE_LOG(LogTurnManager, Verbose,
+        TEXT("[Turn %d] Sequential attack check: HasAttackIntent=%s (Intents=%d)"),
+        CurrentTurnId, bHasAttack ? TEXT("TRUE") : TEXT("FALSE"), EnemyData->Intents.Num());
 }
 
 if (!bSkipAttackCheck)
@@ -2840,25 +2908,19 @@ void AGameTurnManagerBase::HandleAttackPhaseCompleted(int32 FinishedTurnId)
 
     UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] AttackExecutor complete - attack phase finished"), FinishedTurnId);
 
+    // CodeRevision: INC-2025-1117J (Always dispatch move phase after attacks) (2025-11-17 20:30)
+    // 攻撃完了後は常に後続の移動フェーズを開始する（ソフトロック修正）
     if (bSequentialModeActive)
     {
-        if (!bIsInMoveOnlyPhase)
-        {
-            UE_LOG(LogTurnManager, Warning,
-                TEXT("[Turn %d] Sequential attack phase complete, dispatching move-only phase"), FinishedTurnId);
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[Turn %d] Sequential attack phase complete, dispatching move-only phase"), FinishedTurnId);
 
-            bSequentialMovePhaseStarted = true;
-            bIsInMoveOnlyPhase = true;
+        bSequentialMovePhaseStarted = true;
+        bIsInMoveOnlyPhase = true;
 
-            // CodeRevision: INC-2025-1117G-R1 (Sequential enemy turn helpers) (2025-11-17 19:30)
-            ExecuteEnemyMoves_Sequential();
-            return;
-        }
-        else
-        {
-            UE_LOG(LogTurnManager, Warning,
-                TEXT("[Turn %d] HandleAttackPhaseCompleted: Move-only phase already active"), FinishedTurnId);
-        }
+        // CodeRevision: INC-2025-1117G-R1 (Sequential enemy turn helpers) (2025-11-17 19:30)
+        ExecuteEnemyMoves_Sequential();
+        return;
     }
 }
 

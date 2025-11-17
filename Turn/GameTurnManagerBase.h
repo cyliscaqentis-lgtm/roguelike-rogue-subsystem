@@ -77,6 +77,8 @@ public:
     virtual void EndPlay(const EEndPlayReason::Type Reason) override;
     virtual void Tick(float DeltaTime) override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+    // CodeRevision: INC-2025-1125-R1 (Expose sequential flag for resolver checks) (2025-11-25 12:00)
+    bool IsSequentialModeActive() const;
 
     //==========================================================================
     // Grid Debug Initialization
@@ -712,7 +714,3 @@ private:
     // ★★★ Phase 4: Unused variable removal (2025-11-09) ★★★
     // Removed: bEnemyTurnEnding (unused)
 };
-
-
-
-

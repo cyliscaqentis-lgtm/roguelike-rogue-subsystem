@@ -17,6 +17,8 @@
 #include "Grid/GridPathfindingSubsystem.h"
 #include "EngineUtils.h"
 #include "Math/RotationMatrix.h"
+// Lyra standard damage pattern (CombatSet.BaseDamage attribute)
+#include "AbilitySystem/Attributes/LyraCombatSet.h"
 
 struct FTargetFacingInfo
 {
@@ -76,7 +78,7 @@ UGA_MeleeAttack::UGA_MeleeAttack(const FObjectInitializer& ObjectInitializer)
     ReplicationPolicy = EGameplayAbilityReplicationPolicy::ReplicateYes;
 
     MaxExecutionTime = 5.0f;
-    BaseDamage = 28.0f;
+    Damage = 28.0f;  // GA_MeleeAttack独自のDamageプロパティを使用
     RangeInTiles = 1;
 
     FGameplayTagContainer Tags;
@@ -295,6 +297,13 @@ AActor* UGA_MeleeAttack::FindAdjacentTarget()
 
 void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
 {
+    // サーバー権限チェック - クライアントでは実行しない
+    if (!HasAuthority(&CurrentActivationInfo))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] ApplyDamageToTarget called on client - skipping"));
+        return;
+    }
+
     if (!Target || !MeleeAttackEffect)
     {
         UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] Invalid Target or Effect"));
@@ -311,8 +320,8 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
     UE_LOG(LogTemp, Warning,
         TEXT("[GA_MeleeAttack] ==== DAMAGE DIAGNOSTIC START ===="));
     UE_LOG(LogTemp, Warning,
-        TEXT("[GA_MeleeAttack] Attacker=%s, Target=%s, BaseDamage=%.2f"),
-        *Avatar->GetName(), *Target->GetName(), BaseDamage);
+        TEXT("[GA_MeleeAttack] Attacker=%s, Target=%s, Damage=%.2f"),
+        *Avatar->GetName(), *Target->GetName(), Damage);
 
     // Team check diagnostic
     if (AUnitBase* AttackerUnit = Cast<AUnitBase>(Avatar))
@@ -373,39 +382,72 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
 
     if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
     {
+        const float FinalDamage = (Damage > 0.0f) ? Damage : 28.0f;
+
+        if (Damage <= 0.0f)
+        {
+            UE_LOG(LogTemp, Error,
+                TEXT("[GA_MeleeAttack] WARNING: Damage=%.2f is invalid! Using fallback damage=%.2f"),
+                Damage, FinalDamage);
+        }
+
+        // ===== Lyra標準パターン: CombatSet.BaseDamage属性を設定 =====
+        // LyraDamageExecutionはこの属性をキャプチャして使用します
+        const ULyraCombatSet* CombatSet = ASC->GetSet<ULyraCombatSet>();
+        float OldBaseDamage = 0.0f;
+        if (CombatSet)
+        {
+            OldBaseDamage = CombatSet->GetBaseDamage();
+            ASC->SetNumericAttributeBase(ULyraCombatSet::GetBaseDamageAttribute(), FinalDamage);
+            UE_LOG(LogTemp, Warning,
+                TEXT("[GA_MeleeAttack] Set attacker CombatSet.BaseDamage = %.2f (was %.2f)"),
+                FinalDamage, OldBaseDamage);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error,
+                TEXT("[GA_MeleeAttack] WARNING: Attacker has no CombatSet! Damage may fail."));
+        }
+
         FGameplayEffectContextHandle ContextHandle = ASC->MakeEffectContext();
         ContextHandle.AddSourceObject(this);
 
         FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(MeleeAttackEffect, 1.0f, ContextHandle);
         if (SpecHandle.IsValid())
         {
-            const float FinalDamage = (BaseDamage > 0.0f) ? BaseDamage : 28.0f;
-            
-            if (BaseDamage <= 0.0f)
-            {
-                UE_LOG(LogTemp, Error,
-                    TEXT("[GA_MeleeAttack] WARNING: BaseDamage=%.2f is invalid! Using fallback damage=%.2f"),
-                    BaseDamage, FinalDamage);
-            }
-            
-            SpecHandle.Data->SetSetByCallerMagnitude(RogueGameplayTags::SetByCaller_Damage, FinalDamage);
-
             UE_LOG(LogTemp, Warning,
-                TEXT("[GA_MeleeAttack] Applying GameplayEffect: %s with SetByCaller damage=%.2f (BaseDamage=%.2f)"),
-                *MeleeAttackEffect->GetName(), FinalDamage, BaseDamage);
+                TEXT("[GA_MeleeAttack] Applying GameplayEffect: %s (LyraDamageExecution will capture BaseDamage=%.2f)"),
+                *MeleeAttackEffect->GetName(), FinalDamage);
 
             if (UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Target))
             {
                 FActiveGameplayEffectHandle EffectHandle = ASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), TargetASC);
-                UE_LOG(LogTemp, Warning,
-                    TEXT("[GA_MeleeAttack] GameplayEffect applied, Handle valid=%s"),
-                    EffectHandle.IsValid() ? TEXT("YES") : TEXT("NO - EFFECT FAILED"));
+                // Instant エフェクトの場合、ハンドルは無効だが正常に適用される
+                if (EffectHandle.IsValid())
+                {
+                    UE_LOG(LogTemp, Log,
+                        TEXT("[GA_MeleeAttack] GameplayEffect applied successfully (Duration effect, handle is valid)"));
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Log,
+                        TEXT("[GA_MeleeAttack] GameplayEffect applied (Instant effect, handle is invalid but this is normal)"));
+                }
             }
         }
         else
         {
             UE_LOG(LogTemp, Error,
                 TEXT("[GA_MeleeAttack] Failed to create GameplayEffectSpec"));
+        }
+
+        // BaseDamageをリセット（次回の攻撃に影響しないように）
+        if (CombatSet)
+        {
+            ASC->SetNumericAttributeBase(ULyraCombatSet::GetBaseDamageAttribute(), OldBaseDamage);
+            UE_LOG(LogTemp, Verbose,
+                TEXT("[GA_MeleeAttack] Reset attacker CombatSet.BaseDamage to %.2f"),
+                OldBaseDamage);
         }
     }
 }

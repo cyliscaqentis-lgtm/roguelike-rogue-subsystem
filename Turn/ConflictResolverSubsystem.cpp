@@ -1,6 +1,8 @@
 #include "Turn/ConflictResolverSubsystem.h"
 #include "Utility/RogueGameplayTags.h"
 #include "Grid/GridOccupancySubsystem.h"
+#include "EngineUtils.h"
+#include "Turn/GameTurnManagerBase.h"
 
 // Define a local log category to avoid circular dependencies
 DEFINE_LOG_CATEGORY_STATIC(LogConflictResolver, Log, All);
@@ -41,6 +43,16 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
     {
         CurrentTurnId = GridOccupancy->GetCurrentTurnId();
     }
+
+    const bool bSequentialAttackMode = [this]() -> bool
+    {
+        if (AGameTurnManagerBase* TurnManager = ResolveTurnManager())
+        {
+            return TurnManager->IsSequentialModeActive();
+        }
+        return false;
+    }();
+    const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
 
     // ★★★ CRITICAL FIX (2025-11-10): スワップ検出（敵同士のA↔B入れ替わり防止） ★★★
     // 全エントリを収集して Actor→(CurrentCell, NextCell) マップを構築
@@ -156,8 +168,24 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
             // CONFLICT! More than one actor wants this cell.
             UE_LOG(LogConflictResolver, Warning, TEXT("Conflict at cell (%d, %d) with %d contenders. Picking winner."), Cell.X, Cell.Y, Contenders.Num());
 
+            // CodeRevision: INC-2025-1125-R1 (Prioritize attack entries during sequential resolution) (2025-11-25 12:00)
             // Simple random winner for now
-            const int32 WinnerIndex = FMath::RandRange(0, Contenders.Num() - 1);
+            int32 WinnerIndex = FMath::RandRange(0, Contenders.Num() - 1);
+            if (bSequentialAttackMode)
+            {
+                for (int32 AttackIndex = 0; AttackIndex < Contenders.Num(); ++AttackIndex)
+                {
+                    const FReservationEntry& Candidate = Contenders[AttackIndex];
+                    if (Candidate.AbilityTag.MatchesTag(AttackTag) && Candidate.Actor != nullptr && IsValid(Candidate.Actor))
+                    {
+                        WinnerIndex = AttackIndex;
+                        UE_LOG(LogConflictResolver, Verbose,
+                            TEXT("[ResolveAllConflicts] Sequential mode: attack entry keeps (%d,%d) reserved"),
+                            Cell.X, Cell.Y);
+                        break;
+                    }
+                }
+            }
             const FReservationEntry& Winner = Contenders[WinnerIndex];
 
             // ★★★ CRITICAL FIX (2025-11-11): nullptr/無効 Winner をスキップ ★★★
@@ -254,4 +282,23 @@ int32 UConflictResolverSubsystem::GetActionTier(const FGameplayTag& AbilityTag) 
     if (AbilityTag.MatchesTag(RogueGameplayTags::AI_Intent_Move)) return 1; // Assuming Dash is 2
     if (AbilityTag.MatchesTag(RogueGameplayTags::AI_Intent_Wait)) return 0;
     return 0;
+}
+// CodeRevision: INC-2025-1125-R1 (Cache TurnManager to scope sequential checks) (2025-11-25 12:00)
+AGameTurnManagerBase* UConflictResolverSubsystem::ResolveTurnManager() const
+{
+    if (CachedTurnManager.IsValid())
+    {
+        return CachedTurnManager.Get();
+    }
+
+    if (UWorld* World = GetWorld())
+    {
+        for (TActorIterator<AGameTurnManagerBase> It(World); It; ++It)
+        {
+            CachedTurnManager = *It;
+            return CachedTurnManager.Get();
+        }
+    }
+
+    return nullptr;
 }
