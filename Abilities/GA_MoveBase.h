@@ -118,7 +118,6 @@ protected:
 	);
 
 	FVector2D QuantizeToGridDirection(const FVector& InDirection);
-	FVector CalculateNextTilePosition(const FVector& CurrentPosition, const FVector2D& Dir);
 
 	bool IsTileWalkable(const FVector& TilePosition, AUnitBase* Self = nullptr);
 	void UpdateGridState(const FVector& Position, int32 Value);
@@ -134,7 +133,18 @@ protected:
 	void StartMoveToCell(const FIntPoint& TargetCell);
 
 	// 位置調整・デバッグ
+	/**
+	 * ワールド座標をグリッドセルの中心座標に変換（座標のみ返す）
+	 * Note: Actorの位置は変更しない。座標変換のみを行う。
+	 * For Actor movement, use GridUtils::SnapActorToGridCell() instead.
+	 */
 	FVector SnapToCellCenter(const FVector& WorldPos) const;
+	
+	/**
+	 * ワールド座標をグリッドセルの中心座標に変換（Z座標を固定値に設定）
+	 * Note: Actorの位置は変更しない。座標変換のみを行う。
+	 * For Actor movement, use GridUtils::SnapActorToGridCell() instead.
+	 */
 	FVector SnapToCellCenterFixedZ(const FVector& WorldPos, float FixedZ) const;
 	float ComputeFixedZ(const AUnitBase* Unit, const UGridPathfindingSubsystem* Pathfinding) const;
 	FVector AlignZToGround(const FVector& WorldPos, float TraceUp = 200.0f, float TraceDown = 2000.0f) const;
@@ -156,10 +166,7 @@ private:
 	// サブシステム／マネージャキャッシュ
 	mutable TWeakObjectPtr<AGameTurnManagerBase> CachedTurnManager;
 
-	// 旧 PathFinder アクセス（互換用）
-	const UGridPathfindingSubsystem* GetPathFinder() const;
-
-	// 新 PathfindingSubsystem アクセス
+	// PathfindingSubsystem アクセス
 	UGridPathfindingSubsystem* GetGridPathfindingSubsystem() const;
 
 	AGameTurnManagerBase* GetTurnManager() const;

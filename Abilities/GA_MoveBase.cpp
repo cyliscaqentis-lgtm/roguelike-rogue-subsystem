@@ -29,7 +29,7 @@
 #include "Utility/TurnCommandEncoding.h"
 #include "TimerManager.h"
 
-#include "../ProjectDiagnostics.h"
+#include "../Utility/ProjectDiagnostics.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogMoveVerbose, Log, All);
 
@@ -615,12 +615,6 @@ FVector2D UGA_MoveBase::QuantizeToGridDirection(const FVector& InDirection)
 	return FVector2D(X, Y);
 }
 
-FVector UGA_MoveBase::CalculateNextTilePosition(const FVector& CurrentPosition, const FVector2D& Dir)
-{
-	const FVector StepDelta(Dir.X * GridSize, Dir.Y * GridSize, 0.0f);
-	return CurrentPosition + StepDelta;
-}
-
 // CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
 bool UGA_MoveBase::IsTileWalkable(const FVector& TilePosition, AUnitBase* Self)
 {
@@ -668,7 +662,8 @@ void UGA_MoveBase::UpdateGridState(const FVector& Position, int32 Value)
 	}
 
 	const FVector Snapped = SnapToCellCenter(Position);
-	Pathfinding->GridChangeVector(Snapped, Value);
+	// CodeRevision: INC-2025-00031-R1 (Replace legacy GridChangeVector with SetGridCostAtWorldPosition) (2025-01-XX XX:XX)
+	Pathfinding->SetGridCostAtWorldPosition(Snapped, Value);
 	// CodeRevision: INC-2025-00018-R2 (Remove UpdateOccupancy call - grid update moved to UnitMovementComponent) (2025-11-17)
 	// UpdateOccupancy() removed - grid occupancy update is now handled by UnitMovementComponent::FinishMovement()
 }
@@ -681,18 +676,6 @@ float UGA_MoveBase::RoundYawTo45Degrees(float Yaw)
 // CodeRevision: INC-2025-00027-R1 (Add Subsystem access - Phase 2.4) (2025-11-16 00:00)
 // CodeRevision: INC-2025-00030-R1 (Remove CachedPathFinder dependency) (2025-11-16 23:55)
 // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
-// GetPathFinder() is deprecated - use GetGridPathfindingSubsystem() instead
-// Kept for backward compatibility during migration
-const UGridPathfindingSubsystem* UGA_MoveBase::GetPathFinder() const
-{
-	if (const UWorld* World = GetWorld())
-	{
-		return FPathFinderUtils::GetCachedPathFinder(const_cast<UWorld*>(World));
-	}
-
-	return nullptr;
-}
-
 UGridPathfindingSubsystem* UGA_MoveBase::GetGridPathfindingSubsystem() const
 {
 	if (UWorld* World = GetWorld())
@@ -893,6 +876,8 @@ FVector UGA_MoveBase::SnapToCellCenter(const FVector& WorldPos) const
 }
 
 // CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
+// CodeRevision: INC-2025-00031-R1 (Add usage comments to clarify coordinate conversion vs actor movement) (2025-01-XX XX:XX)
+// SnapToCellCenterFixedZ: Converts world position to grid cell center coordinate with fixed Z (returns coordinate only, does not move actor)
 FVector UGA_MoveBase::SnapToCellCenterFixedZ(const FVector& WorldPos, float FixedZ) const
 {
 	UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();

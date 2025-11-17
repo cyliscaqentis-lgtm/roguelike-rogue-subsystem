@@ -22,3 +22,4 @@ DECLARE_LOG_CATEGORY_EXTERN(LogTurnPhase, Log, All);
 #else
   #define DIAG_LOG(Verbosity, Format, ...)
 #endif
+

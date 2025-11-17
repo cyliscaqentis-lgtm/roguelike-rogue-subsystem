@@ -12,7 +12,7 @@
 #include "Misc/ScopeLock.h"
 #include "Grid/DungeonFloorGenerator.h"
 #include "Utility/GridUtils.h"
-#include "../ProjectDiagnostics.h"
+#include "../Utility/ProjectDiagnostics.h"
 
 // CodeRevision: INC-2025-00027-R1 (Create UGridPathfindingSubsystem - Phase 2) (2025-11-16 00:00)
 // Grid pathfinding functionality migrated from AGridPathfindingLibrary to UWorldSubsystem

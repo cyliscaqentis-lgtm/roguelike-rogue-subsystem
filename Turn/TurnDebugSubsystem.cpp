@@ -8,7 +8,7 @@
 #include "Debug/DebugObserverCSV.h"
 #include "Engine/World.h"
 #include "DrawDebugHelpers.h"
-#include "../ProjectDiagnostics.h"
+#include "../Utility/ProjectDiagnostics.h"
 
 //------------------------------------------------------------------------------
 // Subsystem Lifecycle

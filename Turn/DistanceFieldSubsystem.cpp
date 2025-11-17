@@ -4,7 +4,7 @@
 #include "DistanceFieldSubsystem.h"
 #include "../Grid/GridOccupancySubsystem.h"
 #include "../Grid/GridPathfindingSubsystem.h"
-#include "../ProjectDiagnostics.h"  // ☁E E☁EDIAG_LOG用 ☁E E☁E
+#include "../Utility/ProjectDiagnostics.h"  // ☁E E☁EDIAG_LOG用 ☁E E☁E
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
 

@@ -226,7 +226,7 @@ if (!PathFinder)
         UE_LOG(LogTurnManager, Error, TEXT("InitializeTurnSystem: PathFinder not available after resolve"));
         return;
     }
-    CachedPathFinder = PathFinder;
+    // CodeRevision: INC-2025-00032-R1 (Removed CachedPathFinder assignment - use PathFinder only) (2025-01-XX XX:XX)
     UE_LOG(LogTurnManager, Log, TEXT("InitializeTurnSystem: PathFinder ready: %s"), *GetNameSafe(PathFinder));
 
 // CodeRevision: INC-2025-00017-R1 (Replace CollectEnemies() wrapper - Phase 2) (2025-11-16 15:10)
@@ -451,11 +451,11 @@ void AGameTurnManagerBase::HandleDungeonReady(URogueDungeonSubsystem* InDungeonS
         return;
     }
 
-    // Legacy: Still resolve PathFinder Actor for backward compatibility
+    // CodeRevision: INC-2025-00032-R1 (Removed legacy PathFinder Actor resolution - PathFinder is now Subsystem) (2025-01-XX XX:XX)
+    // PathFinder is now a Subsystem, resolved automatically by engine
     if (!PathFinder)
     {
-        UE_LOG(LogTurnManager, Log, TEXT("HandleDungeonReady: Creating PathFinder Actor (legacy)..."));
-        ResolveOrSpawnPathFinder();
+        PathFinder = GridPathfindingSubsystem;
     }
 
     if (!UnitMgr)
@@ -471,7 +471,7 @@ void AGameTurnManagerBase::HandleDungeonReady(URogueDungeonSubsystem* InDungeonS
         return;
     }
 
-    CachedPathFinder = PathFinder;
+    // CodeRevision: INC-2025-00032-R1 (Removed CachedPathFinder assignment - use PathFinder only) (2025-01-XX XX:XX)
 
     // Initialize GridPathfindingSubsystem with dungeon data
     if (ADungeonFloorGenerator* Floor = DungeonSys->GetFloorGenerator())
@@ -482,11 +482,9 @@ void AGameTurnManagerBase::HandleDungeonReady(URogueDungeonSubsystem* InDungeonS
         InitParams.TileSizeCM = Floor->CellSize;
         InitParams.Origin = FVector::ZeroVector;
 
-        // Initialize Subsystem (new approach)
+        // Initialize Subsystem
+        // CodeRevision: INC-2025-00032-R1 (Removed duplicate PathFinder initialization - PathFinder is same as GridPathfindingSubsystem) (2025-01-XX XX:XX)
         GridPathfindingSubsystem->InitializeFromParams(InitParams);
-
-        // Legacy: Also initialize Actor for backward compatibility
-        PathFinder->InitializeFromParams(InitParams);
 
         UE_LOG(LogTurnManager, Warning, TEXT("[PF.Init] Size=%dx%d Cell=%d Origin=(%.1f,%.1f,%.1f) Walkables=%d"),
             Floor->GridWidth, Floor->GridHeight, Floor->CellSize,
@@ -583,38 +581,7 @@ if (!Tag_AbilityMove.IsValid() || !Tag_TurnAbilityCompleted.IsValid())
     }
 }
 
-// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
-// Returns UGridPathfindingSubsystem
-UGridPathfindingSubsystem* AGameTurnManagerBase::GetCachedPathFinder() const
-{
-    // Try to get from cached reference first
-    if (IsValid(PathFinder.Get()))
-    {
-        return PathFinder.Get();
-    }
-
-    if (CachedPathFinder.IsValid())
-    {
-        UGridPathfindingSubsystem* PF = CachedPathFinder.Get();
-        const_cast<AGameTurnManagerBase*>(this)->PathFinder = PF;
-        return PF;
-    }
-
-    // Get subsystem from world
-    UWorld* World = GetWorld();
-    if (World)
-    {
-        UGridPathfindingSubsystem* PF = World->GetSubsystem<UGridPathfindingSubsystem>();
-        if (PF)
-        {
-            const_cast<AGameTurnManagerBase*>(this)->CachedPathFinder = PF;
-            const_cast<AGameTurnManagerBase*>(this)->PathFinder = PF;
-            return PF;
-        }
-    }
-
-    return nullptr;
-}
+// CodeRevision: INC-2025-00032-R1 (Removed GetCachedPathFinder() - use GetGridPathfindingSubsystem() instead) (2025-01-XX XX:XX)
 
 int32 AGameTurnManagerBase::GetCurrentTurnIndex() const
 {
@@ -623,7 +590,7 @@ int32 AGameTurnManagerBase::GetCurrentTurnIndex() const
 
 int32 AGameTurnManagerBase::GetCurrentInputWindowId() const
 {
-    return TurnFlowCoordinator ? TurnFlowCoordinator->GetCurrentInputWindowId() : 0;
+    return CurrentInputWindowId;
 }
 
 UGridPathfindingSubsystem* AGameTurnManagerBase::GetGridPathfindingSubsystem() const
@@ -682,8 +649,6 @@ if (DebugSubsystem)
         WaitingForPlayerInput = true;
         ApplyWaitInputGate(true);      
         OpenInputWindow();
-        // CodeRevision: INC-2025-00030-R1 (Use TurnFlowCoordinator for InputWindowId) (2025-11-16 00:00)
-        int32 CurrentInputWindowId = TurnFlowCoordinator ? TurnFlowCoordinator->GetCurrentInputWindowId() : 0;
         UE_LOG(LogTurnManager, Log,
             TEXT("Turn%d:BeginPhase(Input) Id=%d, Gate=OPEN, Waiting=TRUE"),
             CurrentTurnId, CurrentInputWindowId);
@@ -853,7 +818,8 @@ if (APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0))
             {
                 const FIntPoint PlayerGrid = Occupancy->GetCellOfActor(PlayerPawn);
                 // WorldLocation is not critical here, but can be retrieved from the grid for logging if needed.
-                const FVector PlayerWorldLoc = CachedPathFinder.IsValid() ? CachedPathFinder->GridToWorld(PlayerGrid) : PlayerPawn->GetActorLocation();
+                // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+                const FVector PlayerWorldLoc = IsValid(PathFinder) ? PathFinder->GridToWorld(PlayerGrid) : PlayerPawn->GetActorLocation();
 
                 UE_LOG(LogTurnManager, Warning,
                     TEXT("[AdvanceTurn] PLAYER POSITION BEFORE ADVANCE: Turn=%d Grid(%d,%d) World(%s)"),
@@ -1080,7 +1046,8 @@ TArray<AActor*> AllUnits;
         if (UGridOccupancySubsystem* Occupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
         {
             const FIntPoint PlayerGrid = Occupancy->GetCellOfActor(PlayerPawn);
-            const FVector PlayerWorldLoc = CachedPathFinder.IsValid() ? CachedPathFinder->GridToWorld(PlayerGrid) : FVector::ZeroVector;
+            // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+            const FVector PlayerWorldLoc = IsValid(PathFinder) ? PathFinder->GridToWorld(PlayerGrid) : FVector::ZeroVector;
             UE_LOG(LogTurnManager, Warning,
                 TEXT("[Turn %d] PLAYER POSITION AT TURN START: Grid(%d,%d) World(%s)"),
                 TurnId, PlayerGrid.X, PlayerGrid.Y, *PlayerWorldLoc.ToCompactString());
@@ -1092,6 +1059,7 @@ TArray<AActor*> AllUnits;
         TurnId, PlayerPawn ? *PlayerPawn->GetName() : TEXT("NULL"));
 
 BeginPhase(Phase_Turn_Init);
+    CurrentInputWindowId++;
     BeginPhase(Phase_Player_Wait);
     UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] INPUT GATE OPENED EARLY (before DistanceField update)"), TurnId);
 
@@ -1187,10 +1155,11 @@ UE_LOG(LogTurnManager, Warning,
         TEXT("[Turn %d] Pre-DistanceField check: PlayerPawn=%s, PathFinder=%s, Enemies=%d"),
         TurnId,
         PlayerPawn ? TEXT("Valid") : TEXT("NULL"),
-        CachedPathFinder.IsValid() ? TEXT("Valid") : TEXT("Invalid"),
+        // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+        IsValid(PathFinder) ? TEXT("Valid") : TEXT("Invalid"),
         CachedEnemiesForTurn.Num());
 
-    if (PlayerPawn && CachedPathFinder.IsValid())
+    if (PlayerPawn && IsValid(PathFinder))
     {
         UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] Attempting to update DistanceField..."), TurnId);
 
@@ -1208,7 +1177,8 @@ UE_LOG(LogTurnManager, Warning,
             {
                 if (IsValid(Enemy))
                 {
-                    FIntPoint EnemyGrid = CachedPathFinder->WorldToGrid(Enemy->GetActorLocation());
+                    // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+                    FIntPoint EnemyGrid = PathFinder->WorldToGrid(Enemy->GetActorLocation());
                     EnemyPositions.Add(EnemyGrid);
                 }
             }
@@ -1268,8 +1238,9 @@ bool bAnyUnreached = false;
         UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] Cannot update DistanceField:"), TurnId);
         if (!PlayerPawn)
             UE_LOG(LogTurnManager, Error, TEXT("  - PlayerPawn is NULL"));
-        if (!CachedPathFinder.IsValid())
-            UE_LOG(LogTurnManager, Error, TEXT("  - CachedPathFinder is Invalid"));
+        // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+        if (!IsValid(PathFinder))
+            UE_LOG(LogTurnManager, Error, TEXT("  - PathFinder is Invalid"));
     }
 
 UE_LOG(LogTurnManager, Warning,
@@ -1279,7 +1250,8 @@ UE_LOG(LogTurnManager, Warning,
     UEnemyAISubsystem* EnemyAISys = GetWorld()->GetSubsystem<UEnemyAISubsystem>();
     UEnemyTurnDataSubsystem* EnemyTurnDataSys = GetWorld()->GetSubsystem<UEnemyTurnDataSubsystem>();
 
-    if (EnemyAISys && EnemyTurnDataSys && CachedPathFinder.IsValid() && PlayerPawn && CachedEnemiesForTurn.Num() > 0)
+    // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+    if (EnemyAISys && EnemyTurnDataSys && IsValid(PathFinder) && PlayerPawn && CachedEnemiesForTurn.Num() > 0)
     {
         // Get reliable player grid coordinates from GridOccupancySubsystem
         FIntPoint PlayerGrid = FIntPoint(-1, -1);
@@ -1289,12 +1261,13 @@ UE_LOG(LogTurnManager, Warning,
         }
 
         TArray<FEnemyObservation> PreliminaryObs;
-        EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerGrid, CachedPathFinder.Get(), PreliminaryObs);
+        EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerGrid, PathFinder.Get(), PreliminaryObs);
         EnemyTurnDataSys->Observations = PreliminaryObs;
 
 TArray<FEnemyIntent> PreliminaryIntents;
         EnemyAISys->CollectIntents(PreliminaryObs, CachedEnemiesForTurn, PreliminaryIntents);
         EnemyTurnDataSys->Intents = PreliminaryIntents;
+        CachedEnemyIntents = PreliminaryIntents;
 
         UE_LOG(LogTurnManager, Warning,
             TEXT("[Turn %d] Preliminary intents generated: %d intents from %d enemies (will be updated after player move)"),
@@ -1307,7 +1280,8 @@ TArray<FEnemyIntent> PreliminaryIntents;
             TurnId,
             EnemyAISys != nullptr,
             EnemyTurnDataSys != nullptr,
-            CachedPathFinder.IsValid(),
+            // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+            IsValid(PathFinder),
             PlayerPawn != nullptr,
             CachedEnemiesForTurn.Num());
     }
@@ -1358,13 +1332,13 @@ if (Command.TurnId != CurrentTurnId && Command.TurnId != INDEX_NONE)
             return;
         }
 
-        // CodeRevision: INC-2025-00030-R1 (Use TurnFlowCoordinator for InputWindowId) (2025-11-16 00:00)
-        int32 CurrentInputWindowId = TurnFlowCoordinator ? TurnFlowCoordinator->GetCurrentInputWindowId() : 0;
-        if (Command.WindowId != CurrentInputWindowId && Command.WindowId != INDEX_NONE)
+        // CodeRevision: INC-2025-00030-R1 (Use CurrentInputWindowId for InputWindowId) (2025-11-16 00:00)
+        const int32 WindowIdForTurn = CurrentInputWindowId;
+        if (Command.WindowId != WindowIdForTurn && Command.WindowId != INDEX_NONE)
         {
             UE_LOG(LogTurnManager, Warning,
-                TEXT("[GameTurnManager] Command REJECTED - WindowId mismatch (%d != %d) | Turn=%d"),
-                Command.WindowId, CurrentInputWindowId, CurrentTurnId);
+                    TEXT("[GameTurnManager] Command REJECTED - WindowId mismatch (%d != %d) | Turn=%d"),
+                    Command.WindowId, WindowIdForTurn, CurrentTurnId);
             return;
         }
 
@@ -1414,9 +1388,10 @@ const int32 DirX = FMath::RoundToInt(Command.Direction.X);
 
     // Calculate target cell before packing
     FIntPoint TargetCell = Command.TargetCell;
-    if (CachedPathFinder.IsValid() && (TargetCell.X == 0 && TargetCell.Y == 0))
+    // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+    if (IsValid(PathFinder) && (TargetCell.X == 0 && TargetCell.Y == 0))
     {
-        const FIntPoint CurrentCell = CachedPathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
+        const FIntPoint CurrentCell = PathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
         TargetCell = FIntPoint(
             CurrentCell.X + DirX,
             CurrentCell.Y + DirY);
@@ -1430,9 +1405,10 @@ const int32 DirX = FMath::RoundToInt(Command.Direction.X);
         *EventData.EventTag.ToString(), EventData.EventMagnitude,
         Command.Direction.X, Command.Direction.Y);
 
-if (CachedPathFinder.IsValid())
+    // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+    if (IsValid(PathFinder))
     {
-        const FIntPoint CurrentCell = CachedPathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
+        const FIntPoint CurrentCell = PathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
         TargetCell = FIntPoint(
             CurrentCell.X + static_cast<int32>(Command.Direction.X),
             CurrentCell.Y + static_cast<int32>(Command.Direction.Y));
@@ -1440,7 +1416,7 @@ if (CachedPathFinder.IsValid())
         // ★★★ New: Use unified validation API (2025-11-16 refactoring) ★★★
         // CodeRevision: INC-2025-00015-R1 (Refactored to use IsMoveValid) (2025-11-16 13:55)
         FString FailureReason;
-        const bool bMoveValid = CachedPathFinder->IsMoveValid(CurrentCell, TargetCell, PlayerPawn, FailureReason);
+        const bool bMoveValid = PathFinder->IsMoveValid(CurrentCell, TargetCell, PlayerPawn, FailureReason);
 
         // Swap detection handled separately (ConflictResolver processes it, but we detect here for logging)
         bool bSwapDetected = false;
@@ -1483,7 +1459,8 @@ if (!bMoveValid)
                 TEXT("[MovePrecheck] BLOCKED: %s | Cell (%d,%d) | From=(%d,%d) | Applying FACING ONLY (No Turn)"),
                 *FailureReason, TargetCell.X, TargetCell.Y, CurrentCell.X, CurrentCell.Y);
 
-            const int32 TargetCost = CachedPathFinder->GetGridCost(TargetCell.X, TargetCell.Y);
+            // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+            const int32 TargetCost = PathFinder->GetGridCost(TargetCell.X, TargetCell.Y);
             UE_LOG(LogTurnManager, Warning,
                 TEXT("[MovePrecheck] Target cell (%d,%d) GridCost=%d (expected: 3=Walkable, -1=Blocked)"),
                 TargetCell.X, TargetCell.Y, TargetCost);
@@ -1500,8 +1477,9 @@ const FIntPoint Directions[4] = {
             for (int32 i = 0; i < 4; ++i)
             {
                 const FIntPoint CheckCell = CurrentCell + Directions[i];
-                const int32 Cost = CachedPathFinder->GetGridCost(CheckCell.X, CheckCell.Y);
-                const bool bWalkable = CachedPathFinder->IsCellWalkableIgnoringActor(CheckCell, PlayerPawn);
+                // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+                const int32 Cost = PathFinder->GetGridCost(CheckCell.X, CheckCell.Y);
+                const bool bWalkable = PathFinder->IsCellWalkableIgnoringActor(CheckCell, PlayerPawn);
                 UE_LOG(LogTurnManager, Warning,
                     TEXT("  %s (%d,%d): Cost=%d Walkable=%d"),
                     DirNames[i], CheckCell.X, CheckCell.Y, Cost, bWalkable ? 1 : 0);
@@ -1521,12 +1499,11 @@ if (APlayerController* PC = Cast<APlayerController>(PlayerPawn->GetController())
                 if (APlayerControllerBase* TPCB = Cast<APlayerControllerBase>(PC))
                 {
                     
-                    // CodeRevision: INC-2025-00030-R1 (Use TurnFlowCoordinator for InputWindowId) (2025-11-16 00:00)
-                    int32 CurrentInputWindowId = TurnFlowCoordinator ? TurnFlowCoordinator->GetCurrentInputWindowId() : 0;
-                    TPCB->Client_ApplyFacingNoTurn(CurrentInputWindowId, FVector2D(Command.Direction.X, Command.Direction.Y));
+                    const int32 WindowIdForTurn = CurrentInputWindowId;
+                    TPCB->Client_ApplyFacingNoTurn(WindowIdForTurn, FVector2D(Command.Direction.X, Command.Direction.Y));
                     UE_LOG(LogTurnManager, Log,
                         TEXT("[MovePrecheck] Sent Client_ApplyFacingNoTurn RPC (WindowId=%d, no turn consumed)"),
-                        CurrentInputWindowId);
+                        WindowIdForTurn);
 
 TPCB->Client_NotifyMoveRejected();
                     UE_LOG(LogTurnManager, Log,
@@ -1537,9 +1514,8 @@ TPCB->Client_NotifyMoveRejected();
 UE_LOG(LogTurnManager, Verbose, TEXT("[MovePrecheck] Server state after FACING ONLY:"));
             UE_LOG(LogTurnManager, Verbose, TEXT("  - WaitingForPlayerInput: %d (STAYS TRUE - no turn consumed)"), WaitingForPlayerInput);
             UE_LOG(LogTurnManager, Verbose, TEXT("  - bPlayerMoveInProgress: %d (STAYS FALSE)"), bPlayerMoveInProgress);
-            // CodeRevision: INC-2025-00030-R1 (Use TurnFlowCoordinator for InputWindowId) (2025-11-16 00:00)
-            int32 CurrentInputWindowId = TurnFlowCoordinator ? TurnFlowCoordinator->GetCurrentInputWindowId() : 0;
-            UE_LOG(LogTurnManager, Verbose, TEXT("  - InputWindowId: %d (unchanged)"), CurrentInputWindowId);
+            const int32 WindowIdForTurn = CurrentInputWindowId;
+            UE_LOG(LogTurnManager, Verbose, TEXT("  - InputWindowId: %d (unchanged)"), WindowIdForTurn);
 
 return;
         }
@@ -1566,12 +1542,11 @@ const float Yaw = FMath::Atan2(Command.Direction.Y, Command.Direction.X) * 180.f
             {
                 if (APlayerControllerBase* TPCB = Cast<APlayerControllerBase>(PC))
                 {
-                    // CodeRevision: INC-2025-00030-R1 (Use TurnFlowCoordinator for InputWindowId) (2025-11-16 00:00)
-                    int32 CurrentInputWindowId = TurnFlowCoordinator ? TurnFlowCoordinator->GetCurrentInputWindowId() : 0;
-                    TPCB->Client_ApplyFacingNoTurn(CurrentInputWindowId, FVector2D(Command.Direction.X, Command.Direction.Y));
+                    const int32 WindowIdForTurn = CurrentInputWindowId;
+                    TPCB->Client_ApplyFacingNoTurn(WindowIdForTurn, FVector2D(Command.Direction.X, Command.Direction.Y));
                     UE_LOG(LogTurnManager, Log,
                         TEXT("[MovePrecheck] Sent Client_ApplyFacingNoTurn RPC (WindowId=%d, reservation failed)"),
-                        CurrentInputWindowId);
+                        WindowIdForTurn);
 
 TPCB->Client_NotifyMoveRejected();
                     UE_LOG(LogTurnManager, Log,
@@ -1604,10 +1579,10 @@ if (APlayerController* PC = Cast<APlayerController>(PlayerPawn->GetController())
         {
             if (APlayerControllerBase* TPCB = Cast<APlayerControllerBase>(PC))
             {
-                // CodeRevision: INC-2025-00030-R1 (Use TurnFlowCoordinator for InputWindowId) (2025-11-16 00:00)
-                int32 CurrentInputWindowId = TurnFlowCoordinator ? TurnFlowCoordinator->GetCurrentInputWindowId() : 0;
-                TPCB->Client_ConfirmCommandAccepted(CurrentInputWindowId);
-                UE_LOG(LogTurnManager, Log, TEXT("[GameTurnManager] Sent Client_ConfirmCommandAccepted ACK (WindowId=%d)"), CurrentInputWindowId);
+                    // CodeRevision: INC-2025-00030-R1 (Use CurrentInputWindowId for InputWindowId) (2025-11-16 00:00)
+                    const int32 WindowIdForTurn = CurrentInputWindowId;
+                    TPCB->Client_ConfirmCommandAccepted(WindowIdForTurn);
+                    UE_LOG(LogTurnManager, Log, TEXT("[GameTurnManager] Sent Client_ConfirmCommandAccepted ACK (WindowId=%d)"), WindowIdForTurn);
             }
         }
 
@@ -1631,7 +1606,8 @@ const FGameplayTag InputMove = RogueGameplayTags::InputTag_Move;
             CurrentTurnId);
 
 FIntPoint PlayerDestination = FIntPoint(0, 0);
-        if (CachedPathFinder.IsValid() && PlayerPawn)
+        // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+        if (IsValid(PathFinder) && PlayerPawn)
         {
             // Get current cell from GridOccupancySubsystem (reliable source)
             FIntPoint CurrentCell = FIntPoint(-1, -1);
@@ -1684,13 +1660,14 @@ TArray<FEnemyObservation> Observations;
 
                 for (AActor* Enemy : Enemies)
                 {
-                    if (!Enemy || !CachedPathFinder.IsValid())
+                    // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+                    if (!Enemy || !IsValid(PathFinder))
                     {
                         continue;
                     }
 
                     FEnemyObservation Obs;
-                    Obs.GridPosition = CachedPathFinder->WorldToGrid(Enemy->GetActorLocation());
+                    Obs.GridPosition = PathFinder->WorldToGrid(Enemy->GetActorLocation());
                     Obs.PlayerGridPosition = PlayerDestination;
                     Obs.DistanceInTiles = FGridUtils::ChebyshevDistance(Obs.GridPosition, PlayerDestination);
 
@@ -1706,6 +1683,7 @@ TArray<FEnemyObservation> Observations;
 EnemyAI->CollectIntents(Observations, Enemies, Intents);
 
                 EnemyData->SaveIntents(Intents);
+                CachedEnemyIntents = Intents;
 
                 UE_LOG(LogTurnManager, Warning,
                     TEXT("[Turn %d] Intents regenerated: %d intents (with player destination)"),
@@ -1715,19 +1693,7 @@ EnemyAI->CollectIntents(Observations, Enemies, Intents);
 
 // CodeRevision: INC-2025-00017-R1 (Replace HasAnyAttackIntent() wrapper - Phase 2) (2025-11-16 15:15)
 // Direct check for attack intent
-bool bHasAttack = false;
-// CodeRevision: INC-2025-1125-R1 (Derive bHasAttack from cached intents) (2025-11-25 12:00)
-// CodeRevision: INC-2025-00030-R1 (Use GetWorld()->GetSubsystem<>() instead of cached member) (2025-11-16 00:00)
-if (UWorld* WorldPtr = GetWorld())
-{
-    if (UEnemyTurnDataSubsystem* EnemyTurnDataSys = WorldPtr->GetSubsystem<UEnemyTurnDataSubsystem>())
-    {
-        bHasAttack = EnemyTurnDataSys->HasAttackIntent();
-        UE_LOG(LogTurnManager, Verbose,
-            TEXT("[Turn %d] EnemyTurnDataSubsystem reports %d intents | HasAttackIntent=%s"),
-            CurrentTurnId, EnemyTurnDataSys->Intents.Num(), bHasAttack ? TEXT("TRUE") : TEXT("FALSE"));
-    }
-}
+const bool bHasAttack = DoesAnyIntentHaveAttack();
 
         UE_LOG(LogTurnManager, Log,
             TEXT("[Turn %d] bHasAttack=%s (Simultaneous movement %s)"),
@@ -1772,10 +1738,11 @@ if (UWorld* WorldPtr = GetWorld())
                         TWeakObjectPtr<AActor> PlayerKey(LocalPlayerPawn);
                         if (const FIntPoint* PlayerNextCell = PendingMoveReservations.Find(PlayerKey))
                         {
-                            if (CachedPathFinder.IsValid())
+                            // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+                            if (IsValid(PathFinder))
                             {
                                 const FVector PlayerLoc = LocalPlayerPawn->GetActorLocation();
-                                const FIntPoint PlayerCurrentCell = CachedPathFinder->WorldToGrid(PlayerLoc);
+                                const FIntPoint PlayerCurrentCell = PathFinder->WorldToGrid(PlayerLoc);
 
                                 if (PlayerCurrentCell != *PlayerNextCell)
                                 {
@@ -1844,6 +1811,8 @@ if (UWorld* WorldPtr = GetWorld())
 }
 
 // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+// CodeRevision: INC-2025-00032-R1 (Cleaned up ResolveOrSpawnPathFinder - PathFinder is now Subsystem, not Actor) (2025-01-XX XX:XX)
+// Note: Function name suggests "Spawn" but PathFinder is now a Subsystem (automatically created by engine)
 void AGameTurnManagerBase::ResolveOrSpawnPathFinder()
 {
     UWorld* World = GetWorld();
@@ -1858,9 +1827,8 @@ void AGameTurnManagerBase::ResolveOrSpawnPathFinder()
         return;
     }
 
-    // Get UGridPathfindingSubsystem (subsystems are automatically created by engine)
+    // Get UGridPathfindingSubsystem (subsystems are automatically created by engine, no spawning needed)
     PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>();
-    CachedPathFinder = PathFinder;
 
     if (IsValid(PathFinder.Get()))
     {
@@ -2017,7 +1985,8 @@ UEnemyTurnDataSubsystem* EnemyTurnDataSys = GetWorld()->GetSubsystem<UEnemyTurnD
 
 if (EnemyAISys && EnemyTurnDataSys)
 {
-    if (CachedPathFinder.IsValid() && PlayerPawn)
+    // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+    if (IsValid(PathFinder) && PlayerPawn)
     {
         // Get player grid from GridOccupancySubsystem (reliable source)
         FIntPoint PlayerGrid = FIntPoint(-1, -1);
@@ -2035,7 +2004,7 @@ if (EnemyAISys && EnemyTurnDataSys)
         }
 
         TArray<FEnemyObservation> Observations;
-        EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerGrid, CachedPathFinder.Get(), Observations);
+        EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerGrid, PathFinder.Get(), Observations);
         EnemyTurnDataSys->Observations = Observations;
 
         UE_LOG(LogTurnManager, Warning,
@@ -2047,7 +2016,8 @@ if (EnemyAISys && EnemyTurnDataSys)
         UE_LOG(LogTurnManager, Error,
             TEXT("[Turn %d] BuildObservations: PathFinder=%d PlayerPawn=%d"),
             CurrentTurnId,
-            CachedPathFinder.IsValid(),
+            // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+            IsValid(PathFinder),
             PlayerPawn != nullptr);
     }
 
@@ -2057,7 +2027,8 @@ if (EnemyAISys && EnemyTurnDataSys)
             TEXT("[Turn %d] CollectIntents: No observations available (Enemies=%d) - Auto-generating..."),
             CurrentTurnId, CachedEnemiesForTurn.Num());
 
-        if (CachedPathFinder.IsValid() && PlayerPawn && CachedEnemiesForTurn.Num() > 0)
+        // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+        if (IsValid(PathFinder) && PlayerPawn && CachedEnemiesForTurn.Num() > 0)
         {
             // Get reliable player grid coordinates from GridOccupancySubsystem
             FIntPoint PlayerGrid = FIntPoint(-1, -1);
@@ -2067,7 +2038,7 @@ if (EnemyAISys && EnemyTurnDataSys)
             }
 
             TArray<FEnemyObservation> Observations;
-            EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerGrid, CachedPathFinder.Get(), Observations);
+            EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerGrid, PathFinder.Get(), Observations);
             EnemyTurnDataSys->Observations = Observations;
 
             UE_LOG(LogTurnManager, Warning,
@@ -2082,7 +2053,8 @@ if (EnemyAISys && EnemyTurnDataSys)
             TEXT("[Turn %d] CollectIntents: Size mismatch! Observations=%d != Enemies=%d"),
             CurrentTurnId, EnemyTurnDataSys->Observations.Num(), CachedEnemiesForTurn.Num());
 
-        if (CachedPathFinder.IsValid() && PlayerPawn)
+        // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+        if (IsValid(PathFinder) && PlayerPawn)
         {
             // Get reliable player grid coordinates from GridOccupancySubsystem
             FIntPoint PlayerGrid = FIntPoint(-1, -1);
@@ -2092,7 +2064,7 @@ if (EnemyAISys && EnemyTurnDataSys)
             }
 
             TArray<FEnemyObservation> Observations;
-            EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerGrid, CachedPathFinder.Get(), Observations);
+            EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerGrid, PathFinder.Get(), Observations);
             EnemyTurnDataSys->Observations = Observations;
 
             UE_LOG(LogTurnManager, Warning,
@@ -2104,6 +2076,7 @@ if (EnemyAISys && EnemyTurnDataSys)
     TArray<FEnemyIntent> Intents;
     EnemyAISys->CollectIntents(EnemyTurnDataSys->Observations, CachedEnemiesForTurn, Intents);
     EnemyTurnDataSys->Intents = Intents;
+    CachedEnemyIntents = Intents;
 }
 else
 {
@@ -2116,28 +2089,15 @@ else
 
     UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] Enemy intent collection complete"), CurrentTurnId);
 
-// Direct check for attack intent
-bool bHasAttack = false;
-if (EnemyTurnDataSys && EnemyTurnDataSys->Intents.Num() > 0)
-{
-    const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
-    for (const FEnemyIntent& I : EnemyTurnDataSys->Intents)
-    {
-        if (I.AbilityTag.MatchesTag(AttackTag) && I.Actor.IsValid())
-        {
-            bHasAttack = true;
-            break;
-        }
-    }
-}
+const bool bHasAttack = DoesAnyIntentHaveAttack();
 
     if (bHasAttack)
     {
-        ExecuteSequentialPhase(); 
+        ExecuteSequentialPhase();
     }
     else
     {
-        ExecuteSimultaneousPhase(); 
+        ExecuteSimultaneousPhase();
     }
 }
 
@@ -2175,10 +2135,11 @@ void AGameTurnManagerBase::ExecuteSimultaneousPhase()
 
     // プレイヤーのインテントを追加
     APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(World, 0);
-    if (PlayerPawn && CachedPathFinder.IsValid())
+    // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+    if (PlayerPawn && IsValid(PathFinder))
     {
         const FVector PlayerLoc = PlayerPawn->GetActorLocation();
-        const FIntPoint PlayerCurrentCell = CachedPathFinder->WorldToGrid(PlayerLoc);
+        const FIntPoint PlayerCurrentCell = PathFinder->WorldToGrid(PlayerLoc);
 
         TWeakObjectPtr<AActor> PlayerKey(PlayerPawn);
         if (const FIntPoint* PlayerNextCell = PendingMoveReservations.Find(PlayerKey))
@@ -2400,6 +2361,20 @@ bool AGameTurnManagerBase::IsSequentialModeActive() const
     return bSequentialModeActive;
 }
 
+bool AGameTurnManagerBase::DoesAnyIntentHaveAttack() const
+{
+    const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
+    for (const FEnemyIntent& Intent : CachedEnemyIntents)
+    {
+        if (Intent.AbilityTag.MatchesTag(AttackTag))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 
 void AGameTurnManagerBase::ExecuteAttacks(const TArray<FResolvedAction>& PreResolvedAttacks)
 {
@@ -2521,7 +2496,8 @@ if (EnemyData->Intents.Num() == 0)
             CurrentTurnId);
 
 UEnemyAISubsystem* EnemyAISys = World->GetSubsystem<UEnemyAISubsystem>();
-        if (EnemyAISys && CachedPathFinder.IsValid() && PlayerPawn && CachedEnemiesForTurn.Num() > 0)
+        // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+        if (EnemyAISys && IsValid(PathFinder) && PlayerPawn && CachedEnemiesForTurn.Num() > 0)
         {
             // Get reliable player grid coordinates from GridOccupancySubsystem
             FIntPoint PlayerGrid = FIntPoint(-1, -1);
@@ -2539,7 +2515,7 @@ UEnemyAISubsystem* EnemyAISys = World->GetSubsystem<UEnemyAISubsystem>();
             }
 
 TArray<FEnemyObservation> Observations;
-            EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerGrid, CachedPathFinder.Get(), Observations);
+            EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerGrid, PathFinder.Get(), Observations);
             EnemyData->Observations = Observations;
 
             UE_LOG(LogTurnManager, Warning,
@@ -2549,6 +2525,7 @@ TArray<FEnemyObservation> Observations;
 TArray<FEnemyIntent> Intents;
             EnemyAISys->CollectIntents(Observations, CachedEnemiesForTurn, Intents);
             EnemyData->Intents = Intents;
+            CachedEnemyIntents = Intents;
 
             UE_LOG(LogTurnManager, Warning,
                 TEXT("[Turn %d] Fallback: Generated %d intents"),
@@ -2560,7 +2537,8 @@ TArray<FEnemyIntent> Intents;
                 TEXT("[Turn %d] Fallback failed: EnemyAISys=%d, PathFinder=%d, PlayerPawn=%d, Enemies=%d"),
                 CurrentTurnId,
                 EnemyAISys != nullptr,
-                CachedPathFinder.IsValid(),
+                // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+                IsValid(PathFinder),
                 PlayerPawn != nullptr,
                 CachedEnemiesForTurn.Num());
         }
@@ -2582,15 +2560,11 @@ if (EnemyData->Intents.Num() == 0)
 
 // CodeRevision: INC-2025-00017-R1 (Replace HasAnyAttackIntent() wrapper - Phase 2) (2025-11-16 15:15)
 // Direct check for attack intent
-// CodeRevision: INC-2025-1125-R1 (Use HasAttackIntent for fallback attack gating) (2025-11-25 12:00)
-bool bHasAttack = false;
-if (EnemyData)
-{
-    bHasAttack = EnemyData->HasAttackIntent();
-    UE_LOG(LogTurnManager, Verbose,
-        TEXT("[Turn %d] Sequential attack check: HasAttackIntent=%s (Intents=%d)"),
-        CurrentTurnId, bHasAttack ? TEXT("TRUE") : TEXT("FALSE"), EnemyData->Intents.Num());
-}
+// CodeRevision: INC-2025-1125-R1 (Use DoesAnyIntentHaveAttack for fallback attack gating) (2025-11-25 12:00)
+const bool bHasAttack = DoesAnyIntentHaveAttack();
+UE_LOG(LogTurnManager, Verbose,
+    TEXT("[Turn %d] Sequential attack check: AttackIntentPresent=%s (Intents=%d)"),
+    CurrentTurnId, bHasAttack ? TEXT("TRUE") : TEXT("FALSE"), CachedEnemyIntents.Num());
 
 if (!bSkipAttackCheck)
     {
@@ -2618,10 +2592,11 @@ return;
 
 TArray<FEnemyIntent> AllIntents = EnemyData->Intents;
 
-if (PlayerPawn && CachedPathFinder.IsValid())
+    // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+    if (PlayerPawn && IsValid(PathFinder))
     {
         const FVector PlayerLoc = PlayerPawn->GetActorLocation();
-        const FIntPoint PlayerCurrentCell = CachedPathFinder->WorldToGrid(PlayerLoc);
+        const FIntPoint PlayerCurrentCell = PathFinder->WorldToGrid(PlayerLoc);
 
 TWeakObjectPtr<AActor> PlayerKey(PlayerPawn);
         if (const FIntPoint* PlayerNextCell = PendingMoveReservations.Find(PlayerKey))
@@ -2804,9 +2779,10 @@ const int32 DirX = FMath::RoundToInt(CachedPlayerCommand.Direction.X);
 
     // Calculate target cell from cached command
     FIntPoint TargetCell = CachedPlayerCommand.TargetCell;
-    if (CachedPathFinder.IsValid() && (TargetCell.X == 0 && TargetCell.Y == 0))
+    // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
+    if (IsValid(PathFinder) && (TargetCell.X == 0 && TargetCell.Y == 0))
     {
-        const FIntPoint CurrentCell = CachedPathFinder->WorldToGrid(GetWorld()->GetFirstPlayerController()->GetPawn()->GetActorLocation());
+        const FIntPoint CurrentCell = PathFinder->WorldToGrid(GetWorld()->GetFirstPlayerController()->GetPawn()->GetActorLocation());
         TargetCell = FIntPoint(CurrentCell.X + DirX, CurrentCell.Y + DirY);
     }
 
@@ -3092,8 +3068,6 @@ void AGameTurnManagerBase::OnRep_WaitingForPlayerInput()
 if (WaitingForPlayerInput)
     {
         ApplyWaitInputGate(true);
-        // CodeRevision: INC-2025-00030-R1 (Use TurnFlowCoordinator for InputWindowId) (2025-11-16 00:00)
-        int32 CurrentInputWindowId = TurnFlowCoordinator ? TurnFlowCoordinator->GetCurrentInputWindowId() : 0;
         UE_LOG(LogTurnManager, Log,
             TEXT("[Turn %d] Client: Gate OPENED after replication (WindowId=%d)"),
             CurrentTurnId, CurrentInputWindowId);
@@ -3129,8 +3103,6 @@ void AGameTurnManagerBase::ApplyWaitInputGate(bool bOpen)
             ASC->AddLooseGameplayTag(RogueGameplayTags::Phase_Player_WaitInput);
             ASC->AddLooseGameplayTag(RogueGameplayTags::Gate_Input_Open);
 
-            // CodeRevision: INC-2025-00030-R1 (Use TurnFlowCoordinator for InputWindowId) (2025-11-16 00:00)
-            int32 CurrentInputWindowId = TurnFlowCoordinator ? TurnFlowCoordinator->GetCurrentInputWindowId() : 0;
             UE_LOG(LogTurnManager, Log,
                 TEXT("Turn %d: Gate OPENED (Phase+Gate tags added), WindowId=%d"),
                 CurrentTurnId, CurrentInputWindowId);
@@ -3140,8 +3112,6 @@ void AGameTurnManagerBase::ApplyWaitInputGate(bool bOpen)
             
             ASC->RemoveLooseGameplayTag(RogueGameplayTags::Gate_Input_Open);
 
-                // CodeRevision: INC-2025-00030-R1 (Use TurnFlowCoordinator for InputWindowId) (2025-11-16 00:00)
-                int32 CurrentInputWindowId = TurnFlowCoordinator ? TurnFlowCoordinator->GetCurrentInputWindowId() : 0;
                 UE_LOG(LogTurnManager, Log,
                 TEXT("Turn %d: Gate CLOSED (Gate tag removed), WindowId=%d"),
                 CurrentTurnId, CurrentInputWindowId);
@@ -3162,10 +3132,6 @@ void AGameTurnManagerBase::OpenInputWindow()
     {
         return;
     }
-
-    // CodeRevision: INC-2025-00030-R1 (Use TurnFlowCoordinator for InputWindowId) (2025-11-16 00:00)
-    // InputWindowId is now managed by TurnFlowCoordinator, so we don't increment it here
-    int32 CurrentInputWindowId = TurnFlowCoordinator ? TurnFlowCoordinator->GetCurrentInputWindowId() : 0;
 
     UE_LOG(LogTurnManager, Log,
         TEXT("[WindowId] Opened: Turn=%d WindowId=%d"),
@@ -3689,7 +3655,8 @@ TWeakObjectPtr<AActor> ActorKey(Unit);
     }
 
     // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
-    UGridPathfindingSubsystem* LocalPathFinder = GetCachedPathFinder();
+    // CodeRevision: INC-2025-00032-R1 (Remove GetCachedPathFinder() - use GetGridPathfindingSubsystem() instead) (2025-01-XX XX:XX)
+    UGridPathfindingSubsystem* LocalPathFinder = GetGridPathfindingSubsystem();
     if (!LocalPathFinder)
     {
         UE_LOG(LogTurnManager, Error, TEXT("[ResolvedMove] PathFinder missing"));

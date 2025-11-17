@@ -3,7 +3,7 @@
 #include "Engine/Engine.h"
 // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 #include "EngineUtils.h"  // TActorIterator用
-#include "../ProjectDiagnostics.h"
+#include "../Utility/ProjectDiagnostics.h"
 #include "Grid/DungeonFloorGenerator.h"
 #include "Grid/GridPathfindingSubsystem.h"
 #include "Character/UnitManager.h"

@@ -13,7 +13,7 @@
 #include "Grid/DungeonFloorGenerator.h"
 #include "Grid/URogueDungeonSubsystem.h"
 #include "Grid/DungeonConfigAsset.h"
-#include "../ProjectDiagnostics.h"
+#include "../Utility/ProjectDiagnostics.h"
 #include "GameTurnManagerBase.generated.h"
 
 class UEnemyTurnDataSubsystem;
@@ -120,11 +120,8 @@ public:
     // PathFinder Accessor
     //==========================================================================
 
-    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
-    UFUNCTION(BlueprintPure, Category = "Turn|Services")
-    UGridPathfindingSubsystem* GetCachedPathFinder() const;
-
     /** Get GridPathfindingSubsystem (new subsystem-based access) */
+    // CodeRevision: INC-2025-00032-R1 (Removed GetCachedPathFinder() - use GetGridPathfindingSubsystem() instead) (2025-01-XX XX:XX)
     UFUNCTION(BlueprintPure, Category = "Turn|Services")
     class UGridPathfindingSubsystem* GetGridPathfindingSubsystem() const;
 
@@ -378,6 +375,10 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Turn|State")
     TArray<TObjectPtr<AActor>> CachedEnemiesForTurn;
 
+    /** Cached enemy intents for the current turn (used for sequential checks) */
+    UPROPERTY(Transient)
+    TArray<FEnemyIntent> CachedEnemyIntents;
+
     /** Player's pending move intent (held until next Resolve) */
     UPROPERTY()
     FEnemyIntent PendingPlayerIntent;
@@ -427,10 +428,7 @@ public:
     bool bPlayerPossessed = false;
 
 
-    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
-    UPROPERTY(Transient)
-    TWeakObjectPtr<UGridPathfindingSubsystem> CachedPathFinder;
-
+    // CodeRevision: INC-2025-00032-R1 (Removed CachedPathFinder member - use PathFinder only) (2025-01-XX XX:XX)
 
     UFUNCTION()
     void HandleDungeonReady(URogueDungeonSubsystem* InDungeonSys); // Calls InitializeTurnSystem()
@@ -515,6 +513,9 @@ protected:
 
     UPROPERTY(BlueprintReadWrite, ReplicatedUsing = OnRep_CurrentTurnId, Category = "Turn")
     int32 CurrentTurnId = 0;
+
+    /** Current WindowId used for player input gating. */
+    int32 CurrentInputWindowId = 0;
 
     /** Flag indicating if the first turn has started (for retry logic) */
     UPROPERTY(Replicated)
@@ -713,4 +714,6 @@ private:
     void DispatchMoveActions(const TArray<FResolvedAction>& ActionsToDispatch);
     // ★★★ Phase 4: Unused variable removal (2025-11-09) ★★★
     // Removed: bEnemyTurnEnding (unused)
+
+    bool DoesAnyIntentHaveAttack() const;
 };

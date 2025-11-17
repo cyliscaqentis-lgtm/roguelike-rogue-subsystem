@@ -13,7 +13,7 @@
 #include "Utility/PathFinderUtils.h"
 #include "GameFramework/Actor.h"
 #include "TimerManager.h"
-#include "../ProjectDiagnostics.h"
+#include "../Utility/ProjectDiagnostics.h"
 
 //------------------------------------------------------------------------------
 // Component Lifecycle

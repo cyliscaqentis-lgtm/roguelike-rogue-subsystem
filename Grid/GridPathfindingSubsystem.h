@@ -8,7 +8,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
-#include "../ProjectDiagnostics.h"
+#include "../Utility/ProjectDiagnostics.h"
 #include "GridPathfindingSubsystem.generated.h"
 
 // CodeRevision: INC-2025-00030-R2 (Add missing type definitions) (2025-11-17 00:40)

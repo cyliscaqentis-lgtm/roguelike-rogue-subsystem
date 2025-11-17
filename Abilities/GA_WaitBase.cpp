@@ -6,7 +6,7 @@
 #include "Turn/GameTurnManagerBase.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
-#include "../ProjectDiagnostics.h"
+#include "../Utility/ProjectDiagnostics.h"
 
 UGA_WaitBase::UGA_WaitBase(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)

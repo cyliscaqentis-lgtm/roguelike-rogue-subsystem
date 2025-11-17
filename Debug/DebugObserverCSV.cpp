@@ -7,7 +7,7 @@
 #include "Misc/Paths.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/OutputDeviceRedirector.h"
-#include "ProjectDiagnostics.h"
+#include "../Utility/ProjectDiagnostics.h"
 
 // ★★★ セッションIDの静的カウンター ★★★
 int32 UDebugObserverCSV::NextSessionID = 1;

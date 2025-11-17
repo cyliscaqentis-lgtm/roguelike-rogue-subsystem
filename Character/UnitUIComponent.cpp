@@ -8,7 +8,7 @@
 #include "Character/UnitBase.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/WidgetComponent.h"
-#include "../ProjectDiagnostics.h"
+#include "../Utility/ProjectDiagnostics.h"
 
 //------------------------------------------------------------------------------
 // Component Lifecycle

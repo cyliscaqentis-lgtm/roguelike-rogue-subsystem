@@ -27,16 +27,7 @@ struct FTargetFacingInfo
     FIntPoint ReservedCell = FIntPoint(-1, -1);
 };
 
-// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
-static UGridPathfindingSubsystem* FindGridLibrary(UWorld* World)
-{
-    if (!World)
-    {
-        return nullptr;
-    }
-
-    return World->GetSubsystem<UGridPathfindingSubsystem>();
-}
+// CodeRevision: INC-2025-00032-R1 (Removed FindGridLibrary() helper - use GetSubsystem() directly) (2025-01-XX XX:XX)
 
 // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 static FTargetFacingInfo ComputeTargetFacingInfo(AActor* Target, UWorld* World, UGridPathfindingSubsystem* GridLib)
@@ -158,8 +149,9 @@ void UGA_MeleeAttack::ActivateAbility(
     }
 
     // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+    // CodeRevision: INC-2025-00032-R1 (Removed FindGridLibrary() - use GetSubsystem() directly) (2025-01-XX XX:XX)
     UWorld* World = GetWorld();
-    UGridPathfindingSubsystem* GridLib = FindGridLibrary(World);
+    UGridPathfindingSubsystem* GridLib = World ? World->GetSubsystem<UGridPathfindingSubsystem>() : nullptr;
     const FTargetFacingInfo FacingInfo = ComputeTargetFacingInfo(TargetUnit, World, GridLib);
     UpdateCachedTargetLocation(FacingInfo.Location, FacingInfo.ReservedCell, GridLib);
     FVector TargetFacingLocation = FacingInfo.Location;
@@ -336,8 +328,9 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
     }
 
     // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+    // CodeRevision: INC-2025-00032-R1 (Removed FindGridLibrary() - use GetSubsystem() directly) (2025-01-XX XX:XX)
     UWorld* World = GetWorld();
-    UGridPathfindingSubsystem* GridLib = FindGridLibrary(World);
+    UGridPathfindingSubsystem* GridLib = World ? World->GetSubsystem<UGridPathfindingSubsystem>() : nullptr;
     const FTargetFacingInfo FacingInfo = ComputeTargetFacingInfo(Target, World, GridLib);
     FVector TargetFacingLocation = FacingInfo.Location;
     int32 DistanceInTiles = -1;

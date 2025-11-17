@@ -47,7 +47,7 @@ public:
 
 	// TurnManager から参照されるゲッター（後方互換性のため残すが、通常はnullptrを返す）
 	// PathFinderとUnitManagerはGameTurnManagerが所有するため、ここからは取得しない
-	FORCEINLINE AGridPathfindingLibrary* GetPathFinder() const { return nullptr; } // GameTurnManagerが所有
+	// CodeRevision: INC-2025-00032-R1 (Removed GetPathFinder() - PathFinder is now Subsystem, not Actor) (2025-01-XX XX:XX)
 	FORCEINLINE AUnitManager* GetUnitManager() const { return nullptr; } // GameTurnManagerが所有
 	FORCEINLINE URogueDungeonSubsystem* GetDungeonSubsystem() const { return Dgn; }
 

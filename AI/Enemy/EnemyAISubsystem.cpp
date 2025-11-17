@@ -11,7 +11,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "AbilitySystemInterface.h"
 #include "GenericTeamAgentInterface.h"
-#include "../../ProjectDiagnostics.h"
+#include "../../Utility/ProjectDiagnostics.h"
 
 // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 void UEnemyAISubsystem::BuildObservations(

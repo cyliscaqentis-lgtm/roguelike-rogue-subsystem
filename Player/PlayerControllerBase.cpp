@@ -6,6 +6,8 @@
 // #include "Turn/TurnManagerSubsystem.h"  // ★★★ 統合完了により削除 ★★★
 // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 #include "Grid/GridPathfindingSubsystem.h"
+// CodeRevision: INC-2025-00032-R1 (Add TurnFlowCoordinator include for GetCurrentTurnIndex() replacement) (2025-01-XX XX:XX)
+#include "Turn/TurnFlowCoordinator.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Camera/PlayerCameraManager.h"
@@ -178,7 +180,8 @@ void APlayerControllerBase::EnsureTurnManagerCached()
             CachedTurnManager = *It;
             if (CachedTurnManager)
             {
-                PathFinder = CachedTurnManager->GetCachedPathFinder();
+                // CodeRevision: INC-2025-00032-R1 (Remove GetCachedPathFinder() - use GetGridPathfindingSubsystem() instead) (2025-01-XX XX:XX)
+                PathFinder = CachedTurnManager->GetGridPathfindingSubsystem();
                 UE_LOG(LogTemp, Log, TEXT("[Client] TurnManager cached successfully: %s"),
                     *CachedTurnManager->GetName());
 
@@ -454,8 +457,26 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
     Command.TargetActor = GetPawn();
     Command.TargetCell = GetCurrentGridCell() + GridOffset;
 
-    Command.TurnId = CachedTurnManager->GetCurrentTurnIndex();
-    Command.WindowId = CachedTurnManager->GetCurrentInputWindowId();
+    // CodeRevision: INC-2025-00032-R1 (Replace GetCurrentTurnIndex() with TurnFlowCoordinator access) (2025-01-XX XX:XX)
+    if (UWorld* World = GetWorld())
+    {
+        if (UTurnFlowCoordinator* TFC = World->GetSubsystem<UTurnFlowCoordinator>())
+        {
+            Command.TurnId = TFC->GetCurrentTurnIndex();
+            Command.WindowId = TFC->GetCurrentInputWindowId();
+        }
+        else
+        {
+            // Fallback to TurnManager if TurnFlowCoordinator not available
+            Command.TurnId = CachedTurnManager ? CachedTurnManager->GetCurrentTurnIndex() : 0;
+            Command.WindowId = CachedTurnManager ? CachedTurnManager->GetCurrentInputWindowId() : 0;
+        }
+    }
+    else
+    {
+        Command.TurnId = 0;
+        Command.WindowId = 0;
+    }
 
     UE_LOG(LogTemp, Log, TEXT("[Client] Command created: TurnId=%d (from TurnManager) WindowId=%d"),
         Command.TurnId, Command.WindowId);
