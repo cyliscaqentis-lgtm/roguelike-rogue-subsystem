@@ -847,13 +847,18 @@ void AGameTurnManagerBase::AdvanceTurnAndRestart()
 // CodeRevision: INC-2025-00017-R1 (Replace GetPlayerPawn() wrapper - Phase 2) (2025-11-16 15:05)
 if (APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0))
     {
-        if (CachedPathFinder.IsValid())
+        if (UWorld* World = GetWorld())
         {
-            const FVector PlayerLoc = PlayerPawn->GetActorLocation();
-            const FIntPoint PlayerGrid = CachedPathFinder->WorldToGrid(PlayerLoc);
-            UE_LOG(LogTurnManager, Warning,
-                TEXT("[AdvanceTurn] PLAYER POSITION BEFORE ADVANCE: Turn=%d Grid(%d,%d) World(%s)"),
-                CurrentTurnId, PlayerGrid.X, PlayerGrid.Y, *PlayerLoc.ToCompactString());
+            if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
+            {
+                const FIntPoint PlayerGrid = Occupancy->GetCellOfActor(PlayerPawn);
+                // WorldLocation is not critical here, but can be retrieved from the grid for logging if needed.
+                const FVector PlayerWorldLoc = CachedPathFinder.IsValid() ? CachedPathFinder->GridToWorld(PlayerGrid) : PlayerPawn->GetActorLocation();
+
+                UE_LOG(LogTurnManager, Warning,
+                    TEXT("[AdvanceTurn] PLAYER POSITION BEFORE ADVANCE: Turn=%d Grid(%d,%d) World(%s)"),
+                    CurrentTurnId, PlayerGrid.X, PlayerGrid.Y, *PlayerWorldLoc.ToCompactString());
+            }
         }
     }
 
@@ -1053,10 +1058,10 @@ TArray<AActor*> AllUnits;
 
             if (AllUnits.Num() > 0)
             {
-                GridOccupancy->RebuildFromWorldPositions(AllUnits);
-                UE_LOG(LogTurnManager, Warning,
-                    TEXT("[Turn %d] RebuildFromWorldPositions called - rebuilding occupancy from physical positions (%d units)"),
-                    TurnId, AllUnits.Num());
+                // GridOccupancy->RebuildFromWorldPositions(AllUnits); // ★★★ BUGFIX: This call is destructive and causes state loss. Disabled.
+                // UE_LOG(LogTurnManager, Warning,
+                //     TEXT("[Turn %d] RebuildFromWorldPositions called - rebuilding occupancy from physical positions (%d units)"),
+                //     TurnId, AllUnits.Num());
             }
             else
             {
@@ -1070,13 +1075,16 @@ TArray<AActor*> AllUnits;
     }
 
     // Log player pawn position
-    if (PlayerPawn && CachedPathFinder.IsValid())
+    if (PlayerPawn && GetWorld())
     {
-        const FVector PlayerLoc = PlayerPawn->GetActorLocation();
-        const FIntPoint PlayerGrid = CachedPathFinder->WorldToGrid(PlayerLoc);
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[Turn %d] PLAYER POSITION AT TURN START: Grid(%d,%d) World(%s)"),
-            TurnId, PlayerGrid.X, PlayerGrid.Y, *PlayerLoc.ToCompactString());
+        if (UGridOccupancySubsystem* Occupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
+        {
+            const FIntPoint PlayerGrid = Occupancy->GetCellOfActor(PlayerPawn);
+            const FVector PlayerWorldLoc = CachedPathFinder.IsValid() ? CachedPathFinder->GridToWorld(PlayerGrid) : FVector::ZeroVector;
+            UE_LOG(LogTurnManager, Warning,
+                TEXT("[Turn %d] PLAYER POSITION AT TURN START: Grid(%d,%d) World(%s)"),
+                TurnId, PlayerGrid.X, PlayerGrid.Y, *PlayerWorldLoc.ToCompactString());
+        }
     }
 
     UE_LOG(LogTurnManager, Log,
@@ -1189,7 +1197,11 @@ UE_LOG(LogTurnManager, Warning,
         UDistanceFieldSubsystem* DistanceField = GetWorld()->GetSubsystem<UDistanceFieldSubsystem>();
         if (DistanceField)
         {
-            FIntPoint PlayerGrid = CachedPathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
+            FIntPoint PlayerGrid = FIntPoint(-1, -1);
+            if (UGridOccupancySubsystem* Occupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
+            {
+                PlayerGrid = Occupancy->GetCellOfActor(PlayerPawn);
+            }
 
             TSet<FIntPoint> EnemyPositions;
             for (AActor* Enemy : CachedEnemiesForTurn)
@@ -1269,9 +1281,15 @@ UE_LOG(LogTurnManager, Warning,
 
     if (EnemyAISys && EnemyTurnDataSys && CachedPathFinder.IsValid() && PlayerPawn && CachedEnemiesForTurn.Num() > 0)
     {
-        
+        // Get reliable player grid coordinates from GridOccupancySubsystem
+        FIntPoint PlayerGrid = FIntPoint(-1, -1);
+        if (UGridOccupancySubsystem* Occupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
+        {
+            PlayerGrid = Occupancy->GetCellOfActor(PlayerPawn);
+        }
+
         TArray<FEnemyObservation> PreliminaryObs;
-        EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerPawn, CachedPathFinder.Get(), PreliminaryObs);
+        EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerGrid, CachedPathFinder.Get(), PreliminaryObs);
         EnemyTurnDataSys->Observations = PreliminaryObs;
 
 TArray<FEnemyIntent> PreliminaryIntents;
@@ -1621,7 +1639,13 @@ const FGameplayTag InputMove = RogueGameplayTags::InputTag_Move;
 FIntPoint PlayerDestination = FIntPoint(0, 0);
         if (CachedPathFinder.IsValid() && PlayerPawn)
         {
-            FIntPoint CurrentCell = CachedPathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
+            // Get current cell from GridOccupancySubsystem (reliable source)
+            FIntPoint CurrentCell = FIntPoint(-1, -1);
+            if (UGridOccupancySubsystem* Occupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
+            {
+                CurrentCell = Occupancy->GetCellOfActor(PlayerPawn);
+            }
+
             FIntPoint Direction = FIntPoint(
                 FMath::RoundToInt(Command.Direction.X),
                 FMath::RoundToInt(Command.Direction.Y)
@@ -1935,9 +1959,15 @@ if (EnemyAISys && EnemyTurnDataSys)
 {
     if (CachedPathFinder.IsValid() && PlayerPawn)
     {
+        // Get player grid from GridOccupancySubsystem (reliable source)
+        FIntPoint PlayerGrid = FIntPoint(-1, -1);
+        if (UGridOccupancySubsystem* Occupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
+        {
+            PlayerGrid = Occupancy->GetCellOfActor(PlayerPawn);
+        }
+
         if (UDistanceFieldSubsystem* DistanceField = GetWorld()->GetSubsystem<UDistanceFieldSubsystem>())
         {
-            FIntPoint PlayerGrid = CachedPathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
             DistanceField->UpdateDistanceField(PlayerGrid);
             UE_LOG(LogTurnManager, Log,
                 TEXT("[Turn %d] DistanceField updated for PlayerGrid=(%d,%d)"),
@@ -1945,7 +1975,7 @@ if (EnemyAISys && EnemyTurnDataSys)
         }
 
         TArray<FEnemyObservation> Observations;
-        EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerPawn, CachedPathFinder.Get(), Observations);
+        EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerGrid, CachedPathFinder.Get(), Observations);
         EnemyTurnDataSys->Observations = Observations;
 
         UE_LOG(LogTurnManager, Warning,
@@ -1969,8 +1999,15 @@ if (EnemyAISys && EnemyTurnDataSys)
 
         if (CachedPathFinder.IsValid() && PlayerPawn && CachedEnemiesForTurn.Num() > 0)
         {
+            // Get reliable player grid coordinates from GridOccupancySubsystem
+            FIntPoint PlayerGrid = FIntPoint(-1, -1);
+            if (UGridOccupancySubsystem* Occupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
+            {
+                PlayerGrid = Occupancy->GetCellOfActor(PlayerPawn);
+            }
+
             TArray<FEnemyObservation> Observations;
-            EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerPawn, CachedPathFinder.Get(), Observations);
+            EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerGrid, CachedPathFinder.Get(), Observations);
             EnemyTurnDataSys->Observations = Observations;
 
             UE_LOG(LogTurnManager, Warning,
@@ -1987,8 +2024,15 @@ if (EnemyAISys && EnemyTurnDataSys)
 
         if (CachedPathFinder.IsValid() && PlayerPawn)
         {
+            // Get reliable player grid coordinates from GridOccupancySubsystem
+            FIntPoint PlayerGrid = FIntPoint(-1, -1);
+            if (UGridOccupancySubsystem* Occupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
+            {
+                PlayerGrid = Occupancy->GetCellOfActor(PlayerPawn);
+            }
+
             TArray<FEnemyObservation> Observations;
-            EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerPawn, CachedPathFinder.Get(), Observations);
+            EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerGrid, CachedPathFinder.Get(), Observations);
             EnemyTurnDataSys->Observations = Observations;
 
             UE_LOG(LogTurnManager, Warning,
@@ -2197,10 +2241,15 @@ if (EnemyData->Intents.Num() == 0)
 UEnemyAISubsystem* EnemyAISys = World->GetSubsystem<UEnemyAISubsystem>();
         if (EnemyAISys && CachedPathFinder.IsValid() && PlayerPawn && CachedEnemiesForTurn.Num() > 0)
         {
-            
+            // Get reliable player grid coordinates from GridOccupancySubsystem
+            FIntPoint PlayerGrid = FIntPoint(-1, -1);
+            if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
+            {
+                PlayerGrid = Occupancy->GetCellOfActor(PlayerPawn);
+            }
+
             if (UDistanceFieldSubsystem* DistanceField = World->GetSubsystem<UDistanceFieldSubsystem>())
             {
-                FIntPoint PlayerGrid = CachedPathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
                 DistanceField->UpdateDistanceField(PlayerGrid);
                 UE_LOG(LogTurnManager, Log,
                     TEXT("[Turn %d] Fallback: DistanceField updated for PlayerGrid=(%d,%d)"),
@@ -2208,7 +2257,7 @@ UEnemyAISubsystem* EnemyAISys = World->GetSubsystem<UEnemyAISubsystem>();
             }
 
 TArray<FEnemyObservation> Observations;
-            EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerPawn, CachedPathFinder.Get(), Observations);
+            EnemyAISys->BuildObservations(CachedEnemiesForTurn, PlayerGrid, CachedPathFinder.Get(), Observations);
             EnemyData->Observations = Observations;
 
             UE_LOG(LogTurnManager, Warning,
@@ -2546,25 +2595,9 @@ void AGameTurnManagerBase::HandleMovePhaseCompleted(int32 FinishedTurnId)
             TEXT("[Turn %d] Sequential move phase complete, ending enemy turn"), FinishedTurnId);
     }
 
-    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Move phase complete, scheduling EndEnemyTurn to avoid race condition"), FinishedTurnId);
-    // CodeRevision: INC-2025-00030-R6 (Delay EndEnemyTurn to avoid GA_MoveBase race) (2025-11-17 02:55)
-    UWorld* World = GetWorld();
-    if (World)
-    {
-        const float DelaySeconds = 0.1f;
-        World->GetTimerManager().SetTimer(
-            EndEnemyTurnDelayHandle,
-            this,
-            &AGameTurnManagerBase::EndEnemyTurn,
-            DelaySeconds,
-            false);
-        UE_LOG(LogTurnManager, Log,
-            TEXT("[Turn %d] EndEnemyTurn scheduled in %.2f seconds to avoid race with GA_MoveBase"), FinishedTurnId, DelaySeconds);
-    }
-    else
-    {
-        EndEnemyTurn();
-    }
+    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Move phase complete, calling EndEnemyTurn directly"), FinishedTurnId);
+    // CodeRevision: INC-2025-1117B (Remove timer delay, call EndEnemyTurn directly) (2025-11-17 17:30)
+    EndEnemyTurn();
 }
 
 // CodeRevision: INC-2025-00030-R5 (Split attack/move phase completion handlers) (2025-11-17 02:00)

@@ -27,14 +27,14 @@ public:
 	/**
 	 * 全敵のObservationを生成（原子的部品）
 	 * @param Enemies 敵Actor配列（BPから渡す）
-	 * @param Player プレイヤーActor（BPから渡す）
+	 * @param PlayerGrid プレイヤーのグリッド座標（直接渡す）
 	 * @param PathFinder 経路探索ライブラリ（BPから渡す）
 	 * @param OutObs 出力：生成されたObservation配列
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Turn|Enemy AI")
 	void BuildObservations(
 		const TArray<AActor*>& Enemies,
-		AActor* Player,
+		const FIntPoint& PlayerGrid,
 		UGridPathfindingSubsystem* PathFinder,
 		TArray<FEnemyObservation>& OutObs);
 

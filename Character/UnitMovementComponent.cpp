@@ -213,10 +213,30 @@ void UUnitMovementComponent::MoveToNextWaypoint()
 void UUnitMovementComponent::FinishMovement()
 {
 	bIsMoving = false;
+	SetComponentTickEnabled(false); // Tickを先に無効化
 
 	AUnitBase* OwnerUnit = GetOwnerUnit();
-	if (OwnerUnit)
+	if (OwnerUnit && CurrentPath.Num() > 0)
 	{
+		// CodeRevision: INC-2025-1117E (Snap to final destination before broadcasting OnMoveFinished) (2025-11-17 18:15)
+		// ★★★ START: 新しいスナップ処理 ★★★
+		const FVector FinalDestination = CurrentPath.Last();
+
+		// 向きを最終目的地に合わせる
+		FVector MoveDirection = FinalDestination - OwnerUnit->GetActorLocation();
+		MoveDirection.Z = 0.0f;
+		if (!MoveDirection.IsNearlyZero())
+		{
+			const float TargetYaw = MoveDirection.Rotation().Yaw;
+			FRotator NewRotation = OwnerUnit->GetActorRotation();
+			NewRotation.Yaw = TargetYaw;
+			OwnerUnit->SetActorRotation(NewRotation);
+		}
+
+		// 最終目的地にスナップする
+		OwnerUnit->SetActorLocation(FinalDestination, false, nullptr, ETeleportType::None);
+		// ★★★ END: 新しいスナップ処理 ★★★
+
 		// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
 		if (UWorld* World = GetWorld())
 		{
@@ -224,7 +244,7 @@ void UUnitMovementComponent::FinishMovement()
 			{
 				if (UGridPathfindingSubsystem* PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>())
 				{
-					const FIntPoint FinalCell = PathFinder->WorldToGrid(OwnerUnit->GetActorLocation());
+					const FIntPoint FinalCell = PathFinder->WorldToGrid(FinalDestination);
 					if (!Occupancy->UpdateActorCell(OwnerUnit, FinalCell))
 					{
 						// 更新が失敗した場合（競合など）、短時間後に再試行する
@@ -248,13 +268,10 @@ void UUnitMovementComponent::FinishMovement()
 	CurrentPath.Empty();
 	CurrentPathIndex = 0;
 
-	// Tickを無効化
-	SetComponentTickEnabled(false);
-
-	// イベント配信
+	// イベント配信（スナップ処理完了後）
 	OnMoveFinished.Broadcast(OwnerUnit);
 
-	UE_LOG(LogTemp, Log, TEXT("[UnitMovementComponent] Movement finished"));
+	UE_LOG(LogTemp, Log, TEXT("[UnitMovementComponent] Movement finished and snapped."));
 }
 
 AUnitBase* UUnitMovementComponent::GetOwnerUnit() const

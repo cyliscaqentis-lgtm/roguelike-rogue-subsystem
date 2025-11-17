@@ -411,21 +411,25 @@ void UGA_MoveBase::ActivateAbility(
 		return;
 	}
 
-	BindMoveFinishedDelegate();
-
+	// CodeRevision: INC-2025-1117D (Use FindPathIgnoreEndpoints + trim start point) (2025-11-17 18:00)
 	TArray<FVector> PathPoints;
-	const int32 NumSamples = FMath::Max(
-		2,
-		FMath::CeilToInt(MoveDistance / GA_MoveBase_Private::WaypointSpacingCm));
 
-	for (int32 Index = 1; Index <= NumSamples; ++Index)
+	// Use GridPathfindingSubsystem to generate a grid-aware path that ignores endpoint occupancy
+	Pathfinding->FindPathIgnoreEndpoints(CurrentLocation, NextTileStep, PathPoints, true, EGridHeuristic::Manhattan, 200000, true);
+
+	// PathPoints includes the start point - remove it if the path has more than one point
+	if (PathPoints.Num() > 1)
 	{
-		const float Alpha = static_cast<float>(Index) / static_cast<float>(NumSamples);
-		FVector Sample = FMath::Lerp(CurrentLocation, NextTileStep, Alpha);
-		Sample.Z = FixedZ;
-		PathPoints.Add(Sample);
+		PathPoints.RemoveAt(0);
 	}
 
+	// Fallback: If FindPath failed, create a minimal path directly to the endpoint
+	if (PathPoints.Num() == 0 && FVector::DistSquared(CurrentLocation, NextTileStep) > 1.0f)
+	{
+		PathPoints.Add(NextTileStep);
+	}
+
+	BindMoveFinishedDelegate();
 	Unit->MoveUnit(PathPoints);
 }
 
@@ -743,37 +747,9 @@ void UGA_MoveBase::BindMoveFinishedDelegate()
 
 void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
 {
-	// CodeRevision: INC-2025-00018-R3 (Remove barrier management and grid update - Phase 3) (2025-11-17)
-	// Grid update moved to UnitMovementComponent::FinishMovement()
-	// Barrier management removed from EndAbility - handled here for GA_MoveBase
-	// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
-
-	UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
-	if (Unit && Pathfinding)
-	{
-		// Position snap to cell center
-		const float FixedZ = ComputeFixedZ(Unit, Pathfinding);
-		const FVector DestWorldLoc = Pathfinding->GridToWorld(CachedNextCell);
-		const FVector SnappedLoc = SnapToCellCenterFixedZ(DestWorldLoc, FixedZ);
-		const FVector LocationBefore = Unit->GetActorLocation();
-
-		// CodeRevision: INC-2025-00022-R1 (Update actor rotation on move finish) (2025-11-17 19:00)
-		FVector MoveDirection = SnappedLoc - LocationBefore;
-		MoveDirection.Z = 0.0f;
-		if (!MoveDirection.IsNearlyZero())
-		{
-			const float TargetYaw = MoveDirection.Rotation().Yaw;
-			FRotator NewRotation = Unit->GetActorRotation();
-			NewRotation.Yaw = TargetYaw;
-			Unit->SetActorRotation(NewRotation);
-			UE_LOG(LogTurnManager, Log,
-				TEXT("[OnMoveFinished] Actor %s rotated to Yaw=%.1f"),
-				*GetNameSafe(Unit), TargetYaw);
-		}
-
-		Unit->SetActorLocation(SnappedLoc, false, nullptr, ETeleportType::TeleportPhysics);
-		CachedFirstLoc = SnappedLoc;
-	}
+	// CodeRevision: INC-2025-1117E (Remove snap/rotation logic - moved to UnitMovementComponent) (2025-11-17 18:15)
+	// Position snap and rotation are now handled in UnitMovementComponent::FinishMovement()
+	// This function only handles barrier completion and ability termination
 
 	UE_LOG(LogTurnManager, Log,
 		TEXT("[MoveComplete] Unit %s reached destination, GA_MoveBase ending."),
@@ -868,17 +844,22 @@ void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
 	DesiredYaw = RoundYawTo45Degrees(
 		FMath::RadiansToDegrees(FMath::Atan2(static_cast<float>(MoveDir.Y), static_cast<float>(MoveDir.X))));
 
+	// CodeRevision: INC-2025-1117D (Use FindPathIgnoreEndpoints + trim start point) (2025-11-17 18:00)
 	TArray<FVector> PathPoints;
-	const int32 NumSamples = FMath::Max(
-		2,
-		FMath::CeilToInt(TotalDistance / GA_MoveBase_Private::WaypointSpacingCm));
 
-	for (int32 Index = 1; Index <= NumSamples; ++Index)
+	// Use GridPathfindingSubsystem to generate a grid-aware path that ignores endpoint occupancy
+	Pathfinding->FindPathIgnoreEndpoints(StartPos, EndPos, PathPoints, true, EGridHeuristic::Manhattan, 200000, true);
+
+	// PathPoints includes the start point - remove it if the path has more than one point
+	if (PathPoints.Num() > 1)
 	{
-		const float Alpha = static_cast<float>(Index) / static_cast<float>(NumSamples);
-		FVector Sample = FMath::Lerp(StartPos, EndPos, Alpha);
-		Sample.Z = FixedZ;
-		PathPoints.Add(Sample);
+		PathPoints.RemoveAt(0);
+	}
+
+	// Fallback: If FindPath failed, create a minimal path directly to the endpoint
+	if (PathPoints.Num() == 0 && FVector::DistSquared(StartPos, EndPos) > 1.0f)
+	{
+		PathPoints.Add(EndPos);
 	}
 
 	BindMoveFinishedDelegate();

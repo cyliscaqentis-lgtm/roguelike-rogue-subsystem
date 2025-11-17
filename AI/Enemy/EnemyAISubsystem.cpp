@@ -16,25 +16,24 @@
 // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 void UEnemyAISubsystem::BuildObservations(
     const TArray<AActor*>& Enemies,
-    AActor* Player,
+    const FIntPoint& PlayerGrid,
     UGridPathfindingSubsystem* PathFinder,
     TArray<FEnemyObservation>& OutObs)
 {
     OutObs.Empty(Enemies.Num());
 
     UE_LOG(LogEnemyAI, Verbose,
-        TEXT("[BuildObservations] ==== START ==== Enemies=%d, Player=%s, PathFinder=%s"),
+        TEXT("[BuildObservations] ==== START ==== Enemies=%d, PlayerGrid=(%d,%d), PathFinder=%s"),
         Enemies.Num(),
-        Player ? *Player->GetName() : TEXT("NULL"),
+        PlayerGrid.X, PlayerGrid.Y,
         PathFinder ? TEXT("Valid") : TEXT("NULL"));
 
-    if (!Player || !PathFinder)
+    if (!PathFinder)
     {
-        UE_LOG(LogEnemyAI, Error, TEXT("[BuildObservations] Player or PathFinder is null!"));
+        UE_LOG(LogEnemyAI, Error, TEXT("[BuildObservations] PathFinder is null!"));
         return;
     }
 
-    const FIntPoint PlayerGrid = PathFinder->WorldToGrid(Player->GetActorLocation());
     UE_LOG(LogEnemyAI, Log, TEXT("[BuildObservations] PlayerGrid=(%d, %d)"), PlayerGrid.X, PlayerGrid.Y);
 
     if (UWorld* World = GetWorld())
