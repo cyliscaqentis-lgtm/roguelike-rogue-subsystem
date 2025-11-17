@@ -1,5 +1,4 @@
 // GA_MoveBase.h
-// CodeRevision: INC-2025-00026-R1 (Fix garbled Japanese comments - Phase 1) (2025-11-16 00:00)
 #pragma once
 
 #include "CoreMinimal.h"
@@ -7,270 +6,180 @@
 #include "GameplayTagContainer.h"
 #include "GA_MoveBase.generated.h"
 
-// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
-// Forward declarations
 class UGridPathfindingSubsystem;
 class AUnitBase;
 class UGridOccupancySubsystem;
 class AGameTurnManagerBase;
 
-/**
- * UGA_MoveBase
- * 移動アビリチE��の基底クラス
- *
- * Phase 3 リファクタリング: State.Action.InProgress + Barrier 対忁E
- *
- * 機�E:
- * - EnhancedInputから受け取った方向�EクトルをグリチE��移動に変換
- * - State.Moving タグを管琁E��、ActivationBlockedTags で重褁E��行を防止
- * - State.Action.InProgress タグを管琁E��、他�Eアクションと競合しなぁE��ぁE��する
- * - Barrier::RegisterAction() / CompleteAction() でアクションの完亁E��管琁E
- * - 移動完亁E��に Ability.Move.Completed イベントを発行し、TurnManager に通知
- * - 3軸移動！E/Y/Z�E�をサポ�Eトし、グリチE��中忁E��のスナップ機�Eを提侁E
- * - TurnIdとWindowIdを検証し、古ぁE��ーンのコマンドを無要E
- *
- * 実裁E��細:
- * - State.Action.InProgress タグめEActivationOwnedTags で管琁E
- * - Barrier シスチE��と連携して RegisterAction / CompleteAction を呼び出ぁE
- * - TurnManager の InProgress タグ管琁E��同期
- */
 UCLASS(Abstract, Blueprintable)
 class LYRAGAME_API UGA_MoveBase : public UGA_TurnActionBase
 {
-    GENERATED_BODY()
+	GENERATED_BODY()
 
 public:
-    UGA_MoveBase(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+	UGA_MoveBase(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-    //--------------------------------------------------------------------------
-    // GameplayAbility オーバ�EライチE
-    //--------------------------------------------------------------------------
+	// GameplayAbility overrides
+	virtual void ActivateAbility(
+		const FGameplayAbilitySpecHandle Handle,
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo,
+		const FGameplayEventData* TriggerEventData
+	) override;
 
-    virtual void ActivateAbility(
-        const FGameplayAbilitySpecHandle Handle,
-        const FGameplayAbilityActorInfo* ActorInfo,
-        const FGameplayAbilityActivationInfo ActivationInfo,
-        const FGameplayEventData* TriggerEventData
-    ) override;
+	virtual bool CanActivateAbility(
+		const FGameplayAbilitySpecHandle Handle,
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayTagContainer* SourceTags = nullptr,
+		const FGameplayTagContainer* TargetTags = nullptr,
+		FGameplayTagContainer* OptionalRelevantTags = nullptr
+	) const override;
 
-    virtual bool CanActivateAbility(
-        const FGameplayAbilitySpecHandle Handle,
-        const FGameplayAbilityActorInfo* ActorInfo,
-        const FGameplayTagContainer* SourceTags = nullptr,
-        const FGameplayTagContainer* TargetTags = nullptr,
-        FGameplayTagContainer* OptionalRelevantTags = nullptr
-    ) const override;
+	// ★ override は付けない（エラー回避）
+	virtual void ActivateAbilityFromEvent(
+		const FGameplayAbilitySpecHandle Handle,
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo,
+		const FGameplayEventData* EventData
+	);
 
-    virtual void ActivateAbilityFromEvent(
-        const FGameplayAbilitySpecHandle Handle,
-        const FGameplayAbilityActorInfo* ActorInfo,
-        const FGameplayAbilityActivationInfo ActivationInfo,
-        const FGameplayEventData* EventData
-    );
+	virtual bool ShouldRespondToEvent(
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayEventData* Payload
+	) const;
 
-    /**
-     * ☁E�E☁EChatGPT提桁E イベント応答�E軽量チェチE�� (2025-11-11) ☁E�E☁E
-     * HandleGameplayEvent returned 0 問題を解決するため、E
-     * イベントに応答する前に軽量な検証を行う、E
-     * 重い検証はActivateAbilityで実行される、E
-     */
-    virtual bool ShouldRespondToEvent(
-        const FGameplayAbilityActorInfo* ActorInfo,
-        const FGameplayEventData* Payload
-    ) const;
+	virtual void EndAbility(
+		const FGameplayAbilitySpecHandle Handle,
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo,
+		bool bReplicateEndAbility,
+		bool bWasCancelled
+	) override;
 
-    virtual void EndAbility(
-        const FGameplayAbilitySpecHandle Handle,
-        const FGameplayAbilityActorInfo* ActorInfo,
-        const FGameplayAbilityActivationInfo ActivationInfo,
-        bool bReplicateEndAbility,
-        bool bWasCancelled
-    ) override;
-
-    virtual void CancelAbility(
-        const FGameplayAbilitySpecHandle Handle,
-        const FGameplayAbilityActorInfo* ActorInfo,
-        const FGameplayAbilityActivationInfo ActivationInfo,
-        bool bReplicateCancelAbility
-    ) override;
+	virtual void CancelAbility(
+		const FGameplayAbilitySpecHandle Handle,
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo,
+		bool bReplicateCancelAbility
+	) override;
 
 protected:
-    virtual void SendCompletionEvent(bool bTimedOut = false) override;
+	virtual void SendCompletionEvent(bool bTimedOut = false) override;
 
-    //==========================================================================
-    // Phase 6: チE��チE��・計測
-    //==========================================================================
+	// 計測
+	double AbilityStartTime = 0.0;
 
-    /**
-     * アビリチE��開始時刻�E�デバッグ用�E�E
-     */
-    double AbilityStartTime = 0.0;
+	// 移動パラメータ
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Move")
+	float Speed = 600.0f;
 
-    //--------------------------------------------------------------------------
-    // 移動パラメータ
-    //--------------------------------------------------------------------------
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Move")
+	float SpeedBuff = 1.0f;
 
-    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Move")
-    float Speed = 600.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Move")
+	float SpeedDebuff = 1.0f;
 
-    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Move")
-    float SpeedBuff = 1.0f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Move")
+	float GridSize = 100.0f;
 
-    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Move")
-    float SpeedDebuff = 1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Move|Animation")
+	float SkipAnimIfUnderDistance = 0.0f;
 
-    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Move")
-    float GridSize = 100.0f;
+	UPROPERTY(EditDefaultsOnly, Category = "GAS|Tags")
+	FGameplayTag StateMovingTag = FGameplayTag::RequestGameplayTag(TEXT("State.Moving"));
 
-    /** こ�E距離以下�E場合�EアニメーションをスキチE�E�E�E0で無効化！E*/
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Move|Animation")
-    float SkipAnimIfUnderDistance = 0.0f;  // 距離が短すぎる場合�EアニメーションをスキチE�E
-    UPROPERTY(EditDefaultsOnly, Category = "GAS|Tags")
-    FGameplayTag StateMovingTag = FGameplayTag::RequestGameplayTag(TEXT("State.Moving"));
+	// 状態
+	UPROPERTY(BlueprintReadOnly, Category = "Move|State")
+	FVector Direction = FVector::ZeroVector;
 
-    //--------------------------------------------------------------------------
-    // 状態変数�E�ElueprintReadOnly - 読み取り専用�E�E
-    //--------------------------------------------------------------------------
+	UPROPERTY(BlueprintReadOnly, Category = "Move|State")
+	FVector2D MoveDir2D = FVector2D::ZeroVector;
 
-    UPROPERTY(BlueprintReadOnly, Category = "Move|State")
-    FVector Direction = FVector::ZeroVector;
+	UPROPERTY(BlueprintReadOnly, Category = "Move|State")
+	FVector FirstLoc = FVector::ZeroVector;
 
-    UPROPERTY(BlueprintReadOnly, Category = "Move|State")
-    FVector2D MoveDir2D = FVector2D::ZeroVector;
+	UPROPERTY(BlueprintReadOnly, Category = "Move|State")
+	FVector NextTileStep = FVector::ZeroVector;
 
-    UPROPERTY(BlueprintReadOnly, Category = "Move|State")
-    FVector FirstLoc = FVector::ZeroVector;
+	UPROPERTY(BlueprintReadOnly, Category = "Move|State")
+	float DesiredYaw = 0.0f;
 
-    UPROPERTY(BlueprintReadOnly, Category = "Move|State")
-    FVector NextTileStep = FVector::ZeroVector;
+	UPROPERTY(BlueprintReadOnly, Category = "Move|State")
+	float CurrentSpeed = 0.0f;
 
-    UPROPERTY(BlueprintReadOnly, Category = "Move|State")
-    float DesiredYaw = 0.0f;
+	int32 CompletedTurnIdForEvent = INDEX_NONE;
 
-    UPROPERTY(BlueprintReadOnly, Category = "Move|State")
-    float CurrentSpeed = 0.0f;
+	// ロジック系 C++ 関数
 
-    int32 CompletedTurnIdForEvent = INDEX_NONE;
+	// EventData から方向／セルを抽出（セルは Z=-1 で表現）
+	bool ExtractDirectionFromEventData(
+		const FGameplayEventData* EventData,
+		FVector& OutDirection
+	);
 
-    //--------------------------------------------------------------------------
-    // C++冁E��関数
-    //--------------------------------------------------------------------------
+	FVector2D QuantizeToGridDirection(const FVector& InDirection);
+	FVector CalculateNextTilePosition(const FVector& CurrentPosition, const FVector2D& Dir);
 
-    /** EventDataからDirectionを抽出 */
+	bool IsTileWalkable(const FVector& TilePosition, AUnitBase* Self = nullptr);
+	void UpdateGridState(const FVector& Position, int32 Value);
+	bool IsTileWalkable(const FIntPoint& Cell) const;
 
-    /** 8方向グリチE��に量子化 */
-    FVector2D QuantizeToGridDirection(const FVector& InDirection);
+	float RoundYawTo45Degrees(float Yaw);
 
-    /** 次のタイル位置を計箁E*/
-    FVector CalculateNextTilePosition(const FVector& CurrentPosition, const FVector2D& Dir);
+	void BindMoveFinishedDelegate();
 
-    /**
-     * 移動�Eタイルが通行可能かチェチE���E�E軸移動対応！E
-     */
-    bool IsTileWalkable(const FVector& TilePosition, AUnitBase* Self = nullptr);
+	UFUNCTION()
+	void OnMoveFinished(AUnitBase* Unit);
 
-    /** タイル状態を更新 */
-    void UpdateGridState(const FVector& Position, int32 Value);
+	void StartMoveToCell(const FIntPoint& TargetCell);
 
-    /** セル単位で通行可能かチェチE���E�Eccupancy/DistanceFieldを使用�E�E*/
-    bool IsTileWalkable(const FIntPoint& Cell) const;
+	// 位置調整・デバッグ
+	FVector SnapToCellCenter(const FVector& WorldPos) const;
+	FVector SnapToCellCenterFixedZ(const FVector& WorldPos, float FixedZ) const;
+	float ComputeFixedZ(const AUnitBase* Unit, const UGridPathfindingSubsystem* Pathfinding) const;
+	FVector AlignZToGround(const FVector& WorldPos, float TraceUp = 200.0f, float TraceDown = 2000.0f) const;
+	void DebugDumpAround(const FIntPoint& Center);
 
-    /** ヨー角を45度単位に丸める */
-    float RoundYawTo45Degrees(float Yaw);
+	// アニメーション関連（Blueprint 実装フック）
+	UFUNCTION(BlueprintImplementableEvent, Category = "Move|Animation")
+	void ExecuteMoveAnimation(const TArray<FVector>& Path);
 
-    /** 移動完亁E��リゲートをバインチE*/
-    void BindMoveFinishedDelegate();
-
-    /** 移動完亁E��のコールバック */
-    UFUNCTION()
-    void OnMoveFinished(AUnitBase* Unit);
-
-    /** 持E��セルへの移動を開始（グリチE��位置を正しく設定！E*/
-    void StartMoveToCell(const FIntPoint& TargetCell);
-
-    //--------------------------------------------------------------------------
-    // 3軸移動�E位置調整・チE��チE��ヘルパ�E
-    //--------------------------------------------------------------------------
-
-    FVector SnapToCellCenter(const FVector& WorldPos) const;
-    FVector SnapToCellCenterFixedZ(const FVector& WorldPos, float FixedZ) const;
-    // CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
-    float ComputeFixedZ(const AUnitBase* Unit, const UGridPathfindingSubsystem* Pathfinding) const;
-    FVector AlignZToGround(const FVector& WorldPos, float TraceUp = 200.0f, float TraceDown = 2000.0f) const;
-    void DebugDumpAround(const FIntPoint& Center);
-
-    //--------------------------------------------------------------------------
-    // Blueprint実裁E��能イベント�Eアニメーション制御
-    //--------------------------------------------------------------------------
-
-    UFUNCTION(BlueprintImplementableEvent, Category = "Move|Animation")
-    void ExecuteMoveAnimation(const TArray<FVector>& Path);
-
-    UFUNCTION(BlueprintNativeEvent, Category = "Move|Animation")
-    bool ShouldSkipAnimation();
-    virtual bool ShouldSkipAnimation_Implementation();
+	UFUNCTION(BlueprintNativeEvent, Category = "Move|Animation")
+	bool ShouldSkipAnimation();
+	virtual bool ShouldSkipAnimation_Implementation();
 
 private:
-    //--------------------------------------------------------------------------
-    // CodeRevision: INC-2025-00018-R3 (Remove barrier management - Phase 3) (2025-11-17)
-    // Barrier management removed - handled by other systems
-    //--------------------------------------------------------------------------
+	// タグキャッシュ
+	UPROPERTY()
+	FGameplayTag TagStateMoving;
 
-    //--------------------------------------------------------------------------
-    // State.Moving タグ管琁E�EキャチE��ュ
-    //--------------------------------------------------------------------------
+	// サブシステム／マネージャキャッシュ
+	mutable TWeakObjectPtr<AGameTurnManagerBase> CachedTurnManager;
 
-    UPROPERTY()
-    FGameplayTag TagStateMoving;
+	// 旧 PathFinder アクセス（互換用）
+	const UGridPathfindingSubsystem* GetPathFinder() const;
 
-    //--------------------------------------------------------------------------
-    // CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
-    // Removed CachedPathFinder - now using subsystem-based access
-    //--------------------------------------------------------------------------
+	// 新 PathfindingSubsystem アクセス
+	UGridPathfindingSubsystem* GetGridPathfindingSubsystem() const;
 
-    mutable TWeakObjectPtr<AGameTurnManagerBase> CachedTurnManager;
+	AGameTurnManagerBase* GetTurnManager() const;
 
-    /**
-     * PathFinderへのアクセスを取得（キャチE��ュ付き�E�E
-     * CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
-     * @deprecated Use GetGridPathfindingSubsystem() instead
-     */
-    const class UGridPathfindingSubsystem* GetPathFinder() const;
+	bool bMoveFinishedDelegateBound = false;
 
-    /** Get GridPathfindingSubsystem (new subsystem-based access) */
-    class UGridPathfindingSubsystem* GetGridPathfindingSubsystem() const;
+	// Barrier 連携用
+	FGuid MoveActionId;
+	int32 MoveTurnId = -1;
+	bool bBarrierRegistered = false;
 
-    AGameTurnManagerBase* GetTurnManager() const;
+	// 移動状態キャッシュ
+	FVector CachedStartLocWS = FVector::ZeroVector;
+	FIntPoint CachedNextCell = FIntPoint(-1, -1);
 
-    bool bMoveFinishedDelegateBound = false;
+	FGameplayAbilitySpecHandle CachedSpecHandle;
+	FGameplayAbilityActorInfo CachedActorInfo;
+	FGameplayAbilityActivationInfo CachedActivationInfo;
+	FVector CachedFirstLoc = FVector::ZeroVector;
 
-    // CodeRevision: INC-2025-00030-R3 (Add Barrier sync to GA_MoveBase) (2025-11-17 01:00)
-    // P1: Fix turn hang by synchronizing player move with TurnActionBarrierSubsystem
-    FGuid MoveActionId;
-    int32 MoveTurnId = -1;
-    bool bBarrierRegistered = false;
-
-    //--------------------------------------------------------------------------
-    // 移動状態キャチE��ュ・GridOccupancy連携
-    //--------------------------------------------------------------------------
-
-    FVector CachedStartLocWS = FVector::ZeroVector;
-
-    /** 移動�Eセル�E�EnMoveFinishedで正しい位置設定に使用�E�E*/
-    FIntPoint CachedNextCell = FIntPoint(-1, -1);
-
-    //--------------------------------------------------------------------------
-    // キャチE��ュ変数�E�EnMoveFinished で使用�E�E
-    //--------------------------------------------------------------------------
-
-    FGameplayAbilitySpecHandle CachedSpecHandle;
-    FGameplayAbilityActorInfo CachedActorInfo;
-    FGameplayAbilityActivationInfo CachedActivationInfo;
-    FVector CachedFirstLoc = FVector::ZeroVector;
-
-    // Sparky修正: 再終亁E��止フラグ
-    bool bIsEnding = false;
-
-    // ☁E�E☁EREMOVED: InProgressStack (2025-11-11) ☁E�E☁E
-    // ActivationOwnedTags を使用するため、手動カウント�E不要E
+	// EndAbility 再入防止
+	bool bIsEnding = false;
 };

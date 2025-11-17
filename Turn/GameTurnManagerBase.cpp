@@ -1399,8 +1399,19 @@ FGameplayEventData EventData;
 
 const int32 DirX = FMath::RoundToInt(Command.Direction.X);
     const int32 DirY = FMath::RoundToInt(Command.Direction.Y);
+
+    // Calculate target cell before packing
+    FIntPoint TargetCell = Command.TargetCell;
+    if (CachedPathFinder.IsValid() && (TargetCell.X == 0 && TargetCell.Y == 0))
+    {
+        const FIntPoint CurrentCell = CachedPathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
+        TargetCell = FIntPoint(
+            CurrentCell.X + DirX,
+            CurrentCell.Y + DirY);
+    }
+
     // CodeRevision: INC-2025-00030-R8 (Refactor GA_MoveBase SSOT) (2025-11-17 01:50)
-    EventData.EventMagnitude = static_cast<float>(TurnCommandEncoding::PackCell(Action.NextCell.X, Action.NextCell.Y));
+    EventData.EventMagnitude = static_cast<float>(TurnCommandEncoding::PackCell(TargetCell.X, TargetCell.Y));
 
     UE_LOG(LogTurnManager, Log,
         TEXT("[GameTurnManager] EventData prepared - Tag=%s, Magnitude=%.2f, Direction=(%.0f,%.0f)"),
@@ -1410,7 +1421,7 @@ const int32 DirX = FMath::RoundToInt(Command.Direction.X);
 if (CachedPathFinder.IsValid())
     {
         const FIntPoint CurrentCell = CachedPathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
-        const FIntPoint TargetCell(
+        TargetCell = FIntPoint(
             CurrentCell.X + static_cast<int32>(Command.Direction.X),
             CurrentCell.Y + static_cast<int32>(Command.Direction.Y));
 
@@ -2464,12 +2475,20 @@ const int32 DirX = FMath::RoundToInt(CachedPlayerCommand.Direction.X);
         const int32 DirY = FMath::RoundToInt(CachedPlayerCommand.Direction.Y);
         EventData.EventMagnitude = static_cast<float>(TurnCommandEncoding::PackDir(DirX, DirY));
 
+    // Calculate target cell from cached command
+    FIntPoint TargetCell = CachedPlayerCommand.TargetCell;
+    if (CachedPathFinder.IsValid() && (TargetCell.X == 0 && TargetCell.Y == 0))
+    {
+        const FIntPoint CurrentCell = CachedPathFinder->WorldToGrid(GetWorld()->GetFirstPlayerController()->GetPawn()->GetActorLocation());
+        TargetCell = FIntPoint(CurrentCell.X + DirX, CurrentCell.Y + DirY);
+    }
+
     UE_LOG(LogTurnManager, Warning,
         TEXT("Turn %d: Sending GameplayEvent %s (TargetCell=(%d,%d), Magnitude=%.0f)"),
         CurrentTurnId,
         *EventData.EventTag.ToString(),
-        Action.NextCell.X,
-        Action.NextCell.Y,
+        TargetCell.X,
+        TargetCell.Y,
         EventData.EventMagnitude);
 
         const int32 TriggeredCount = ASC->HandleGameplayEvent(EventData.EventTag, &EventData);

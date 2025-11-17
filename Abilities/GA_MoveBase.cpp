@@ -1,3 +1,9 @@
+// --------------------------------------------------------------------------
+// File: Abilities/GA_MoveBase.cpp
+// --------------------------------------------------------------------------
+
+// Copyright Epic Games, Inc. All Rights Reserved.
+
 #include "Abilities/GA_MoveBase.h"
 
 #include "AbilitySystemComponent.h"
@@ -9,6 +15,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
+
 // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 #include "Rogue/Character/UnitBase.h"
 #include "Rogue/Character/UnitMovementComponent.h"
@@ -17,6 +24,7 @@
 #include "Rogue/Utility/RogueGameplayTags.h"
 #include "Turn/GameTurnManagerBase.h"
 #include "Turn/TurnFlowCoordinator.h"
+#include "Turn/TurnActionBarrierSubsystem.h"
 #include "Utility/PathFinderUtils.h"
 #include "Utility/TurnCommandEncoding.h"
 #include "TimerManager.h"
@@ -169,7 +177,7 @@ bool UGA_MoveBase::ShouldRespondToEvent(
 	}
 
 	UE_LOG(LogMoveVerbose, Log,
-		TEXT("[GA_MoveBase] ShouldRespondToEvent: âœEPassed all checks (Actor=%s, EventTag=%s, Magnitude=%d)"),
+		TEXT("[GA_MoveBase] ShouldRespondToEvent: âœ… Passed all checks (Actor=%s, EventTag=%s, Magnitude=%d)"),
 		*GetNameSafe(ActorInfo->AvatarActor.Get()),
 		*Payload->EventTag.ToString(),
 		RawMagnitude);
@@ -270,45 +278,109 @@ void UGA_MoveBase::ActivateAbility(
 			TEXT("[GA_MoveBase] TurnManager not available in TriggerEventData - CompletedTurnIdForEvent set to INDEX_NONE"));
 	}
 
-	// â˜EEâ˜EMagnitude æ¤œè¨¼EEurnCommandEncoding ç¯E›²ãƒã‚§ãƒE‚¯EEâ˜EEâ˜E
-			const int32 RawMagnitude = FMath::RoundToInt(TriggerEventData->EventMagnitude);
-			FIntPoint TargetCell(-1, -1);
-			if (RawMagnitude >= TurnCommandEncoding::kCellBase)
-			{
-				int32 GridX = 0;
-				int32 GridY = 0;
-				if (TurnCommandEncoding::UnpackCell(RawMagnitude, GridX, GridY))
-				{
-					TargetCell = FIntPoint(GridX, GridY);
-				}
-			}
+	// Magnitude validation & decoding
+	const int32 RawMagnitude = FMath::RoundToInt(TriggerEventData->EventMagnitude);
+	if (RawMagnitude < TurnCommandEncoding::kDirBase)
+	{
+		UE_LOG(LogTurnManager, Error,
+			TEXT("[GA_MoveBase] ActivateAbility failed: Invalid magnitude %d (expected >= %d)"),
+			RawMagnitude, TurnCommandEncoding::kDirBase);
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
 
-			if (TargetCell.X == -1 || TargetCell.Y == -1)
-			{
-				UE_LOG(LogTurnManager, Error,
-					TEXT(\"[GA_MoveBase] ABORT: TriggerEventData missing resolved TargetCell (magnitude=%d)\"),
-					RawMagnitude);
-				EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
-				return;
-			}
+	FVector EncodedDirection = FVector::ZeroVector;
+	if (!ExtractDirectionFromEventData(TriggerEventData, EncodedDirection))
+	{
+		UE_LOG(LogTurnManager, Error,
+			TEXT("[GA_MoveBase] ActivateAbility failed: ExtractDirectionFromEventData failed (magnitude=%d)"),
+			RawMagnitude);
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
 
-			CachedNextCell = TargetCell;
-			UE_LOG(LogTurnManager, Log,
-				TEXT(\"[GA_MoveBase] TargetCell resolved by ConflictResolver: From=%s -> Target=%s\"),
-				*CurrentCell.ToString(), *TargetCell.ToString());
+	// If Z < 0, this Event encodes a resolved target cell (from ConflictResolver / TurnCommandEncoding::kCellBase)
+	if (EncodedDirection.Z < -0.5f)
+	{
+		const FIntPoint TargetCell(
+			FMath::RoundToInt(EncodedDirection.X),
+			FMath::RoundToInt(EncodedDirection.Y));
 
-			if (!Pathfinding->IsCellWalkableIgnoringActor(TargetCell, Unit))
-			{
-				UE_LOG(LogTurnManager, Warning,
-					TEXT(\"[GA_MoveBase] Cell (%d,%d) is blocked by terrain; aborting move\"),
-					TargetCell.X, TargetCell.Y);
-				EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
-				return;
-			}
+		UE_LOG(LogTurnManager, Log,
+			TEXT("[GA_MoveBase] Starting move to resolved cell: Target=(%d,%d) Actor=%s Magnitude=%d"),
+			TargetCell.X, TargetCell.Y, *GetNameSafe(Avatar), RawMagnitude);
 
-			// CodeRevision: INC-2025-00018-R3 (Remove barrier management - Phase 3) (2025-11-17)
-			// Barrier registration removed - handled by other systems
-			const FVector DestWorldLoc = Pathfinding->GridToWorld(CachedNextCell);
+		StartMoveToCell(TargetCell);
+		return;
+	}
+
+	// Directional move (relative step)
+	const FVector2D GridDir = QuantizeToGridDirection(EncodedDirection);
+	if (GridDir.IsNearlyZero())
+	{
+		UE_LOG(LogTurnManager, Warning,
+			TEXT("[GA_MoveBase] Quantized direction is zero; aborting move"));
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
+	UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
+	if (!Pathfinding)
+	{
+		UE_LOG(LogTurnManager, Error,
+			TEXT("[GA_MoveBase] GridPathfindingSubsystem not available - aborting move"));
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
+	AUnitBase* Unit = Cast<AUnitBase>(Avatar);
+	if (!Unit)
+	{
+		UE_LOG(LogTurnManager, Error,
+			TEXT("[GA_MoveBase] Avatar is not a UnitBase - aborting move"));
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
+	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
+	{
+		ASC->AddLooseGameplayTag(RogueGameplayTags::Event_Dungeon_Step);
+	}
+
+	const float FixedZ = ComputeFixedZ(Unit, Pathfinding);
+	FVector CurrentLocation = SnapToCellCenterFixedZ(Unit->GetActorLocation(), FixedZ);
+	Unit->SetActorLocation(CurrentLocation, false, nullptr, ETeleportType::TeleportPhysics);
+
+	const FIntPoint CurrentCell = Pathfinding->WorldToGrid(CurrentLocation);
+
+	const FIntPoint RawStep(
+		FMath::Clamp(static_cast<int32>(GridDir.X), -1, 1),
+		FMath::Clamp(static_cast<int32>(GridDir.Y), -1, 1));
+
+	bool bAdjustedStep = false;
+	const FIntPoint Step = GA_MoveBase_Private::QuantizeStepToGrid(RawStep, GridDir, bAdjustedStep);
+
+	if (Step == FIntPoint::ZeroValue)
+	{
+		UE_LOG(LogTurnManager, Warning,
+			TEXT("[GA_MoveBase] Step after quantization is zero; aborting move"));
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
+	const FIntPoint TargetCell = CurrentCell + Step;
+	CachedNextCell = TargetCell;
+
+	if (!Pathfinding->IsCellWalkableIgnoringActor(TargetCell, Unit))
+	{
+		UE_LOG(LogTurnManager, Warning,
+			TEXT("[GA_MoveBase] Cell (%d,%d) is blocked for %s; aborting move"),
+			TargetCell.X, TargetCell.Y, *GetNameSafe(Unit));
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
+	const FVector DestWorldLoc = Pathfinding->GridToWorld(TargetCell, FixedZ);
 	NextTileStep = SnapToCellCenterFixedZ(DestWorldLoc, FixedZ);
 	NextTileStep.Z = FixedZ;
 
@@ -324,7 +396,8 @@ void UGA_MoveBase::ActivateAbility(
 
 	if (MoveDistance < KINDA_SMALL_NUMBER)
 	{
-		UE_LOG(LogTurnManager, Verbose, TEXT("[GA_MoveBase] Zero distance move detected â€Eending ability"));
+		UE_LOG(LogTurnManager, Verbose,
+			TEXT("[GA_MoveBase] Zero distance move detected â€“ ending ability"));
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 		return;
 	}
@@ -340,27 +413,20 @@ void UGA_MoveBase::ActivateAbility(
 
 	BindMoveFinishedDelegate();
 
-	if (Unit)
-	{
-		TArray<FVector> PathPoints;
-		const FVector EndPos = NextTileStep;
-		const int32 NumSamples = FMath::Max(2, FMath::CeilToInt(MoveDistance / GA_MoveBase_Private::WaypointSpacingCm));
+	TArray<FVector> PathPoints;
+	const int32 NumSamples = FMath::Max(
+		2,
+		FMath::CeilToInt(MoveDistance / GA_MoveBase_Private::WaypointSpacingCm));
 
-		for (int32 Index = 1; Index <= NumSamples; ++Index)
-		{
-			const float Alpha = static_cast<float>(Index) / static_cast<float>(NumSamples);
-			FVector Sample = FMath::Lerp(CurrentLocation, EndPos, Alpha);
-			Sample.Z = FixedZ;
-			PathPoints.Add(Sample);
-		}
-
-		Unit->MoveUnit(PathPoints);
-	}
-	else
+	for (int32 Index = 1; Index <= NumSamples; ++Index)
 	{
-		UE_LOG(LogTurnManager, Warning, TEXT("[GA_MoveBase] Unit cast failed â€Efinishing immediately"));
-		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		const float Alpha = static_cast<float>(Index) / static_cast<float>(NumSamples);
+		FVector Sample = FMath::Lerp(CurrentLocation, NextTileStep, Alpha);
+		Sample.Z = FixedZ;
+		PathPoints.Add(Sample);
 	}
+
+	Unit->MoveUnit(PathPoints);
 }
 
 void UGA_MoveBase::ActivateAbilityFromEvent(
@@ -427,7 +493,7 @@ void UGA_MoveBase::EndAbility(
 	}
 
 	// CodeRevision: INC-2025-00018-R3 (Remove barrier management - Phase 3) (2025-11-17)
-	// Barrier completion removed - handled by other systems
+	// Barrier completion removed here - handled instead in OnMoveFinished via TurnActionBarrierSubsystem
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 
@@ -438,38 +504,49 @@ void UGA_MoveBase::EndAbility(
 
 void UGA_MoveBase::SendCompletionEvent(bool bTimedOut)
 {
-    if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
-    {
-        const int32 NotifiedTurnId = CompletedTurnIdForEvent;
+	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
+	{
+		const int32 NotifiedTurnId = CompletedTurnIdForEvent;
 
-        if (NotifiedTurnId == INDEX_NONE || NotifiedTurnId < 0)
-        {
-            UE_LOG(LogTurnManager, Error,
-                TEXT("[SendCompletionEvent] INVALID TurnId=%d, NOT sending completion event! (Actor=%s)"),
-                NotifiedTurnId, *GetNameSafe(GetAvatarActorFromActorInfo()));
-            return;
-        }
+		if (NotifiedTurnId == INDEX_NONE || NotifiedTurnId < 0)
+		{
+			UE_LOG(LogTurnManager, Error,
+				TEXT("[SendCompletionEvent] INVALID TurnId=%d, NOT sending completion event! (Actor=%s)"),
+				NotifiedTurnId, *GetNameSafe(GetAvatarActorFromActorInfo()));
+			return;
+		}
 
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[TurnNotify] GA_MoveBase completion: Actor=%s TurnId=%d"),
-            *GetNameSafe(GetAvatarActorFromActorInfo()), NotifiedTurnId);
+		UE_LOG(LogTurnManager, Warning,
+			TEXT("[TurnNotify] GA_MoveBase completion: Actor=%s TurnId=%d"),
+			*GetNameSafe(GetAvatarActorFromActorInfo()), NotifiedTurnId);
 
-        FGameplayEventData EventData;
-        EventData.Instigator = GetAvatarActorFromActorInfo();
-        EventData.OptionalObject = this;
-        EventData.EventMagnitude = static_cast<float>(NotifiedTurnId);
-        EventData.EventTag = RogueGameplayTags::Gameplay_Event_Turn_Ability_Completed;
+		FGameplayEventData EventData;
+		EventData.Instigator = GetAvatarActorFromActorInfo();
+		EventData.OptionalObject = this;
+		EventData.EventMagnitude = static_cast<float>(NotifiedTurnId);
+		EventData.EventTag = RogueGameplayTags::Gameplay_Event_Turn_Ability_Completed;
 
-        ASC->HandleGameplayEvent(RogueGameplayTags::Gameplay_Event_Turn_Ability_Completed, &EventData);
+		ASC->HandleGameplayEvent(RogueGameplayTags::Gameplay_Event_Turn_Ability_Completed, &EventData);
 
-        EventData.EventTag = RogueGameplayTags::Ability_Move_Completed;
-        ASC->HandleGameplayEvent(RogueGameplayTags::Ability_Move_Completed, &EventData);
-    }
+		EventData.EventTag = RogueGameplayTags::Ability_Move_Completed;
+		ASC->HandleGameplayEvent(RogueGameplayTags::Ability_Move_Completed, &EventData);
+	}
 }
 
+bool UGA_MoveBase::ExtractDirectionFromEventData(
+	const FGameplayEventData* EventData,
+	FVector& OutDirection)
+{
+	if (!EventData)
+	{
+		UE_LOG(LogTurnManager, Error,
+			TEXT("[GA_MoveBase] ExtractDirectionFromEventData: EventData is null"));
+		return false;
+	}
 
 	const int32 Magnitude = FMath::RoundToInt(EventData->EventMagnitude);
-	DIAG_LOG(Log, TEXT("[GA_MoveBase] ExtractDirection magnitude=%d (raw=%.2f)"),
+	DIAG_LOG(Log,
+		TEXT("[GA_MoveBase] ExtractDirection magnitude=%d (raw=%.2f)"),
 		Magnitude, EventData->EventMagnitude);
 
 	if (Magnitude >= TurnCommandEncoding::kCellBase)
@@ -503,8 +580,8 @@ void UGA_MoveBase::SendCompletionEvent(bool bTimedOut)
 	}
 
 	UE_LOG(LogTurnManager, Warning,
-		TEXT("[GA_MoveBase] Invalid magnitude=%d (expected >= 1000)"),
-		Magnitude);
+		TEXT("[GA_MoveBase] Invalid magnitude=%d (expected >= %d)"),
+		Magnitude, TurnCommandEncoding::kDirBase);
 	return false;
 }
 
@@ -530,36 +607,38 @@ FVector UGA_MoveBase::CalculateNextTilePosition(const FVector& CurrentPosition, 
 // CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
 bool UGA_MoveBase::IsTileWalkable(const FVector& TilePosition, AUnitBase* Self)
 {
-    UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
-    if (!Pathfinding)
-    {
-        return false;
-    }
+	UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
+	if (!Pathfinding)
+	{
+		return false;
+	}
 
-    const FIntPoint Cell = Pathfinding->WorldToGrid(TilePosition);
-    AActor* ActorToIgnore = Self ? static_cast<AActor*>(Self) : const_cast<AActor*>(GetAvatarActorFromActorInfo());
-    return Pathfinding->IsCellWalkableIgnoringActor(Cell, ActorToIgnore);
+	const FIntPoint Cell = Pathfinding->WorldToGrid(TilePosition);
+	AActor* ActorToIgnore = Self
+		? static_cast<AActor*>(Self)
+		: const_cast<AActor*>(GetAvatarActorFromActorInfo());
+	return Pathfinding->IsCellWalkableIgnoringActor(Cell, ActorToIgnore);
 }
 
 // CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
 bool UGA_MoveBase::IsTileWalkable(const FIntPoint& Cell) const
 {
-    UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
-    if (!Pathfinding)
-    {
-        return false;
-    }
+	UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
+	if (!Pathfinding)
+	{
+		return false;
+	}
 
-    AActor* IgnoreActor = const_cast<AActor*>(GetAvatarActorFromActorInfo());
-    if (!Pathfinding->IsCellWalkableIgnoringActor(Cell, IgnoreActor))
-    {
-        UE_LOG(LogTurnManager, Verbose,
-            TEXT("[IsTileWalkable] Cell (%d,%d) blocked for %s."),
-            Cell.X, Cell.Y, *GetNameSafe(IgnoreActor));
-        return false;
-    }
+	AActor* IgnoreActor = const_cast<AActor*>(GetAvatarActorFromActorInfo());
+	if (!Pathfinding->IsCellWalkableIgnoringActor(Cell, IgnoreActor))
+	{
+		UE_LOG(LogTurnManager, Verbose,
+			TEXT("[IsTileWalkable] Cell (%d,%d) blocked for %s."),
+			Cell.X, Cell.Y, *GetNameSafe(IgnoreActor));
+		return false;
+	}
 
-    return true;
+	return true;
 }
 
 // CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
@@ -666,7 +745,7 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
 {
 	// CodeRevision: INC-2025-00018-R3 (Remove barrier management and grid update - Phase 3) (2025-11-17)
 	// Grid update moved to UnitMovementComponent::FinishMovement()
-	// Barrier management removed - handled by other systems
+	// Barrier management removed from EndAbility - handled here for GA_MoveBase
 	// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
 
 	UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
@@ -736,38 +815,38 @@ void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
 
 	// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
 	UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
-    if (!Pathfinding)
-    {
-        UE_LOG(LogTurnManager, Error, TEXT("[GA_MoveBase] StartMoveToCell failed: GridPathfindingSubsystem missing"));
-        EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, true);
-        return;
-    }
+	if (!Pathfinding)
+	{
+		UE_LOG(LogTurnManager, Error, TEXT("[GA_MoveBase] StartMoveToCell failed: GridPathfindingSubsystem missing"));
+		EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, true);
+		return;
+	}
 
-    const AGameTurnManagerBase* TurnManager = GetTurnManager();
-    const bool bTargetReserved = (TurnManager && Unit)
-        ? TurnManager->HasReservationFor(Unit, TargetCell)
-        : false;
+	const AGameTurnManagerBase* TurnManager = GetTurnManager();
+	const bool bTargetReserved = (TurnManager && Unit)
+		? TurnManager->HasReservationFor(Unit, TargetCell)
+		: false;
 
-    // â˜EEâ˜EPhase 5: Collision Prevention - Require reservation (2025-11-09) â˜EEâ˜E
-    // CRITICAL FIX: Units can ONLY move to cells reserved for them
-    // This prevents overlapping by enforcing the reservation system
-    if (!bTargetReserved)
-    {
-        // Fallback for non-turn-based scenarios (exploration mode, etc.)
-        if (!IsTileWalkable(TargetCell))
-        {
-            UE_LOG(LogTurnManager, Warning,
-                TEXT("[GA_MoveBase] Target cell (%d,%d) not reserved and not walkable - Move blocked"),
-                TargetCell.X, TargetCell.Y);
-            EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, true);
-            return;
-        }
+	// Phase 5: Collision Prevention - Require reservation (2025-11-09)
+	// CRITICAL FIX: Units can ONLY move to cells reserved for them
+	// This prevents overlapping by enforcing the reservation system
+	if (!bTargetReserved)
+	{
+		// Fallback for non-turn-based scenarios (exploration mode, etc.)
+		if (!IsTileWalkable(TargetCell))
+		{
+			UE_LOG(LogTurnManager, Warning,
+				TEXT("[GA_MoveBase] Target cell (%d,%d) not reserved and not walkable - Move blocked"),
+				TargetCell.X, TargetCell.Y);
+			EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, true);
+			return;
+		}
 
-        // Allow movement but log warning if no reservation system is active
-        UE_LOG(LogTurnManager, Verbose,
-            TEXT("[GA_MoveBase] Target cell (%d,%d) not reserved but walkable - Allowing (exploration mode?)"),
-            TargetCell.X, TargetCell.Y);
-    }
+		// Allow movement but log warning if no reservation system is active
+		UE_LOG(LogTurnManager, Verbose,
+			TEXT("[GA_MoveBase] Target cell (%d,%d) not reserved but walkable - Allowing (exploration mode?)"),
+			TargetCell.X, TargetCell.Y);
+	}
 
 	const float FixedZ = ComputeFixedZ(Unit, Pathfinding);
 	FVector StartPos = SnapToCellCenterFixedZ(Unit->GetActorLocation(), FixedZ);
@@ -790,7 +869,9 @@ void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
 		FMath::RadiansToDegrees(FMath::Atan2(static_cast<float>(MoveDir.Y), static_cast<float>(MoveDir.X))));
 
 	TArray<FVector> PathPoints;
-	const int32 NumSamples = FMath::Max(2, FMath::CeilToInt(TotalDistance / GA_MoveBase_Private::WaypointSpacingCm));
+	const int32 NumSamples = FMath::Max(
+		2,
+		FMath::CeilToInt(TotalDistance / GA_MoveBase_Private::WaypointSpacingCm));
 
 	for (int32 Index = 1; Index <= NumSamples; ++Index)
 	{
