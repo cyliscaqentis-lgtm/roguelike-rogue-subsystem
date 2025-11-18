@@ -140,17 +140,24 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unit|Movement")
 	float ArrivalThreshold = 10.0f;
 
-	/** スムーズな移動補間を使用するか */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unit|Movement")
-	bool bUseSmoothMovement = true;
+    /** スムーズな移動補間を使用するか */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unit|Movement")
+    bool bUseSmoothMovement = true;
 
-	/** 補間速度 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unit|Movement", meta = (EditCondition = "bUseSmoothMovement"))
-	float InterpSpeed = 5.0f;
+    /** 補間速度 */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Unit|Movement", meta = (EditCondition = "bUseSmoothMovement"))
+    float InterpSpeed = 5.0f;
 
-	/** グリッド更新再試行用タイマーハンドル */
-	UPROPERTY(Transient)
-	FTimerHandle GridUpdateRetryHandle;
+    /** Occupancy 更新の最大リトライ回数 */
+    static constexpr int32 MaxGridUpdateRetries = 5;
+
+    /** Occupancy 更新の現在のリトライ回数 */
+    UPROPERTY(Transient)
+    int32 GridUpdateRetryCount = 0;
+
+    /** グリッド更新再試行用タイマーハンドル */
+    UPROPERTY(Transient)
+    FTimerHandle GridUpdateRetryHandle;
 
 	// ========== Internal Methods ==========
 

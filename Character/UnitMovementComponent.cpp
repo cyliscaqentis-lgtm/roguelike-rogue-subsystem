@@ -54,6 +54,7 @@ void UUnitMovementComponent::MoveUnit(const TArray<FVector>& Path)
 	}
 
 	CurrentPath = Path;
+	GridUpdateRetryCount = 0;
 	CurrentPathIndex = 0;
 	bIsMoving = true;
 
@@ -227,17 +228,17 @@ void UUnitMovementComponent::MoveToNextWaypoint()
 
 void UUnitMovementComponent::FinishMovement()
 {
+	// CodeRevision: INC-2025-1129-R1 (Prevent movement hang by capping grid occupancy retries) (2025-11-27 16:00)
 	bIsMoving = false;
-	SetComponentTickEnabled(false); // Tickを先に無効化
+	SetComponentTickEnabled(false); // Tickは先に止める
 
 	AUnitBase* OwnerUnit = GetOwnerUnit();
+
 	if (OwnerUnit && CurrentPath.Num() > 0)
 	{
-		// CodeRevision: INC-2025-1117E (Snap to final destination before broadcasting OnMoveFinished) (2025-11-17 18:15)
-		// ★★★ START: 新しいスナップ処理 ★★★
 		const FVector FinalDestination = CurrentPath.Last();
 
-		// 向きを最終目的地に合わせる
+		// 向きと位置のスナップは現行どおり
 		FVector MoveDirection = FinalDestination - OwnerUnit->GetActorLocation();
 		MoveDirection.Z = 0.0f;
 		if (!MoveDirection.IsNearlyZero())
@@ -247,12 +248,8 @@ void UUnitMovementComponent::FinishMovement()
 			NewRotation.Yaw = TargetYaw;
 			OwnerUnit->SetActorRotation(NewRotation);
 		}
-
-		// 最終目的地にスナップする
 		OwnerUnit->SetActorLocation(FinalDestination, false, nullptr, ETeleportType::None);
-		// ★★★ END: 新しいスナップ処理 ★★★
 
-		// CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
 		if (UWorld* World = GetWorld())
 		{
 			if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
@@ -260,21 +257,46 @@ void UUnitMovementComponent::FinishMovement()
 				if (UGridPathfindingSubsystem* PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>())
 				{
 					const FIntPoint FinalCell = PathFinder->WorldToGrid(FinalDestination);
+
 					if (!Occupancy->UpdateActorCell(OwnerUnit, FinalCell))
 					{
-						// 更新が失敗した場合（競合など）、短時間後に再試行する
-						World->GetTimerManager().SetTimer(
-							GridUpdateRetryHandle,
-							this,
-							&UUnitMovementComponent::FinishMovement,
-							0.1f,
-							false);
-						return; // ここで処理を中断し、再試行に任せる
-					}
+						GridUpdateRetryCount++;
 
-					UE_LOG(LogTemp, Verbose,
-						TEXT("[UnitMovementComponent] GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
-						*GetNameSafe(OwnerUnit), FinalCell.X, FinalCell.Y);
+						if (GridUpdateRetryCount <= MaxGridUpdateRetries)
+						{
+							UE_LOG(LogTemp, Warning,
+								TEXT("[UnitMovementComponent] UpdateActorCell FAILED (Retry=%d/%d) for %s at (%d,%d) - scheduling retry"),
+								GridUpdateRetryCount, MaxGridUpdateRetries,
+								*GetNameSafe(OwnerUnit), FinalCell.X, FinalCell.Y);
+
+							World->GetTimerManager().SetTimer(
+								GridUpdateRetryHandle,
+								this,
+								&UUnitMovementComponent::FinishMovement,
+								0.1f,
+								false);
+
+							return;
+						}
+						else
+						{
+						UE_LOG(LogTemp, Error,
+							TEXT("[UnitMovementComponent] UpdateActorCell FAILED after %d retries. Forcing movement completion to avoid game hang. Actor=%s FinalCell=(%d,%d)"),
+							GridUpdateRetryCount,
+							*GetNameSafe(OwnerUnit),
+							FinalCell.X, FinalCell.Y);
+							// fall through and finish movement anyway
+						}
+					}
+					else
+					{
+						GridUpdateRetryCount = 0;
+						World->GetTimerManager().ClearTimer(GridUpdateRetryHandle);
+
+						UE_LOG(LogTemp, Verbose,
+							TEXT("[UnitMovementComponent] GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
+							*GetNameSafe(OwnerUnit), FinalCell.X, FinalCell.Y);
+					}
 				}
 			}
 		}
@@ -283,12 +305,12 @@ void UUnitMovementComponent::FinishMovement()
 	CurrentPath.Empty();
 	CurrentPathIndex = 0;
 
-	// イベント配信（スナップ処理完了後）
 	OnMoveFinished.Broadcast(OwnerUnit);
 
-	UE_LOG(LogTemp, Log, TEXT("[UnitMovementComponent] Movement finished and snapped."));
+	UE_LOG(LogTemp, Log,
+		TEXT("[UnitMovementComponent] Movement finished and snapped. (RetryCount=%d)"),
+		GridUpdateRetryCount);
 }
-
 AUnitBase* UUnitMovementComponent::GetOwnerUnit() const
 {
 	return Cast<AUnitBase>(GetOwner());

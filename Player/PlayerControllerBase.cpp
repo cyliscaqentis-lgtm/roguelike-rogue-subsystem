@@ -86,25 +86,29 @@ void APlayerControllerBase::Tick(float DeltaTime)
 
     const bool bNow = CachedTurnManager->WaitingForPlayerInput;
     const int32 NewWindowId = TFC ? TFC->GetCurrentInputWindowId() : 0;
-    UE_LOG(LogTemp, Verbose, TEXT("[Client_Tick] WPI: Prev=%d, Now=%d, Sent=%d, WinId=%d->%d"),
-        bPrevWaitingForPlayerInput, bNow, bSentThisInputWindow, CurrentInputWindowId, NewWindowId);
+    UE_LOG(LogTemp, Verbose, TEXT("[Client_Tick] WPI: Prev=%d, Now=%d, Sent=%d, WinId=%d->%d, LastHandled=%d"),
+        bPrevWaitingForPlayerInput, bNow, bSentThisInputWindow, CurrentInputWindowId, NewWindowId, LastHandledInputWindowId);
 
-    if (!bPrevWaitingForPlayerInput && bNow)
+    const int32 PreviousWindowId = CurrentInputWindowId;
+    const bool bWindowChanged = PreviousWindowId != NewWindowId;
+
+    if (bWindowChanged)
     {
-        bSentThisInputWindow = false;
-        LastProcessedWindowId = INDEX_NONE;
-        
-        UE_LOG(LogTemp, Warning, TEXT("[Client_Tick] ★ INPUT WINDOW DETECTED: reset latch (WinId=%d)"),
-            NewWindowId);
-    }
-    
-    if (CurrentInputWindowId != NewWindowId)
-    {
-        bSentThisInputWindow = false;
-        LastProcessedWindowId = INDEX_NONE;
         CurrentInputWindowId = NewWindowId;
     }
-    
+
+    // CodeRevision: INC-2025-1128-R1 (Reset latches only when a new window id is detected or after rejection) (2025-11-27 15:00)
+    if (CurrentInputWindowId != LastHandledInputWindowId)
+    {
+        bSentThisInputWindow = false;
+        LastProcessedWindowId = INDEX_NONE;
+        LastHandledInputWindowId = CurrentInputWindowId;
+
+        UE_LOG(LogTemp, Warning,
+            TEXT("[Client_Tick] Input window change detected (Prev=%d, Now=%d) -> latch reset (WinId=%d)"),
+            PreviousWindowId, NewWindowId, CurrentInputWindowId);
+    }
+
     if (bPrevWaitingForPlayerInput && !bNow)
     {
         bSentThisInputWindow = false;
@@ -114,7 +118,6 @@ void APlayerControllerBase::Tick(float DeltaTime)
             CurrentInputWindowId);
     }
 
-    CurrentInputWindowId = NewWindowId;
     bPrevWaitingForPlayerInput = bNow;
 }
 
@@ -783,6 +786,7 @@ void APlayerControllerBase::Client_NotifyMoveRejected_Implementation()
 
     bSentThisInputWindow = false;
     LastProcessedWindowId = INDEX_NONE;
+    LastHandledInputWindowId = INDEX_NONE;
 
     UE_LOG(LogTemp, Warning, TEXT("[Client] AFTER reset: bSentThisInputWindow=%s, LastProcessedWindowId=%d"),
         bSentThisInputWindow ? TEXT("TRUE") : TEXT("FALSE"), LastProcessedWindowId);

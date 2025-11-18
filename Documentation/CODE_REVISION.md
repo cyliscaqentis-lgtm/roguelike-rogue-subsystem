@@ -6,6 +6,10 @@ When modifying code in this project, add a `CodeRevision` comment to track versi
 
 ## CodeRevision Log
 
+- `CodeRevision: INC-2025-1131-R1` - Replace the alternate-move selection with tactics-aware scoring so candidates are filtered by distance and chosen based on weighted distance/lane alignment (2025-11-27 17:00)
+- `CodeRevision: INC-2025-1130-R1` - Two-pass enemy intent generation that marks attackers as hard-blocked and lets movers claim alternative targets or wait rather than colliding (2025-11-27 16:30)
+- `CodeRevision: INC-2025-1129-R1` - Cap `UUnitMovementComponent`’s grid update retries and force movement completion after the limit to prevent hang states when `UpdateActorCell` freezes (2025-11-27 16:00)
+- `CodeRevision: INC-2025-1128-R1` - Tightened PlayerController input latch resets to only trigger on legitimate window id changes or explicit rejection, preventing duplicate SubmitCommand RPCs (2025-11-27 15:00)
 - `CodeRevision: INC-2025-1127-R1` - Align sequential move filtering with `CoreResolvePhase`, log why moves drop out of the dispatch set, and ensure the legacy sequential entry path still sets move-phase flags (2025-11-27 14:15)
 - `CodeRevision: INC-2025-1126-R1` - Derives sequential/simultaneous flow from cached EnemyIntents via `DoesAnyIntentHaveAttack()` so ATTACK intents never slip through per FIX_PLAN_26.md (2025-11-26 10:00)
 - `CodeRevision: INC-2025-1125-R1` - Blocks move intents from attack tiles and derives bHasAttack from cached intents per FIX_PLAN_25.md (2025-11-25 12:00)

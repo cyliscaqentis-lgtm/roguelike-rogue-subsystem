@@ -71,4 +71,32 @@ public:
 	void CollectAllEnemies(
 		AActor* PlayerPawn,
 		TArray<AActor*>& OutEnemies);
+
+private:
+	FEnemyIntent ComputeMoveOrWaitIntent(
+		AActor* EnemyActor,
+		const FEnemyObservation& Obs,
+		const TSet<FIntPoint>& HardBlockedCells,
+		const TSet<FIntPoint>& ClaimedMoveTargets) const;
+
+	void FindAlternateMoveCells(
+		const FIntPoint& SelfCell,
+		const FIntPoint& PlayerGrid,
+		int32 CurrentDistanceInTiles,
+		AActor* EnemyActor,
+		const TSet<FIntPoint>& HardBlockedCells,
+		const TSet<FIntPoint>& ClaimedMoveTargets,
+		TArray<FIntPoint>& OutCandidates) const;
+
+	FIntPoint SelectBestAlternateCell(
+		const TArray<FIntPoint>& Candidates,
+		const FIntPoint& SelfCell,
+		const FIntPoint& PlayerGrid) const;
+
+	float ScoreMoveCandidate(
+		const FIntPoint& SelfCell,
+		const FIntPoint& Candidate,
+		const FIntPoint& PlayerGrid) const;
+
+	bool IsCellWalkable(AActor* EnemyActor, const FIntPoint& Cell) const;
 };

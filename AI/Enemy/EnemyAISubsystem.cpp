@@ -8,7 +8,9 @@
 #include "Grid/GridPathfindingSubsystem.h"
 #include "Grid/GridOccupancySubsystem.h"
 #include "Turn/TurnCorePhaseManager.h"
+#include "Turn/DistanceFieldSubsystem.h"
 #include "Utility/GridUtils.h"  // CodeRevision: INC-2025-00016-R1 (2025-11-16 14:00)
+#include "Utility/RogueGameplayTags.h"
 #include "Kismet/GameplayStatics.h"
 #include "AbilitySystemInterface.h"
 #include "GenericTeamAgentInterface.h"
@@ -148,6 +150,7 @@ void UEnemyAISubsystem::CollectIntents(
     const TArray<AActor*>& Enemies,
     TArray<FEnemyIntent>& OutIntents)
 {
+// CodeRevision: INC-2025-1130-R1 (Two-pass enemy intent generation to avoid attacker blocking) (2025-11-27 16:30)
     OutIntents.Empty(Obs.Num());
 
     UE_LOG(LogEnemyAI, Warning,
@@ -165,6 +168,15 @@ void UEnemyAISubsystem::CollectIntents(
     int32 ValidIntents = 0;
     int32 WaitIntents = 0;
 
+    const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
+    const FGameplayTag MoveTag = RogueGameplayTags::AI_Intent_Move;
+    const FGameplayTag WaitTag = RogueGameplayTags::AI_Intent_Wait;
+
+    TSet<FIntPoint> HardBlockedCells;
+    TSet<FIntPoint> ClaimedMoveTargets;
+    TSet<TWeakObjectPtr<AActor>> ActorsWithIntent;
+
+    // ---- Pass 1: Determine attackers and hard-block their cells ----
     for (int32 i = 0; i < Obs.Num(); ++i)
     {
         AActor* Enemy = Enemies[i];
@@ -176,9 +188,79 @@ void UEnemyAISubsystem::CollectIntents(
         }
 
         FEnemyIntent Intent = ComputeIntent(Enemy, Obs[i]);
-        OutIntents.Add(Intent);
 
-        if (Intent.AbilityTag.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"))))
+        if (Intent.AbilityTag.MatchesTag(AttackTag))
+        {
+            Intent.Actor = Enemy;
+            Intent.Owner = Enemy;
+            Intent.CurrentCell = Obs[i].GridPosition;
+            OutIntents.Add(Intent);
+            ActorsWithIntent.Add(Enemy);
+            HardBlockedCells.Add(Obs[i].GridPosition);
+            ++ValidIntents;
+        }
+    }
+
+    // ---- Pass 2: Handle movers / waits while respecting claimed cells ----
+    TArray<int32> MoveCandidateIndices;
+    MoveCandidateIndices.Reserve(Obs.Num());
+
+    for (int32 i = 0; i < Obs.Num(); ++i)
+    {
+        AActor* Enemy = Enemies[i];
+        if (IsValid(Enemy) && !ActorsWithIntent.Contains(Enemy))
+        {
+            MoveCandidateIndices.Add(i);
+        }
+    }
+
+    MoveCandidateIndices.Sort([&Obs](int32 A, int32 B)
+    {
+        const FEnemyObservation& ObsA = Obs[A];
+        const FEnemyObservation& ObsB = Obs[B];
+
+        if (ObsA.DistanceInTiles != ObsB.DistanceInTiles)
+        {
+            return ObsA.DistanceInTiles < ObsB.DistanceInTiles;
+        }
+
+        const int32 ManA =
+            FMath::Abs(ObsA.GridPosition.X - ObsA.PlayerGridPosition.X) +
+            FMath::Abs(ObsA.GridPosition.Y - ObsA.PlayerGridPosition.Y);
+
+        const int32 ManB =
+            FMath::Abs(ObsB.GridPosition.X - ObsB.PlayerGridPosition.X) +
+            FMath::Abs(ObsB.GridPosition.Y - ObsB.PlayerGridPosition.Y);
+
+        if (ManA != ManB)
+        {
+            return ManA < ManB;
+        }
+
+        return A < B;
+    });
+
+    for (const int32 i : MoveCandidateIndices)
+    {
+        AActor* Enemy = Enemies[i];
+        const FEnemyObservation& Observation = Obs[i];
+
+        FEnemyIntent Intent = ComputeMoveOrWaitIntent(
+            Enemy,
+            Observation,
+            HardBlockedCells,
+            ClaimedMoveTargets);
+
+        Intent.Actor = Enemy;
+        Intent.Owner = Enemy;
+        Intent.CurrentCell = Observation.GridPosition;
+
+        if (Intent.AbilityTag.MatchesTag(MoveTag))
+        {
+            ClaimedMoveTargets.Add(Intent.NextCell);
+            ++ValidIntents;
+        }
+        else if (Intent.AbilityTag.MatchesTag(WaitTag))
         {
             ++WaitIntents;
         }
@@ -187,17 +269,244 @@ void UEnemyAISubsystem::CollectIntents(
             ++ValidIntents;
         }
 
-        if (i < 3)
-        {
-            UE_LOG(LogEnemyAI, Log,
-                TEXT("[CollectIntents] Enemy[%d]: %s, Intent=%s"),
-                i, *Enemy->GetName(), *Intent.AbilityTag.ToString());
-        }
+        OutIntents.Add(Intent);
+        ActorsWithIntent.Add(Enemy);
     }
 
     UE_LOG(LogEnemyAI, Warning,
         TEXT("[CollectIntents] ==== RESULT ==== Generated %d intents (Valid=%d, Wait=%d)"),
         OutIntents.Num(), ValidIntents, WaitIntents);
+}
+
+// CodeRevision: INC-2025-1130-R1 (Two-pass enemy intent generation to avoid attacker blocking) (2025-11-27 16:30)
+FEnemyIntent UEnemyAISubsystem::ComputeMoveOrWaitIntent(
+    AActor* EnemyActor,
+    const FEnemyObservation& Obs,
+    const TSet<FIntPoint>& HardBlockedCells,
+    const TSet<FIntPoint>& ClaimedMoveTargets) const
+{
+    FEnemyIntent Intent;
+    Intent.CurrentCell = Obs.GridPosition;
+    Intent.NextCell = Obs.GridPosition;
+
+    if (!IsValid(EnemyActor))
+    {
+        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Wait;
+        return Intent;
+    }
+
+    const UDistanceFieldSubsystem* DistanceField = GetWorld() ? GetWorld()->GetSubsystem<UDistanceFieldSubsystem>() : nullptr;
+    FIntPoint PrimaryCell = Obs.GridPosition;
+
+    if (DistanceField)
+    {
+        PrimaryCell = DistanceField->GetNextStepTowardsPlayer(Obs.GridPosition, EnemyActor);
+    }
+
+    const int32 CurrentDist = Obs.DistanceInTiles;
+    const int32 PrimaryDist = FGridUtils::ChebyshevDistance(PrimaryCell, Obs.PlayerGridPosition);
+
+    const bool bPrimaryWalkable = IsCellWalkable(EnemyActor, PrimaryCell);
+    const bool bPrimaryCloserOrEqual = (PrimaryDist <= CurrentDist);
+    const bool bPrimaryBlocked =
+        HardBlockedCells.Contains(PrimaryCell) ||
+        ClaimedMoveTargets.Contains(PrimaryCell);
+
+    if (PrimaryCell != Obs.GridPosition &&
+        bPrimaryWalkable &&
+        bPrimaryCloserOrEqual &&
+        !bPrimaryBlocked)
+    {
+        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Move;
+        Intent.NextCell = PrimaryCell;
+        UE_LOG(LogEnemyAI, Verbose,
+            TEXT("[ComputeMoveOrWaitIntent] %s: Using primary cell (%d,%d) -> Dist %d -> %d"),
+            *GetNameSafe(EnemyActor),
+            PrimaryCell.X, PrimaryCell.Y,
+            CurrentDist, PrimaryDist);
+        return Intent;
+    }
+
+    TArray<FIntPoint> Candidates;
+    FindAlternateMoveCells(
+        Obs.GridPosition,
+        Obs.PlayerGridPosition,
+        CurrentDist,
+        EnemyActor,
+        HardBlockedCells,
+        ClaimedMoveTargets,
+        Candidates);
+
+    if (Candidates.Num() > 0)
+    {
+        const FIntPoint ChosenCell = SelectBestAlternateCell(
+            Candidates,
+            Obs.GridPosition,
+            Obs.PlayerGridPosition);
+        const int32 ChosenDist = FGridUtils::ChebyshevDistance(ChosenCell, Obs.PlayerGridPosition);
+
+        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Move;
+        Intent.NextCell = ChosenCell;
+        UE_LOG(LogEnemyAI, Verbose,
+            TEXT("[ComputeMoveOrWaitIntent] %s: Using alternate cell (%d,%d) -> Dist %d -> %d (Candidates=%d)"),
+            *GetNameSafe(EnemyActor),
+            ChosenCell.X, ChosenCell.Y,
+            CurrentDist, ChosenDist,
+            Candidates.Num());
+        return Intent;
+    }
+
+    Intent.AbilityTag = RogueGameplayTags::AI_Intent_Wait;
+    Intent.NextCell = Obs.GridPosition;
+    UE_LOG(LogEnemyAI, Verbose,
+        TEXT("[ComputeMoveOrWaitIntent] %s: No valid move cells found, WAIT at (%d,%d)"),
+        *GetNameSafe(EnemyActor),
+        Obs.GridPosition.X, Obs.GridPosition.Y);
+    return Intent;
+}
+
+void UEnemyAISubsystem::FindAlternateMoveCells(
+    const FIntPoint& SelfCell,
+    const FIntPoint& PlayerGrid,
+    int32 CurrentDistanceInTiles,
+    AActor* EnemyActor,
+    const TSet<FIntPoint>& HardBlockedCells,
+    const TSet<FIntPoint>& ClaimedMoveTargets,
+    TArray<FIntPoint>& OutCandidates) const
+{
+    OutCandidates.Reset();
+
+    static const FIntPoint Directions[8] = {
+        { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 },
+        { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 }
+    };
+
+    for (const FIntPoint& Dir : Directions)
+    {
+        const FIntPoint Candidate = SelfCell + Dir;
+
+        if (!IsCellWalkable(EnemyActor, Candidate))
+        {
+            continue;
+        }
+
+        if (HardBlockedCells.Contains(Candidate) || ClaimedMoveTargets.Contains(Candidate))
+        {
+            continue;
+        }
+
+        const int32 NewDist = FGridUtils::ChebyshevDistance(Candidate, PlayerGrid);
+        if (NewDist > CurrentDistanceInTiles)
+        {
+            continue;
+        }
+
+        OutCandidates.Add(Candidate);
+    }
+
+    UE_LOG(LogEnemyAI, Verbose,
+        TEXT("[FindAlternateMoveCells] Self=(%d,%d) Dist=%d, CandidateCount=%d"),
+        SelfCell.X, SelfCell.Y, CurrentDistanceInTiles, OutCandidates.Num());
+}
+
+FIntPoint UEnemyAISubsystem::SelectBestAlternateCell(
+    const TArray<FIntPoint>& Candidates,
+    const FIntPoint& SelfCell,
+    const FIntPoint& PlayerGrid) const
+{
+    if (Candidates.Num() == 0)
+    {
+        return FIntPoint::ZeroValue;
+    }
+
+    FIntPoint BestCell = Candidates[0];
+    float BestScore = ScoreMoveCandidate(SelfCell, BestCell, PlayerGrid);
+
+    for (int32 Idx = 1; Idx < Candidates.Num(); ++Idx)
+    {
+        const FIntPoint& Candidate = Candidates[Idx];
+        const float Score = ScoreMoveCandidate(SelfCell, Candidate, PlayerGrid);
+
+        if (Score > BestScore)
+        {
+            BestScore = Score;
+            BestCell = Candidate;
+        }
+    }
+
+    UE_LOG(LogEnemyAI, Verbose,
+        TEXT("[SelectBestAlternateCell] Self=(%d,%d) Player=(%d,%d) Best=(%d,%d) Score=%.2f"),
+        SelfCell.X, SelfCell.Y,
+        PlayerGrid.X, PlayerGrid.Y,
+        BestCell.X, BestCell.Y,
+        BestScore);
+
+    return BestCell;
+}
+
+float UEnemyAISubsystem::ScoreMoveCandidate(
+    const FIntPoint& SelfCell,
+    const FIntPoint& Candidate,
+    const FIntPoint& PlayerGrid) const
+{
+    const int32 CurDist = FGridUtils::ChebyshevDistance(SelfCell, PlayerGrid);
+    const int32 NewDist = FGridUtils::ChebyshevDistance(Candidate, PlayerGrid);
+    const int32 dRow = FMath::Abs(Candidate.Y - PlayerGrid.Y);
+    const int32 dCol = FMath::Abs(Candidate.X - PlayerGrid.X);
+
+    const float Wdist = 10.0f;
+    const float Wrow = 2.0f;
+    const float Wcol = 1.0f;
+    const float Wlane = 1.5f;
+
+    float Score = 0.0f;
+    Score += Wdist * float(CurDist - NewDist);
+    Score -= Wrow * float(dRow);
+    Score -= Wcol * float(dCol);
+
+    const FVector2D ToPlayer(float(PlayerGrid.X - SelfCell.X), float(PlayerGrid.Y - SelfCell.Y));
+    const FVector2D Step(float(Candidate.X - SelfCell.X), float(Candidate.Y - SelfCell.Y));
+
+    float DotContribution = 0.0f;
+    if (!ToPlayer.IsNearlyZero() && !Step.IsNearlyZero())
+    {
+        const float Dot = FVector2D::DotProduct(ToPlayer.GetSafeNormal(), Step.GetSafeNormal());
+        DotContribution = Wlane * Dot;
+        Score += DotContribution;
+    }
+
+    UE_LOG(LogEnemyAI, VeryVerbose,
+        TEXT("[ScoreMoveCandidate] Self=(%d,%d) Candidate=(%d,%d) ΔDist=%d Wdist*Δ=%.2f Wrow*%d=%.2f Wcol*%d=%.2f Wlane*dot=%.2f Total=%.2f"),
+        SelfCell.X, SelfCell.Y,
+        Candidate.X, Candidate.Y,
+        CurDist - NewDist,
+        Wdist * float(CurDist - NewDist),
+        dRow,
+        Wrow * float(dRow),
+        dCol,
+        Wcol * float(dCol),
+        DotContribution,
+        Score);
+
+    return Score;
+}
+
+bool UEnemyAISubsystem::IsCellWalkable(AActor* EnemyActor, const FIntPoint& Cell) const
+{
+    if (!EnemyActor)
+    {
+        return false;
+    }
+
+    if (UWorld* World = GetWorld())
+    {
+        if (UGridPathfindingSubsystem* PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>())
+        {
+            return PathFinder->IsCellWalkableIgnoringActor(Cell, EnemyActor);
+        }
+    }
+
+    return false;
 }
 
 FEnemyIntent UEnemyAISubsystem::ComputeIntent(

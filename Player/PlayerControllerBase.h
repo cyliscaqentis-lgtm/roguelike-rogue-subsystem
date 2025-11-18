@@ -255,6 +255,9 @@ private:
     /** 現在の入力ウィンドウID */
     int32 CurrentInputWindowId = 0;
 
+    /** Last input window id that has had the latch reset */
+    int32 LastHandledInputWindowId = INDEX_NONE;
+
     /** Input_Move_Completed の冪等化用（マルチ環境対応） */
     UPROPERTY()
     int32 LastProcessedWindowId = INDEX_NONE;
