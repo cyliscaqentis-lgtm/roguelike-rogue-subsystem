@@ -20,6 +20,9 @@
 // Lyra standard damage pattern (CombatSet.BaseDamage attribute)
 #include "AbilitySystem/Attributes/LyraCombatSet.h"
 
+// CodeRevision: INC-2025-00033-R1
+// (Align GA_MeleeAttack with GA_AttackBase barrier/completion flow and enforce tile range) (2025-11-18 11:00)
+
 struct FTargetFacingInfo
 {
     FVector Location = FVector::ZeroVector;
@@ -136,6 +139,7 @@ void UGA_MeleeAttack::ActivateAbility(
                 *GetNameSafe(GetAvatarActorFromActorInfo()));
         }
     }
+
     if (ActorInfo && ActorInfo->AvatarActor.IsValid())
     {
         if (APawn* Pawn = Cast<APawn>(ActorInfo->AvatarActor.Get()))
@@ -166,10 +170,10 @@ void UGA_MeleeAttack::ActivateAbility(
 
             if (!ToTarget.IsNearlyZero())
             {
-            const FVector DirectionToTarget = ToTarget.GetSafeNormal();
-            // CodeRevision: INC-2025-00022-R1 (Correct melee attack rotation) (2025-11-17 19:00)
-            const FRotator NewRotation = DirectionToTarget.Rotation();
-            Avatar->SetActorRotation(NewRotation);
+                const FVector DirectionToTarget = ToTarget.GetSafeNormal();
+                // CodeRevision: INC-2025-00022-R1 (Correct melee attack rotation) (2025-11-17 19:00)
+                const FRotator NewRotation = DirectionToTarget.Rotation();
+                Avatar->SetActorRotation(NewRotation);
 
                 UE_LOG(LogTemp, Log, TEXT("[GA_MeleeAttack] %s: Rotated to face target %s (Yaw=%.1f)"),
                     *GetNameSafe(Avatar), *GetNameSafe(TargetUnit), NewRotation.Yaw);
@@ -245,10 +249,19 @@ void UGA_MeleeAttack::OnMontageCompleted()
             *GetNameSafe(GetAvatarActorFromActorInfo()));
     }
 
-    UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] %s: Montage completed, calling EndAbility immediately"),
+    // CodeRevision: INC-2025-00033-R1
+    // ここから先の「完了通知＋EndAbility」は GA_AttackBase / GA_TurnActionBase に一元化する。
+    // OnAttackCompleted() はサーバー権限チェックを内包しており、サーバー側のみで
+    // SendCompletionEvent + EndAbility を行う。
+    UE_LOG(LogTemp, Error,
+        TEXT("[GA_MeleeAttack] %s: Montage completed, calling OnAttackCompleted()"),
         *GetNameSafe(GetAvatarActorFromActorInfo()));
-    EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
-    UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] EndAbility RETURNED"));
+
+    OnAttackCompleted();
+
+    UE_LOG(LogTemp, Error,
+        TEXT("[GA_MeleeAttack] %s: OnAttackCompleted RETURNED"),
+        *GetNameSafe(GetAvatarActorFromActorInfo()));
 }
 
 void UGA_MeleeAttack::OnMontageBlendOut()
@@ -284,7 +297,7 @@ AActor* UGA_MeleeAttack::FindAdjacentTarget()
 }
 
 //------------------------------------------------------------------------------
-// 繝繝｡繝ｼ繧ｸ驕ｩ逕ｨ
+// ダメージ適用
 //------------------------------------------------------------------------------
 
 void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
@@ -349,12 +362,25 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
             AttackerGrid.X, AttackerGrid.Y, TargetGrid.X, TargetGrid.Y,
             DistanceInTiles, RangeInTiles,
             DistanceInTiles <= RangeInTiles ? TEXT("YES") : TEXT("NO - TOO FAR"));
+
+        // CodeRevision: INC-2025-00033-R1
+        // タイル距離が射程を超えている場合はダメージをスキップし、「攻撃モーションだけ発生したミス」として扱う。
+        if (DistanceInTiles > RangeInTiles)
+        {
+            UE_LOG(LogTemp, Warning,
+                TEXT("[GA_MeleeAttack] Target is OUT OF RANGE (DistanceInTiles=%d, RangeInTiles=%d) - skipping damage"),
+                DistanceInTiles, RangeInTiles);
+            UE_LOG(LogTemp, Warning,
+                TEXT("[GA_MeleeAttack] ==== DAMAGE DIAGNOSTIC END (OUT OF RANGE) ===="));
+            return;
+        }
     }
     else
     {
         UE_LOG(LogTemp, Error,
-            TEXT("[GA_MeleeAttack] GridPathfindingLibrary not found - cannot calculate tile distance!"));
+            TEXT("[GA_MeleeAttack] GridPathfindingLibrary not found - cannot calculate tile distance! (Damage will still be applied as fallback)"));
     }
+
     // ASC and Tags diagnostic
     if (UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Target))
     {
@@ -510,4 +536,3 @@ AGameTurnManagerBase* UGA_MeleeAttack::GetTurnManager() const
     }
     return CachedTurnManager.Get();
 }
-

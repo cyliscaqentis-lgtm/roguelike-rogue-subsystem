@@ -27,7 +27,6 @@
 #include "../Utility/RogueGameplayTags.h"
 #include "EngineUtils.h"
 
-
 DEFINE_LOG_CATEGORY(LogTurnCore);
 
 namespace TurnCorePhaseManagerPrivate
@@ -51,6 +50,7 @@ namespace TurnCorePhaseManagerPrivate
             return RogueGameplayTags::GameplayEvent_Intent_Wait;
         }
 
+        // For custom intents, use the tag as-is so the ability layer can handle it.
         return IntentTag;
     }
 }
@@ -68,7 +68,7 @@ static int32 ReadGenerationOrderFromBlueprint(const AActor* Actor)
     {
         if (const int32* ValuePtr = Prop->ContainerPtrToValuePtr<int32>(Actor))
         {
-            int32 Order = *ValuePtr;
+            const int32 Order = *ValuePtr;
             return Order >= 0 ? Order : TNumericLimits<int32>::Max();
         }
     }
@@ -80,6 +80,7 @@ void UTurnCorePhaseManager::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
 
+    // Sanity check: core intent tags must exist in DefaultGameplayTags.ini
     static const FName RequiredTags[] = {
         FName("AI.Intent.Move"),
         FName("AI.Intent.Attack"),
@@ -97,8 +98,8 @@ void UTurnCorePhaseManager::Initialize(FSubsystemCollectionBase& Collection)
     }
 
     ConflictResolver = GetWorld()->GetSubsystem<UConflictResolverSubsystem>();
-    DistanceField = GetWorld()->GetSubsystem<UDistanceFieldSubsystem>();
-    ActorRegistry = GetWorld()->GetSubsystem<UStableActorRegistry>();
+    DistanceField    = GetWorld()->GetSubsystem<UDistanceFieldSubsystem>();
+    ActorRegistry    = GetWorld()->GetSubsystem<UStableActorRegistry>();
 
     UE_LOG(LogTemp, Log, TEXT("[TurnCore] Initialized"));
 }
@@ -109,9 +110,9 @@ void UTurnCorePhaseManager::Deinitialize()
     Super::Deinitialize();
 }
 
-// ????????????????????????????????????????????????????????????????????????
+// ============================================================================
 // Core Phase Pipeline
-// ????????????????????????????????????????????????????????????????????????
+// ============================================================================
 
 void UTurnCorePhaseManager::CoreObservationPhase(const FIntPoint& PlayerCell)
 {
@@ -132,11 +133,17 @@ void UTurnCorePhaseManager::CoreObservationPhase(const FIntPoint& PlayerCell)
             // CodeRevision: INC-2025-00030-R1 (Use TurnFlowCoordinator instead of GetCurrentTurnIndex) (2025-11-16 00:00)
             if (UTurnFlowCoordinator* TFC = World->GetSubsystem<UTurnFlowCoordinator>())
             {
-                int32 CurrentTurnId = TFC->GetCurrentTurnId();
+                const int32 CurrentTurnId = TFC->GetCurrentTurnId();
                 GridOccupancy->SetCurrentTurnId(CurrentTurnId);
                 GridOccupancy->PurgeOutdatedReservations(CurrentTurnId);
-                UE_LOG(LogTemp, Log, TEXT("[TurnCore] ObservationPhase: Purged outdated reservations for turn %d"), CurrentTurnId);
+
+                UE_LOG(LogTemp, Log,
+                    TEXT("[TurnCore] ObservationPhase: Purged outdated reservations for turn %d"),
+                    CurrentTurnId);
             }
+
+            // Ensure there are no stacked actors before any AI reasoning.
+            GridOccupancy->EnforceUniqueOccupancy();
         }
     }
 
@@ -159,7 +166,9 @@ TArray<FEnemyIntent> UTurnCorePhaseManager::CoreThinkPhase(const TArray<AActor*>
         UEnemyThinkerBase* Thinker = Enemy->FindComponentByClass<UEnemyThinkerBase>();
         if (!Thinker)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[TurnCore] Enemy %s has no EnemyThinkerBase component"), *Enemy->GetName());
+            UE_LOG(LogTemp, Warning,
+                TEXT("[TurnCore] Enemy %s has no EnemyThinkerBase component"),
+                *GetNameSafe(Enemy));
             continue;
         }
 
@@ -173,9 +182,15 @@ TArray<FEnemyIntent> UTurnCorePhaseManager::CoreThinkPhase(const TArray<AActor*>
 
 TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEnemyIntent>& Intents)
 {
-    if (!ConflictResolver || !ActorRegistry || !DistanceField)
+    UConflictResolverSubsystem* ConflictResolverPtr = ConflictResolver.Get();
+    UStableActorRegistry* ActorRegistryPtr = ActorRegistry.Get();
+    UDistanceFieldSubsystem* DistanceFieldPtr = DistanceField.Get();
+
+    if (!ConflictResolverPtr || !ActorRegistryPtr || !DistanceFieldPtr)
     {
-        UE_LOG(LogTemp, Error, TEXT("[TurnCore] Required subsystems are null"));
+        UE_LOG(LogTemp, Error,
+            TEXT("[TurnCore] CoreResolvePhase: Required subsystems are null (ConflictResolver=%p, ActorRegistry=%p, DistanceField=%p)"),
+            ConflictResolverPtr, ActorRegistryPtr, DistanceFieldPtr);
         return TArray<FResolvedAction>();
     }
 
@@ -199,22 +214,24 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
 
     if (GridOccupancy)
     {
+        // Begin a new move phase: resets two-phase commit tracking for this slot.
         GridOccupancy->BeginMovePhase();
     }
-    auto GetLiveCell = [&](AActor* A) -> FIntPoint
-        {
-            if (GridOccupancy)
-            {
-                FIntPoint Cell = GridOccupancy->GetCellOfActor(A);
-                if (Cell != FIntPoint::ZeroValue)
-                {
-                    return Cell;
-                }
-            }
-            return FIntPoint::ZeroValue;
-        };
 
-    ConflictResolver->ClearReservations();
+    auto GetLiveCell = [&](AActor* A) -> FIntPoint
+    {
+        if (GridOccupancy)
+        {
+            const FIntPoint Cell = GridOccupancy->GetCellOfActor(A);
+            if (Cell != FIntPoint::ZeroValue)
+            {
+                return Cell;
+            }
+        }
+        return FIntPoint::ZeroValue;
+    };
+
+    ConflictResolverPtr->ClearReservations();
 
     for (const FEnemyIntent& Intent : Intents)
     {
@@ -226,87 +243,108 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
         AActor* Actor = Intent.Actor.Get();
         if (!IsValid(Actor) || Actor->IsActorBeingDestroyed())
         {
-            UE_LOG(LogTemp, Log, TEXT("[TurnCore] Actor %s is dead/destroyed, skipping"),
+            UE_LOG(LogTemp, Log,
+                TEXT("[TurnCore] CoreResolvePhase: Actor %s is dead/destroyed, skipping"),
                 *GetNameSafe(Actor));
             continue;
         }
 
-        FStableActorID ActorID = ActorRegistry->GetStableID(Actor);
+        const FStableActorID ActorID = ActorRegistryPtr->GetStableID(Actor);
 
+        // Prefer the live grid cell from occupancy; fall back to intent's cached cell.
         FIntPoint LiveCurrentCell = GetLiveCell(Actor);
         if (LiveCurrentCell == FIntPoint::ZeroValue)
         {
             LiveCurrentCell = Intent.CurrentCell;
         }
 
+        // Attack intents are treated as stationary for conflict resolution:
+        // they reserve their current cell and never change position during the move phase.
         FIntPoint ResolvedNextCell = Intent.NextCell;
         if (Intent.AbilityTag.MatchesTag(RogueGameplayTags::AI_Intent_Attack))
         {
             ResolvedNextCell = LiveCurrentCell;
             UE_LOG(LogTemp, Verbose,
-                TEXT("[TurnCore] Attack intent detected: %s stays at (%d,%d) (original NextCell=(%d,%d))"),
-                *GetNameSafe(Actor), LiveCurrentCell.X, LiveCurrentCell.Y, Intent.NextCell.X, Intent.NextCell.Y);
+                TEXT("[TurnCore] Attack intent: %s stays at (%d,%d) (original NextCell=(%d,%d))"),
+                *GetNameSafe(Actor),
+                LiveCurrentCell.X, LiveCurrentCell.Y,
+                Intent.NextCell.X, Intent.NextCell.Y);
         }
 
-        int32 CurrentDist = DistanceField->GetDistance(LiveCurrentCell);
-        int32 NextDist = DistanceField->GetDistance(ResolvedNextCell);
-        int32 DistanceReduction = FMath::Max(0, CurrentDist - NextDist);
+        const int32 CurrentDist = DistanceFieldPtr->GetDistance(LiveCurrentCell);
+        const int32 NextDist    = DistanceFieldPtr->GetDistance(ResolvedNextCell);
+        const int32 DistanceReduction = FMath::Max(0, CurrentDist - NextDist);
 
         FReservationEntry Entry;
-        Entry.Actor = Actor;
-        Entry.ActorID = ActorID;
-        Entry.TimeSlot = Intent.TimeSlot;
-        Entry.CurrentCell = LiveCurrentCell;
-        Entry.Cell = ResolvedNextCell;
-        Entry.AbilityTag = Intent.AbilityTag;
-        Entry.ActionTier = 1;
-        Entry.BasePriority = 100;
-        Entry.DistanceReduction = DistanceReduction;
-        Entry.GenerationOrder = ReadGenerationOrderFromBlueprint(Actor);
+        Entry.Actor            = Actor;
+        Entry.ActorID          = ActorID;
+        Entry.TimeSlot         = Intent.TimeSlot;
+        Entry.CurrentCell      = LiveCurrentCell;
+        Entry.Cell             = ResolvedNextCell;
+        Entry.AbilityTag       = Intent.AbilityTag;
+        Entry.ActionTier       = 1;    // TODO: use GetActionTier if we introduce tiered abilities
+        Entry.BasePriority     = 100;
+        Entry.DistanceReduction= DistanceReduction;
+        Entry.GenerationOrder  = ReadGenerationOrderFromBlueprint(Actor);
 
-        ConflictResolver->AddReservation(Entry);
+        ConflictResolverPtr->AddReservation(Entry);
     }
 
-    TArray<FResolvedAction> Resolved = ConflictResolver->ResolveAllConflicts();
+    // Run the conflict resolver to convert reservations into resolved actions.
+    TArray<FResolvedAction> Resolved = ConflictResolverPtr->ResolveAllConflicts();
 
+    // Build a stable hash for debugging determinism across runs.
     uint32 TurnHash = 2166136261u;
-    auto Mix = [&](uint32 Value) { TurnHash ^= Value; TurnHash *= 16777619u; };
+    auto Mix = [&](uint32 Value)
+    {
+        TurnHash ^= Value;
+        TurnHash *= 16777619u;
+    };
 
     for (const FResolvedAction& Action : Resolved)
     {
-        Mix((uint32)Action.GenerationOrder);
+        Mix(static_cast<uint32>(Action.GenerationOrder));
         Mix(GetTypeHash(Action.ActorID.PersistentGUID.A));
         Mix(GetTypeHash(Action.NextCell.X));
         Mix(GetTypeHash(Action.NextCell.Y));
-        Mix((uint32)Action.AllowedDashSteps);
+        Mix(static_cast<uint32>(Action.AllowedDashSteps));
         Mix(GetTypeHash(Action.FinalAbilityTag));
-        Mix((uint32)Action.TimeSlot);
+        Mix(static_cast<uint32>(Action.TimeSlot));
     }
 
-    UE_LOG(LogTemp, Log, TEXT("[TurnCore] ResolvePhase: Resolved %d actions, Hash=0x%08X"),
+    UE_LOG(LogTemp, Log,
+        TEXT("[TurnCore] ResolvePhase: Resolved %d actions, Hash=0x%08X"),
         Resolved.Num(), TurnHash);
+
+    // Only true movement actions should reserve destination cells with the TurnManager.
+    const FGameplayTag MoveTag = RogueGameplayTags::AI_Intent_Move;
 
     if (AGameTurnManagerBase* TurnManager = ResolveTurnManager())
     {
         for (FResolvedAction& Action : Resolved)
         {
-            if (!Action.bIsWait)
+            const bool bIsMoveLikeAction = Action.FinalAbilityTag.MatchesTag(MoveTag);
+
+            if (bIsMoveLikeAction && !Action.bIsWait)
             {
                 const bool bReserved = TurnManager->RegisterResolvedMove(Action.SourceActor.Get(), Action.NextCell);
                 if (!bReserved)
                 {
                     UE_LOG(LogTemp, Error,
-                        TEXT("[TurnCore] RegisterResolvedMove FAILED for %s -> (%d,%d) - MARKING AS WAIT (no movement)"),
+                        TEXT("[TurnCore] RegisterResolvedMove FAILED for %s -> (%d,%d) - marking as WAIT (no movement)"),
                         *GetNameSafe(Action.SourceActor.Get()), Action.NextCell.X, Action.NextCell.Y);
 
                     Action.bIsWait = true;
+                    Action.ResolutionReason = TEXT("TurnManager reservation failed - converted to wait");
                 }
             }
             else
             {
                 UE_LOG(LogTemp, Verbose,
-                    TEXT("[TurnCore] Skip reservation for loser: %s (bIsWait=true)"),
-                    *GetNameSafe(Action.SourceActor.Get()));
+                    TEXT("[TurnCore] Skip RegisterResolvedMove for %s (bIsWait=%d, FinalTag=%s)"),
+                    *GetNameSafe(Action.SourceActor.Get()),
+                    Action.bIsWait ? 1 : 0,
+                    *Action.FinalAbilityTag.ToString());
             }
         }
     }
@@ -314,9 +352,10 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
     return Resolved;
 }
 
-// TurnCorePhaseManager.cpp
+// ============================================================================
+// Execute Phase
+// ============================================================================
 
-// TurnCorePhaseManager.cpp
 void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& ResolvedActions)
 {
     for (const FResolvedAction& Action : ResolvedActions)
@@ -329,9 +368,9 @@ void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& Reso
 
         if (Action.bIsWait)
         {
-            // CodeRevision: INC-2025-00030-R7 (Keep wait actions flowing through TurnManager) (2025-11-17 01:50)
+            // Even wait actions are forwarded so GAS can react (e.g., play idle or "blocked" animations).
             UE_LOG(LogTurnCore, Verbose,
-                TEXT("[Execute] Notice: Actor=%s marked as bIsWait=true (loser or reservation failed), still dispatching"),
+                TEXT("[Execute] Notice: Actor=%s marked as bIsWait=true, still dispatching"),
                 *GetNameSafe(Action.SourceActor.Get()));
         }
 
@@ -345,24 +384,29 @@ void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& Reso
         {
             continue;
         }
+
         UAbilitySystemComponent* ASC = ResolveASC(Action.SourceActor);
         if (!ASC)
         {
-            UE_LOG(LogTurnCore, Error, TEXT("[Execute] ASC not found for %s"),
+            UE_LOG(LogTurnCore, Error,
+                TEXT("[Execute] ASC not found for %s"),
                 *GetNameSafe(Action.SourceActor));
             continue;
         }
 
-        // C++ event sending
+        // Build the gameplay event and send it into GAS.
         FGameplayEventData EventData;
-        const FGameplayTag EventTag = TurnCorePhaseManagerPrivate::MapIntentToGameplayEvent(Action.FinalAbilityTag);
-        EventData.EventTag = EventTag;
+        const FGameplayTag EventTag =
+            TurnCorePhaseManagerPrivate::MapIntentToGameplayEvent(Action.FinalAbilityTag);
+
+        EventData.EventTag   = EventTag;
         EventData.Instigator = Action.SourceActor;
-        EventData.Target = Action.SourceActor;
+        EventData.Target     = Action.SourceActor;
 
         if (Action.NextCell != FIntPoint(-1, -1))
         {
-            const int32 EncodedCell = TurnCommandEncoding::PackCell(Action.NextCell.X, Action.NextCell.Y);
+            const int32 EncodedCell =
+                TurnCommandEncoding::PackCell(Action.NextCell.X, Action.NextCell.Y);
             EventData.EventMagnitude = static_cast<float>(EncodedCell);
 
             UE_LOG(LogTurnCore, Log,
@@ -377,28 +421,30 @@ void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& Reso
             *GetNameSafe(Action.SourceActor),
             Action.NextCell.X, Action.NextCell.Y);
 
-        // Dump the ASC's active tags before the event to trace blocking tags.
+        // Log owned tags before dispatch; helps diagnose blocking tags.
         FGameplayTagContainer OwnedTags;
         ASC->GetOwnedGameplayTags(OwnedTags);
         UE_LOG(LogTurnCore, Log,
             TEXT("[Execute] DEBUG: Owned Tags BEFORE HandleGameplayEvent: %s"),
             *OwnedTags.ToStringSimple());
 
-        int32 NumActivated = ASC->HandleGameplayEvent(EventTag, &EventData);
+        const int32 NumActivated = ASC->HandleGameplayEvent(EventTag, &EventData);
 
         UE_LOG(LogTurnCore, Log,
             TEXT("[Execute] Ability activation result: NumActivated=%d"),
             NumActivated);
     }
 
-    UGridOccupancySubsystem* GridOccupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>();
-    if (GridOccupancy)
+    if (UGridOccupancySubsystem* GridOccupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
     {
+        // End of the move phase for this slot; clears two-phase commit tracking.
         GridOccupancy->EndMovePhase();
     }
 }
 
-
+// ============================================================================
+// Cleanup Phase
+// ============================================================================
 
 void UTurnCorePhaseManager::CoreCleanupPhase()
 {
@@ -410,11 +456,31 @@ void UTurnCorePhaseManager::CoreCleanupPhase()
     UE_LOG(LogTemp, Log, TEXT("[TurnCore] CleanupPhase: Complete"));
 }
 
+// ============================================================================
+// Gameplay Tag Accessors
+// ============================================================================
+
 const FGameplayTag& UTurnCorePhaseManager::Tag_Move()
 {
     static const FGameplayTag Tag = RogueGameplayTags::AI_Intent_Move;
     return Tag;
 }
+
+const FGameplayTag& UTurnCorePhaseManager::Tag_Attack()
+{
+    static const FGameplayTag Tag = RogueGameplayTags::AI_Intent_Attack;
+    return Tag;
+}
+
+const FGameplayTag& UTurnCorePhaseManager::Tag_Wait()
+{
+    static const FGameplayTag Tag = RogueGameplayTags::AI_Intent_Wait;
+    return Tag;
+}
+
+// ============================================================================
+// Turn Manager Resolution
+// ============================================================================
 
 AGameTurnManagerBase* UTurnCorePhaseManager::ResolveTurnManager()
 {
@@ -435,17 +501,9 @@ AGameTurnManagerBase* UTurnCorePhaseManager::ResolveTurnManager()
     return nullptr;
 }
 
-const FGameplayTag& UTurnCorePhaseManager::Tag_Attack()
-{
-    static const FGameplayTag Tag = RogueGameplayTags::AI_Intent_Attack;
-    return Tag;
-}
-
-const FGameplayTag& UTurnCorePhaseManager::Tag_Wait()
-{
-    static const FGameplayTag Tag = RogueGameplayTags::AI_Intent_Wait;
-    return Tag;
-}
+// ============================================================================
+// Intent Bucketing by Time Slot
+// ============================================================================
 
 void UTurnCorePhaseManager::BucketizeIntentsBySlot(
     const TArray<FEnemyIntent>& All,
@@ -471,6 +529,10 @@ void UTurnCorePhaseManager::BucketizeIntentsBySlot(
     }
 }
 
+// ============================================================================
+// Move Phase with Time Slots
+// ============================================================================
+
 int32 UTurnCorePhaseManager::ExecuteMovePhaseWithSlots(
     const TArray<FEnemyIntent>& AllIntents,
     TArray<FResolvedAction>& OutActions)
@@ -490,7 +552,8 @@ int32 UTurnCorePhaseManager::ExecuteMovePhaseWithSlots(
     int32 MaxSlot = 0;
     BucketizeIntentsBySlot(AllIntents, Buckets, MaxSlot);
 
-    UE_LOG(LogTemp, Log, TEXT("[ExecuteMovePhaseWithSlots] MaxTimeSlot = %d, Total Intents = %d"),
+    UE_LOG(LogTemp, Log,
+        TEXT("[ExecuteMovePhaseWithSlots] MaxTimeSlot = %d, Total Intents = %d"),
         MaxSlot, AllIntents.Num());
 
     for (int32 Slot = 0; Slot <= MaxSlot; ++Slot)
@@ -499,11 +562,13 @@ int32 UTurnCorePhaseManager::ExecuteMovePhaseWithSlots(
 
         if (SlotIntents.Num() == 0)
         {
-            UE_LOG(LogTemp, Log, TEXT("[Move Slot %d] No intents, skipping"), Slot);
+            UE_LOG(LogTemp, Log,
+                TEXT("[Move Slot %d] No intents, skipping"), Slot);
             continue;
         }
 
-        UE_LOG(LogTemp, Log, TEXT("[Move Slot %d] Processing %d intents"),
+        UE_LOG(LogTemp, Log,
+            TEXT("[Move Slot %d] Processing %d intents"),
             Slot, SlotIntents.Num());
 
         TArray<FResolvedAction> SlotActions = CoreResolvePhase(SlotIntents);
@@ -518,11 +583,16 @@ int32 UTurnCorePhaseManager::ExecuteMovePhaseWithSlots(
         OutActions.Append(SlotActions);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("[ExecuteMovePhaseWithSlots] Complete. Total Actions = %d"),
+    UE_LOG(LogTemp, Log,
+        TEXT("[ExecuteMovePhaseWithSlots] Complete. Total Actions = %d"),
         OutActions.Num());
 
     return MaxSlot;
 }
+
+// ============================================================================
+// Attack Phase with Time Slots
+// ============================================================================
 
 int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
     const TArray<FEnemyIntent>& AllIntents,
@@ -534,23 +604,29 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
 
     if (AllIntents.Num() == 0)
     {
-        UE_LOG(LogTemp, Log, TEXT("[ExecuteAttackPhaseWithSlots] No intents"));
+        UE_LOG(LogTemp, Log,
+            TEXT("[ExecuteAttackPhaseWithSlots] No intents"));
         return 0;
     }
 
     const FGameplayTag& AttackTag = Tag_Attack();
-    ensureMsgf(AttackTag.IsValid(), TEXT("Tag 'AI.Intent.Attack' is not registered."));
+    ensureMsgf(AttackTag.IsValid(),
+        TEXT("Tag 'AI.Intent.Attack' is not registered."));
 
     TArray<TArray<FEnemyIntent>> Buckets;
     int32 MaxSlot = 0;
     BucketizeIntentsBySlot(AllIntents, Buckets, MaxSlot);
 
-    UE_LOG(LogTemp, Log, TEXT("[ExecuteAttackPhaseWithSlots] MaxTimeSlot = %d"), MaxSlot);
+    UE_LOG(LogTemp, Log,
+        TEXT("[ExecuteAttackPhaseWithSlots] MaxTimeSlot = %d"), MaxSlot);
 
     for (int32 Slot = 0; Slot <= MaxSlot; ++Slot)
     {
         const TArray<FEnemyIntent>& Src = Buckets[Slot];
-        if (Src.Num() == 0) { continue; }
+        if (Src.Num() == 0)
+        {
+            continue;
+        }
 
         TArray<FEnemyIntent> Attacks;
         Attacks.Reserve(Src.Num());
@@ -565,11 +641,13 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
 
         if (Attacks.Num() == 0)
         {
-            UE_LOG(LogTemp, Log, TEXT("[Attack Slot %d] No attacks"), Slot);
+            UE_LOG(LogTemp, Log,
+                TEXT("[Attack Slot %d] No attacks"), Slot);
             continue;
         }
 
-        UE_LOG(LogTemp, Log, TEXT("[Attack Slot %d] Processing %d attacks"),
+        UE_LOG(LogTemp, Log,
+            TEXT("[Attack Slot %d] Processing %d attacks"),
             Slot, Attacks.Num());
 
         TArray<FResolvedAction> SlotActions;
@@ -587,52 +665,67 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
             }
 
             FResolvedAction Action;
-            Action.ActorID = ActorRegistry ? ActorRegistry->GetStableID(IntentActor) : FStableActorID{};
-            Action.Actor = IntentActor;
-            Action.SourceActor = IntentActor;
-            Action.FinalAbilityTag = AttackTag;
-            Action.AbilityTag = RogueGameplayTags::GameplayEvent_Intent_Attack;
-            Action.NextCell = Intent.NextCell;
-            Action.TimeSlot = Slot;
+            Action.ActorID        = ActorRegistry ? ActorRegistry->GetStableID(IntentActor) : FStableActorID{};
+            Action.Actor          = IntentActor;
+            Action.SourceActor    = IntentActor;
+            Action.FinalAbilityTag= AttackTag;
+            Action.AbilityTag     = RogueGameplayTags::GameplayEvent_Intent_Attack;
+            Action.NextCell       = Intent.NextCell;
+            Action.TimeSlot       = Slot;
+            Action.bIsWait        = false;
+            Action.ResolutionReason = TEXT("Attack phase action");
 
+            // Build target data if a target exists.
             if (AActor* TargetActor = Intent.Target.Get())
             {
-                FGameplayAbilityTargetData_SingleTargetHit* TargetData = new FGameplayAbilityTargetData_SingleTargetHit();
+                FGameplayAbilityTargetData_SingleTargetHit* TargetData =
+                    new FGameplayAbilityTargetData_SingleTargetHit();
+
                 FHitResult HitResult;
                 HitResult.HitObjectHandle = FActorInstanceHandle(TargetActor);
-                HitResult.Location = TargetActor->GetActorLocation();
-                TargetData->HitResult = HitResult;
+                HitResult.Location        = TargetActor->GetActorLocation();
+                TargetData->HitResult     = HitResult;
+
                 Action.TargetData.Add(TargetData);
 
-                UE_LOG(LogTemp, Log, TEXT("[Attack Slot %d] %s -> Target: %s"),
+                UE_LOG(LogTemp, Log,
+                    TEXT("[Attack Slot %d] %s -> Target: %s"),
                     Slot, *GetNameSafe(IntentActor), *GetNameSafe(TargetActor));
             }
             else if (AActor* TargetActorAlt = Intent.TargetActor)
             {
-                FGameplayAbilityTargetData_SingleTargetHit* TargetData = new FGameplayAbilityTargetData_SingleTargetHit();
+                FGameplayAbilityTargetData_SingleTargetHit* TargetData =
+                    new FGameplayAbilityTargetData_SingleTargetHit();
+
                 FHitResult HitResult;
                 HitResult.HitObjectHandle = FActorInstanceHandle(TargetActorAlt);
-                HitResult.Location = TargetActorAlt->GetActorLocation();
-                TargetData->HitResult = HitResult;
+                HitResult.Location        = TargetActorAlt->GetActorLocation();
+                TargetData->HitResult     = HitResult;
+
                 Action.TargetData.Add(TargetData);
 
-                UE_LOG(LogTemp, Log, TEXT("[Attack Slot %d] %s -> Target (Alt): %s"),
+                UE_LOG(LogTemp, Log,
+                    TEXT("[Attack Slot %d] %s -> Target (Alt): %s"),
                     Slot, *GetNameSafe(IntentActor), *GetNameSafe(TargetActorAlt));
             }
             else
             {
-                UE_LOG(LogTemp, Warning, TEXT("[Attack Slot %d] %s has no target!"),
+                UE_LOG(LogTemp, Warning,
+                    TEXT("[Attack Slot %d] %s has no target!"),
                     Slot, *GetNameSafe(IntentActor));
             }
 
             SlotActions.Add(Action);
         }
 
+        // Filter out any invalid actions before executing.
         TArray<FResolvedAction> ValidActions;
         ValidActions.Reserve(SlotActions.Num());
         for (const FResolvedAction& Action : SlotActions)
         {
-            if (Action.Actor.IsValid() && Action.SourceActor != nullptr && IsValid(Action.SourceActor))
+            if (Action.Actor.IsValid() &&
+                Action.SourceActor != nullptr &&
+                IsValid(Action.SourceActor))
             {
                 ValidActions.Add(Action);
             }
@@ -647,11 +740,16 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
         OutActions.Append(ValidActions);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("[ExecuteAttackPhaseWithSlots] Complete. Total = %d"),
+    UE_LOG(LogTemp, Log,
+        TEXT("[ExecuteAttackPhaseWithSlots] Complete. Total = %d"),
         OutActions.Num());
 
     return MaxSlot;
 }
+
+// ============================================================================
+// Think Phase with Time Slots (Quick enemies get a second action)
+// ============================================================================
 
 void UTurnCorePhaseManager::CoreThinkPhaseWithTimeSlots(
     const TArray<AActor*>& Enemies,
@@ -664,8 +762,12 @@ void UTurnCorePhaseManager::CoreThinkPhaseWithTimeSlots(
 
     for (AActor* Enemy : Enemies)
     {
-        if (!Enemy) { continue; }
+        if (!Enemy)
+        {
+            continue;
+        }
 
+        // Primary (slot 0) intent
         TArray<FEnemyIntent> FirstIntents = CoreThinkPhase({ Enemy });
         if (FirstIntents.Num() > 0)
         {
@@ -674,6 +776,7 @@ void UTurnCorePhaseManager::CoreThinkPhaseWithTimeSlots(
             OutIntents.Add(Intent);
         }
 
+        // Quick enemies get a second (slot 1) intent
         if (Enemy->ActorHasTag(TagQuick))
         {
             TArray<FEnemyIntent> SecondIntents = CoreThinkPhase({ Enemy });
@@ -686,17 +789,19 @@ void UTurnCorePhaseManager::CoreThinkPhaseWithTimeSlots(
         }
     }
 
-    UE_LOG(LogTemp, Log, TEXT("[CoreThinkPhaseWithTimeSlots] Generated %d intents for %d enemies"),
+    UE_LOG(LogTemp, Log,
+        TEXT("[CoreThinkPhaseWithTimeSlots] Generated %d intents for %d enemies"),
         OutIntents.Num(), Enemies.Num());
 }
 
-// TurnCorePhaseManager.cpp
-
-#include "AbilitySystemGlobals.h"
+// ============================================================================
+// Ability System Resolution Helpers
+// ============================================================================
 
 UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
 {
     static TSet<TWeakObjectPtr<AActor>> WarnedMissingASC;
+
     AActor* const SourceActor = Actor;
     const auto ReturnWithSuccess = [SourceActor](UAbilitySystemComponent* Result)
     {
@@ -706,17 +811,22 @@ UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
         }
         return Result;
     };
+
     if (!Actor)
     {
-        UE_LOG(LogTurnCore, Verbose, TEXT("[TurnCore] ResolveASC: Actor is null"));
+        UE_LOG(LogTurnCore, Verbose,
+            TEXT("[TurnCore] ResolveASC: Actor is null"));
         return nullptr;
     }
 
-    if (UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Actor))
+    // 1) Direct lookup via GAS globals
+    if (UAbilitySystemComponent* ASC =
+            UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Actor))
     {
         return ReturnWithSuccess(ASC);
     }
 
+    // 2) Actor implements IAbilitySystemInterface
     if (IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(Actor))
     {
         if (UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent())
@@ -725,11 +835,14 @@ UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
         }
     }
 
-    if (UAbilitySystemComponent* ASC = Actor->FindComponentByClass<UAbilitySystemComponent>())
+    // 3) Direct component search on the actor
+    if (UAbilitySystemComponent* ASC =
+            Actor->FindComponentByClass<UAbilitySystemComponent>())
     {
         return ReturnWithSuccess(ASC);
     }
 
+    // 4) Pawn → PlayerState / Controller paths
     if (APawn* Pawn = Cast<APawn>(Actor))
     {
         if (APlayerState* PS = Pawn->GetPlayerState<APlayerState>())
@@ -741,14 +854,18 @@ UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
                     return ReturnWithSuccess(ASC);
                 }
             }
-            if (UAbilitySystemComponent* PS_ASC = PS->FindComponentByClass<UAbilitySystemComponent>())
+
+            if (UAbilitySystemComponent* PS_ASC =
+                    PS->FindComponentByClass<UAbilitySystemComponent>())
             {
-                return PS_ASC;
+                return ReturnWithSuccess(PS_ASC);
             }
         }
         else
         {
-            UE_LOG(LogTemp, Verbose, TEXT("[TurnCore] ResolveASC: %s has no PlayerState"), *GetNameSafe(Pawn));
+            UE_LOG(LogTemp, Verbose,
+                TEXT("[TurnCore] ResolveASC: %s has no PlayerState"),
+                *GetNameSafe(Pawn));
         }
 
         if (AController* C = Pawn->GetController())
@@ -760,6 +877,7 @@ UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
                     return ReturnWithSuccess(ASC);
                 }
             }
+
             if (APlayerState* PS = C->GetPlayerState<APlayerState>())
             {
                 if (IAbilitySystemInterface* PSI = Cast<IAbilitySystemInterface>(PS))
@@ -769,22 +887,29 @@ UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
                         return ReturnWithSuccess(ASC);
                     }
                 }
-                if (UAbilitySystemComponent* PS_ASC = PS->FindComponentByClass<UAbilitySystemComponent>())
+
+                if (UAbilitySystemComponent* PS_ASC =
+                        PS->FindComponentByClass<UAbilitySystemComponent>())
                 {
-                    return PS_ASC;
+                    return ReturnWithSuccess(PS_ASC);
                 }
             }
             else
             {
-                UE_LOG(LogTemp, Verbose, TEXT("[TurnCore] ResolveASC: %s's Controller has no PlayerState"), *GetNameSafe(C));
+                UE_LOG(LogTemp, Verbose,
+                    TEXT("[TurnCore] ResolveASC: %s's Controller has no PlayerState"),
+                    *GetNameSafe(C));
             }
         }
         else
         {
-            UE_LOG(LogTemp, Verbose, TEXT("[TurnCore] ResolveASC: %s has no Controller"), *GetNameSafe(Pawn));
+            UE_LOG(LogTemp, Verbose,
+                TEXT("[TurnCore] ResolveASC: %s has no Controller"),
+                *GetNameSafe(Pawn));
         }
     }
 
+    // 5) Controller → PlayerState path
     if (AController* C = Cast<AController>(Actor))
     {
         if (APlayerState* PS = C->GetPlayerState<APlayerState>())
@@ -796,17 +921,22 @@ UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
                     return ReturnWithSuccess(ASC);
                 }
             }
-            if (UAbilitySystemComponent* PS_ASC = PS->FindComponentByClass<UAbilitySystemComponent>())
+
+            if (UAbilitySystemComponent* PS_ASC =
+                    PS->FindComponentByClass<UAbilitySystemComponent>())
             {
-                return PS_ASC;
+                return ReturnWithSuccess(PS_ASC);
             }
         }
         else
         {
-            UE_LOG(LogTemp, Verbose, TEXT("[TurnCore] ResolveASC: Controller %s has no PlayerState"), *GetNameSafe(C));
+            UE_LOG(LogTemp, Verbose,
+                TEXT("[TurnCore] ResolveASC: Controller %s has no PlayerState"),
+                *GetNameSafe(C));
         }
     }
 
+    // Failed to locate an ASC for this actor; warn once.
     if (!WarnedMissingASC.Contains(SourceActor))
     {
         WarnedMissingASC.Add(SourceActor);
@@ -820,10 +950,9 @@ UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
             TEXT("[TurnCore] ResolveASC: ASC still missing for %s"),
             *GetNameSafe(SourceActor));
     }
+
     return nullptr;
 }
-
-
 
 bool UTurnCorePhaseManager::IsGASReady(AActor* Actor)
 {
@@ -832,35 +961,42 @@ bool UTurnCorePhaseManager::IsGASReady(AActor* Actor)
         return false;
     }
 
-    UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Actor);
+    UAbilitySystemComponent* ASC =
+        UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Actor);
     if (!ASC)
     {
         return false;
     }
 
-
     const FGameplayAbilityActorInfo* Info = ASC->AbilityActorInfo.Get();
     if (!Info || !Info->AvatarActor.IsValid())
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[TurnCore] IsGASReady: %s has invalid ActorInfo"), *GetNameSafe(Actor));
+        UE_LOG(LogTemp, Verbose,
+            TEXT("[TurnCore] IsGASReady: %s has invalid ActorInfo"),
+            *GetNameSafe(Actor));
         return false;
     }
 
-    const TArray<FGameplayAbilitySpec>& Abilities = ASC->GetActivatableAbilities();
+    const TArray<FGameplayAbilitySpec>& Abilities =
+        ASC->GetActivatableAbilities();
 
     if (Abilities.Num() == 0)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[TurnCore] IsGASReady: %s has ASC but no abilities yet"), *GetNameSafe(Actor));
+        UE_LOG(LogTemp, Verbose,
+            TEXT("[TurnCore] IsGASReady: %s has ASC but no abilities yet"),
+            *GetNameSafe(Actor));
         return false;
     }
 
-    UE_LOG(LogTemp, Verbose, TEXT("[TurnCore] IsGASReady: %s has %d abilities - READY"), *GetNameSafe(Actor), Abilities.Num());
+    UE_LOG(LogTemp, Verbose,
+        TEXT("[TurnCore] IsGASReady: %s has %d abilities - READY"),
+        *GetNameSafe(Actor), Abilities.Num());
     return true;
 }
 
 bool UTurnCorePhaseManager::AllEnemiesReady(const TArray<AActor*>& Enemies) const
 {
-    int32 ReadyCount = 0;
+    int32 ReadyCount    = 0;
     int32 NotReadyCount = 0;
 
     for (AActor* Enemy : Enemies)
@@ -874,7 +1010,8 @@ bool UTurnCorePhaseManager::AllEnemiesReady(const TArray<AActor*>& Enemies) cons
             NotReadyCount++;
             if (NotReadyCount <= 3)
             {
-                UE_LOG(LogTemp, Verbose, TEXT("[TurnCore] AllEnemiesReady: %s not ready yet"),
+                UE_LOG(LogTemp, Verbose,
+                    TEXT("[TurnCore] AllEnemiesReady: %s not ready yet"),
                     *GetNameSafe(Enemy));
             }
         }
@@ -882,11 +1019,14 @@ bool UTurnCorePhaseManager::AllEnemiesReady(const TArray<AActor*>& Enemies) cons
 
     if (ReadyCount < Enemies.Num())
     {
-        UE_LOG(LogTemp, Log, TEXT("[TurnCore] AllEnemiesReady: %d/%d enemies ready (waiting for %d)"),
+        UE_LOG(LogTemp, Log,
+            TEXT("[TurnCore] AllEnemiesReady: %d/%d enemies ready (waiting for %d)"),
             ReadyCount, Enemies.Num(), NotReadyCount);
         return false;
     }
 
-    UE_LOG(LogTemp, Log, TEXT("[TurnCore] AllEnemiesReady: All %d enemies ready ?"), Enemies.Num());
+    UE_LOG(LogTemp, Log,
+        TEXT("[TurnCore] AllEnemiesReady: All %d enemies ready"),
+        Enemies.Num());
     return true;
 }

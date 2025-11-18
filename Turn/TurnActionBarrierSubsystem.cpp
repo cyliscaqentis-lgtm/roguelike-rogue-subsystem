@@ -1,8 +1,8 @@
 // ============================================================================
-// ファイル: Source/LyraGame/Rogue/Turn/TurnActionBarrierSubsystem.cpp
-// 用途: ターンアクション完了の同期バリア（ActionIDベース実装）
-// 作成日: 2025-10-26
-// 修正日: 2025-10-29 (ActionID方式に全面改修、3タグシステム対応)
+// File: Source/LyraGame/Rogue/Turn/TurnActionBarrierSubsystem.cpp
+// Purpose: Turn action completion barrier (ActionID-based implementation)
+// Created: 2025-10-26
+// Updated: 2025-10-29 (Full ActionID migration, 3-tag system support)
 // ============================================================================
 
 #include "TurnActionBarrierSubsystem.h"
@@ -15,17 +15,17 @@
 #include "EngineUtils.h"
 
 // ============================================================================
-// ログカテゴリ定義
+// Log category
 // ============================================================================
 DEFINE_LOG_CATEGORY(LogTurnBarrier);
 
 // ============================================================================
-// StatId定義（Tick用）- REMOVED: Tickは使用されなくなりました
+// StatId for Tick (no longer used)
 // ============================================================================
 // DECLARE_CYCLE_STAT(TEXT("TurnBarrier Tick"), STAT_TurnBarrierTick, STATGROUP_Game);
 
 // ============================================================================
-// UTurnActionBarrierSubsystem 実装
+// UTurnActionBarrierSubsystem implementation
 // ============================================================================
 
 void UTurnActionBarrierSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -36,14 +36,13 @@ void UTurnActionBarrierSubsystem::Initialize(FSubsystemCollectionBase& Collectio
 
 void UTurnActionBarrierSubsystem::Deinitialize()
 {
-    // 未完了のアクションがある場合は警告
+    // Warn if there are any pending actions when the subsystem shuts down
     for (auto& TurnPair : TurnStates)
     {
         const int32 TurnId = TurnPair.Key;
         FTurnState& State = TurnPair.Value;
-        // CompactTurnState(State);  // TODO: Implement if needed
 
-        const int32 PendingCount = State.PendingActionIds.Num();
+        const int32 PendingCount = GetPendingActionCount(TurnId);
         if (PendingCount > 0)
         {
             UE_LOG(LogTurnBarrier, Error,
@@ -62,39 +61,38 @@ bool UTurnActionBarrierSubsystem::IsServer() const
 }
 
 // ============================================================================
-// 公開API: BeginTurn
+// Public API: BeginTurn
 // ============================================================================
 
 void UTurnActionBarrierSubsystem::BeginTurn(int32 TurnId)
 {
-    // サーバー専用
+    // Server-only
     if (!IsServer())
     {
         return;
     }
 
-    // CurrentTurnIdを更新
+    // Update current turn tracking
     CurrentTurnId = TurnId;
     CurrentKey.TurnId = TurnId;
 
-    // 新しいターンの状態を初期化
+    // Initialize state for this turn
     FTurnState& State = TurnStates.FindOrAdd(TurnId);
     State.TurnStartTime = FPlatformTime::Seconds();
-    State.PendingActionIds.Reset();
+    State.PendingActions.Reset();
+    State.ActionStartTimes.Reset();
     State.ActorToAction.Reset();
     State.ActionToActor.Reset();
-    State.ActionStartTimes.Reset();
 
     if (bEnableVerboseLogging)
     {
         UE_LOG(LogTurnBarrier, Log, TEXT("[Barrier] BeginTurn: Turn=%d"), TurnId);
     }
 
-    // 古いターンの掃除（2ターン以前は削除）
+    // Cleanup old turns (keep only the last 2 turns)
     RemoveOldTurns(TurnId);
 
-    // ★★★ 最適化: Tick→Timer変換（2025-11-09）
-    // タイムアウトチェックを1秒ごとのタイマーで実行
+    // Timer-based timeout check (replaces Tick)
     UWorld* World = GetWorld();
     if (World)
     {
@@ -102,19 +100,19 @@ void UTurnActionBarrierSubsystem::BeginTurn(int32 TurnId)
             TimeoutCheckTimer,
             this,
             &UTurnActionBarrierSubsystem::CheckTimeouts,
-            1.0f,  // 1秒ごと
-            true   // ループ
+            1.0f,  // every 1 second
+            true   // looping
         );
     }
 }
 
 // ============================================================================
-// 公開API: RegisterAction
+// Public API: RegisterAction
 // ============================================================================
 
 FGuid UTurnActionBarrierSubsystem::RegisterAction(AActor* Actor, int32 TurnId)
 {
-    // サーバー専用
+    // Server-only
     if (!IsServer())
     {
         return FGuid();
@@ -126,36 +124,35 @@ FGuid UTurnActionBarrierSubsystem::RegisterAction(AActor* Actor, int32 TurnId)
         return FGuid();
     }
 
-    // 一意なActionIDを生成
+    // Generate a unique ActionId
     FGuid ActionId = FGuid::NewGuid();
 
-    // ターン状態を取得または作成
+    // Get or create the turn state
     FTurnState& State = TurnStates.FindOrAdd(TurnId);
 
-    // ActorのActionセットに追加
+    // Register this ActionId in the actor's pending set
     State.PendingActions.FindOrAdd(Actor).Add(ActionId);
 
-    // 登録時刻を記録（タイムアウト検出用）
+    // Record registration time for timeout detection
     State.ActionStartTimes.Add(ActionId, FPlatformTime::Seconds());
 
-    // 現在の保留アクション数を計算
-    int32 TotalPending = GetPendingActionCount(TurnId);
+    // Compute total pending count for logging
+    const int32 TotalPending = GetPendingActionCount(TurnId);
 
-    // Verbose: 個別の登録は冗長（合計数は別途ログ）
     UE_LOG(LogTurnBarrier, Verbose,
-        TEXT("[Barrier] ✅ REGISTER: Turn=%d Actor=%s Action=%s (Total=%d)"),
-        TurnId, *Actor->GetName(), *ActionId.ToString(), TotalPending);
+        TEXT("[Barrier] REGISTER: Turn=%d Actor=%s Action=%s (Total=%d)"),
+        TurnId, *GetNameSafe(Actor), *ActionId.ToString(), TotalPending);
 
     return ActionId;
 }
 
 // ============================================================================
-// 公開API: CompleteAction
+// Public API: CompleteAction
 // ============================================================================
 
 void UTurnActionBarrierSubsystem::CompleteAction(AActor* Actor, int32 TurnId, const FGuid& ActionId)
 {
-    // サーバー専用
+    // Server-only
     if (!IsServer())
     {
         return;
@@ -166,25 +163,25 @@ void UTurnActionBarrierSubsystem::CompleteAction(AActor* Actor, int32 TurnId, co
         return;
     }
 
-    //==========================================================================
-    // ★★★ (1) ターン状態の取得
-    //==========================================================================
+    //--------------------------------------------------------------------------
+    // (1) Resolve turn state
+    //--------------------------------------------------------------------------
     FTurnState* State = TurnStates.Find(TurnId);
     if (!State)
     {
-        // 古いターンの完了通知は無視（ログだけ出す）
+        // Completion for an old / unknown turn is ignored (log only)
         if (bEnableVerboseLogging)
         {
             UE_LOG(LogTurnBarrier, Verbose,
                 TEXT("[Barrier] Complete(Ignored): Turn=%d Actor=%s Action=%s (Turn not found)"),
-                TurnId, *Actor->GetName(), *ActionId.ToString());
+                TurnId, *GetNameSafe(Actor), *ActionId.ToString());
         }
         return;
     }
 
-    //==========================================================================
-    // ★★★ (2) Actorの保留アクションセットを取得
-    //==========================================================================
+    //--------------------------------------------------------------------------
+    // (2) Lookup pending actions for this actor
+    //--------------------------------------------------------------------------
     TArray<FGuid>* ActionSet = State->PendingActions.Find(Actor);
     if (!ActionSet)
     {
@@ -192,58 +189,57 @@ void UTurnActionBarrierSubsystem::CompleteAction(AActor* Actor, int32 TurnId, co
         {
             UE_LOG(LogTurnBarrier, Verbose,
                 TEXT("[Barrier] Complete(NoActor): Turn=%d Actor=%s Action=%s"),
-                TurnId, *Actor->GetName(), *ActionId.ToString());
+                TurnId, *GetNameSafe(Actor), *ActionId.ToString());
         }
         return;
     }
 
-    //==========================================================================
-    // ★★★ (3) ActionIDの削除（冪等性: 既に削除済みなら何もしない）
-    //==========================================================================
-    int32 RemovedCount = ActionSet->Remove(ActionId);
+    //--------------------------------------------------------------------------
+    // (3) Remove ActionId (idempotent; ignore if already removed)
+    //--------------------------------------------------------------------------
+    const int32 RemovedCount = ActionSet->Remove(ActionId);
     if (RemovedCount > 0)
     {
-        // 成功: ActionSetが空になったらActorも削除
+        // If the actor has no more actions, remove the actor entry
         if (ActionSet->Num() == 0)
         {
             State->PendingActions.Remove(Actor);
         }
 
-        // ActionStartTimesからも削除
+        // Remove from ActionStartTimes as well
         State->ActionStartTimes.Remove(ActionId);
 
-        // 残りのアクション数
-        int32 Remaining = GetPendingActionCount(TurnId);
+        // Remaining actions after this completion
+        const int32 Remaining = GetPendingActionCount(TurnId);
 
-        // Verbose: 個別の完了は冗長（Remaining=0は別途ログ）
         UE_LOG(LogTurnBarrier, Verbose,
-            TEXT("[Barrier] ✅ COMPLETE: Turn=%d Actor=%s Action=%s (Remaining=%d)"),
-            TurnId, *Actor->GetName(), *ActionId.ToString(), Remaining);
+            TEXT("[Barrier] COMPLETE: Turn=%d Actor=%s Action=%s (Remaining=%d)"),
+            TurnId, *GetNameSafe(Actor), *ActionId.ToString(), Remaining);
 
-        // ★★★ 新規追加：0到達時に即通知（ActionIDモデル完成） ★★★
+        // If we reached zero, immediately notify listeners
         if (Remaining == 0)
         {
-            // Warning: 全アクション完了は重要イベントなので可視性保つ
             UE_LOG(LogTurnBarrier, Warning,
-                TEXT("[Barrier] 🎉 Turn %d: ALL ACTIONS COMPLETED (Remaining=0) -> Broadcasting OnAllMovesFinished"),
+                TEXT("[Barrier] Turn %d: ALL ACTIONS COMPLETED (Remaining=0) -> Broadcasting OnAllMovesFinished"),
                 TurnId);
-            OnAllMovesFinished.Broadcast(TurnId);  // ← ここで確実に発火
+
+            OnAllMovesFinished.Broadcast(TurnId);
         }
     }
     else
     {
-        // 重複完了は黙って無視（Verboseログのみ）
+        // Duplicate completion is silently ignored (verbose only)
         if (bEnableVerboseLogging)
         {
             UE_LOG(LogTurnBarrier, Verbose,
                 TEXT("[Barrier] Complete(Duplicate): Turn=%d Actor=%s Action=%s"),
-                TurnId, *Actor->GetName(), *ActionId.ToString());
+                TurnId, *GetNameSafe(Actor), *ActionId.ToString());
         }
     }
 }
 
 // ============================================================================
-// 公開API: IsQuiescent
+// Public API: IsQuiescent
 // ============================================================================
 
 bool UTurnActionBarrierSubsystem::IsQuiescent(int32 TurnId) const
@@ -251,17 +247,16 @@ bool UTurnActionBarrierSubsystem::IsQuiescent(int32 TurnId) const
     const FTurnState* State = TurnStates.Find(TurnId);
     if (!State)
     {
-        // ターン情報がなければ完了とみなす
+        // No state for this turn means nothing is pending
         return true;
     }
 
-    // 無効なWeakPtrを除外してカウント
     int32 ValidPendingCount = 0;
     for (const auto& Pair : State->PendingActions)
     {
         if (Pair.Key.IsValid() && Pair.Value.Num() > 0)
         {
-            ValidPendingCount++;
+            ++ValidPendingCount;
         }
     }
 
@@ -269,7 +264,7 @@ bool UTurnActionBarrierSubsystem::IsQuiescent(int32 TurnId) const
 }
 
 // ============================================================================
-// 公開API: GetPendingActionCount
+// Public API: GetPendingActionCount
 // ============================================================================
 
 int32 UTurnActionBarrierSubsystem::GetPendingActionCount(int32 TurnId) const
@@ -292,7 +287,7 @@ int32 UTurnActionBarrierSubsystem::GetPendingActionCount(int32 TurnId) const
 }
 
 // ============================================================================
-// 冪等API: RegisterActionOnce
+// Idempotent API: RegisterActionOnce
 // ============================================================================
 
 void UTurnActionBarrierSubsystem::RegisterActionOnce(AActor* Owner, FGuid& OutToken)
@@ -307,7 +302,7 @@ void UTurnActionBarrierSubsystem::RegisterActionOnce(AActor* Owner, FGuid& OutTo
         UE_LOG(LogTurnBarrier, VeryVerbose,
             TEXT("[RegisterActionOnce] Duplicate token=%s owner=%s"),
             *OutToken.ToString(),
-            Owner ? *Owner->GetName() : TEXT("null"));
+            Owner ? *GetNameSafe(Owner) : TEXT("null"));
         return;
     }
 
@@ -317,11 +312,11 @@ void UTurnActionBarrierSubsystem::RegisterActionOnce(AActor* Owner, FGuid& OutTo
     UE_LOG(LogTurnBarrier, Verbose,
         TEXT("[RegisterActionOnce] token=%s owner=%s"),
         *OutToken.ToString(),
-        Owner ? *Owner->GetName() : TEXT("null"));
+        Owner ? *GetNameSafe(Owner) : TEXT("null"));
 }
 
 // ============================================================================
-// 冪等API: CompleteActionToken
+// Idempotent API: CompleteActionToken
 // ============================================================================
 
 void UTurnActionBarrierSubsystem::CompleteActionToken(const FGuid& Token)
@@ -335,7 +330,8 @@ void UTurnActionBarrierSubsystem::CompleteActionToken(const FGuid& Token)
     if (!ActiveTokens.Remove(Token))
     {
         UE_LOG(LogTurnBarrier, VeryVerbose,
-            TEXT("[CompleteActionToken] unknown token=%s"), *Token.ToString());
+            TEXT("[CompleteActionToken] unknown token=%s"),
+            *Token.ToString());
         return;
     }
 
@@ -345,9 +341,9 @@ void UTurnActionBarrierSubsystem::CompleteActionToken(const FGuid& Token)
 }
 
 // ============================================================================
-// Tick: タイムアウト監視（Phase 6で実装）
-// ★★★ 最適化完了: Tick→Timer変換済み（2025-11-09）
+// Timeout monitoring (timer-based; Tick removed)
 // ============================================================================
+
 /*
 REMOVED: Tick is replaced with timer-based CheckTimeouts()
 void UTurnActionBarrierSubsystem::Tick(float DeltaTime)
@@ -359,18 +355,17 @@ void UTurnActionBarrierSubsystem::Tick(float DeltaTime)
 */
 
 // ============================================================================
-// CheckTimeouts: タイムアウト検出と強制完了
-// ★★★ 最適化: Tickから呼ばれていたが、現在は1秒ごとのタイマーで実行
+// CheckTimeouts: detect and force-complete timed-out actions
 // ============================================================================
 
 void UTurnActionBarrierSubsystem::CheckTimeouts()
 {
-    double Now = FPlatformTime::Seconds();
+    const double Now = FPlatformTime::Seconds();
 
-    // 全ターンをチェック
+    // Check all active turns
     for (auto& TurnPair : TurnStates)
     {
-        int32 TurnId = TurnPair.Key;
+        const int32 TurnId = TurnPair.Key;
         FTurnState& State = TurnPair.Value;
 
         if (State.TurnStartTime <= 0.0)
@@ -378,15 +373,13 @@ void UTurnActionBarrierSubsystem::CheckTimeouts()
             continue;
         }
 
-        double Elapsed = Now - State.TurnStartTime;
+        const double Elapsed = Now - State.TurnStartTime;
         if (Elapsed < ActionTimeoutSeconds)
         {
-            continue; // まだタイムアウトしていない
+            continue; // Turn is not timed out yet
         }
 
-        //======================================================================
-        // ★★★ タイムアウト処理: 個別Actionをチェック
-        //======================================================================
+        // Collect all actions that have exceeded the timeout
         TArray<TWeakObjectPtr<AActor>> TimeoutActors;
         TArray<FGuid> TimeoutActions;
 
@@ -399,7 +392,6 @@ void UTurnActionBarrierSubsystem::CheckTimeouts()
 
             AActor* Actor = ActorPair.Key.Get();
 
-            // このActorの各Actionをチェック
             for (const FGuid& ActionId : ActorPair.Value)
             {
                 double* StartTime = State.ActionStartTimes.Find(ActionId);
@@ -408,27 +400,24 @@ void UTurnActionBarrierSubsystem::CheckTimeouts()
                     continue;
                 }
 
-                double ActionElapsed = Now - *StartTime;
+                const double ActionElapsed = Now - *StartTime;
                 if (ActionElapsed >= ActionTimeoutSeconds)
                 {
-                    // タイムアウト
                     TimeoutActors.Add(ActorPair.Key);
                     TimeoutActions.Add(ActionId);
 
                     UE_LOG(LogTurnBarrier, Error,
                         TEXT("[Barrier] Timeout: Turn=%d Actor=%s Action=%s Elapsed=%.2fs"),
-                        TurnId, *Actor->GetName(), *ActionId.ToString(), ActionElapsed);
+                        TurnId, *GetNameSafe(Actor), *ActionId.ToString(), ActionElapsed);
                 }
             }
         }
 
-        //======================================================================
-        // ★★★ タイムアウトしたActionの処理
-        //======================================================================
+        // Process all timed-out actions
         for (int32 i = 0; i < TimeoutActors.Num(); ++i)
         {
             TWeakObjectPtr<AActor> ActorPtr = TimeoutActors[i];
-            FGuid ActionId = TimeoutActions[i];
+            const FGuid ActionId = TimeoutActions[i];
 
             if (!ActorPtr.IsValid())
             {
@@ -437,28 +426,27 @@ void UTurnActionBarrierSubsystem::CheckTimeouts()
 
             AActor* Actor = ActorPtr.Get();
 
-            // GAをキャンセル（設定で有効な場合）
+            // Optionally cancel active abilities on timeout
             if (bCancelAbilitiesOnTimeout)
             {
                 if (UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Actor))
                 {
                     UE_LOG(LogTurnBarrier, Warning,
-                        TEXT("[Barrier] Cancelling abilities: Actor=%s"),
-                        *Actor->GetName());
+                        TEXT("[Barrier] Cancelling abilities due to timeout: Actor=%s"),
+                        *GetNameSafe(Actor));
 
-                    // すべてのアビリティをキャンセル
                     ASC->CancelAbilities();
                 }
             }
 
-            // 強制完了
+            // Force-complete the timed-out action
             CompleteAction(Actor, TurnId, ActionId);
         }
     }
 }
 
 // ============================================================================
-// RemoveOldTurns: 古いターンのデータ削除
+// RemoveOldTurns: prune old turn data
 // ============================================================================
 
 void UTurnActionBarrierSubsystem::RemoveOldTurns(int32 CurrentTurn)
@@ -466,7 +454,7 @@ void UTurnActionBarrierSubsystem::RemoveOldTurns(int32 CurrentTurn)
     TArray<int32> KeysToRemove;
     for (const auto& Pair : TurnStates)
     {
-        // 2ターン以前は削除
+        // Remove turns older than CurrentTurn - 1
         if (Pair.Key < CurrentTurn - 1)
         {
             KeysToRemove.Add(Pair.Key);
@@ -475,7 +463,7 @@ void UTurnActionBarrierSubsystem::RemoveOldTurns(int32 CurrentTurn)
 
     for (int32 Key : KeysToRemove)
     {
-        int32 RemainingActions = GetPendingActionCount(Key);
+        const int32 RemainingActions = GetPendingActionCount(Key);
         if (RemainingActions > 0)
         {
             UE_LOG(LogTurnBarrier, Warning,
@@ -492,9 +480,8 @@ void UTurnActionBarrierSubsystem::RemoveOldTurns(int32 CurrentTurn)
     }
 }
 
-
 // ============================================================================
-// デバッグAPI: DumpTurnState
+// Debug API: DumpTurnState
 // ============================================================================
 
 void UTurnActionBarrierSubsystem::DumpTurnState(int32 TurnId) const
@@ -524,12 +511,12 @@ void UTurnActionBarrierSubsystem::DumpTurnState(int32 TurnId) const
         AActor* Actor = ActorPair.Key.Get();
         UE_LOG(LogTurnBarrier, Log,
             TEXT("  Actor: %s (Actions: %d)"),
-            *Actor->GetName(), ActorPair.Value.Num());
+            *GetNameSafe(Actor), ActorPair.Value.Num());
 
         for (const FGuid& ActionId : ActorPair.Value)
         {
             const double* StartTime = State->ActionStartTimes.Find(ActionId);
-            double Elapsed = StartTime ? (FPlatformTime::Seconds() - *StartTime) : 0.0;
+            const double Elapsed = StartTime ? (FPlatformTime::Seconds() - *StartTime) : 0.0;
 
             UE_LOG(LogTurnBarrier, Log,
                 TEXT("    - Action: %s (Elapsed: %.2fs)"),
@@ -541,9 +528,9 @@ void UTurnActionBarrierSubsystem::DumpTurnState(int32 TurnId) const
         TEXT("[Barrier] ===== End Turn %d State ====="), TurnId);
 }
 
-//==============================================================================
-// レガシーAPI実装（Phase 1互換用）
-//==============================================================================
+// ============================================================================
+// Legacy API (Phase 1 compatibility - unit-count–based barrier)
+// ============================================================================
 
 void UTurnActionBarrierSubsystem::StartMoveBatch(int32 InCount, int32 InTurnId)
 {
@@ -661,9 +648,10 @@ TArray<AActor*> UTurnActionBarrierSubsystem::GetNotifiedActorsThisTurn() const
     }
     return Result;
 }
-//==============================================================================
-// 内部ヘルパー: デリゲート発火
-//==============================================================================
+
+// ============================================================================
+// Internal helper: delegate firing for legacy API
+// ============================================================================
 
 void UTurnActionBarrierSubsystem::FireAllFinished(int32 TurnId)
 {
@@ -676,15 +664,15 @@ void UTurnActionBarrierSubsystem::FireAllFinished(int32 TurnId)
         TEXT("Turn %d: FireAllFinished - Broadcasting OnAllMovesFinished"),
         TurnId);
 
-    // デリゲート発火（Blueprint購読用）
+    // Blueprint-facing delegate
     OnAllMovesFinished.Broadcast(TurnId);
 
-    // タイマークリア
+    // Clear safety timeout timer
     if (UWorld* World = GetWorld())
     {
         World->GetTimerManager().ClearTimer(SafetyTimeoutHandle);
     }
 
-    // 次ターン用にクリア
+    // Reset per-turn notification set
     NotifiedActorsThisTurn.Empty();
 }

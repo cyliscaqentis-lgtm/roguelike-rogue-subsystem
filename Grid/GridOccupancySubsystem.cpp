@@ -1,5 +1,6 @@
 // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 // GridOccupancySubsystem.cpp
+
 #include "GridOccupancySubsystem.h"
 #include "Grid/GridPathfindingSubsystem.h"
 #include "Kismet/GameplayStatics.h"
@@ -42,25 +43,25 @@ bool UGridOccupancySubsystem::WillLeaveThisTick(AActor* Actor) const
         return false;
     }
 
-    // ★★★ CRITICAL FIX (2025-11-11): bCommitted ベースに変更 ★★★
-    // 予約があるだけでは不十分。ConflictResolver で勝者と決まり、bCommitted=true になった場合のみ退去扱い
+    // ★★★ CRITICAL FIX (2025-11-11): Use reservation + TurnId, do not depend on animation state ★★★
+    // We only treat an actor as "leaving" if it has a valid reservation for this turn.
+
     const FReservationInfo* InfoPtr = ActorToReservation.Find(Actor);
     if (!InfoPtr)
     {
         return false; // No reservation = not leaving
     }
 
-    // TurnId チェック：古い予約は無視
+    // Ignore stale reservations from previous turns
     if (InfoPtr->TurnId != CurrentTurnId)
     {
         return false;
     }
 
-    // ★★★ BUGFIX [INC-2025-00002]: Removed bCommitted dependency ★★★
-    // Race condition fix: Trust logical reservation (ActorToReservation) instead of animation completion
-    // This prevents "REJECT UPDATE" when follower completes animation before leader
-    // OLD CODE (removed):
-    //   if (!InfoPtr->bCommitted) { return false; }
+    // ★★★ BUGFIX [INC-2025-00002]: Removed hard dependency on animation-driven commit ★★★
+    // We now detect "leaving" by comparing current cell vs reserved cell.
+    // Old behavior relied on bCommitted (tied to animation completion), which caused race conditions
+    // when followers completed animations before leaders and hit "REJECT UPDATE".
 
     const FIntPoint* CurrentCell = ActorToCell.Find(Actor);
     if (!CurrentCell)
@@ -88,7 +89,7 @@ bool UGridOccupancySubsystem::IsPerfectSwap(AActor* A, AActor* B) const
     const FIntPoint AReserved = GetReservedCellForActor(A);
     const FIntPoint BReserved = GetReservedCellForActor(B);
 
-    // Perfect swap: A->B's current AND B->A's current
+    // Perfect swap: A moves to B's current cell AND B moves to A's current cell
     const bool bAtoB = (AReserved == *BCurrent);
     const bool bBtoA = (BReserved == *ACurrent);
     const bool bBothHaveValidReservations = (AReserved != FIntPoint(-1, -1) && BReserved != FIntPoint(-1, -1));
@@ -103,8 +104,8 @@ bool UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
         return false;
     }
 
-    // ★★★ CRITICAL FIX (2025-11-11): 他者予約の尊重 ★★★
-    // セルが他のActorに予約されている場合、原則拒否（完全スワップは例外）
+    // ★★★ CRITICAL FIX (2025-11-11): Respect other actors' reservations ★★★
+    // If another actor has reserved this cell, we reject by default (except for a perfect swap).
     const bool bIHaveReservation = IsReservationOwnedByActor(Actor, NewCell);
     if (!bIHaveReservation)
     {
@@ -112,7 +113,7 @@ bool UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
         {
             if (ForeignReserver != Actor)
             {
-                // 完全スワップ（A<->B）の場合のみ許可
+                // Allow only if this is a perfect swap (A <-> B)
                 const bool bIsPerfectSwap = IsPerfectSwap(Actor, ForeignReserver);
                 if (!bIsPerfectSwap)
                 {
@@ -131,11 +132,11 @@ bool UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
         }
     }
 
-    // ★★★ CRITICAL FIX (2025-11-11): 二相コミット - 退去元が確定するまで待つ ★★★
-    // 新しいセルが他の Actor で占有されている場合、以下の条件で許可：
-    // 1. このActorがセルを予約している AND
-    // 2. 既占有者が今ターンでそのセルを離れる予定がある AND
-    // 3. 既占有者が実際に移動をコミット済み（二相コミット）
+    // ★★★ CRITICAL FIX (2025-11-11): Two-phase commit - wait until the leaver has committed ★★★
+    // If the target cell is currently occupied, we only allow the move when:
+    // 1. This actor has reserved the cell AND
+    // 2. The existing occupant is scheduled to leave this turn AND
+    // 3. The existing occupant has already committed its move (two-phase commit).
     if (const TWeakObjectPtr<AActor>* ExistingActorPtr = OccupiedCells.Find(NewCell))
     {
         AActor* ExistingActor = ExistingActorPtr->Get();
@@ -145,23 +146,24 @@ bool UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
             const bool bOccupantWillLeave = WillLeaveThisTick(ExistingActor);
             const bool bOccupantCommitted = HasCommittedThisTick(ExistingActor);
 
-            // ★★★ 二相コミット: 退去予定があっても、まだコミットしていないなら拒否 ★★★
+            // ★★★ Two-phase commit: follower must wait until owner commits ★★★
             if (bOccupantWillLeave && !bOccupantCommitted)
             {
                 UE_LOG(LogTemp, Verbose,
                     TEXT("[GridOccupancy] REJECT (follower before owner commit): %s -> (%d,%d), occupant=%s will leave but not committed yet"),
                     *GetNameSafe(Actor), NewCell.X, NewCell.Y, *GetNameSafe(ExistingActor));
-                return false; // 先に来たフォロワーは一旦ロールバック
+                return false; // Follower arrived before leader's commit; reject for now
             }
 
-            // 予約があっても、既占有者が退去しないなら上書き禁止（待機者の踏み潰し防止）
+            // Even if mover has a reservation, we do not allow overwriting if the occupant does not leave.
+            // This prevents "crushing" a waiting unit.
             if (!(bMoverHasReservation && bOccupantWillLeave))
             {
                 UE_LOG(LogTemp, Error,
                     TEXT("[GridOccupancy] REJECT UPDATE: %s cannot move to (%d,%d) - occupied by %s (moverReserved=%d, occupantLeaves=%d)"),
                     *GetNameSafe(Actor), NewCell.X, NewCell.Y, *GetNameSafe(ExistingActor),
                     bMoverHasReservation ? 1 : 0, bOccupantWillLeave ? 1 : 0);
-                return false;  // 条件不満：書き込み拒否
+                return false;
             }
             else
             {
@@ -184,13 +186,13 @@ bool UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
     ActorToCell.Add(Actor, NewCell);
     OccupiedCells.Add(NewCell, Actor);
 
-    // ★★★ 二相コミット: 移動を確定としてマーク → 後続のフォロワーを許可 ★★★
+    // ★★★ Two-phase commit: mark the move as committed so followers can proceed ★★★
     CommittedThisTick.Add(Actor);
 
     UE_LOG(LogTemp, Log, TEXT("[GridOccupancy] COMMIT: %s -> (%d,%d)"),
         *GetNameSafe(Actor), NewCell.X, NewCell.Y);
 
-    return true;  // 成功
+    return true;
 }
 
 bool UGridOccupancySubsystem::IsCellOccupied(const FIntPoint& Cell) const
@@ -203,7 +205,7 @@ bool UGridOccupancySubsystem::IsCellOccupied(const FIntPoint& Cell) const
         }
     }
 
-    // ★★★ CRITICAL FIX (2025-11-11): FReservationInfo を使用 ★★★
+    // ★★★ CRITICAL FIX (2025-11-11): Check FReservationInfo as well ★★★
     if (const FReservationInfo* InfoPtr = ReservedCells.Find(Cell))
     {
         if (InfoPtr->Owner.IsValid())
@@ -268,45 +270,46 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
 {
     if (!Actor)
     {
-        return false;  // Actor が null の場合は失敗
+        return false;  // Null Actor is always failure
     }
 
-    // ★★★ CRITICAL FIX (2025-11-11): 既存の予約を保護（OriginHold対応） ★★★
-    // セルが既に他の Actor に予約されている場合、上書きしない
+    // ★★★ CRITICAL FIX (2025-11-11): Protect existing reservations (OriginHold support) ★★★
+    // If the cell is already reserved by another actor, do not overwrite it by default.
     if (const FReservationInfo* ExistingInfo = ReservedCells.Find(Cell))
     {
         if (ExistingInfo->Owner.IsValid() && ExistingInfo->Owner.Get() != Actor)
         {
-            // OriginHold の場合、owner が移動中なので destination として予約できない（backstab防止）
+            // For OriginHold, the owner is in the process of leaving this cell.
+            // We treat this as a hard block to prevent "backstabbing" (someone stepping into the origin too early).
             if (ExistingInfo->bIsOriginHold)
             {
-                // ★★★ 修正 (2025-11-11): 追従詰めパターンを許可（SoftHold実装） ★★★
-                // A が Origin から Destination へ移動中、B が A の Origin へ移動する「追従」パターンを許可
+                // ★★★ FIX (2025-11-11): Allow follow-up compression pattern (SoftHold) ★★★
+                // Pattern: A moves from Origin to Destination, and B moves into A's Origin (follow behavior).
                 AActor* OriginOwner = ExistingInfo->Owner.Get();
                 const FReservationInfo* OriginOwnerDestReservation = ActorToReservation.Find(OriginOwner);
 
-                // 追従詰めパターンの条件：
-                // 1. OriginOwner が destination 予約を持っている
-                // 2. OriginOwner の destination が現在のセルと異なる（実際に移動している）
-                // 3. OriginOwner の destination 予約が通常予約（OriginHold ではない）
+                // Follow-up pattern conditions:
+                // 1. OriginOwner has a destination reservation.
+                // 2. Destination differs from the current cell (they are actually moving).
+                // 3. Destination reservation is a normal reservation (not OriginHold).
                 if (OriginOwnerDestReservation &&
                     OriginOwnerDestReservation->Cell != Cell &&
                     !OriginOwnerDestReservation->bIsOriginHold)
                 {
-                    // 追従詰めパターン：許可（SoftHold）
+                    // Follow-up compression: allow this as a "SoftHold" override.
                     UE_LOG(LogTemp, Log,
-                        TEXT("[GridOccupancy] ALLOW FOLLOW-UP: %s -> (%d,%d) following %s who moves to (%d,%d) [SOFTHOLD → ALLOW]"),
+                        TEXT("[GridOccupancy] ALLOW FOLLOW-UP: %s -> (%d,%d) following %s who moves to (%d,%d) [SOFTHOLD -> ALLOW]"),
                         *GetNameSafe(Actor), Cell.X, Cell.Y, *GetNameSafe(OriginOwner),
                         OriginOwnerDestReservation->Cell.X, OriginOwnerDestReservation->Cell.Y);
-                    // 続行して予約を許可（OriginHold を上書き）
+                    // Continue and allow reservation (overwriting the OriginHold)
                 }
                 else
                 {
-                    // 従来どおり拒否（HardHold）
+                    // Hard block remains: no valid follow-up pattern, keep OriginHold.
                     UE_LOG(LogTemp, Error,
-                        TEXT("[GridOccupancy] REJECT RESERVATION: %s cannot reserve (%d,%d) - OriginHold by %s (TurnId=%d) [HARDHOLD → BLOCKED]"),
+                        TEXT("[GridOccupancy] REJECT RESERVATION: %s cannot reserve (%d,%d) - OriginHold by %s (TurnId=%d) [HARDHOLD -> BLOCKED]"),
                         *GetNameSafe(Actor), Cell.X, Cell.Y, *GetNameSafe(OriginOwner), ExistingInfo->TurnId);
-                    return false;  // OriginHold により予約拒否（backstab防止）
+                    return false;  // Block reservation to prevent backstab
                 }
             }
             else
@@ -314,19 +317,20 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
                 UE_LOG(LogTemp, Error,
                     TEXT("[GridOccupancy] REJECT RESERVATION: %s cannot reserve (%d,%d) - already reserved by %s (TurnId=%d)"),
                     *GetNameSafe(Actor), Cell.X, Cell.Y, *GetNameSafe(ExistingInfo->Owner.Get()), ExistingInfo->TurnId);
-                return false;  // 予約拒否 - 他のActorが既に予約済み
+                return false;  // Reservation denied - another actor already reserved this cell
             }
         }
     }
 
-    // ★★★ OriginHold実装: 移動元セルを取得 ★★★
+    // ★★★ OriginHold implementation: capture current origin cell ★★★
     const FIntPoint* CurrentCellPtr = ActorToCell.Find(Actor);
     const FIntPoint CurrentCell = CurrentCellPtr ? *CurrentCellPtr : FIntPoint(-1, -1);
 
-    // ★★★ CRITICAL FIX (2025-11-11): FReservationInfo 形式に変更 + OriginHold追加 ★★★
-    ReleaseReservationForActor(Actor);  // 既存の予約（destination + originHold）を全解放
+    // ★★★ CRITICAL FIX (2025-11-11): Use FReservationInfo + OriginHold ★★★
+    // Clear all existing reservations (destination + OriginHold) for this actor.
+    ReleaseReservationForActor(Actor);
 
-    // Destination cell に通常の予約を作成
+    // Create normal destination reservation
     FReservationInfo DestInfo(Actor, Cell, CurrentTurnId, false);
     ReservedCells.Add(Cell, DestInfo);
     ActorToReservation.Add(Actor, DestInfo);
@@ -334,10 +338,10 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
     UE_LOG(LogTemp, Log, TEXT("[GridOccupancy] RESERVE DEST: %s -> (%d, %d) (TurnId=%d)"),
         *GetNameSafe(Actor), Cell.X, Cell.Y, CurrentTurnId);
 
-    // ★★★ OriginHold実装: 移動元セルにOriginHold予約を配置（backstab防止） ★★★
+    // ★★★ OriginHold implementation: place an OriginHold reservation on the origin cell ★★★
     if (CurrentCell != FIntPoint(-1, -1) && CurrentCell != Cell)
     {
-        // Origin cell に OriginHold を作成（他のActorが入ってこないようにする）
+        // Reserve origin cell with OriginHold to prevent other actors from entering prematurely.
         FReservationInfo OriginHoldInfo(Actor, CurrentCell, CurrentTurnId, true);
         ReservedCells.Add(CurrentCell, OriginHoldInfo);
 
@@ -345,7 +349,7 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
             *GetNameSafe(Actor), CurrentCell.X, CurrentCell.Y, CurrentTurnId);
     }
 
-    return true;  // 予約成功
+    return true;  // Reservation succeeded
 }
 
 void UGridOccupancySubsystem::ReleaseReservationForActor(AActor* Actor)
@@ -355,8 +359,8 @@ void UGridOccupancySubsystem::ReleaseReservationForActor(AActor* Actor)
         return;
     }
 
-    // ★★★ CRITICAL FIX (2025-11-11): OriginHold対応 - Actor が owner の全ての予約を解放 ★★★
-    // Destination reservation を解放
+    // ★★★ CRITICAL FIX (2025-11-11): OriginHold support - clear all reservations owned by this actor ★★★
+    // Clear destination reservation.
     if (const FReservationInfo* InfoPtr = ActorToReservation.Find(Actor))
     {
         ReservedCells.Remove(InfoPtr->Cell);
@@ -365,7 +369,7 @@ void UGridOccupancySubsystem::ReleaseReservationForActor(AActor* Actor)
     }
     ActorToReservation.Remove(Actor);
 
-    // OriginHold reservation を解放（ReservedCells から Actor が owner の OriginHold を検索して削除）
+    // Clear OriginHold reservations owned by this actor.
     for (auto It = ReservedCells.CreateIterator(); It; ++It)
     {
         const FReservationInfo& Info = It.Value();
@@ -387,7 +391,7 @@ void UGridOccupancySubsystem::ClearAllReservations()
 
 bool UGridOccupancySubsystem::IsCellReserved(const FIntPoint& Cell) const
 {
-    // ★★★ CRITICAL FIX (2025-11-11): FReservationInfo を使用 ★★★
+    // ★★★ CRITICAL FIX (2025-11-11): Use FReservationInfo ★★★
     if (const FReservationInfo* InfoPtr = ReservedCells.Find(Cell))
     {
         return InfoPtr->Owner.IsValid();
@@ -398,7 +402,7 @@ bool UGridOccupancySubsystem::IsCellReserved(const FIntPoint& Cell) const
 
 AActor* UGridOccupancySubsystem::GetReservationOwner(const FIntPoint& Cell) const
 {
-    // ★★★ CRITICAL FIX (2025-11-11): FReservationInfo を使用 ★★★
+    // ★★★ CRITICAL FIX (2025-11-11): Use FReservationInfo ★★★
     if (const FReservationInfo* InfoPtr = ReservedCells.Find(Cell))
     {
         return InfoPtr->Owner.Get();
@@ -414,7 +418,7 @@ bool UGridOccupancySubsystem::IsReservationOwnedByActor(AActor* Actor, const FIn
         return false;
     }
 
-    // ★★★ CRITICAL FIX (2025-11-11): FReservationInfo を使用 ★★★
+    // ★★★ CRITICAL FIX (2025-11-11): Use FReservationInfo ★★★
     if (const FReservationInfo* InfoPtr = ReservedCells.Find(Cell))
     {
         if (InfoPtr->Owner.IsValid())
@@ -433,7 +437,7 @@ FIntPoint UGridOccupancySubsystem::GetReservedCellForActor(AActor* Actor) const
         return FIntPoint(-1, -1);
     }
 
-    // ★★★ CRITICAL FIX (2025-11-11): FReservationInfo から Cell を取得 ★★★
+    // ★★★ CRITICAL FIX (2025-11-11): Get Cell from FReservationInfo ★★★
     if (const FReservationInfo* InfoPtr = ActorToReservation.Find(Actor))
     {
         return InfoPtr->Cell;
@@ -491,7 +495,7 @@ bool UGridOccupancySubsystem::HasCommittedThisTick(AActor* Actor) const
     return CommittedThisTick.Contains(Actor);
 }
 
-// ★★★ CRITICAL FIX (2025-11-11): 新しいメソッドの実装 ★★★
+// ★★★ CRITICAL FIX (2025-11-11): New method implementation ★★★
 
 void UGridOccupancySubsystem::MarkReservationCommitted(AActor* Actor, int32 TurnId)
 {
@@ -500,14 +504,14 @@ void UGridOccupancySubsystem::MarkReservationCommitted(AActor* Actor, int32 Turn
         return;
     }
 
-    // ActorToReservation から予約情報を取得して bCommitted を true にする
+    // Look up reservation and mark bCommitted = true
     if (FReservationInfo* InfoPtr = ActorToReservation.Find(Actor))
     {
         if (InfoPtr->TurnId == TurnId)
         {
             InfoPtr->bCommitted = true;
 
-            // ReservedCells の方も更新
+            // Mirror the committed flag in ReservedCells as well
             if (FReservationInfo* CellInfoPtr = ReservedCells.Find(InfoPtr->Cell))
             {
                 CellInfoPtr->bCommitted = true;
@@ -524,7 +528,7 @@ void UGridOccupancySubsystem::PurgeOutdatedReservations(int32 InCurrentTurnId)
 {
     int32 PurgedCount = 0;
 
-    // ReservedCells から古い予約を削除
+    // Remove stale reservations from ReservedCells
     for (auto It = ReservedCells.CreateIterator(); It; ++It)
     {
         if (It.Value().TurnId != InCurrentTurnId)
@@ -537,7 +541,7 @@ void UGridOccupancySubsystem::PurgeOutdatedReservations(int32 InCurrentTurnId)
         }
     }
 
-    // ActorToReservation から古い予約を削除
+    // Remove stale entries from ActorToReservation
     for (auto It = ActorToReservation.CreateIterator(); It; ++It)
     {
         if (It.Value().TurnId != InCurrentTurnId)
@@ -560,35 +564,41 @@ void UGridOccupancySubsystem::SetCurrentTurnId(int32 TurnId)
     UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] SetCurrentTurnId: %d"), CurrentTurnId);
 }
 
-// ★★★ CRITICAL FIX (2025-11-11): 整合性チェック - 重なり検出＆修復 ★★★
+// ★★★ CRITICAL FIX (2025-11-11): Consistency check - detect and fix overlapping occupancy ★★★
 
 void UGridOccupancySubsystem::EnforceUniqueOccupancy()
 {
-    // Step 1: Cell→Actors[] マップを構築（ActorToCell から逆引き）
+    // Step 1: Build Cell -> Actors[] map from ActorToCell
     TMap<FIntPoint, TArray<TWeakObjectPtr<AActor>>> CellToActors;
-    for (const auto& [Actor, Cell] : ActorToCell)
+    for (const auto& Pair : ActorToCell)
     {
+        AActor* Actor = Pair.Key;
+        const FIntPoint Cell = Pair.Value;
+
         if (Actor && Actor->IsValidLowLevel())
         {
             CellToActors.FindOrAdd(Cell).Add(Actor);
         }
     }
 
-    // Step 2: 重なり（複数Actorが同一セル）を検出
+    // Step 2: Detect overlaps (multiple actors on the same cell)
     int32 FixedCount = 0;
-    for (const auto& [Cell, Actors] : CellToActors)
+    for (const auto& Pair : CellToActors)
     {
+        const FIntPoint Cell = Pair.Key;
+        const TArray<TWeakObjectPtr<AActor>>& Actors = Pair.Value;
+
         if (Actors.Num() <= 1)
         {
-            continue;  // 正常：1セルに1Actor以下
+            continue;  // Normal: 0 or 1 actor per cell
         }
 
-        // ★★★ 重なり発見！ ★★★
+        // ★★★ Overlap detected ★★★
         UE_LOG(LogTemp, Error,
             TEXT("[GridOccupancy] OVERLAP DETECTED at (%d,%d): %d actors stacked!"),
             Cell.X, Cell.Y, Actors.Num());
 
-        // Step 3: Keeper（残すActor）を決定
+        // Step 3: Choose keeper (the actor that stays in this cell)
         AActor* Keeper = ChooseKeeperActor(Cell, Actors);
         if (!Keeper)
         {
@@ -602,7 +612,7 @@ void UGridOccupancySubsystem::EnforceUniqueOccupancy()
             TEXT("[GridOccupancy] Keeper for (%d,%d): %s"),
             Cell.X, Cell.Y, *GetNameSafe(Keeper));
 
-        // Step 4: Keeper 以外を退避
+        // Step 4: Relocate all other actors to nearby free cells
         for (const TWeakObjectPtr<AActor>& ActorPtr : Actors)
         {
             AActor* Actor = ActorPtr.Get();
@@ -611,17 +621,17 @@ void UGridOccupancySubsystem::EnforceUniqueOccupancy()
                 continue;
             }
 
-            // 最寄りの空セルを探す
+            // Find the nearest free cell
             const FIntPoint SafeCell = FindNearestFreeCell(Cell, 10);
             if (SafeCell == FIntPoint(-1, -1))
             {
                 UE_LOG(LogTemp, Error,
                     TEXT("[GridOccupancy] No free cell found for %s - keeping stacked (WARN)"),
                     *GetNameSafe(Actor));
-                continue;  // 退避先がない場合はスキップ（重なりのまま）
+                continue;  // No safe cell; leave overlapping (logical best effort)
             }
 
-            // 強制移動
+            // Force relocation
             ForceRelocate(Actor, SafeCell);
             FixedCount++;
 
@@ -641,14 +651,14 @@ void UGridOccupancySubsystem::EnforceUniqueOccupancy()
 
 FIntPoint UGridOccupancySubsystem::FindNearestFreeCell(const FIntPoint& Origin, int32 MaxSearchRadius) const
 {
-    // BFS で最寄りの空セルを探す
+    // BFS search for nearest free cell
     TQueue<FIntPoint> Queue;
     TSet<FIntPoint> Visited;
 
     Queue.Enqueue(Origin);
     Visited.Add(Origin);
 
-    // 8方向（上下左右＋斜め）
+    // 8 directions (orthogonal + diagonal)
     static const TArray<FIntPoint> Directions = {
         FIntPoint(1, 0), FIntPoint(-1, 0), FIntPoint(0, 1), FIntPoint(0, -1),
         FIntPoint(1, 1), FIntPoint(1, -1), FIntPoint(-1, 1), FIntPoint(-1, -1)
@@ -659,28 +669,28 @@ FIntPoint UGridOccupancySubsystem::FindNearestFreeCell(const FIntPoint& Origin, 
         FIntPoint Current;
         Queue.Dequeue(Current);
 
-        // 距離チェック
+        // Distance check (Manhattan)
         const int32 Distance = FMath::Abs(Current.X - Origin.X) + FMath::Abs(Current.Y - Origin.Y);
         if (Distance > MaxSearchRadius)
         {
             continue;
         }
 
-        // Origin 自身はスキップ
+        // Skip origin itself
         if (Current != Origin)
         {
-            // セルが占有されていない＆予約されていないか確認
+            // Check that cell is neither occupied nor reserved
             const bool bOccupied = OccupiedCells.Contains(Current);
             const bool bReserved = ReservedCells.Contains(Current);
 
             if (!bOccupied && !bReserved)
             {
-                // 空セル発見！
+                // Free cell found
                 return Current;
             }
         }
 
-        // 隣接セルを探索
+        // Enqueue neighbors
         for (const FIntPoint& Dir : Directions)
         {
             const FIntPoint Next = Current + Dir;
@@ -692,7 +702,7 @@ FIntPoint UGridOccupancySubsystem::FindNearestFreeCell(const FIntPoint& Origin, 
         }
     }
 
-    // 見つからなかった
+    // Nothing found within radius
     return FIntPoint(-1, -1);
 }
 
@@ -703,7 +713,7 @@ void UGridOccupancySubsystem::ForceRelocate(AActor* Actor, const FIntPoint& NewC
         return;
     }
 
-    // 旧セルから削除
+    // Remove from old cell
     if (const FIntPoint* OldCellPtr = ActorToCell.Find(Actor))
     {
         OccupiedCells.Remove(*OldCellPtr);
@@ -712,18 +722,18 @@ void UGridOccupancySubsystem::ForceRelocate(AActor* Actor, const FIntPoint& NewC
             *GetNameSafe(Actor), OldCellPtr->X, OldCellPtr->Y);
     }
 
-    // 新セルへ配置
+    // Register at new cell
     ActorToCell.Add(Actor, NewCell);
     OccupiedCells.Add(NewCell, Actor);
 
-    // ★★★ Actor 側の座標も同期（World座標へ変換が必要） ★★★
-    // 注：GridPathFinder を使用して Grid→World 変換が必要
-    // ここでは簡易的に、セルサイズを 100 と仮定（プロジェクトに合わせて調整）
+    // ★★★ Sync actor world position as well (simple grid->world mapping) ★★★
+    // NOTE: Ideally this should be done via GridPathfindingSubsystem::GridToWorld().
+    // Here we use a simple fixed cell size as a fallback; adjust to your project.
     const float CellSize = 100.0f;
     const FVector NewWorldLocation(
         NewCell.X * CellSize,
         NewCell.Y * CellSize,
-        Actor->GetActorLocation().Z  // Z座標は保持
+        Actor->GetActorLocation().Z  // Preserve Z
     );
     Actor->SetActorLocation(NewWorldLocation, false, nullptr, ETeleportType::TeleportPhysics);
 
@@ -740,8 +750,8 @@ AActor* UGridOccupancySubsystem::ChooseKeeperActor(const FIntPoint& Cell, const 
         return nullptr;
     }
 
-    // 優先順位1: OriginHold を持っているActorを優先
-    // （移動元セルを保護しているActorは、そのセルに留まる権利がある）
+    // Priority 1: Prefer the actor that owns an OriginHold on this cell
+    // (the actor protecting this origin cell has the strongest claim to stay).
     for (const TWeakObjectPtr<AActor>& ActorPtr : Actors)
     {
         AActor* Actor = ActorPtr.Get();
@@ -750,7 +760,7 @@ AActor* UGridOccupancySubsystem::ChooseKeeperActor(const FIntPoint& Cell, const 
             continue;
         }
 
-        // OriginHold チェック（ReservedCells に bIsOriginHold=true でこのセルを保持しているか）
+        // Check for OriginHold reservation on this cell
         if (const FReservationInfo* Info = ReservedCells.Find(Cell))
         {
             if (Info->bIsOriginHold && Info->Owner.Get() == Actor)
@@ -763,7 +773,7 @@ AActor* UGridOccupancySubsystem::ChooseKeeperActor(const FIntPoint& Cell, const 
         }
     }
 
-    // 優先順位2: 最初の有効なActorを選ぶ（TODO: Team優先度などを実装可能）
+    // Priority 2: Fallback to the first valid actor (TODO: extend with team priority, etc.)
     for (const TWeakObjectPtr<AActor>& ActorPtr : Actors)
     {
         AActor* Actor = ActorPtr.Get();
@@ -779,7 +789,7 @@ AActor* UGridOccupancySubsystem::ChooseKeeperActor(const FIntPoint& Cell, const 
     return nullptr;
 }
 
-// ★★★ CRITICAL FIX (2025-11-11): 物理座標ベースの占有マップ再構築（Gemini診断より） ★★★
+// ★★★ CRITICAL FIX (2025-11-11): Rebuild occupancy map from physical positions (based on diagnostics) ★★★
 
 void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& AllUnits)
 {
@@ -787,7 +797,7 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
         TEXT("[GridOccupancy] RebuildFromWorldPositions: Rebuilding occupancy map from physical positions for %d units"),
         AllUnits.Num());
 
-    // PathFinder を取得（Grid↔World 変換に必要）
+    // Acquire PathFinder (needed for Grid <-> World conversion)
     UWorld* World = GetWorld();
     if (!World)
     {
@@ -805,11 +815,11 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
         return;
     }
 
-    // ★★★ 占有マップをクリア（論理状態を完全リセット） ★★★
+    // ★★★ Clear current logical occupancy state completely ★★★
     ActorToCell.Empty();
     OccupiedCells.Empty();
 
-    // ★★★ 物理座標から Cell→Actors[] マップを構築 ★★★
+    // ★★★ Build Cell -> Actors[] map from physical positions ★★★
     TMap<FIntPoint, TArray<AActor*>> CellToActors;
     for (AActor* Unit : AllUnits)
     {
@@ -824,19 +834,22 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
         CellToActors.FindOrAdd(CurrentCell).Add(Unit);
 
         UE_LOG(LogTemp, Verbose,
-            TEXT("[GridOccupancy] RebuildFromWorldPositions: %s at World=(%s) → Cell=(%d,%d)"),
+            TEXT("[GridOccupancy] RebuildFromWorldPositions: %s at World=(%s) -> Cell=(%d,%d)"),
             *GetNameSafe(Unit), *WorldPos.ToCompactString(), CurrentCell.X, CurrentCell.Y);
     }
 
-    // ★★★ セルごとに占有を再登録、重なりがあれば解決 ★★★
+    // ★★★ Re-register occupancy per cell; resolve overlaps if any ★★★
     int32 OverlapCount = 0;
     int32 RelocatedCount = 0;
 
-    for (const auto& [Cell, Actors] : CellToActors)
+    for (const auto& Pair : CellToActors)
     {
+        const FIntPoint Cell = Pair.Key;
+        const TArray<AActor*>& Actors = Pair.Value;
+
         if (Actors.Num() == 1)
         {
-            // 正常：1セルに1Actor
+            // Normal: one actor per cell
             AActor* Actor = Actors[0];
             ActorToCell.Add(Actor, Cell);
             OccupiedCells.Add(Cell, Actor);
@@ -846,13 +859,13 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
         }
         else if (Actors.Num() > 1)
         {
-            // ★★★ 物理的な重なり発見！ ★★★
+            // ★★★ Physical overlap detected ★★★
             OverlapCount++;
             UE_LOG(LogTemp, Error,
                 TEXT("[GridOccupancy] RebuildFromWorldPositions: PHYSICAL OVERLAP at (%d,%d) with %d actors!"),
                 Cell.X, Cell.Y, Actors.Num());
 
-            // Keeper（残すActor）を決定（最初の1体）
+            // Choose keeper (first actor in the list for now)
             AActor* Keeper = Actors[0];
             ActorToCell.Add(Keeper, Cell);
             OccupiedCells.Add(Cell, Keeper);
@@ -861,7 +874,7 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
                 TEXT("[GridOccupancy] RebuildFromWorldPositions: Keeper=%s at (%d,%d)"),
                 *GetNameSafe(Keeper), Cell.X, Cell.Y);
 
-            // 残りのActorを最寄りの空セルへ強制退避
+            // Relocate the remaining actors to nearest free cells
             for (int32 i = 1; i < Actors.Num(); ++i)
             {
                 AActor* Evictee = Actors[i];
@@ -869,26 +882,26 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
 
                 if (FreeCell != FIntPoint(-1, -1))
                 {
-                    // 空セル発見 → 強制移動
+                    // Free cell found -> teleport there
                     const FVector NewWorldPos = PathFinder->GridToWorld(FreeCell, Evictee->GetActorLocation().Z);
                     Evictee->SetActorLocation(NewWorldPos, false, nullptr, ETeleportType::TeleportPhysics);
 
-                    // 占有マップに登録
+                    // Register in occupancy map
                     ActorToCell.Add(Evictee, FreeCell);
                     OccupiedCells.Add(FreeCell, Evictee);
                     RelocatedCount++;
 
                     UE_LOG(LogTemp, Warning,
-                        TEXT("[GridOccupancy] RebuildFromWorldPositions: RELOCATED %s from (%d,%d) → (%d,%d)"),
+                        TEXT("[GridOccupancy] RebuildFromWorldPositions: RELOCATED %s from (%d,%d) -> (%d,%d)"),
                         *GetNameSafe(Evictee), Cell.X, Cell.Y, FreeCell.X, FreeCell.Y);
                 }
                 else
                 {
-                    // 空セルが見つからない → 仕方なく重なったまま登録
+                    // No free cell: keep overlapped physically but do not register logically.
                     UE_LOG(LogTemp, Error,
                         TEXT("[GridOccupancy] RebuildFromWorldPositions: NO FREE CELL for %s - remains overlapped at (%d,%d)!"),
                         *GetNameSafe(Evictee), Cell.X, Cell.Y);
-                    // 占有マップには登録しない（論理的には存在しないことにする）
+                    // Not registering in occupancy map = treated as "not present" logically.
                 }
             }
         }
@@ -897,12 +910,29 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
     if (OverlapCount > 0)
     {
         UE_LOG(LogTemp, Error,
-            TEXT("[GridOccupancy] RebuildFromWorldPositions: ✅ Fixed %d physical overlaps, relocated %d actors"),
+            TEXT("[GridOccupancy] RebuildFromWorldPositions: Fixed %d physical overlaps, relocated %d actors"),
             OverlapCount, RelocatedCount);
     }
     else
     {
         UE_LOG(LogTemp, Log,
-            TEXT("[GridOccupancy] RebuildFromWorldPositions: ✅ No physical overlaps detected - occupancy map rebuilt successfully"));
+            TEXT("[GridOccupancy] RebuildFromWorldPositions: No physical overlaps detected - occupancy map rebuilt successfully"));
     }
+}
+
+// Priority 2.2: Return all occupied cells (for static blocker detection)
+TMap<FIntPoint, AActor*> UGridOccupancySubsystem::GetAllOccupiedCells() const
+{
+    TMap<FIntPoint, AActor*> Result;
+    for (const auto& Pair : OccupiedCells)
+    {
+        const FIntPoint Cell = Pair.Key;
+        const TWeakObjectPtr<AActor> ActorPtr = Pair.Value;
+
+        if (ActorPtr.IsValid())
+        {
+            Result.Add(Cell, ActorPtr.Get());
+        }
+    }
+    return Result;
 }

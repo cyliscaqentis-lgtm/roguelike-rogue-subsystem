@@ -10,6 +10,7 @@ When modifying code in this project, add a `CodeRevision` comment to track versi
 - `CodeRevision: INC-2025-1125-R1` - Blocks move intents from attack tiles and derives bHasAttack from cached intents per FIX_PLAN_25.md (2025-11-25 12:00)
 - `CodeRevision: INC-2025-1124-R1` - Simplifies `ComputeIntent` move handling so CoreResolvePhase arbitrates congested moves per `FIX_PLAN_24.md` (2025-11-24 09:30)
 - `CodeRevision: INC-2025-1123-R1` - Rejects DistanceField suggestions that do not reduce the distance to the player as outlined in `FIX_PLAN_23.md` (2025-11-23 12:00)
+- `CodeRevision: INC-2025-1118-R1` - Implements Priority 2.1 three-pass revalidation so stationary blockers lock out conflicting moves instead of triggering `GridOccupancy` rejection (2025-11-18 13:10)
 - `CodeRevision: INC-2025-1117G-R1` - Implement sequential enemy turn flow and caching per `FIX_PLAN_7.md` (2025-11-17 19:30)
 - `CodeRevision: INC-2025-1117H-R1` - Generalize `ExecuteAttacks` and add shared move dispatching per `FIX_PLAN_8.md` (2025-11-17 19:10)
 - `CodeRevision: INC-2025-1117DIAG-R1` - Added diagnostic ASC tag logging before sequential attacks to aid FIX_PLAN_10 investigation (2025-11-17 19:30)

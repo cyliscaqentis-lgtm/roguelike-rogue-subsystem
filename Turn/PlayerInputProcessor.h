@@ -29,7 +29,7 @@ public:
 
 	/** 入力ウィンドウを開く */
 	UFUNCTION(BlueprintCallable, Category = "Input", meta = (BlueprintAuthorityOnly))
-	void OpenInputWindow(int32 TurnId);
+	void OpenInputWindow(int32 TurnId, int32 WindowId);
 
 	/** 入力ウィンドウを閉じる */
 	UFUNCTION(BlueprintCallable, Category = "Input", meta = (BlueprintAuthorityOnly))
@@ -47,9 +47,9 @@ public:
 	// コマンド検証
 	//==========================================================================
 
-	/** コマンドのWindowIdが有効か検証 */
+	/** コマンドのTurnId/WindowIdが有効か検証 */
 	UFUNCTION(BlueprintCallable, Category = "Input")
-	bool ValidateCommand(const FPlayerCommand& Command, int32 ExpectedWindowId);
+	bool ValidateCommand(const FPlayerCommand& Command);
 
 	//==========================================================================
 	// コマンド処理
@@ -107,4 +107,16 @@ protected:
 	/** 現在の入力ウィンドウに対応するTurnId */
 	UPROPERTY()
 	int32 CurrentInputWindowTurnId = 0;
+
+	/** 現在受け付けているTurnId */
+	UPROPERTY()
+	int32 CurrentAcceptedTurnId = -1;
+
+	/** 現在受け付けているWindowId */
+	UPROPERTY()
+	int32 CurrentAcceptedWindowId = -1;
+
+	/** 入力ウィンドウが開いているか */
+	UPROPERTY()
+	bool bInputWindowOpen = false;
 };

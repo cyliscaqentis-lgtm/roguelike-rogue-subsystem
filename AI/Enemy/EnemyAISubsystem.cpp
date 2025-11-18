@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+// CodeRevision: INC-2025-00030-R3 (Ensure Obs/Enemies array alignment) (2025-11-18 10:00)
 // EnemyAISubsystem.cpp
 #include "AI/Enemy/EnemyAISubsystem.h"
 #include "AI/Enemy/EnemyThinkerBase.h"
@@ -56,32 +57,42 @@ void UEnemyAISubsystem::BuildObservations(
     int32 ValidEnemies = 0;
     int32 InvalidEnemies = 0;
 
+    // CodeRevision: INC-2025-00030-R3
+    // Enemies 配列と OutObs 配列のインデックス整合性を保証するため、
+    // 無効な Enemy に対してもダミー Observation を挿入する。
     for (int32 i = 0; i < Enemies.Num(); ++i)
     {
         AActor* Enemy = Enemies[i];
 
+        FEnemyObservation Obs;
+        Obs.PlayerGridPosition = PlayerGrid;
+
         if (!IsValid(Enemy))
         {
-            UE_LOG(LogEnemyAI, Log, TEXT("[BuildObservations] Enemy[%d] is invalid, skipping"), i);
-            ++InvalidEnemies;
-            continue;
-        }
+            UE_LOG(LogEnemyAI, Log,
+                TEXT("[BuildObservations] Enemy[%d] is invalid, inserting dummy observation"), i);
 
-        FEnemyObservation Obs;
-        Obs.GridPosition = PathFinder->WorldToGrid(Enemy->GetActorLocation());
-        Obs.PlayerGridPosition = PlayerGrid;
-        // CodeRevision: INC-2025-00016-R1 (Use FGridUtils::ChebyshevDistance) (2025-11-16 14:00)
-        Obs.DistanceInTiles = FGridUtils::ChebyshevDistance(Obs.GridPosition, PlayerGrid);
+            Obs.GridPosition = FIntPoint::ZeroValue;
+            Obs.DistanceInTiles = -1;
+            ++InvalidEnemies;
+        }
+        else
+        {
+            Obs.GridPosition = PathFinder->WorldToGrid(Enemy->GetActorLocation());
+            // CodeRevision: INC-2025-00016-R1 (Use FGridUtils::ChebyshevDistance) (2025-11-16 14:00)
+            Obs.DistanceInTiles = FGridUtils::ChebyshevDistance(Obs.GridPosition, PlayerGrid);
+
+            ++ValidEnemies;
+
+            if (i < 3)
+            {
+                UE_LOG(LogEnemyAI, Log,
+                    TEXT("[BuildObservations] Enemy[%d]: %s, Grid=(%d, %d), DistToPlayer=%d"),
+                    i, *Enemy->GetName(), Obs.GridPosition.X, Obs.GridPosition.Y, Obs.DistanceInTiles);
+            }
+        }
 
         OutObs.Add(Obs);
-        ++ValidEnemies;
-
-        if (i < 3)
-        {
-            UE_LOG(LogEnemyAI, Log,
-                TEXT("[BuildObservations] Enemy[%d]: %s, Grid=(%d, %d), DistToPlayer=%d"),
-                i, *Enemy->GetName(), Obs.GridPosition.X, Obs.GridPosition.Y, Obs.DistanceInTiles);
-        }
     }
 
     UE_LOG(LogEnemyAI, Log,
@@ -96,19 +107,19 @@ void UEnemyAISubsystem::BuildObservations(
             int32 BlockedCount = 0;
             int32 TotalCells = (SampleRadius * 2 + 1) * (SampleRadius * 2 + 1);
             
-                for (int32 dx = -SampleRadius; dx <= SampleRadius; ++dx)
+            for (int32 dx = -SampleRadius; dx <= SampleRadius; ++dx)
+            {
+                for (int32 dy = -SampleRadius; dy <= SampleRadius; ++dy)
                 {
-                    for (int32 dy = -SampleRadius; dy <= SampleRadius; ++dy)
+                    FIntPoint SampleCell = PlayerGrid + FIntPoint(dx, dy);
+                    // CodeRevision: INC-2025-00021-R1 (Replace IsCellWalkable with IsCellWalkableIgnoringActor - Phase 2.3) (2025-11-17 15:05)
+                    // Debug code: only terrain check needed
+                    if (PathFinder && !PathFinder->IsCellWalkableIgnoringActor(SampleCell, nullptr))
                     {
-                        FIntPoint SampleCell = PlayerGrid + FIntPoint(dx, dy);
-                        // CodeRevision: INC-2025-00021-R1 (Replace IsCellWalkable with IsCellWalkableIgnoringActor - Phase 2.3) (2025-11-17 15:05)
-                        // Debug code: only terrain check needed
-                        if (PathFinder && !PathFinder->IsCellWalkableIgnoringActor(SampleCell, nullptr))
-                        {
-                            BlockedCount++;
-                        }
+                        BlockedCount++;
                     }
                 }
+            }
             
             UE_LOG(LogEnemyAI, Verbose,
                 TEXT("[BuildObservations] GridOccupancy SAMPLE: %d/%d cells blocked around player (%d,%d)"),

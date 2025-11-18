@@ -514,9 +514,6 @@ protected:
     UPROPERTY(BlueprintReadWrite, ReplicatedUsing = OnRep_CurrentTurnId, Category = "Turn")
     int32 CurrentTurnId = 0;
 
-    /** Current WindowId used for player input gating. */
-    int32 CurrentInputWindowId = 0;
-
     /** Flag indicating if the first turn has started (for retry logic) */
     UPROPERTY(Replicated)
     bool bFirstTurnStarted = false;

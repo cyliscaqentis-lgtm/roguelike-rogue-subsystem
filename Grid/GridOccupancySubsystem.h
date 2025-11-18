@@ -7,10 +7,10 @@
 #include "GridOccupancySubsystem.generated.h"
 
 /**
- * ★★★ CRITICAL FIX (2025-11-11): 予約情報構造体（TurnId + bCommitted + bIsOriginHold） ★★★
- * - TurnId: 予約が作成されたターン番号（古い予約の検出用）
- * - bCommitted: ConflictResolver で勝者が決まり、確定した予約かどうか
- * - bIsOriginHold: 移動元セルの保護用予約（backstab防止）
+ * ★★★ CRITICAL FIX (2025-11-11): Reservation info struct (TurnId + bCommitted + bIsOriginHold) ★★★
+ * - TurnId: Turn number when the reservation was created (for detecting stale reservations)
+ * - bCommitted: True if ConflictResolver selected this reservation as a winner and it is now committed
+ * - bIsOriginHold: Reservation used to protect the origin cell (backstab protection)
  */
 USTRUCT()
 struct FReservationInfo
@@ -50,9 +50,9 @@ struct FReservationInfo
 };
 
 /**
- * UGridOccupancySubsystem: グリチE��の占有�E通行可否管琁E
- * - 神速対応�E要E��Actor→セル位置の最新マップを管琁E
- * - Slot0の移動結果がSlot1に確実に反映されめE
+ * UGridOccupancySubsystem: Grid occupancy and passability management
+ * - Maintains an up-to-date Actor → Cell map for fast queries
+ * - Ensures that movement results of Slot 0 are reliably reflected into Slot 1
  */
 UCLASS()
 class LYRAGAME_API UGridOccupancySubsystem : public UWorldSubsystem
@@ -63,17 +63,17 @@ public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
 
-    // ☁E�E☁E神速対応�E核忁E��アクターの現在セル位置を取征E☁E�E☁E
+    // Fast-path core API: get the current cell of an actor
     UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
     FIntPoint GetCellOfActor(AActor* Actor) const;
 
-    // ☁E�E☁Eセル位置を更新�E�移動実行後に呼び出す！E☁E�E☁E
-    // ★★★ CRITICAL FIX (2025-11-10): 二重書き込みガード（成功=true, 失敗=false） ★★★
+    // Update cell position (must be called after a move is actually executed)
+    // ★★★ CRITICAL FIX (2025-11-10): Guard against double-write (returns true on success, false on failure) ★★★
     UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
     bool UpdateActorCell(AActor* Actor, FIntPoint NewCell);
 
     /**
-     * 持E��セルが占有されてぁE��か判宁E
+     * Check if the given cell is currently occupied
      */
     UFUNCTION(BlueprintPure, Category = "Turn|Occupancy")
     bool IsCellOccupied(const FIntPoint& Cell) const;
@@ -97,30 +97,37 @@ public:
     UFUNCTION(BlueprintPure, Category = "Turn|Occupancy")
     FIntPoint GetReservedCellForActor(AActor* Actor) const;
 
-    // ☁E�E☁EIsWalkableはPathFinderに統一するため削除 ☁E�E☁E
+    /**
+     * Priority 2.2: Get all occupied cells for static blocker detection
+     * @return Map of Cell -> Actor for all currently occupied cells
+     */
+    UFUNCTION(BlueprintPure, Category = "Turn|Occupancy")
+    TMap<FIntPoint, AActor*> GetAllOccupiedCells() const;
+
+    // NOTE: IsWalkable is removed; walkability is unified in PathFinder
     // UFUNCTION(BlueprintPure, Category = "Turn|Occupancy")
     // bool IsWalkable(const FIntPoint& Cell) const;
 
     /**
-     * セルを占有する（アクター配置時に呼び出す！E
+     * Mark a cell as occupied (call when placing/spawning an actor)
      */
     UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
     void OccupyCell(const FIntPoint& Cell, AActor* Actor);
 
     /**
-     * セルの占有を解除�E�アクター削除時に呼び出す！E
+     * Release occupancy of a cell (call when the actor is removed/despawned)
      */
     UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
     void ReleaseCell(const FIntPoint& Cell);
 
     /**
-     * アクターの登録を削除�E�死亡時に呼び出す！E
+     * Unregister an actor from the occupancy system (call on death / removal)
      */
     UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
     void UnregisterActor(AActor* Actor);
 
     /**
-     * ★★★ CRITICAL FIX (2025-11-11): bool型に変更（成功/失敗を返す） ★★★
+     * ★★★ CRITICAL FIX (2025-11-11): Changed to bool return (success/failure) ★★★
      * Reserve a cell for an actor. Returns false if the cell is already reserved by another actor.
      * @param Actor - The actor requesting the reservation
      * @param Cell - The grid cell to reserve
@@ -143,13 +150,13 @@ public:
     bool TryReserveCell(AActor* Actor, const FIntPoint& Cell, int32 TurnId);
 
     /**
-     * Begin move phase - clears committed actors set
+     * Begin move phase - clears the committed actors set
      */
     UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
     void BeginMovePhase();
 
     /**
-     * End move phase - cleanup
+     * End move phase - cleanup committed actors set
      */
     UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
     void EndMovePhase();
@@ -160,15 +167,15 @@ public:
     bool HasCommittedThisTick(AActor* Actor) const;
 
     /**
-     * ★★★ CRITICAL FIX (2025-11-11): 勝者の予約を committed にマーク ★★★
-     * ConflictResolver で勝者が決まった後に呼び出す
+     * ★★★ CRITICAL FIX (2025-11-11): Mark winning reservations as committed ★★★
+     * Must be called by ConflictResolver after a winner has been determined
      */
     UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
     void MarkReservationCommitted(AActor* Actor, int32 TurnId);
 
     /**
-     * ★★★ CRITICAL FIX (2025-11-11): 古い予約を削除 ★★★
-     * ターン開始時 or CleanupPhase で呼び出す
+     * ★★★ CRITICAL FIX (2025-11-11): Remove stale reservations ★★★
+     * Call at turn start or during a cleanup phase
      */
     UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
     void PurgeOutdatedReservations(int32 CurrentTurnId);
@@ -186,80 +193,81 @@ public:
     int32 GetCurrentTurnId() const { return CurrentTurnId; }
 
     /**
-     * ★★★ CRITICAL FIX (2025-11-11): 既存の重なりを強制修復 ★★★
-     * ターン開始時に呼び出し、同一セルに複数のActorが占有している場合に修正する
-     * - 1セルに複数Actorがいる場合、1体だけを残して他は最寄りの空セルへ退避
-     * - Cell→Actor の一意性を強制
+     * ★★★ CRITICAL FIX (2025-11-11): Force repair of existing overlaps ★★★
+     * Call at turn start to fix cases where multiple actors occupy the same cell:
+     * - If multiple actors share a cell, keep one actor and relocate others to the nearest free cells
+     * - Enforces uniqueness of Cell -> Actor mapping
      */
     UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
     void EnforceUniqueOccupancy();
 
     /**
-     * ★★★ CRITICAL FIX (2025-11-11): 物理座標ベースの占有マップ再構築 ★★★
-     * 全ユニットの物理座標から占有マップを再構築し、論理/物理の不整合を修正
-     * - ActorToCell と OccupiedCells を完全にクリアして再構築
-     * - 物理的に重なっている場合、1体を残して他は最寄りの空セルへ退避
-     * - ターン開始時に呼び出すことで、あらゆる不整合をリセット
-     * @param AllUnits すべてのユニット（Player + Enemies）
+     * ★★★ CRITICAL FIX (2025-11-11): Rebuild occupancy map from physical positions ★★★
+     * Rebuilds the logical occupancy map from the physical world positions of all units,
+     * fixing any logical/physical inconsistencies:
+     * - Completely clears ActorToCell and OccupiedCells and reconstructs them
+     * - If multiple actors physically overlap, keeps one and relocates others to nearest free cells
+     * - Call at turn start to reset any accumulated inconsistencies
+     * @param AllUnits All units (players + enemies)
      */
     UFUNCTION(BlueprintCallable, Category = "Turn|Occupancy")
     void RebuildFromWorldPositions(const TArray<AActor*>& AllUnits);
 
 private:
     /**
-     * ★★★ CRITICAL FIX (2025-11-11): 整合性チェック用ヘルパー ★★★
-     * 指定セルから最寄りの空セルを BFS で探す
-     * @return 空セル、見つからない場合は (-1, -1)
+     * ★★★ CRITICAL FIX (2025-11-11): Consistency helper ★★★
+     * Find the nearest free cell from the given origin using BFS.
+     * @return A free cell, or (-1, -1) if none is found within the given radius
      */
     FIntPoint FindNearestFreeCell(const FIntPoint& Origin, int32 MaxSearchRadius = 10) const;
 
     /**
-     * ★★★ CRITICAL FIX (2025-11-11): 整合性チェック用ヘルパー ★★★
-     * Actorを強制的に指定セルへ移動（予約なしの直接書き込み）
-     * - ActorToCell と OccupiedCells の両方を更新
-     * - Actor側の座標も同期（SetActorLocation）
+     * ★★★ CRITICAL FIX (2025-11-11): Consistency helper ★★★
+     * Forcefully relocate an actor to the specified cell (no reservation, direct write):
+     * - Updates both ActorToCell and OccupiedCells
+     * - Also synchronizes the actor's world position via SetActorLocation
      */
     void ForceRelocate(AActor* Actor, const FIntPoint& NewCell);
 
     /**
-     * ★★★ CRITICAL FIX (2025-11-11): 整合性チェック用ヘルパー ★★★
-     * 重なりが発生した場合、どのActorを残すか決定
-     * 優先順位：OriginHold所有者 > Team優先度 > ランダム
+     * ★★★ CRITICAL FIX (2025-11-11): Consistency helper ★★★
+     * Decide which actor should remain on an overlapped cell.
+     * Priority: OriginHold owner > team/priority rules (future) > first/other
      */
     AActor* ChooseKeeperActor(const FIntPoint& Cell, const TArray<TWeakObjectPtr<AActor>>& Actors) const;
 
     /**
      * Check if an actor will leave its current cell this tick
-     * Returns true if the actor has a reservation for a different cell
+     * Returns true if the actor holds a reservation to a different cell
      */
     bool WillLeaveThisTick(AActor* Actor) const;
 
     /**
-     * Check if two actors form a perfect swap (A->B and B->A)
+     * Check if two actors form a perfect swap (A -> B and B -> A)
      * Returns true if both actors have reservations to each other's current cells
      */
     bool IsPerfectSwap(AActor* A, AActor* B) const;
 
-    // ☁EActor ↁEセル位置のマップ（神速対応�E要E��E
+    // Map from Actor -> current cell (fast-path access to latest positions)
     UPROPERTY()
     TMap<TObjectPtr<AActor>, FIntPoint> ActorToCell;
 
-    // セル ↁE占有アクターのマップ（通行可否判定用�E�E
+    // Map from Cell -> occupying actor (used for passability checks)
     UPROPERTY()
     TMap<FIntPoint, TWeakObjectPtr<AActor>> OccupiedCells;
 
-    // ★★★ CRITICAL FIX (2025-11-11): FReservationInfo 形式に変更（TurnId + bCommitted） ★★★
+    // ★★★ CRITICAL FIX (2025-11-11): Use FReservationInfo (TurnId + bCommitted + bIsOriginHold) ★★★
     UPROPERTY()
     TMap<FIntPoint, FReservationInfo> ReservedCells;
 
     UPROPERTY()
     TMap<TWeakObjectPtr<AActor>, FReservationInfo> ActorToReservation;
 
-    // ★★★ 二相コミット用: このターンで移動を確定したActor集合 (2025-11-11) ★★★
+    // ★★★ Two-phase commit: set of actors that have committed their move this tick (2025-11-11) ★★★
     UPROPERTY()
     TSet<TWeakObjectPtr<AActor>> CommittedThisTick;
 
-    // ★★★ CRITICAL FIX (2025-11-11): 現在のターンID（古い予約の検出用） ★★★
+    // ★★★ CRITICAL FIX (2025-11-11): Current turn ID (for detecting stale reservations) ★★★
     UPROPERTY()
     int32 CurrentTurnId = 0;
 };

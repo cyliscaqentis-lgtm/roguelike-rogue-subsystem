@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 // AttackPhaseExecutorSubsystem.cpp
+
 #include "Turn/AttackPhaseExecutorSubsystem.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
@@ -28,14 +29,23 @@ void UAttackPhaseExecutorSubsystem::Deinitialize()
 {
 	UnbindCurrentASC();
 
+	Queue.Empty();
+	CurrentIndex = 0;
+	TurnId = -1;
+
 	UE_LOG(LogAttackPhase, Log, TEXT("[AttackPhaseExecutor] Deinitialized"));
 	Super::Deinitialize();
 }
+
+//--------------------------------------------------------------------------
+// Public API
+//--------------------------------------------------------------------------
 
 void UAttackPhaseExecutorSubsystem::BeginSequentialAttacks(
 	const TArray<FResolvedAction>& AttackActions,
 	int32 InTurnId)
 {
+	// Ensure we are not still bound to a previous ASC
 	UnbindCurrentASC();
 
 	Queue = AttackActions;
@@ -44,16 +54,19 @@ void UAttackPhaseExecutorSubsystem::BeginSequentialAttacks(
 
 	UE_LOG(LogAttackPhase, Log,
 		TEXT("[Turn %d] BeginSequentialAttacks: %d attacks queued"),
-		 TurnId, Queue.Num());
+		TurnId, Queue.Num());
 
 	if (Queue.Num() == 0)
 	{
 		UE_LOG(LogAttackPhase, Warning,
 			TEXT("[Turn %d] No attacks to execute"), TurnId);
+
 		OnFinished.Broadcast(TurnId);
 		return;
 	}
 
+	// Pre-register all attacks in the TurnActionBarrier so that abilities
+	// can reference a stable ActionId during their lifetime.
 	if (UWorld* World = GetWorld())
 	{
 		if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
@@ -73,7 +86,14 @@ void UAttackPhaseExecutorSubsystem::BeginSequentialAttacks(
 
 					UE_LOG(LogAttackPhase, Verbose,
 						TEXT("[Turn %d] Pre-registered attack %d/%d: %s (ActionId=%s)"),
-						TurnId, i + 1, Queue.Num(), *Attacker->GetName(), *ActionId.ToString());
+						TurnId, i + 1, Queue.Num(),
+						*GetNameSafe(Attacker), *ActionId.ToString());
+				}
+				else
+				{
+					UE_LOG(LogAttackPhase, Warning,
+						TEXT("[Turn %d] Skip pre-registering attack %d/%d: Actor is invalid"),
+						TurnId, i + 1, Queue.Num());
 				}
 			}
 		}
@@ -94,11 +114,16 @@ void UAttackPhaseExecutorSubsystem::NotifyAttackCompleted(AActor* Attacker)
 	{
 		UE_LOG(LogAttackPhase, Verbose,
 			TEXT("[Turn %d] NotifyAttackCompleted: %s"),
-			TurnId, *Attacker->GetName());
+			TurnId, *GetNameSafe(Attacker));
 	}
 
+	// Reuse the same completion path as the ASC event callback
 	OnAbilityCompleted(nullptr);
 }
+
+//--------------------------------------------------------------------------
+// Internal execution pipeline
+//--------------------------------------------------------------------------
 
 void UAttackPhaseExecutorSubsystem::DispatchNext()
 {
@@ -120,7 +145,8 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 		UE_LOG(LogAttackPhase, Warning,
 			TEXT("[Turn %d] Invalid actor at index %d, skipping"),
 			TurnId, CurrentIndex);
-		CurrentIndex++;
+
+		++CurrentIndex;
 		DispatchNext();
 		return;
 	}
@@ -133,8 +159,9 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 	{
 		UE_LOG(LogAttackPhase, Warning,
 			TEXT("[Turn %d] %s has no ASC, skipping"),
-			TurnId, *Attacker->GetName());
-		CurrentIndex++;
+			TurnId, *GetNameSafe(Attacker));
+
+		++CurrentIndex;
 		DispatchNext();
 		return;
 	}
@@ -148,7 +175,7 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 
 	UE_LOG(LogAttackPhase, Warning,
 		TEXT("[Turn %d] %s: ASC has %d activatable abilities"),
-		TurnId, *Attacker->GetName(), ASC->GetActivatableAbilities().Num());
+		TurnId, *GetNameSafe(Attacker), ASC->GetActivatableAbilities().Num());
 
 	for (int32 i = 0; i < ASC->GetActivatableAbilities().Num(); ++i)
 	{
@@ -157,8 +184,12 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 		{
 			UE_LOG(LogAttackPhase, Warning,
 				TEXT("  [%d] Ability=%s (Class=%s), Level=%d, InputID=%d, IsActive=%d"),
-				i, *Spec.Ability->GetName(), *Spec.Ability->GetClass()->GetName(),
-				Spec.Level, Spec.InputID, Spec.IsActive());
+				i,
+				*Spec.Ability->GetName(),
+				*Spec.Ability->GetClass()->GetName(),
+				Spec.Level,
+				Spec.InputID,
+				Spec.IsActive());
 
 			const FGameplayTagContainer& AssetTags = Spec.Ability->GetAssetTags();
 			UE_LOG(LogAttackPhase, Warning,
@@ -169,8 +200,9 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 
 	UE_LOG(LogAttackPhase, Warning,
 		TEXT("[Turn %d] Sending GameplayEvent: Tag=%s (to %s)"),
-		TurnId, TEXT("GameplayEvent.Intent.Attack"), *Attacker->GetName());
-
+		TurnId,
+		TEXT("GameplayEvent.Intent.Attack"),
+		*GetNameSafe(Attacker));
 
 	const int32 TriggeredCount = ASC->HandleGameplayEvent(Payload.EventTag, &Payload);
 
@@ -178,20 +210,30 @@ void UAttackPhaseExecutorSubsystem::DispatchNext()
 	{
 		UE_LOG(LogAttackPhase, Log,
 			TEXT("[Turn %d] Dispatched attack %d/%d: %s (Tag=%s)"),
-			TurnId, CurrentIndex + 1, Queue.Num(),
-			*Attacker->GetName(), TEXT("GameplayEvent.Intent.Attack"));
-		}
-		else
-		{
-			UE_LOG(LogAttackPhase, Warning,
-				TEXT("[Turn %d] %s: %s failed to trigger any abilities"),
-				TurnId, *Attacker->GetName(), TEXT("GameplayEvent.Intent.Attack"));
+			TurnId,
+			CurrentIndex + 1,
+			Queue.Num(),
+			*GetNameSafe(Attacker),
+			TEXT("GameplayEvent.Intent.Attack"));
+	}
+	else
+	{
+		UE_LOG(LogAttackPhase, Warning,
+			TEXT("[Turn %d] %s: %s failed to trigger any abilities"),
+			TurnId,
+			*GetNameSafe(Attacker),
+			TEXT("GameplayEvent.Intent.Attack"));
 
-			UnbindCurrentASC();
-			CurrentIndex++;
-			DispatchNext();
+		// No ability fired; treat as completed and move on.
+		UnbindCurrentASC();
+		++CurrentIndex;
+		DispatchNext();
 	}
 }
+
+//--------------------------------------------------------------------------
+// ASC binding helpers
+//--------------------------------------------------------------------------
 
 void UAttackPhaseExecutorSubsystem::BindASC(UAbilitySystemComponent* ASC)
 {
@@ -201,6 +243,7 @@ void UAttackPhaseExecutorSubsystem::BindASC(UAbilitySystemComponent* ASC)
 		return;
 	}
 
+	// Ensure we are not still bound to an old ASC
 	UnbindCurrentASC();
 
 	WaitingASC = ASC;
@@ -211,16 +254,14 @@ void UAttackPhaseExecutorSubsystem::BindASC(UAbilitySystemComponent* ASC)
 
 	UE_LOG(LogAttackPhase, Verbose,
 		TEXT("[Turn %d] Bound to ASC: %s"),
-		TurnId, *ASC->GetOwner()->GetName());
+		TurnId, *GetNameSafe(ASC->GetOwner()));
 }
 
 void UAttackPhaseExecutorSubsystem::UnbindCurrentASC()
 {
 	if (WaitingASC.IsValid() && AbilityCompletedHandle.IsValid())
 	{
-		UAbilitySystemComponent* ASC = WaitingASC.Get();
-
-		if (ASC)
+		if (UAbilitySystemComponent* ASC = WaitingASC.Get())
 		{
 			ASC->GenericGameplayEventCallbacks.FindOrAdd(
 				RogueGameplayTags::Gameplay_Event_Turn_Ability_Completed
@@ -228,7 +269,7 @@ void UAttackPhaseExecutorSubsystem::UnbindCurrentASC()
 
 			UE_LOG(LogAttackPhase, Verbose,
 				TEXT("[Turn %d] Unbound from ASC: %s"),
-				TurnId, *ASC->GetOwner()->GetName());
+				TurnId, *GetNameSafe(ASC->GetOwner()));
 		}
 
 		AbilityCompletedHandle.Reset();
@@ -236,6 +277,10 @@ void UAttackPhaseExecutorSubsystem::UnbindCurrentASC()
 
 	WaitingASC.Reset();
 }
+
+//--------------------------------------------------------------------------
+// Callbacks
+//--------------------------------------------------------------------------
 
 void UAttackPhaseExecutorSubsystem::OnAbilityCompleted(
 	const FGameplayEventData* Payload)
@@ -245,15 +290,20 @@ void UAttackPhaseExecutorSubsystem::OnAbilityCompleted(
 		TurnId, CurrentIndex);
 
 	UnbindCurrentASC();
-	CurrentIndex++;
+	++CurrentIndex;
 	DispatchNext();
 }
+
+//--------------------------------------------------------------------------
+// Barrier integration helpers
+//--------------------------------------------------------------------------
 
 FGuid UAttackPhaseExecutorSubsystem::GetActionIdForActor(AActor* Actor) const
 {
 	if (!Actor)
 	{
-		UE_LOG(LogAttackPhase, Warning, TEXT("[GetActionIdForActor] Actor is null"));
+		UE_LOG(LogAttackPhase, Warning,
+			TEXT("[GetActionIdForActor] Actor is null"));
 		return FGuid();
 	}
 
@@ -267,6 +317,7 @@ FGuid UAttackPhaseExecutorSubsystem::GetActionIdForActor(AActor* Actor) const
 
 	UE_LOG(LogAttackPhase, Warning,
 		TEXT("[GetActionIdForActor] Actor %s not found in attack queue"),
-		*Actor->GetName());
+		*GetNameSafe(Actor));
+
 	return FGuid();
 }

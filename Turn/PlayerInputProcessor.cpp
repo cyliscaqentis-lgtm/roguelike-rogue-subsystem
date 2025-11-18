@@ -15,7 +15,7 @@ void UPlayerInputProcessor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	DOREPLIFETIME(UPlayerInputProcessor, bWaitingForPlayerInput);
 }
 
-void UPlayerInputProcessor::OpenInputWindow(int32 TurnId)
+void UPlayerInputProcessor::OpenInputWindow(int32 TurnId, int32 WindowId)
 {
 	UWorld* World = GetWorld();
 	if (!World || !World->GetAuthGameMode())
@@ -23,18 +23,19 @@ void UPlayerInputProcessor::OpenInputWindow(int32 TurnId)
 		return; // サーバーのみ実行
 	}
 
+	CurrentAcceptedTurnId = TurnId;
+	CurrentAcceptedWindowId = WindowId;
+	bInputWindowOpen = true;
+
+	// レガシー互換用
 	CurrentInputWindowTurnId = TurnId;
 	bWaitingForPlayerInput = true;
+
 	ApplyWaitInputGate(true);
 
-	// TurnFlowCoordinatorのInputWindowIdを更新
-	if (UTurnFlowCoordinator* TFC = World->GetSubsystem<UTurnFlowCoordinator>())
-	{
-		// InputWindowIdはTurnFlowCoordinatorで管理される
-		// ここでは入力受付開始のみを処理
-	}
-
-	UE_LOG(LogTemp, Log, TEXT("[PlayerInputProcessor] Input window opened for TurnId=%d"), TurnId);
+	UE_LOG(LogTemp, Log,
+		TEXT("[PIP] OpenInputWindow: TurnId=%d, WindowId=%d"),
+		TurnId, WindowId);
 }
 
 void UPlayerInputProcessor::CloseInputWindow()
@@ -45,10 +46,13 @@ void UPlayerInputProcessor::CloseInputWindow()
 		return; // サーバーのみ実行
 	}
 
+	bInputWindowOpen = false;
 	bWaitingForPlayerInput = false;
 	ApplyWaitInputGate(false);
 
-	UE_LOG(LogTemp, Log, TEXT("[PlayerInputProcessor] Input window closed"));
+	UE_LOG(LogTemp, Log,
+		TEXT("[PIP] CloseInputWindow: TurnId=%d, WindowId=%d"),
+		CurrentAcceptedTurnId, CurrentAcceptedWindowId);
 }
 
 bool UPlayerInputProcessor::IsInputOpen_Server() const
@@ -62,13 +66,29 @@ bool UPlayerInputProcessor::IsInputOpen_Server() const
 	return bWaitingForPlayerInput;
 }
 
-bool UPlayerInputProcessor::ValidateCommand(const FPlayerCommand& Command, int32 ExpectedWindowId)
+bool UPlayerInputProcessor::ValidateCommand(const FPlayerCommand& Command)
 {
-	if (Command.WindowId != ExpectedWindowId)
+	if (!bInputWindowOpen)
+	{
+		UE_LOG(LogTemp, Verbose,
+			TEXT("[PIP] RejectCommand: InputWindowClosed (Cmd Turn=%d, Window=%d)"),
+			Command.TurnId, Command.WindowId);
+		return false;
+	}
+
+	if (Command.TurnId != CurrentAcceptedTurnId)
 	{
 		UE_LOG(LogTemp, Warning,
-			TEXT("[PlayerInputProcessor] Command WindowId mismatch: Expected=%d, Got=%d"),
-			ExpectedWindowId, Command.WindowId);
+			TEXT("[PIP] RejectCommand: TurnId mismatch (Expected=%d, Got=%d)"),
+			CurrentAcceptedTurnId, Command.TurnId);
+		return false;
+	}
+
+	if (Command.WindowId != CurrentAcceptedWindowId)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[PIP] RejectCommand: WindowId mismatch (Expected=%d, Got=%d)"),
+			CurrentAcceptedWindowId, Command.WindowId);
 		return false;
 	}
 

@@ -1,4 +1,4 @@
- 
+
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
@@ -13,7 +13,7 @@
 class AGameTurnManagerBase;
 
 /**
- * UConflictResolverSubsystem: —\–ñƒe[ƒuƒ‚ÆÕ“Ë‰ğŒˆiv2.2 ‘æ7ğE‘æ17ğj
+ * UConflictResolverSubsystem: äºˆç´„ãƒ†ãƒ¼ãƒ–ãƒ«ã¨è¡çªè§£æ±º(v2.2 ç¬¬7ç« ãƒ»ç¬¬17ç« )
  */
 UCLASS()
 class LYRAGAME_API UConflictResolverSubsystem : public UWorldSubsystem
@@ -25,44 +25,70 @@ public:
     virtual void Deinitialize() override;
 
     /**
-     * —\–ñƒe[ƒuƒ‚ğƒNƒŠƒAiƒ^[ƒ“ŠJnj
+     * äºˆç´„ãƒ†ãƒ¼ãƒ–ãƒ«ã‚’ã‚¯ãƒªã‚¢(ã‚¿ãƒ¼ãƒ³é–‹å§‹æ™‚)
      */
     UFUNCTION(BlueprintCallable, Category = "Turn|Resolve")
     void ClearReservations();
 
     /**
-     * —\–ñ‰•å‚ğ’Ç‰Á
+     * äºˆç´„å¿œå‹Ÿè¿½åŠ 
      */
     UFUNCTION(BlueprintCallable, Category = "Turn|Resolve")
     void AddReservation(const FReservationEntry& Entry);
 
     /**
-     * ‘S‚Ä‚ÌÕ“Ë‚ğ‰ğŒˆiv2.2 O’iƒoƒPƒbƒg + ƒTƒCƒNƒ–‰Âj
+     * Resolve all conflicts and produce final action list (v2.2: TripleBucket + Cycle)
+     *
+     * CONTRACT (Priority 2 guarantees):
+     *   1. Intent Non-Disappearance: Input reservation count MUST equal output action count.
+     *      - Enforced by checkf() at function end to prevent silent intent loss
+     *      - Every reservation becomes exactly one FResolvedAction (success, fallback, or wait)
+     *   2. ResolutionReason Completeness: All actions MUST have ResolutionReason set.
+     *      - Explains why each action was resolved as-is (success, lost conflict, fallback, etc.)
+     *      - Used for debugging and UI feedback
+     *
+     * MODE-SPECIFIC BEHAVIOR:
+     *   SEQUENTIAL MODE (has ATTACK entries):
+     *     - Attack entries ALWAYS win against Move entries for the same cell
+     *     - This effectively "locks" the attacker's current cell from Move intrusion
+     *     - Rationale: Attacker must stay in place to execute attack animation
+     *     - Move losers receive reason: "Cell locked by attacker (Sequential)"
+     *   SIMULTANEOUS MODE (all MOVE entries):
+     *     - No attack priority - all reservations are moves
+     *     - Winner selected by action tier priority or random tie-breaking
+     *     - Move losers receive reason: "Cell occupied by higher priority"
+     *
+     * @return Array of FResolvedAction, guaranteed to have same count as input reservations
      */
     UFUNCTION(BlueprintCallable, Category = "Turn|Resolve")
     TArray<FResolvedAction> ResolveAllConflicts();
 
     /**
-     * s“®ƒ^ƒO‚©‚çTier‚ğæ“¾iAttack=3, Dash=2, Move=1, Wait=0j
+     * è¡Œå‹•ã‚¿ã‚°ã‹ã‚‰Tierã‚’å–å¾—(Attack=3, Dash=2, Move=1, Wait=0)
      */
     UFUNCTION(BlueprintPure, Category = "Turn|Resolve")
     int32 GetActionTier(const FGameplayTag& AbilityTag) const;
 
 private:
-    // —\–ñƒe[ƒuƒ: Key=(TimeSlot, Cell), Value=‰•åÒƒŠƒXƒg
+    // äºˆç´„ãƒ†ãƒ¼ãƒ–ãƒ«: Key=(TimeSlot, Cell), Value=ç«¶äº‰è€…ãƒªã‚¹ãƒˆ
     TMap<TPair<int32, FIntPoint>, TArray<FReservationEntry>> ReservationTable;
 
-    // O’iƒoƒPƒbƒg‰ğŒˆiv2.2 ‘æ17ğj
+    // ä¸‰ãƒã‚±ãƒƒãƒˆè§£æ±º(v2.2 ç¬¬17ç« )
     TArray<FResolvedAction> ResolveWithTripleBucket(const TArray<FReservationEntry>& Applicants);
 
-    // ƒTƒCƒNƒŒŸoik†3‚ÌzŠÂ–‰Âj
+    // ã‚µã‚¤ã‚¯ãƒ«æ¤œå‡º(kâ‰§3ã®å·¡å›)
     bool DetectAndAllowCycle(const TArray<FReservationEntry>& Applicants, TArray<FStableActorID>& OutCycle);
 
-    // ƒtƒH[ƒƒoƒbƒNŒó•âiß–T1‰ñ‚Ì‚İj
+    // ãƒ•ã‚©ãƒ¼ãƒ«ãƒãƒƒã‚¯ç§»å‹•(éš£æ¥T1ã®ã¿)
     FResolvedAction TryFallbackMove(const FReservationEntry& LoserEntry);
 
-    // Wait~Ši
+    // Waitç”Ÿæˆ
     FResolvedAction CreateWaitAction(const FReservationEntry& Entry);
+
+    // Priority 2.1: GridOccupancySubsystem ã¸ã®å‚ç…§
+    mutable TWeakObjectPtr<class UGridOccupancySubsystem> CachedGridOccupancy;
+    class UGridOccupancySubsystem* ResolveGridOccupancy() const;
+
     mutable TWeakObjectPtr<AGameTurnManagerBase> CachedTurnManager;
     AGameTurnManagerBase* ResolveTurnManager() const;
 

@@ -38,6 +38,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Turn")
 	int32 GetCurrentTurnIndex() const { return CurrentTurnIndex; }
 
+	/** 新しい入力ウィンドウを開く（サーバー権威のみ） */
+	UFUNCTION(BlueprintCallable, Category = "Turn", meta = (BlueprintAuthorityOnly))
+	void OpenNewInputWindow();
+
 	//==========================================================================
 	// ターン進行制御
 	//==========================================================================

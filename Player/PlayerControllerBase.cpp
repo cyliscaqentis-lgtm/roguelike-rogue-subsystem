@@ -72,17 +72,20 @@ void APlayerControllerBase::Tick(float DeltaTime)
         return;
     }
 
+    // TurnFlowCoordinatorから現在のWindowIdを取得
+    UTurnFlowCoordinator* TFC = GetWorld() ? GetWorld()->GetSubsystem<UTurnFlowCoordinator>() : nullptr;
+
     if (!bPrevInitSynced)
     {
         bPrevWaitingForPlayerInput = CachedTurnManager->WaitingForPlayerInput;
-        CurrentInputWindowId = CachedTurnManager->GetCurrentInputWindowId();
+        CurrentInputWindowId = TFC ? TFC->GetCurrentInputWindowId() : 0;
         bPrevInitSynced = true;
         UE_LOG(LogTemp, Warning, TEXT("[Client] Initial sync: WaitingForPlayerInput=%d, WindowId=%d"),
             bPrevWaitingForPlayerInput, CurrentInputWindowId);
     }
 
     const bool bNow = CachedTurnManager->WaitingForPlayerInput;
-    const int32 NewWindowId = CachedTurnManager->GetCurrentInputWindowId();
+    const int32 NewWindowId = TFC ? TFC->GetCurrentInputWindowId() : 0;
     UE_LOG(LogTemp, Verbose, TEXT("[Client_Tick] WPI: Prev=%d, Now=%d, Sent=%d, WinId=%d->%d"),
         bPrevWaitingForPlayerInput, bNow, bSentThisInputWindow, CurrentInputWindowId, NewWindowId);
 
@@ -462,14 +465,15 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
     {
         if (UTurnFlowCoordinator* TFC = World->GetSubsystem<UTurnFlowCoordinator>())
         {
-            Command.TurnId = TFC->GetCurrentTurnIndex();
+            Command.TurnId = TFC->GetCurrentTurnId();
             Command.WindowId = TFC->GetCurrentInputWindowId();
         }
         else
         {
-            // Fallback to TurnManager if TurnFlowCoordinator not available
-            Command.TurnId = CachedTurnManager ? CachedTurnManager->GetCurrentTurnIndex() : 0;
-            Command.WindowId = CachedTurnManager ? CachedTurnManager->GetCurrentInputWindowId() : 0;
+            // Fallback: TurnFlowCoordinator should always be available
+            Command.TurnId = 0;
+            Command.WindowId = 0;
+            UE_LOG(LogTemp, Warning, TEXT("[PlayerController] TurnFlowCoordinator not available!"));
         }
     }
     else
@@ -681,7 +685,9 @@ void APlayerControllerBase::Server_SubmitCommand_Implementation(const FPlayerCom
         return;
     }
 
-    const int32 CurrentWindowId = CachedTurnManager->GetCurrentInputWindowId();
+    // TurnFlowCoordinatorから現在のWindowIdを取得
+    UTurnFlowCoordinator* TFC = GetWorld() ? GetWorld()->GetSubsystem<UTurnFlowCoordinator>() : nullptr;
+    const int32 CurrentWindowId = TFC ? TFC->GetCurrentInputWindowId() : 0;
 
     if (CommandIn.WindowId != CurrentWindowId)
     {

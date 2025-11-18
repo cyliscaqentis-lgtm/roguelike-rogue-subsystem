@@ -10,6 +10,9 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogAttackAbility, Log, All);
 
+// CodeRevision: INC-2025-00033-R2
+// (Reset Barrier state in EndAbility to avoid stale ActionId/TurnId reuse) (2025-11-18 11:00)
+
 UGA_AttackBase::UGA_AttackBase(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
 {
@@ -280,12 +283,16 @@ void UGA_AttackBase::EndAbility(const FGameplayAbilitySpecHandle Handle,
                     UE_LOG(LogAttackAbility, Log,
                         TEXT("[GA_AttackBase] EndAbility: Completed attack in Barrier (TurnId=%d, ActionId=%s, Actor=%s)"),
                         AttackTurnId, *AttackActionId.ToString(), *Avatar->GetName());
-
-                    bBarrierRegistered = false;
                 }
             }
         }
     }
+
+    // CodeRevision: INC-2025-00033-R2
+    // Ability再利用時に古い TurnId / ActionId を誤用しないよう、ここで必ずクリアする。
+    AttackTurnId = INDEX_NONE;
+    AttackActionId.Invalidate();
+    bBarrierRegistered = false;
 
     // 親クラスのEndAbilityを呼ぶ（タイムアウトクリア、State.Ability.Executing削除など）
     Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
