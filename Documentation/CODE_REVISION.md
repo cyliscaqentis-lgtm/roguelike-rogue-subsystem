@@ -6,6 +6,7 @@ When modifying code in this project, add a `CodeRevision` comment to track versi
 
 ## CodeRevision Log
 
+- `CodeRevision: INC-2025-1127-R1` - Align sequential move filtering with `CoreResolvePhase`, log why moves drop out of the dispatch set, and ensure the legacy sequential entry path still sets move-phase flags (2025-11-27 14:15)
 - `CodeRevision: INC-2025-1126-R1` - Derives sequential/simultaneous flow from cached EnemyIntents via `DoesAnyIntentHaveAttack()` so ATTACK intents never slip through per FIX_PLAN_26.md (2025-11-26 10:00)
 - `CodeRevision: INC-2025-1125-R1` - Blocks move intents from attack tiles and derives bHasAttack from cached intents per FIX_PLAN_25.md (2025-11-25 12:00)
 - `CodeRevision: INC-2025-1124-R1` - Simplifies `ComputeIntent` move handling so CoreResolvePhase arbitrates congested moves per `FIX_PLAN_24.md` (2025-11-24 09:30)

@@ -2211,15 +2211,19 @@ void AGameTurnManagerBase::OnSimultaneousPhaseCompleted()
 
 void AGameTurnManagerBase::ExecuteSequentialPhase()
 {
-    if (!HasAuthority())
-    {
-        return;
-    }
+	if (!HasAuthority())
+	{
+		return;
+	}
 
-    UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] ==== Sequential Phase (Attack -> Move) ===="), CurrentTurnId);
-    bIsInMoveOnlyPhase = false;
+	UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] ==== Sequential Phase (Attack -> Move) ===="), CurrentTurnId);
+	// CodeRevision: INC-2025-1127-R1 (Ensure legacy sequential entry still sets move-phase flags) (2025-11-27 14:15)
+	// Ensure the legacy sequential path still flags that a move phase should follow.
+	bSequentialModeActive = true;
+	bSequentialMovePhaseStarted = false;
+	bIsInMoveOnlyPhase = false;
 
-    ExecuteAttacks();
+	ExecuteAttacks();
 }
 
 
@@ -2286,65 +2290,123 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
 
 void AGameTurnManagerBase::ExecuteEnemyMoves_Sequential()
 {
-    if (!HasAuthority())
-    {
-        return;
-    }
+	// CodeRevision: INC-2025-1127-R1 (Align sequential move dispatch filtering with CoreResolvePhase and surface diagnostics) (2025-11-27 14:15)
+	if (!HasAuthority())
+	{
+		return;
+	}
 
-    if (CachedResolvedActions.Num() == 0)
-    {
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[Turn %d] ExecuteEnemyMoves_Sequential: No cached actions available"),
-            CurrentTurnId);
-        EndEnemyTurn();
-        return;
-    }
+	if (CachedResolvedActions.Num() == 0)
+	{
+		UE_LOG(LogTurnManager, Warning,
+			TEXT("[Turn %d] ExecuteEnemyMoves_Sequential: No cached actions available"),
+			CurrentTurnId);
+		EndEnemyTurn();
+		return;
+	}
 
-    // CodeRevision: INC-2025-1117H-R1 (Centralized move dispatch) (2025-11-17 19:10)
-    const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
-    TArray<FResolvedAction> EnemyMoveActions;
-    EnemyMoveActions.Reserve(CachedResolvedActions.Num());
+	const FGameplayTag MoveTag = RogueGameplayTags::AI_Intent_Move;
+	const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
+	TArray<FResolvedAction> EnemyMoveActions;
+	EnemyMoveActions.Reserve(CachedResolvedActions.Num());
 
-    APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+	APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 
-    for (const FResolvedAction& Action : CachedResolvedActions)
-    {
-        AActor* SourceActor = Action.SourceActor.Get();
-        if (!SourceActor)
-        {
-            continue;
-        }
+	int32 TotalActions = 0;
+	int32 TotalEnemyMoves = 0;
+	int32 TotalEnemyWaits = 0;
+	int32 TotalEnemyNonMoves = 0;
 
-        if (PlayerPawn && SourceActor == PlayerPawn)
-        {
-            continue;
-        }
+	for (const FResolvedAction& Action : CachedResolvedActions)
+	{
+		++TotalActions;
 
-        // CodeRevision: INC-2025-1117I (Filter by actual movement, not by intent tag) (2025-11-17 20:00)
-        // CoreResolvePhaseによって移動が割り当てられた全てのアクションを判定
-        if (Action.CurrentCell != Action.NextCell)
-        {
-            EnemyMoveActions.Add(Action);
-        }
-    }
+		AActor* SourceActor = Action.SourceActor.Get();
+		if (!SourceActor)
+		{
+			UE_LOG(LogTurnManager, VeryVerbose,
+				TEXT("[Turn %d] ExecuteEnemyMoves_Sequential: Skip action with null SourceActor"),
+				CurrentTurnId);
+			continue;
+		}
 
-    if (EnemyMoveActions.IsEmpty())
-    {
-        UE_LOG(LogTurnManager, Log,
-            TEXT("[Turn %d] ExecuteEnemyMoves_Sequential: No enemy moves to dispatch"),
-            CurrentTurnId);
-        EndEnemyTurn();
-        return;
-    }
+		if (PlayerPawn && SourceActor == PlayerPawn)
+		{
+			UE_LOG(LogTurnManager, VeryVerbose,
+				TEXT("[Turn %d] ExecuteEnemyMoves_Sequential: Skip player action %s"),
+				CurrentTurnId, *GetNameSafe(SourceActor));
+			continue;
+		}
 
-    bSequentialMovePhaseStarted = true;
-    bIsInMoveOnlyPhase = true;
+		const bool bIsMoveLike =
+			Action.FinalAbilityTag.MatchesTag(MoveTag) ||
+			Action.AbilityTag.MatchesTag(MoveTag);
 
-    UE_LOG(LogTurnManager, Log,
-        TEXT("[Turn %d] Dispatching %d cached enemy moves sequentially"),
-        CurrentTurnId, EnemyMoveActions.Num());
+		const bool bIsAttackLike =
+			Action.FinalAbilityTag.MatchesTag(AttackTag) ||
+			Action.AbilityTag.MatchesTag(AttackTag);
 
-    DispatchMoveActions(EnemyMoveActions);
+		if (bIsMoveLike && !Action.bIsWait)
+		{
+			++TotalEnemyMoves;
+			UE_LOG(LogTurnManager, VeryVerbose,
+				TEXT("[Turn %d] ExecuteEnemyMoves_Sequential: Enqueue MOVE for %s (FinalTag=%s, Next=(%d,%d))"),
+				CurrentTurnId,
+				*GetNameSafe(SourceActor),
+				*Action.FinalAbilityTag.ToString(),
+				Action.NextCell.X, Action.NextCell.Y);
+			EnemyMoveActions.Add(Action);
+			continue;
+		}
+
+		if (Action.bIsWait)
+		{
+			++TotalEnemyWaits;
+			UE_LOG(LogTurnManager, VeryVerbose,
+				TEXT("[Turn %d] ExecuteEnemyMoves_Sequential: Skip WAIT action for %s (FinalTag=%s, AttackLike=%d)"),
+				CurrentTurnId,
+				*GetNameSafe(SourceActor),
+				*Action.FinalAbilityTag.ToString(),
+				bIsAttackLike ? 1 : 0);
+			continue;
+		}
+
+		++TotalEnemyNonMoves;
+		UE_LOG(LogTurnManager, VeryVerbose,
+			TEXT("[Turn %d] ExecuteEnemyMoves_Sequential: Skip non-move action for %s (FinalTag=%s, AttackLike=%d, Current=(%d,%d), Next=(%d,%d))"),
+			CurrentTurnId,
+			*GetNameSafe(SourceActor),
+			*Action.FinalAbilityTag.ToString(),
+			bIsAttackLike ? 1 : 0,
+			Action.CurrentCell.X, Action.CurrentCell.Y,
+			Action.NextCell.X, Action.NextCell.Y);
+	}
+
+	if (EnemyMoveActions.IsEmpty())
+	{
+		UE_LOG(LogTurnManager, Log,
+			TEXT("[Turn %d] ExecuteEnemyMoves_Sequential: No enemy actions to dispatch (Total=%d, Moves=%d, Waits=%d, NonMove=%d)"),
+			CurrentTurnId,
+			TotalActions,
+			TotalEnemyMoves,
+			TotalEnemyWaits,
+			TotalEnemyNonMoves);
+		EndEnemyTurn();
+		return;
+	}
+
+	bSequentialMovePhaseStarted = true;
+	bIsInMoveOnlyPhase = true;
+
+	UE_LOG(LogTurnManager, Log,
+		TEXT("[Turn %d] Dispatching %d cached enemy actions sequentially (Moves=%d, Waits=%d, NonMove=%d)"),
+		CurrentTurnId,
+		EnemyMoveActions.Num(),
+		TotalEnemyMoves,
+		TotalEnemyWaits,
+		TotalEnemyNonMoves);
+
+	DispatchMoveActions(EnemyMoveActions);
 }
 
 
