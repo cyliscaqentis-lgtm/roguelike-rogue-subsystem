@@ -9,6 +9,7 @@
 #include "Turn/TurnFlowCoordinator.h"
 #include "TurnSystemTypes.h"
 #include "../Grid/GridOccupancySubsystem.h"
+#include "../Utility/GridUtils.h"
 #include "../Utility/TurnCommandEncoding.h"
 #include "UObject/UnrealType.h"
 #include "../AI/Enemy/EnemyThinkerBase.h"
@@ -231,6 +232,10 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
         return FIntPoint::ZeroValue;
     };
 
+    const FGameplayTag MoveTag = RogueGameplayTags::AI_Intent_Move;
+    const FGameplayTag WaitTag = RogueGameplayTags::AI_Intent_Wait;
+    const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
+
     ConflictResolverPtr->ClearReservations();
 
     for (const FEnemyIntent& Intent : Intents)
@@ -258,10 +263,23 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
             LiveCurrentCell = Intent.CurrentCell;
         }
 
+        if (LiveCurrentCell != FIntPoint::ZeroValue && LiveCurrentCell != Intent.CurrentCell)
+        {
+            const int32 DesyncDistance = FGridUtils::ChebyshevDistance(LiveCurrentCell, Intent.CurrentCell);
+            UE_LOG(LogTurnCore, Warning,
+                TEXT("[TurnCore] Intent/Live desync: %s Live=(%d,%d) Intent=(%d,%d) Dist=%d"),
+                *GetNameSafe(Intent.Actor.Get()),
+                LiveCurrentCell.X, LiveCurrentCell.Y,
+                Intent.CurrentCell.X, Intent.CurrentCell.Y,
+                DesyncDistance);
+        }
+
+        FGameplayTag ResolvedAbilityTag = Intent.AbilityTag;
+
         // Attack intents are treated as stationary for conflict resolution:
         // they reserve their current cell and never change position during the move phase.
         FIntPoint ResolvedNextCell = Intent.NextCell;
-        if (Intent.AbilityTag.MatchesTag(RogueGameplayTags::AI_Intent_Attack))
+        if (Intent.AbilityTag.MatchesTag(AttackTag))
         {
             ResolvedNextCell = LiveCurrentCell;
             UE_LOG(LogTemp, Verbose,
@@ -269,6 +287,25 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
                 *GetNameSafe(Actor),
                 LiveCurrentCell.X, LiveCurrentCell.Y,
                 Intent.NextCell.X, Intent.NextCell.Y);
+        }
+
+        const bool bIsMoveIntent = Intent.AbilityTag.MatchesTag(MoveTag);
+        if (bIsMoveIntent && LiveCurrentCell != FIntPoint::ZeroValue)
+        {
+            const int32 MoveDistance = FGridUtils::ChebyshevDistance(LiveCurrentCell, ResolvedNextCell);
+            if (MoveDistance > 1)
+            {
+                // CodeRevision: INC-2025-1132-R1 (Prevent teleporting move intents by gating Chebyshev distance) (2025-11-19 00:57)
+                UE_LOG(LogTurnCore, Warning,
+                    TEXT("[TurnCore] Anti-teleport guard: %s Live=(%d,%d) IntentCurrent=(%d,%d) IntentNext=(%d,%d) Dist=%d -> forcing WAIT"),
+                    *GetNameSafe(Actor),
+                    LiveCurrentCell.X, LiveCurrentCell.Y,
+                    Intent.CurrentCell.X, Intent.CurrentCell.Y,
+                    Intent.NextCell.X, Intent.NextCell.Y,
+                    MoveDistance);
+                ResolvedNextCell = LiveCurrentCell;
+                ResolvedAbilityTag = WaitTag;
+            }
         }
 
         const int32 CurrentDist = DistanceFieldPtr->GetDistance(LiveCurrentCell);
@@ -281,7 +318,7 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
         Entry.TimeSlot         = Intent.TimeSlot;
         Entry.CurrentCell      = LiveCurrentCell;
         Entry.Cell             = ResolvedNextCell;
-        Entry.AbilityTag       = Intent.AbilityTag;
+        Entry.AbilityTag       = ResolvedAbilityTag;
         Entry.ActionTier       = 1;    // TODO: use GetActionTier if we introduce tiered abilities
         Entry.BasePriority     = 100;
         Entry.DistanceReduction= DistanceReduction;
@@ -317,7 +354,6 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
         Resolved.Num(), TurnHash);
 
     // Only true movement actions should reserve destination cells with the TurnManager.
-    const FGameplayTag MoveTag = RogueGameplayTags::AI_Intent_Move;
 
     if (AGameTurnManagerBase* TurnManager = ResolveTurnManager())
     {

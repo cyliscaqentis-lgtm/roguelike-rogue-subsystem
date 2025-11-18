@@ -329,21 +329,17 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
     const FIntPoint& FromCell,
     AActor* IgnoreActor) const
 {
-    // Work in the absolute grid coordinate space used by the distance field.
     const int32 d0 = GetDistanceAbs(FromCell);
     if (d0 < 0)
     {
-        // Out-of-bounds or missing distance entry – stay in place (cheap fallback).
         DIAG_LOG(Warning,
             TEXT("[GetNextStep] Enemy out of bounds (%d,%d) - staying put"),
             FromCell.X, FromCell.Y);
         return FromCell;
     }
 
-    int32 CurrentDist = d0;
-
     // Already at the player's cell – do not move.
-    if (CurrentDist == 0)
+    if (d0 == 0)
     {
         DIAG_LOG(Log,
             TEXT("[GetNextStep] FromCell=(%d,%d) ALREADY AT PLAYER"),
@@ -351,9 +347,26 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
         return FromCell;
     }
 
-    // Choose best neighbor (4+4 directions) using absolute distances
+    // Player direction (clamped to -1, 0, 1)
+    const FIntPoint GoalDelta(
+        FMath::Clamp(PlayerPosition.X - FromCell.X, -1, 1),
+        FMath::Clamp(PlayerPosition.Y - FromCell.Y, -1, 1)
+    );
+
+    DIAG_LOG(VeryVerbose,
+        TEXT("[GetNextStep] FromCell=(%d,%d), Player=(%d,%d), GoalDelta=(%d,%d)"),
+        FromCell.X, FromCell.Y, PlayerPosition.X, PlayerPosition.Y, GoalDelta.X, GoalDelta.Y);
+
+    auto ComputeAlignment = [&GoalDelta](const FIntPoint& Offset) -> int32
+    {
+        // Range: -2 to +2 (e.g., perfect alignment=2, perpendicular=0, opposite=-2)
+        return Offset.X * GoalDelta.X + Offset.Y * GoalDelta.Y;
+    };
+
     FIntPoint Best = FromCell;
-    int32 BestDist = CurrentDist;
+    int32 BestDist = d0;
+    int32 BestAlign = TNumericLimits<int32>::Lowest();
+    bool bBestIsDiagonal = true; // Default to true so a non-diagonal move is always better on a tie
 
     struct FNeighborDef
     {
@@ -373,40 +386,115 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
         {FIntPoint(-1, -1), true }
     };
 
+    int32 CandidateCount = 0;
+
+    // Get GridPathfinding for terrain-only checks (ignore dynamic occupancy)
+    const UGridPathfindingSubsystem* GridPathfinding = GetPathFinder();
+    if (!GridPathfinding)
+    {
+        DIAG_LOG(Error, TEXT("[GetNextStep] GridPathfindingSubsystem not found"));
+        return FromCell;
+    }
+
     for (const FNeighborDef& Neighbor : Neighbors)
     {
         const FIntPoint N = FromCell + Neighbor.Offset;
 
-        if (Neighbor.bDiagonal && !CanMoveDiagonal(FromCell, N))
+        // Check terrain walkability only (ignore dynamic unit occupancy for optimistic pathing)
+        // Actual conflicts will be resolved by ConflictResolverSubsystem
+        if (!GridPathfinding->IsCellWalkableIgnoringActor(N, nullptr))
         {
+            DIAG_LOG(VeryVerbose,
+                TEXT("[GetNextStep]   Neighbor (%d,%d) REJECTED: terrain blocked"),
+                N.X, N.Y);
             continue;
         }
 
-        if (!IsWalkable(N, IgnoreActor))
+        // For diagonal moves, check if both orthogonal shoulders are terrain-walkable
+        if (Neighbor.bDiagonal)
         {
-            continue;
+            const FIntPoint Delta = Neighbor.Offset;
+            const FIntPoint Side1 = FromCell + FIntPoint(Delta.X, 0);
+            const FIntPoint Side2 = FromCell + FIntPoint(0, Delta.Y);
+
+            if (!GridPathfinding->IsCellWalkableIgnoringActor(Side1, nullptr) ||
+                !GridPathfinding->IsCellWalkableIgnoringActor(Side2, nullptr))
+            {
+                DIAG_LOG(VeryVerbose,
+                    TEXT("[GetNextStep]   Neighbor (%d,%d) REJECTED: diagonal path blocked"),
+                    N.X, N.Y);
+                continue;
+            }
         }
 
         const int32 nd = GetDistanceAbs(N);
-        if (nd >= 0 && nd < BestDist)
+        // Cells that do not reduce distance are not candidates
+        if (nd < 0 || nd >= d0)
         {
-            BestDist = nd;
-            Best = N;
+            DIAG_LOG(VeryVerbose,
+                TEXT("[GetNextStep]   Neighbor (%d,%d) REJECTED: dist %d (no reduction from %d)"),
+                N.X, N.Y, nd, d0);
+            continue;
+        }
+
+        const int32 Align = ComputeAlignment(Neighbor.Offset);
+        ++CandidateCount;
+
+        bool bIsBetter = false;
+        FString Reason;
+
+        // 1. Better distance
+        if (nd < BestDist)
+        {
+            bIsBetter = true;
+            Reason = TEXT("better distance");
+        }
+        // 2. Same distance, better alignment
+        else if (nd == BestDist)
+        {
+            if (Align > BestAlign)
+            {
+                bIsBetter = true;
+                Reason = TEXT("same distance, better alignment");
+            }
+            // 3. Same distance and alignment, prefer non-diagonal
+            else if (Align == BestAlign)
+            {
+                if (bBestIsDiagonal && !Neighbor.bDiagonal)
+                {
+                    bIsBetter = true;
+                    Reason = TEXT("same distance & alignment, prefer straight");
+                }
+            }
+        }
+
+        DIAG_LOG(VeryVerbose,
+            TEXT("[GetNextStep]   Neighbor (%d,%d): dist=%d, align=%d, diag=%d -> %s (best: dist=%d, align=%d, diag=%d)"),
+            N.X, N.Y, nd, Align, Neighbor.bDiagonal ? 1 : 0,
+            bIsBetter ? *FString::Printf(TEXT("ACCEPT (%s)"), *Reason) : TEXT("reject"),
+            BestDist, BestAlign, bBestIsDiagonal ? 1 : 0);
+
+        if (bIsBetter)
+        {
+            BestDist        = nd;
+            BestAlign       = Align;
+            bBestIsDiagonal = Neighbor.bDiagonal;
+            Best            = N;
         }
     }
 
     if (Best == FromCell)
     {
         DIAG_LOG(Log,
-            TEXT("[GetNextStep] STAY at (%d,%d) - no better neighbor found"),
-            FromCell.X, FromCell.Y);
-        return FromCell;  // E.g. attacking in place or blocked
+            TEXT("[GetNextStep] STAY at (%d,%d) - no better neighbor found (checked %d candidates)"),
+            FromCell.X, FromCell.Y, CandidateCount);
+        return FromCell;
     }
-    
+
     DIAG_LOG(Log,
-        TEXT("[GetNextStep] FromCell=(%d,%d) -> NextCell=(%d,%d) (Dist: %d -> %d)"),
-        FromCell.X, FromCell.Y, Best.X, Best.Y, CurrentDist, BestDist);
-    
+        TEXT("[GetNextStep] FromCell=(%d,%d) -> NextCell=(%d,%d) (Dist: %d -> %d, Align=%d, Diag=%d, Candidates=%d)"),
+        FromCell.X, FromCell.Y, Best.X, Best.Y, d0, BestDist, BestAlign, bBestIsDiagonal ? 1 : 0, CandidateCount);
+
     return Best;
 }
 

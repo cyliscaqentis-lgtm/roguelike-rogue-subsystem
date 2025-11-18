@@ -2437,15 +2437,58 @@ bool AGameTurnManagerBase::IsSequentialModeActive() const
 bool AGameTurnManagerBase::DoesAnyIntentHaveAttack() const
 {
     const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
-    for (const FEnemyIntent& Intent : CachedEnemyIntents)
+
+    // INC-2025-0002: ログ強化 - bHasAttack判定に使用されるIntents配列の内容を詳細出力
+    UE_LOG(LogTurnManager, Warning,
+        TEXT("[AttackScan] Turn=%d, Scanning CachedEnemyIntents (Count=%d)"),
+        CurrentTurnId, CachedEnemyIntents.Num());
+
+    int32 AttackCount = 0;
+    int32 MoveCount = 0;
+    int32 WaitCount = 0;
+    const FGameplayTag MoveTag = RogueGameplayTags::AI_Intent_Move;
+    const FGameplayTag WaitTag = RogueGameplayTags::AI_Intent_Wait;
+
+    for (int32 i = 0; i < CachedEnemyIntents.Num(); ++i)
     {
+        const FEnemyIntent& Intent = CachedEnemyIntents[i];
+
+        // カウント
         if (Intent.AbilityTag.MatchesTag(AttackTag))
         {
-            return true;
+            ++AttackCount;
         }
+        else if (Intent.AbilityTag.MatchesTag(MoveTag))
+        {
+            ++MoveCount;
+        }
+        else if (Intent.AbilityTag.MatchesTag(WaitTag))
+        {
+            ++WaitCount;
+        }
+
+        // 各Intentの詳細をログ出力
+        UE_LOG(LogTurnManager, Warning,
+            TEXT("[AttackScan] Turn=%d, Intent[%d]: Actor=%s, Ability=%s, From=(%d,%d), To=(%d,%d)"),
+            CurrentTurnId,
+            i,
+            *GetNameSafe(Intent.Actor.Get()),
+            *Intent.AbilityTag.ToString(),
+            Intent.CurrentCell.X, Intent.CurrentCell.Y,
+            Intent.NextCell.X, Intent.NextCell.Y);
     }
 
-    return false;
+    UE_LOG(LogTurnManager, Warning,
+        TEXT("[AttackScan] Turn=%d, Summary: Attack=%d, Move=%d, Wait=%d, Total=%d"),
+        CurrentTurnId, AttackCount, MoveCount, WaitCount, CachedEnemyIntents.Num());
+
+    const bool bHasAttack = (AttackCount > 0);
+
+    UE_LOG(LogTurnManager, Warning,
+        TEXT("[AttackScan] Turn=%d, bHasAttack=%s"),
+        CurrentTurnId, bHasAttack ? TEXT("TRUE") : TEXT("FALSE"));
+
+    return bHasAttack;
 }
 
 

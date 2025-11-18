@@ -272,9 +272,34 @@ void UEnemyTurnDataSubsystem::SaveIntents(const TArray<FEnemyIntent>& NewIntents
     Intents = NewIntents;
     ++DataRevision;
 
-    UE_LOG(LogEnemyTurnDataSys, Log,
-        TEXT("[SaveIntents] Saved %d intents (Revision=%d)"),
-        Intents.Num(), DataRevision);
+    // INC-2025-0002: ログ強化 - 保存されるIntentsのAttack/Move/Wait件数を集計
+    int32 AttackCount = 0;
+    int32 MoveCount = 0;
+    int32 WaitCount = 0;
+
+    const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
+    const FGameplayTag MoveTag = RogueGameplayTags::AI_Intent_Move;
+    const FGameplayTag WaitTag = RogueGameplayTags::AI_Intent_Wait;
+
+    for (const FEnemyIntent& Intent : Intents)
+    {
+        if (Intent.AbilityTag.MatchesTag(AttackTag))
+        {
+            ++AttackCount;
+        }
+        else if (Intent.AbilityTag.MatchesTag(MoveTag))
+        {
+            ++MoveCount;
+        }
+        else if (Intent.AbilityTag.MatchesTag(WaitTag))
+        {
+            ++WaitCount;
+        }
+    }
+
+    UE_LOG(LogEnemyTurnDataSys, Warning,
+        TEXT("[SaveIntents] Saved %d intents (Attack=%d, Move=%d, Wait=%d, Revision=%d)"),
+        Intents.Num(), AttackCount, MoveCount, WaitCount, DataRevision);
 }
 
 const TArray<FEnemyIntent>& UEnemyTurnDataSubsystem::GetIntents() const

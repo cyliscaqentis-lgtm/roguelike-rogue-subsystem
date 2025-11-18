@@ -6,6 +6,7 @@
 #include "Turn/DistanceFieldSubsystem.h"
 #include "Grid/GridPathfindingSubsystem.h"
 #include "Utility/GridUtils.h"  // CodeRevision: INC-2025-00016-R1 (2025-11-16 14:00)
+#include "Utility/RogueGameplayTags.h"  // INC-2025-0002: GameplayTag統一のため追加
 #include "Kismet/GameplayStatics.h"
 #include "../../Turn/GameTurnManagerBase.h"
 #include "EngineUtils.h"
@@ -191,9 +192,65 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
 
     AActor* PlayerActor = UGameplayStatics::GetPlayerPawn(World, 0);
 
+    // 角抜け防止：攻撃前に射線チェックを実施
+    bool bHasLineOfSight = false;
     if (DistanceToPlayer >= 0 && DistanceToPlayer <= AttackRangeInTiles)
     {
-        Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Attack"));
+        // GridPathfindingは既にline 60で宣言済み、再利用する
+        if (GridPathfinding && PlayerActor)
+        {
+            const FIntPoint PlayerGridPos = GridPathfinding->WorldToGrid(PlayerActor->GetActorLocation());
+            const FVector StartWorld = GridPathfinding->GridToWorld(Intent.CurrentCell);
+            const FVector EndWorld = GridPathfinding->GridToWorld(PlayerGridPos);
+            bHasLineOfSight = GridPathfinding->HasLineOfSight(StartWorld, EndWorld);
+
+            // 対角攻撃の場合、両方の肩セルがwalkableかチェック（角抜け防止）
+            if (bHasLineOfSight)
+            {
+                const int32 dx = FMath::Abs(PlayerGridPos.X - Intent.CurrentCell.X);
+                const int32 dy = FMath::Abs(PlayerGridPos.Y - Intent.CurrentCell.Y);
+
+                // 対角攻撃（dx == 1 && dy == 1）の場合のみチェック
+                if (dx == 1 && dy == 1)
+                {
+                    const FIntPoint Delta = PlayerGridPos - Intent.CurrentCell;
+                    const FIntPoint Shoulder1 = Intent.CurrentCell + FIntPoint(Delta.X, 0);
+                    const FIntPoint Shoulder2 = Intent.CurrentCell + FIntPoint(0, Delta.Y);
+
+                    const bool bShoulder1Walkable = GridPathfinding->IsCellWalkableIgnoringActor(Shoulder1, nullptr);
+                    const bool bShoulder2Walkable = GridPathfinding->IsCellWalkableIgnoringActor(Shoulder2, nullptr);
+
+                    if (!bShoulder1Walkable || !bShoulder2Walkable)
+                    {
+                        bHasLineOfSight = false;
+                        UE_LOG(LogTemp, Log,
+                            TEXT("[DecideIntent] %s: Diagonal attack blocked by corner (Enemy=%d,%d Player=%d,%d Shoulder1=%d Shoulder2=%d)"),
+                            *GetNameSafe(GetOwner()),
+                            Intent.CurrentCell.X, Intent.CurrentCell.Y,
+                            PlayerGridPos.X, PlayerGridPos.Y,
+                            bShoulder1Walkable ? 1 : 0, bShoulder2Walkable ? 1 : 0);
+                    }
+                }
+            }
+
+            if (!bHasLineOfSight)
+            {
+                UE_LOG(LogTemp, Verbose,
+                    TEXT("[DecideIntent] %s: No line of sight to player (Distance=%d) - switching to MOVE"),
+                    *GetNameSafe(GetOwner()), DistanceToPlayer);
+            }
+        }
+        else
+        {
+            // PathFindingがない場合は、射線チェックをスキップ（従来の動作）
+            bHasLineOfSight = true;
+        }
+    }
+
+    if (DistanceToPlayer >= 0 && DistanceToPlayer <= AttackRangeInTiles && bHasLineOfSight)
+    {
+        // INC-2025-0002: RogueGameplayTags経由でタグを取得（文字列ベースのRequestを廃止）
+        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Attack;
         Intent.NextCell = Intent.CurrentCell;
 
         if (PlayerActor)
@@ -212,11 +269,13 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
     }
     else
     {
-        Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Move"));
-        
+        // INC-2025-0002: RogueGameplayTags経由でタグを取得（文字列ベースのRequestを廃止）
+        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Move;
+
         if (Intent.NextCell == Intent.CurrentCell)
         {
-        Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"));
+        // INC-2025-0002: RogueGameplayTags経由でタグを取得（文字列ベースのRequestを廃止）
+        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Wait;
         UE_LOG(LogTurnManager, Log, TEXT("[Thinker] %s WAIT - NextCell identical to current"),
             *GetNameSafe(GetOwner()));
         }
@@ -260,9 +319,70 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
     DistanceToPlayer = ChebyshevDistance;
     AActor* PlayerActor = UGameplayStatics::GetPlayerPawn(World, 0);
 
+    // 角抜け防止：攻撃前に射線チェックを実施
+    bool bHasLineOfSight = false;
     if (DistanceToPlayer >= 0 && DistanceToPlayer <= AttackRangeInTiles)
     {
-        Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Attack"));
+        // GridPathfindingSubsystemを取得（キャッシュまたは新規取得）
+        const UGridPathfindingSubsystem* PathfindingForLOS = CachedPathFinder.Get();
+        if (!PathfindingForLOS)
+        {
+            PathfindingForLOS = World->GetSubsystem<UGridPathfindingSubsystem>();
+        }
+
+        if (PathfindingForLOS)
+        {
+            const FVector StartWorld = PathfindingForLOS->GridToWorld(Intent.CurrentCell);
+            const FVector EndWorld = PathfindingForLOS->GridToWorld(PlayerGridCell);
+            bHasLineOfSight = PathfindingForLOS->HasLineOfSight(StartWorld, EndWorld);
+
+            // 対角攻撃の場合、両方の肩セルがwalkableかチェック（角抜け防止）
+            if (bHasLineOfSight)
+            {
+                const int32 dx = FMath::Abs(PlayerGridCell.X - Intent.CurrentCell.X);
+                const int32 dy = FMath::Abs(PlayerGridCell.Y - Intent.CurrentCell.Y);
+
+                // 対角攻撃（dx == 1 && dy == 1）の場合のみチェック
+                if (dx == 1 && dy == 1)
+                {
+                    const FIntPoint Delta = PlayerGridCell - Intent.CurrentCell;
+                    const FIntPoint Shoulder1 = Intent.CurrentCell + FIntPoint(Delta.X, 0);
+                    const FIntPoint Shoulder2 = Intent.CurrentCell + FIntPoint(0, Delta.Y);
+
+                    const bool bShoulder1Walkable = PathfindingForLOS->IsCellWalkableIgnoringActor(Shoulder1, nullptr);
+                    const bool bShoulder2Walkable = PathfindingForLOS->IsCellWalkableIgnoringActor(Shoulder2, nullptr);
+
+                    if (!bShoulder1Walkable || !bShoulder2Walkable)
+                    {
+                        bHasLineOfSight = false;
+                        UE_LOG(LogTemp, Log,
+                            TEXT("[ComputeIntent] %s: Diagonal attack blocked by corner (Enemy=%d,%d Player=%d,%d Shoulder1=%d Shoulder2=%d)"),
+                            *GetNameSafe(GetOwner()),
+                            Intent.CurrentCell.X, Intent.CurrentCell.Y,
+                            PlayerGridCell.X, PlayerGridCell.Y,
+                            bShoulder1Walkable ? 1 : 0, bShoulder2Walkable ? 1 : 0);
+                    }
+                }
+            }
+
+            if (!bHasLineOfSight)
+            {
+                UE_LOG(LogTemp, Verbose,
+                    TEXT("[ComputeIntent] %s: No line of sight to player (TileDistance=%d) - switching to MOVE"),
+                    *GetNameSafe(GetOwner()), DistanceToPlayer);
+            }
+        }
+        else
+        {
+            // PathFindingがない場合は、射線チェックをスキップ（従来の動作）
+            bHasLineOfSight = true;
+        }
+    }
+
+    if (DistanceToPlayer >= 0 && DistanceToPlayer <= AttackRangeInTiles && bHasLineOfSight)
+    {
+        // INC-2025-0002: RogueGameplayTags経由でタグを取得（文字列ベースのRequestを廃止）
+        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Attack;
         Intent.NextCell = Intent.CurrentCell;
 
         if (PlayerActor)
@@ -282,7 +402,8 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
     }
     else
     {
-        Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Move"));
+        // INC-2025-0002: RogueGameplayTags経由でタグを取得（文字列ベースのRequestを廃止）
+        Intent.AbilityTag = RogueGameplayTags::AI_Intent_Move;
 
         if (UDistanceFieldSubsystem* DistanceField = World->GetSubsystem<UDistanceFieldSubsystem>())
         {
@@ -299,7 +420,8 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
 
         if (Intent.NextCell == Intent.CurrentCell)
         {
-            Intent.AbilityTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"));
+            // INC-2025-0002: RogueGameplayTags経由でタグを取得（文字列ベースのRequestを廃止）
+            Intent.AbilityTag = RogueGameplayTags::AI_Intent_Wait;
             UE_LOG(LogTurnManager, Log,
                 TEXT("[ComputeIntent] %s WAIT - NextCell identical to current (TileDistance=%d)"),
                 *GetNameSafe(GetOwner()), DistanceToPlayer);
@@ -324,7 +446,8 @@ FGameplayTag UEnemyThinkerBase::GetAttackAbilityForRange(int32 DistanceInTiles) 
 {
     if (DistanceInTiles <= AttackRangeInTiles)
     {
-        return FGameplayTag::RequestGameplayTag(FName("AI.Intent.Attack"));
+        // INC-2025-0002: RogueGameplayTags経由でタグを取得（文字列ベースのRequestを廃止）
+        return RogueGameplayTags::AI_Intent_Attack;
     }
 
     return FGameplayTag();

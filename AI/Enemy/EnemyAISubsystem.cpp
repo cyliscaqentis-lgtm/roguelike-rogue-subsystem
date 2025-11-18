@@ -165,7 +165,9 @@ void UEnemyAISubsystem::CollectIntents(
         return;
     }
 
-    int32 ValidIntents = 0;
+    // INC-2025-0002: ログ強化 - Attack/Move/Waitの件数を個別にカウント
+    int32 AttackIntents = 0;
+    int32 MoveIntents = 0;
     int32 WaitIntents = 0;
 
     const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
@@ -177,6 +179,7 @@ void UEnemyAISubsystem::CollectIntents(
     TSet<TWeakObjectPtr<AActor>> ActorsWithIntent;
 
     // ---- Pass 1: Determine attackers and hard-block their cells ----
+    UE_LOG(LogEnemyAI, Warning, TEXT("[CollectIntents] === PASS 1: Attack Intent Generation ==="));
     for (int32 i = 0; i < Obs.Num(); ++i)
     {
         AActor* Enemy = Enemies[i];
@@ -197,11 +200,21 @@ void UEnemyAISubsystem::CollectIntents(
             OutIntents.Add(Intent);
             ActorsWithIntent.Add(Enemy);
             HardBlockedCells.Add(Obs[i].GridPosition);
-            ++ValidIntents;
+            ++AttackIntents;
+
+            UE_LOG(LogEnemyAI, Warning,
+                TEXT("[CollectIntents] Pass1[%d]: %s -> ATTACK at (%d,%d), HardBlocked"),
+                i, *GetNameSafe(Enemy),
+                Obs[i].GridPosition.X, Obs[i].GridPosition.Y);
         }
     }
 
+    UE_LOG(LogEnemyAI, Warning,
+        TEXT("[CollectIntents] Pass1 Complete: AttackIntents=%d, HardBlockedCells=%d"),
+        AttackIntents, HardBlockedCells.Num());
+
     // ---- Pass 2: Handle movers / waits while respecting claimed cells ----
+    UE_LOG(LogEnemyAI, Warning, TEXT("[CollectIntents] === PASS 2: Move/Wait Intent Generation ==="));
     TArray<int32> MoveCandidateIndices;
     MoveCandidateIndices.Reserve(Obs.Num());
 
@@ -258,24 +271,39 @@ void UEnemyAISubsystem::CollectIntents(
         if (Intent.AbilityTag.MatchesTag(MoveTag))
         {
             ClaimedMoveTargets.Add(Intent.NextCell);
-            ++ValidIntents;
+            ++MoveIntents;
+
+            UE_LOG(LogEnemyAI, VeryVerbose,
+                TEXT("[CollectIntents] Pass2[%d]: %s -> MOVE (%d,%d) -> (%d,%d)"),
+                i, *GetNameSafe(Enemy),
+                Observation.GridPosition.X, Observation.GridPosition.Y,
+                Intent.NextCell.X, Intent.NextCell.Y);
         }
         else if (Intent.AbilityTag.MatchesTag(WaitTag))
         {
             ++WaitIntents;
+
+            UE_LOG(LogEnemyAI, VeryVerbose,
+                TEXT("[CollectIntents] Pass2[%d]: %s -> WAIT at (%d,%d)"),
+                i, *GetNameSafe(Enemy),
+                Observation.GridPosition.X, Observation.GridPosition.Y);
         }
         else
         {
-            ++ValidIntents;
+            // Unknown tag
+            UE_LOG(LogEnemyAI, Warning,
+                TEXT("[CollectIntents] Pass2[%d]: %s -> UNKNOWN tag %s"),
+                i, *GetNameSafe(Enemy), *Intent.AbilityTag.ToString());
         }
 
         OutIntents.Add(Intent);
         ActorsWithIntent.Add(Enemy);
     }
 
+    // INC-2025-0002: 詳細なサマリログ
     UE_LOG(LogEnemyAI, Warning,
-        TEXT("[CollectIntents] ==== RESULT ==== Generated %d intents (Valid=%d, Wait=%d)"),
-        OutIntents.Num(), ValidIntents, WaitIntents);
+        TEXT("[CollectIntents] ==== RESULT ==== Generated %d intents (Attack=%d, Move=%d, Wait=%d)"),
+        OutIntents.Num(), AttackIntents, MoveIntents, WaitIntents);
 }
 
 // CodeRevision: INC-2025-1130-R1 (Two-pass enemy intent generation to avoid attacker blocking) (2025-11-27 16:30)
@@ -308,8 +336,11 @@ FEnemyIntent UEnemyAISubsystem::ComputeMoveOrWaitIntent(
 
     const bool bPrimaryWalkable = IsCellWalkable(EnemyActor, PrimaryCell);
     const bool bPrimaryCloserOrEqual = (PrimaryDist <= CurrentDist);
+
+    // Optimistic Pathing: 攻撃中の味方マス(HardBlockedCells)はここではブロックしない。
+    // 実際に動けるかどうかは ConflictResolver に任せる。
+    // これにより、後列ユニットが前列の攻撃ユニットの背後で待機する挙動（隊列維持）が実現される。
     const bool bPrimaryBlocked =
-        HardBlockedCells.Contains(PrimaryCell) ||
         ClaimedMoveTargets.Contains(PrimaryCell);
 
     if (PrimaryCell != Obs.GridPosition &&
