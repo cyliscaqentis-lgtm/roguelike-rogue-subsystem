@@ -4,7 +4,8 @@
 
 When modifying code in this project, add a `CodeRevision` comment to track version changes. This helps external agents like Claude Code understand the change history, so please check this file when editing related files.
 
--  - Added an anti-teleport guard in the CoreResolvePhase so movement intents that differ from live occupancy by more than one Chebyshev step become WAITs and emit a desync warning (2025-11-19 00:57)
+- `CodeRevision: INC-2025-1133-R1` - Added player attack command handling inside `AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation` so `InputTag_Attack` fires a GameplayEvent toward the target actor (2025-11-19 01:10)
+- `CodeRevision: INC-2025-1132-R1` - Added an anti-teleport guard in the CoreResolvePhase so movement intents that differ from live occupancy by more than one Chebyshev step become WAITs and emit a desync warning (2025-11-19 00:57)
 - `CodeRevision: INC-2025-1131-R1` - Replace the alternate-move selection with tactics-aware scoring so candidates are filtered by distance and chosen based on weighted distance/lane alignment (2025-11-27 17:00)
 - `CodeRevision: INC-2025-1130-R1` - Two-pass enemy intent generation that marks attackers as hard-blocked and lets movers claim alternative targets or wait rather than colliding (2025-11-27 16:30)
 - `CodeRevision: INC-2025-1129-R1` - Cap `UUnitMovementComponent`’s grid update retries and force movement completion after the limit to prevent hang states when `UpdateActorCell` freezes (2025-11-27 16:00)
