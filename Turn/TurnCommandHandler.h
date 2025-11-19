@@ -1,7 +1,7 @@
 // ============================================================================
 // TurnCommandHandler.h
-// プレイヤーコマンド処理Subsystem
-// GameTurnManagerBaseから分離（2025-11-09）
+// Player command processing World Subsystem
+// Extracted from GameTurnManagerBase (2025-11-09)
 // ============================================================================
 
 #pragma once
@@ -14,8 +14,12 @@
 class APlayerControllerBase;
 
 /**
- * プレイヤーコマンド処理を担当するSubsystem
- * 責務: コマンド検証、受理マーク、入力ウィンドウ管理
+ * World subsystem responsible for processing player commands.
+ *
+ * Responsibilities:
+ * - Command validation
+ * - Marking commands as accepted
+ * - Managing the input window lifecycle
  */
 UCLASS()
 class LYRAGAME_API UTurnCommandHandler : public UWorldSubsystem
@@ -24,42 +28,61 @@ class LYRAGAME_API UTurnCommandHandler : public UWorldSubsystem
 
 public:
 	// ========== Subsystem Lifecycle ==========
+
+	/** Initialize the subsystem and internal state. */
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+
+	/** Deinitialize the subsystem and clear internal state. */
 	virtual void Deinitialize() override;
 
 	// ========== Command Processing ==========
 
 	/**
-	 * プレイヤーコマンドを処理
+	 * Process a player command.
+	 *
 	 * CodeRevision: INC-2025-1134-R1 (Execute validated commands inside handler) (2025-12-13 09:30)
-	 * 検証後、コマンドタグに基づいて適切なアクションを実行します。
-	 * @param Command 処理するコマンド
-	 * @return 成功した場合true
-	 * @return コマンドが受理され、実行パスに進んだ場合true
+	 *
+	 * After validation, executes appropriate actions based on the command tag.
+	 *
+	 * @param Command The command to process.
+	 * @return true if the command is accepted and execution path continues.
+	 * @return false if the command is rejected or cannot be processed.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Turn|Command")
 	bool ProcessPlayerCommand(const FPlayerCommand& Command);
 
 	/**
-	 * コマンドの妥当性を検証
-	 * @param Command 検証するコマンド
-	 * @return 妥当な場合true
+	 * Validate the basic correctness and acceptability of a command.
+	 *
+	 * This includes:
+	 * - Tag validity
+	 * - Timeliness check
+	 * - Duplicate command check
+	 *
+	 * @param Command The command to validate.
+	 * @return true if the command is valid.
+	 * @return false if the command fails any validation step.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Turn|Command")
 	bool ValidateCommand(const FPlayerCommand& Command) const;
 
 	/**
-	 * ★★★ コマンドを"受理済み"としてマーク (2025-11-10) ★★★
-	 * MovePrecheck成功後にのみ呼ばれる。
-	 * これにより、拒否時の再入力がDuplicate扱いされなくなる。
-	 * @param Command 受理するコマンド
+	 * Mark a command as "accepted".
+	 *
+	 * Code note:
+	 * - Intended to be called only after MovePrecheck succeeds.
+	 * - Prevents re-submitted commands from being treated as duplicates
+	 *   when a previously accepted command is later rejected by another step.
+	 *
+	 * @param Command The command to mark as accepted.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Turn|Command")
 	void MarkCommandAsAccepted(const FPlayerCommand& Command);
 
 	/**
-	 * 入力ウィンドウを開始
-	 * @param WindowId ウィンドウID
+	 * Begin an input window for receiving player commands.
+	 *
+	 * @param WindowId Identifier for the input window.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Turn|Command")
 	void BeginInputWindow(int32 WindowId);
@@ -67,31 +90,37 @@ public:
 protected:
 	// ========== Internal State ==========
 
-	/** 最後に受理されたコマンド（TurnId -> Command） */
+	/** Map of the last accepted commands keyed by TurnId (TurnId -> Command). */
 	UPROPERTY(Transient)
 	TMap<int32, FPlayerCommand> LastAcceptedCommands;
 
-	/** 現在の入力ウィンドウID */
+	/** The current input window identifier. */
 	UPROPERTY(Transient)
 	int32 CurrentInputWindowId = 0;
 
-	/** 入力ウィンドウが開いているか */
+	/** Whether the input window is currently open. */
 	UPROPERTY(Transient)
 	bool bInputWindowOpen = false;
 
 	// ========== Internal Helpers ==========
 
 	/**
-	 * コマンドがタイムアウトしていないか確認
-	 * @param Command 確認するコマンド
-	 * @return タイムアウトしていない場合true
+	 * Check whether the command has not timed out.
+	 *
+	 * Note:
+	 * - Currently a placeholder that always returns true.
+	 * - Intended extension point for time-based validation.
+	 *
+	 * @param Command The command to check.
+	 * @return true if the command is considered timely.
 	 */
 	bool IsCommandTimely(const FPlayerCommand& Command) const;
 
 	/**
-	 * コマンドの重複チェック
-	 * @param Command 確認するコマンド
-	 * @return 重複していない場合true
+	 * Check whether the command is not a duplicate of a previously accepted command.
+	 *
+	 * @param Command The command to check.
+	 * @return true if the command is not a duplicate.
 	 */
 	bool IsCommandUnique(const FPlayerCommand& Command) const;
 };

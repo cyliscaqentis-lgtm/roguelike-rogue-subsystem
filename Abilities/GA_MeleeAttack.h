@@ -5,7 +5,8 @@
 #include "GA_MeleeAttack.generated.h"
 
 // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
-// 前方宣言
+
+// Forward declarations
 class UGameplayEffect;
 class AUnitBase;
 class UGridPathfindingSubsystem;
@@ -18,10 +19,7 @@ class LYRAGAME_API UGA_MeleeAttack : public UGA_AttackBase
 public:
     UGA_MeleeAttack(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-    //--------------------------------------------------------------------------
-    // GameplayAbility オーバ�EライチE
-    //--------------------------------------------------------------------------
-
+    // GameplayAbility overrides
     virtual void ActivateAbility(
         const FGameplayAbilitySpecHandle Handle,
         const FGameplayAbilityActorInfo* ActorInfo,
@@ -38,89 +36,81 @@ public:
     ) override;
 
 protected:
-    //--------------------------------------------------------------------------
-    // 設定パラメータ
-    //--------------------------------------------------------------------------
+    // Config parameters
 
-    /** 近接攻撁E�EGameplayEffect */
+    /** GameplayEffect used for melee damage */
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "MeleeAttack")
     TSubclassOf<UGameplayEffect> MeleeAttackEffect;
 
-    /** 近接攻撁E��ンタージュ */
+    /** Animation montage for melee attack */
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "MeleeAttack|Animation")
     TObjectPtr<UAnimMontage> MeleeAttackMontage;
 
-    /** ダメージ量！EetByCallerで設定！E*/
+    /** Base damage amount (SetByCaller can override) */
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "MeleeAttack")
     float Damage = 28.0f;
 
-    //--------------------------------------------------------------------------
-    // 冁E��状慁E
-    //--------------------------------------------------------------------------
+    // Runtime state
 
-    /** 攻撁E��象ユニッチE*/
+    /** Current attack target */
     UPROPERTY(BlueprintReadOnly, Category = "MeleeAttack|State")
     TObjectPtr<AActor> TargetUnit;
 
-    //--------------------------------------------------------------------------
-    // C++冁E��実裁E
-    //--------------------------------------------------------------------------
+    // Internal C++ logic
 
-    /** 隣接する敵ユニットを取征E*/
+    /** Finds an adjacent enemy unit, if any */
     AActor* FindAdjacentTarget();
 
-    /** GameplayEffectを適用してダメージを与えめE*/
+    /** Applies GameplayEffect-based damage to the target */
     void ApplyDamageToTarget(AActor* Target);
 
-    /** モンタージュ完亁E��ールバック */
+    /** Montage callbacks */
     UFUNCTION()
     void OnMontageCompleted();
 
-    /** モンタージュブレンドアウチE*/
     UFUNCTION()
     void OnMontageBlendOut();
 
-    /** モンタージュ中断 */
     UFUNCTION()
     void OnMontageCancelled();
 
-    //--------------------------------------------------------------------------
-    // Blueprint拡張ポインチE
-    //--------------------------------------------------------------------------
+    // Blueprint extension points
 
     /**
-     * モンタージュ再生�E�Elueprint実裁E��能�E�E
-     *
-     * チE��ォルトではC++でPlayMontageAndWaitを使用、E
-     * プロジェクト固有�Eアニメーション制御が忁E��な場合�EBPでオーバ�Eライド、E
+     * Hook for project-specific attack montage handling.
+     * Default implementation uses PlayMontageAndWait in C++.
      */
     UFUNCTION(BlueprintNativeEvent, Category = "MeleeAttack|Animation")
     void PlayAttackMontage();
     virtual void PlayAttackMontage_Implementation();
 
 private:
-    /** モンタージュタスクのハンドル */
+    /** Montage delegate handles */
     FDelegateHandle MontageCompletedHandle;
     FDelegateHandle MontageBlendOutHandle;
     FDelegateHandle MontageCancelledHandle;
 
-    /** 入力無効化フラグ */
+    /** Whether input is disabled during the attack */
     bool bInputDisabled = false;
     
-    // ☁E�E☁ETurnManagerのキャチE��ュ ☁E�E☁E
+    /** Cached TurnManager reference */
     UPROPERTY(Transient)
     mutable TWeakObjectPtr<class AGameTurnManagerBase> CachedTurnManager;
     
-    /** TurnManager取得�Eルパ�E */
+    /** Resolves the TurnManager instance */
     class AGameTurnManagerBase* GetTurnManager() const;
 
-    /** ���߂̃^�[�Q�b�g�ʒu�L���b�V�� */
+    /** Cached target position and grid cell */
     FVector CachedTargetLocation = FVector::ZeroVector;
     FIntPoint CachedTargetCell = FIntPoint(-1, -1);
     bool bHasCachedTargetCell = false;
 
-    /** �^�[�Q�b�g�ʒu�L���b�V�����X�V */
-    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
-    void UpdateCachedTargetLocation(const FVector& Location, const FIntPoint& ReservedCell, const UGridPathfindingSubsystem* GridLib);
+    /**
+     * Updates cached world location and grid cell for the current target.
+     * CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem)
+     */
+    void UpdateCachedTargetLocation(
+        const FVector& Location,
+        const FIntPoint& ReservedCell,
+        const UGridPathfindingSubsystem* GridLib);
 };
-

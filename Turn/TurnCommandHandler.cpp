@@ -1,12 +1,14 @@
-// TurnCommandHandler.cpp
+﻿// TurnCommandHandler.cpp
 #include "Turn/TurnCommandHandler.h"
 #include "Player/PlayerControllerBase.h"
 #include "Utility/RogueGameplayTags.h"
 #include "Character/UnitBase.h"
 #include "Grid/GridOccupancySubsystem.h"
+#include "Grid/GridPathfindingSubsystem.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
 #include "Abilities/GameplayAbilityTargetTypes.h"
+#include "Utility/TurnCommandEncoding.h"
 #include "Kismet/GameplayStatics.h"
 #include "../Utility/ProjectDiagnostics.h"
 #include "Engine/ActorInstanceHandle.h"
@@ -73,24 +75,33 @@ bool UTurnCommandHandler::ProcessPlayerCommand(const FPlayerCommand& Command)
 		return false;
 	}
 
+	// CodeRevision: INC-2025-1136-R1 (Final attack dispatch uses front-cell GameplayEvent) (2025-12-13 10:00)
 	if (Command.CommandTag.MatchesTag(RogueGameplayTags::Command_Player_Attack) || Command.CommandTag.MatchesTag(RogueGameplayTags::InputTag_Attack))
 	{
-		// ☁E�E☁E改訂: Attack abilities are triggered via GameplayEvent.Intent.Attack
-		AActor* TargetActor = Command.TargetActor.Get();
-		if (!TargetActor)
+		// Attack abilities are triggered via GameplayEvent.Intent.Attack
+		UGridPathfindingSubsystem* PathFinder = GetWorld()->GetSubsystem<UGridPathfindingSubsystem>();
+		UGridOccupancySubsystem* Occupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>();
+		if (!PathFinder || !Occupancy)
 		{
-			if (UGridOccupancySubsystem* Occupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
-			{
-				TargetActor = Occupancy->GetActorAtCell(Command.TargetCell);
-			}
+			UE_LOG(LogTurnManager, Error, TEXT("[TurnCommandHandler] PathFinder or Occupancy subsystem not found."));
+			return false;
 		}
 
-		if (!TargetActor)
+		const FVector ForwardVector = PlayerUnit->GetActorForwardVector();
+		const FVector2D ForwardDir2D = FVector2D(ForwardVector.X, ForwardVector.Y).GetSafeNormal();
+		FIntPoint Direction = FIntPoint(FMath::RoundToInt(ForwardDir2D.X), FMath::RoundToInt(ForwardDir2D.Y));
+		if (Direction == FIntPoint::ZeroValue)
 		{
-			UE_LOG(LogTurnManager, Warning,
-				TEXT("[TurnCommandHandler] Attack command failed: No valid target at cell (%d,%d)"),
-				Command.TargetCell.X, Command.TargetCell.Y);
-			return false;
+			Direction = FIntPoint(1, 0);
+		}
+
+		const FIntPoint CurrentCell = PathFinder->WorldToGrid(PlayerUnit->GetActorLocation());
+		const FIntPoint TargetCell = CurrentCell + Direction;
+
+		AActor* TargetActor = Occupancy->GetActorAtCell(TargetCell);
+		if (TargetActor == PlayerUnit || (TargetActor && !TargetActor->IsA(AUnitBase::StaticClass())))
+		{
+			TargetActor = nullptr;
 		}
 
 		FGameplayEventData AttackEventData;
@@ -98,19 +109,22 @@ bool UTurnCommandHandler::ProcessPlayerCommand(const FPlayerCommand& Command)
 		AttackEventData.Instigator = PlayerPawn;
 		AttackEventData.Target = TargetActor;
 		AttackEventData.OptionalObject = this;
+		AttackEventData.EventMagnitude = static_cast<float>(TurnCommandEncoding::PackCell(TargetCell.X, TargetCell.Y));
 
 		FGameplayAbilityTargetData_SingleTargetHit* TargetData = new FGameplayAbilityTargetData_SingleTargetHit();
-		FHitResult HitResult;
-		HitResult.HitObjectHandle = FActorInstanceHandle(TargetActor);
-		HitResult.Location = TargetActor->GetActorLocation();
-		HitResult.ImpactPoint = HitResult.Location;
-		TargetData->HitResult = HitResult;
-
+		TargetData->HitResult.Location = PathFinder->GridToWorld(TargetCell, PlayerPawn->GetActorLocation().Z);
+		TargetData->HitResult.ImpactPoint = TargetData->HitResult.Location;
+		if (TargetActor)
+		{
+			TargetData->HitResult.HitObjectHandle = FActorInstanceHandle(TargetActor);
+		}
 		AttackEventData.TargetData.Add(TargetData);
 
 		UE_LOG(LogTurnManager, Log,
-			TEXT("[TurnCommandHandler] Sending GameplayEvent '%s' to trigger attack on '%s'"),
-			*AttackEventData.EventTag.ToString(), *GetNameSafe(TargetActor));
+			TEXT("[TurnCommandHandler] Sending GameplayEvent '%s' to trigger attack. TargetActor: '%s', TargetCell: (%d,%d)"),
+			*AttackEventData.EventTag.ToString(),
+			*GetNameSafe(TargetActor),
+			TargetCell.X, TargetCell.Y);
 
 		ASC->HandleGameplayEvent(AttackEventData.EventTag, &AttackEventData);
 
@@ -155,7 +169,7 @@ void UTurnCommandHandler::MarkCommandAsAccepted(const FPlayerCommand& Command)
 {
 	LastAcceptedCommands.Add(Command.TurnId, Command);
 
-	UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] ★ Command MARKED AS ACCEPTED: TurnId=%d, Tag=%s"),
+	UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Command marked as accepted: TurnId=%d, Tag=%s"),
 		Command.TurnId, *Command.CommandTag.ToString());
 }
 
