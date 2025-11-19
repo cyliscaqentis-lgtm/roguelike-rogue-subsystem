@@ -159,6 +159,23 @@ void UGA_MeleeAttack::ActivateAbility(
     const FTargetFacingInfo FacingInfo = ComputeTargetFacingInfo(TargetUnit, World, GridLib);
     UpdateCachedTargetLocation(FacingInfo.Location, FacingInfo.ReservedCell, GridLib);
 
+    // CodeRevision: INC-2025-1147-R1 (Rotate melee attackers toward their target using cached front-cell location) (2025-11-20 15:10)
+    if (ActorInfo && ActorInfo->AvatarActor.IsValid())
+    {
+        if (APawn* Pawn = Cast<APawn>(ActorInfo->AvatarActor.Get()))
+        {
+            const FVector ToTarget = FacingInfo.Location - Pawn->GetActorLocation();
+            FVector FlatDirection = ToTarget;
+            FlatDirection.Z = 0.0f;
+
+            if (!FlatDirection.IsNearlyZero())
+            {
+                const FRotator NewRotation = FlatDirection.Rotation();
+                Pawn->SetActorRotation(NewRotation);
+            }
+        }
+    }
+
     UE_LOG(LogTemp, Error,
         TEXT("[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=%s"),
         MeleeAttackMontage ? *MeleeAttackMontage->GetName() : TEXT("NULL"));

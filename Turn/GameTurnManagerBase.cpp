@@ -2291,6 +2291,71 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
         return;
     }
 
+    // CodeRevision: INC-2025-1146-R1 (Run enemy phase after player attack/turn actions even when no move was accepted) (2025-11-20 15:00)
+    // If no pre-resolved move existed (bSequentialModeActive=false), derive sequential/simultaneous flow
+    // directly from the cached EnemyTurnData intents for this turn.
+    if (UWorld* World = GetWorld())
+    {
+        UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>();
+        UTurnCorePhaseManager* PhaseManager = World->GetSubsystem<UTurnCorePhaseManager>();
+
+        if (EnemyData && PhaseManager)
+        {
+            // Keep CachedEnemyIntents in sync with EnemyTurnData
+            CachedEnemyIntents = EnemyData->Intents;
+
+            const bool bHasAttack = DoesAnyIntentHaveAttack();
+            if (bHasAttack)
+            {
+                UE_LOG(LogTurnManager, Log,
+                    TEXT("Turn %d: OnPlayerMoveCompleted (no pre-resolve) - ATTACK intents present, starting sequential enemy phase"),
+                    CurrentTurnId);
+
+                bSequentialModeActive = true;
+                bSequentialMovePhaseStarted = false;
+                bIsInMoveOnlyPhase = false;
+
+                CachedResolvedActions.Reset();
+
+                TArray<FEnemyIntent> AllIntents = EnemyData->Intents;
+                CachedResolvedActions = PhaseManager->CoreResolvePhase(AllIntents);
+
+                UE_LOG(LogTurnManager, Log,
+                    TEXT("[Turn %d] CoreResolvePhase produced %d cached actions (post-player action)"),
+                    CurrentTurnId, CachedResolvedActions.Num());
+
+                const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
+                TArray<FResolvedAction> AttackActions;
+                AttackActions.Reserve(CachedResolvedActions.Num());
+                for (const FResolvedAction& Action : CachedResolvedActions)
+                {
+                    if (Action.AbilityTag.MatchesTag(AttackTag) || Action.FinalAbilityTag.MatchesTag(AttackTag))
+                    {
+                        AttackActions.Add(Action);
+                    }
+                }
+
+                if (AttackActions.IsEmpty())
+                {
+                    ExecuteEnemyMoves_Sequential();
+                }
+                else
+                {
+                    ExecuteAttacks(AttackActions);
+                }
+
+                return;
+            }
+
+            UE_LOG(LogTurnManager, Log,
+                TEXT("Turn %d: OnPlayerMoveCompleted (no pre-resolve) - no ATTACK intents, executing simultaneous phase"),
+                CurrentTurnId);
+
+            ExecuteSimultaneousPhase();
+            return;
+        }
+    }
+
     UE_LOG(LogTurnManager, Log,
         TEXT("Turn %d: Move completed, ending player phase (AP system not implemented)"),
         CurrentTurnId);

@@ -181,10 +181,11 @@ bool UTurnCommandHandler::ProcessPlayerCommand(const FPlayerCommand& Command)
 
 		return true;
 	}
+	// CodeRevision: INC-2025-1145-R1 (Treat move commands as validated so GameTurnManagerBase can run MovePrecheck and ACK instead of dropping input) (2025-11-20 14:00)
 	else if (Command.CommandTag.MatchesTag(RogueGameplayTags::InputTag_Move))
 	{
-		UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Move command received, delegating to GameTurnManagerBase."));
-		return false;
+		UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Move command validated; delegating MovePrecheck/ACK to GameTurnManagerBase."));
+		return true;
 	}
 
 	return false;

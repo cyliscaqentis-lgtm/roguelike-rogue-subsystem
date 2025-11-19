@@ -7,6 +7,9 @@
 
 - `CodeRevision: INC-2025-1142-R1` - Ensure `GA_TurnActionBase` and its attack/wait derivatives send the current `TurnId` in `Gameplay.Event.Turn.Ability.Completed` so downstream turn logic stops processing stale payloads per `FIX_PLAN.md` (2025-11-20 12:30)
 - `CodeRevision: INC-2025-1141-R1` - Guard `UGA_MeleeAttack::OnMontageCompleted` against duplicate invocations so a single attack ability cannot end twice, per `FIX_PLAN.md` (2025-11-20 12:00)
+- `CodeRevision: INC-2025-1145-R1` - Prevent stale attack completions from calling `TurnActionBarrierSubsystem::CompleteAction` on the wrong `TurnId` by checking the barrier’s current turn inside `UGA_AttackBase::EndAbility`, avoiding cross-turn pollution of the barrier state (2025-11-20 14:00)
+- `CodeRevision: INC-2025-1146-R1` - Updated `UTurnCommandHandler::ProcessPlayerCommand` and `AGameTurnManagerBase::OnPlayerMoveCompleted` so validated `InputTag_Move` commands still allow downstream MovePrecheck/ACK to run, and attack/turn completions re-derive sequential vs simultaneous enemy flow from cached intents even when no move was accepted, ensuring enemies act after a player attack and the first move of Turn 0 is no longer dropped (2025-11-20 15:00)
+- `CodeRevision: INC-2025-1147-R1` - Rotated melee attackers toward their target in `UGA_MeleeAttack::ActivateAbility` using the cached front-cell location from `ComputeTargetFacingInfo`, so both enemies and the player visually face the struck unit when playing the melee montage (2025-11-20 15:10)
 
 When modifying code in this project, add a `CodeRevision` comment to track version changes. This helps external agents like Claude Code understand the change history, so please check this file when editing related files.
 
