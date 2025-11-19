@@ -106,6 +106,8 @@ void UGA_WaitBase::RegisterBarrierAction()
         if (AActor* Avatar = GetAvatarActorFromActorInfo())
         {
             WaitTurnId = Barrier->GetCurrentTurnId();
+            // CodeRevision: INC-2025-1142-R1 (Keep the wait completion event aligned with the current TurnId) (2025-11-20 12:30)
+            SetCompletionEventTurnId(WaitTurnId);
             WaitActionId = Barrier->RegisterAction(Avatar, WaitTurnId);
             bBarrierActionRegistered = WaitActionId.IsValid();
 

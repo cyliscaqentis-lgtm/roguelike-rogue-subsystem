@@ -210,6 +210,7 @@ void UGA_AttackBase::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
     const FGameplayEventData* TriggerEventData)
 {
     // 親クラスのActivateAbilityを呼ぶ（タイムアウトタイマー、State.Ability.Executing追加など）
+    bAbilityHasEnded = false;
     Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
     // ★★★ Barrier登録：攻撃もターン進行のブロック対象として管理 ★★★
@@ -248,6 +249,8 @@ void UGA_AttackBase::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
     }
 
     AttackTurnId = Barrier->GetCurrentTurnId();
+    // CodeRevision: INC-2025-1142-R1 (Pass the attack's TurnId through to the completion-event payload) (2025-11-20 12:30)
+    SetCompletionEventTurnId(AttackTurnId);
     AttackActionId = AttackExecutor->GetActionIdForActor(Avatar);
     bBarrierRegistered = AttackActionId.IsValid();
 
@@ -290,6 +293,16 @@ void UGA_AttackBase::EndAbility(const FGameplayAbilitySpecHandle Handle,
     bool bReplicateEndAbility,
     bool bWasCancelled)
 {
+    // CodeRevision: INC-2025-1144-R1 (Prevent duplicate EndAbility runs from corrupting the barrier)
+    if (bAbilityHasEnded)
+    {
+        UE_LOG(LogAttackAbility, Warning,
+            TEXT("[GA_AttackBase] EndAbility called on %s more than once. Ignoring."),
+            *GetName());
+        return;
+    }
+    bAbilityHasEnded = true;
+
     // To fix a race condition, we must call the parent EndAbility FIRST.
     // This ensures all gameplay tags (like State.Action.InProgress) are removed
     // BEFORE we notify the barrier. Notifying the barrier can synchronously
@@ -306,11 +319,22 @@ void UGA_AttackBase::EndAbility(const FGameplayAbilitySpecHandle Handle,
             {
                 if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
                 {
-                    Barrier->CompleteAction(Avatar, AttackTurnId, AttackActionId);
+                    // CodeRevision: INC-2025-1145-R1 (Prevent stale turn completion from polluting current barrier)
+                    const int32 CurrentBarrierTurn = Barrier->GetCurrentTurnId();
+                    if (AttackTurnId != CurrentBarrierTurn)
+                    {
+                        UE_LOG(LogAttackAbility, Warning,
+                            TEXT("[GA_AttackBase] EndAbility: IGNORED Stale Barrier Completion (AttackTurnId=%d != CurrentBarrierTurn=%d, Actor=%s)"),
+                            AttackTurnId, CurrentBarrierTurn, *Avatar->GetName());
+                    }
+                    else
+                    {
+                        Barrier->CompleteAction(Avatar, AttackTurnId, AttackActionId);
 
-                    UE_LOG(LogAttackAbility, Log,
-                        TEXT("[GA_AttackBase] EndAbility: Completed attack in Barrier (TurnId=%d, ActionId=%s, Actor=%s)"),
-                        AttackTurnId, *AttackActionId.ToString(), *Avatar->GetName());
+                        UE_LOG(LogAttackAbility, Log,
+                            TEXT("[GA_AttackBase] EndAbility: Completed attack in Barrier (TurnId=%d, ActionId=%s, Actor=%s)"),
+                            AttackTurnId, *AttackActionId.ToString(), *Avatar->GetName());
+                    }
                 }
             }
         }

@@ -25,6 +25,8 @@ void UGA_TurnActionBase::ActivateAbility(const FGameplayAbilitySpecHandle Handle
     const FGameplayEventData* TriggerEventData)
 {
     bCompletionSent = false;
+    // CodeRevision: INC-2025-1142-R1 (Clear the cached TurnId before activation so completion payloads never reuse stale IDs) (2025-11-20 12:30)
+    CompletionEventTurnId = INDEX_NONE;
 
     Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
@@ -117,20 +119,43 @@ void UGA_TurnActionBase::OnTimeout()
 
 void UGA_TurnActionBase::SendCompletionEvent(bool bTimedOut)
 {
-    FGameplayEventData Payload;
-    Payload.Instigator = GetAvatarActorFromActorInfo();
-    Payload.OptionalObject = this;
-    Payload.EventMagnitude = bTimedOut ? -1.0f : 1.0f;
+    // CodeRevision: INC-2025-1142-R1 (Guard completion events so only the correct TurnId is broadcast) (2025-11-20 12:30)
+    if (CompletionEventTurnId == INDEX_NONE)
+    {
+        UE_LOG(LogTemp, Warning,
+            TEXT("[GA_TurnActionBase] Completion event skipped: TurnId is unset (TimedOut=%d)"),
+            bTimedOut ? 1 : 0);
+        return;
+    }
 
     AActor* InstigatorActor = GetAvatarActorFromActorInfo();
-    if (InstigatorActor)
+    if (!InstigatorActor)
     {
-        UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(InstigatorActor);
-        if (ASC)
-        {
-            ASC->HandleGameplayEvent(CompletionEventTag, &Payload);
-        }
+        UE_LOG(LogTemp, Warning, TEXT("[GA_TurnActionBase] Cannot send completion event: Avatar actor missing"));
+        return;
     }
+
+    if (bTimedOut)
+    {
+        UE_LOG(LogTemp, Warning,
+            TEXT("[GA_TurnActionBase] Sending timed-out completion event for Turn=%d"),
+            CompletionEventTurnId);
+    }
+
+    if (UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(InstigatorActor))
+    {
+        FGameplayEventData Payload;
+        Payload.Instigator = InstigatorActor;
+        Payload.OptionalObject = this;
+        Payload.EventMagnitude = static_cast<float>(CompletionEventTurnId);
+        Payload.EventTag = CompletionEventTag;
+        ASC->HandleGameplayEvent(CompletionEventTag, &Payload);
+    }
+}
+
+void UGA_TurnActionBase::SetCompletionEventTurnId(int32 TurnId)
+{
+    CompletionEventTurnId = TurnId;
 }
 
 void UGA_TurnActionBase::SendStartEvent()

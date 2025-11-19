@@ -2,6 +2,12 @@
 
 ## Overview
 
+
+- `CodeRevision: INC-2025-1144-R1` - Added an idempotency guard inside `UGA_AttackBase::EndAbility` so duplicate completion calls are ignored before any barrier updates, per `FIX_PLAN.md` (2025-11-20 13:30)
+
+- `CodeRevision: INC-2025-1142-R1` - Ensure `GA_TurnActionBase` and its attack/wait derivatives send the current `TurnId` in `Gameplay.Event.Turn.Ability.Completed` so downstream turn logic stops processing stale payloads per `FIX_PLAN.md` (2025-11-20 12:30)
+- `CodeRevision: INC-2025-1141-R1` - Guard `UGA_MeleeAttack::OnMontageCompleted` against duplicate invocations so a single attack ability cannot end twice, per `FIX_PLAN.md` (2025-11-20 12:00)
+
 When modifying code in this project, add a `CodeRevision` comment to track version changes. This helps external agents like Claude Code understand the change history, so please check this file when editing related files.
 
 - `CodeRevision: INC-2025-1135-R1` - Fixed encoding issues by correcting garbled comments (7 locations: ・・lueprintNativeEvent・・ → BlueprintNativeEvent) and translating all Japanese comments to English in `GameTurnManagerBase.h` (2 locations), `GameTurnManagerBase.cpp` (16 locations), and `TurnCommandEncoding.h` (2 locations) to prevent SHIFT-JIS misinterpretation by AI tools (2025-11-19 17:25)

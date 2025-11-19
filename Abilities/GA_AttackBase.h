@@ -68,4 +68,7 @@ private:
     FGuid AttackActionId;
     int32 AttackTurnId = -1;
     bool bBarrierRegistered = false;
+
+    // CodeRevision: INC-2025-1144-R1 (Idempotency guard moved into GA_AttackBase so duplicate EndAbility calls skip barrier logic) (2025-11-20 13:30)
+    bool bAbilityHasEnded = false;
 };

@@ -183,8 +183,8 @@ bool UTurnCommandHandler::ProcessPlayerCommand(const FPlayerCommand& Command)
 	}
 	else if (Command.CommandTag.MatchesTag(RogueGameplayTags::InputTag_Move))
 	{
-		UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Move command received, passing through for now."));
-		return true;
+		UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Move command received, delegating to GameTurnManagerBase."));
+		return false;
 	}
 
 	return false;

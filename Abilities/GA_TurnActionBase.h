@@ -49,7 +49,14 @@ protected:
     UFUNCTION(BlueprintCallable, Category = "Turn")
     void SendStartEvent();
 
+    // CodeRevision: INC-2025-1142-R1 (Track the TurnId associated with completion events so they carry valid payloads) (2025-11-20 12:30)
+    void SetCompletionEventTurnId(int32 TurnId);
+
 private:
     FTimerHandle TimeoutHandle;
     bool bCompletionSent = false;
+
+    // CodeRevision: INC-2025-1142-R1 (Keep the most recent TurnId for completion notifications to avoid stale payloads) (2025-11-20 12:30)
+    int32 CompletionEventTurnId = INDEX_NONE;
+
 };

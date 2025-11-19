@@ -216,14 +216,23 @@ void UTurnActionBarrierSubsystem::CompleteAction(AActor* Actor, int32 TurnId, co
             TEXT("[Barrier] COMPLETE: Turn=%d Actor=%s Action=%s (Remaining=%d)"),
             TurnId, *GetNameSafe(Actor), *ActionId.ToString(), Remaining);
 
-        // If we reached zero, immediately notify listeners
+        // If we reached zero, notify listeners on the next tick to prevent recursion
         if (Remaining == 0)
         {
             UE_LOG(LogTurnBarrier, Warning,
-                TEXT("[Barrier] Turn %d: ALL ACTIONS COMPLETED (Remaining=0) -> Broadcasting OnAllMovesFinished"),
+                TEXT("[Barrier] Turn %d: ALL ACTIONS COMPLETED (Remaining=0) -> Scheduling OnAllMovesFinished (NextTick)"),
                 TurnId);
 
-            OnAllMovesFinished.Broadcast(TurnId);
+            if (UWorld* World = GetWorld())
+            {
+                World->GetTimerManager().SetTimerForNextTick([this, TurnId]()
+                {
+                    // Verify that the turn is still valid and we haven't moved past it (though unlikely in one tick)
+                    // Actually, we just want to signal that *that* turn finished.
+                    UE_LOG(LogTurnBarrier, Log, TEXT("[Barrier] Broadcasting OnAllMovesFinished for Turn %d"), TurnId);
+                    OnAllMovesFinished.Broadcast(TurnId);
+                });
+            }
         }
     }
     else
