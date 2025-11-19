@@ -1321,6 +1321,14 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
             UE_LOG(LogTurnManager, Warning, TEXT("[GameTurnManager] Command processing failed by CommandHandler"));
             return;
         }
+
+        // CodeRevision: INC-2025-1149-R1 (Record last accepted command tag for completion handling)
+        LastAcceptedCommandTag = Command.CommandTag;
+    }
+    else
+    {
+        // CommandHandler が無いフォールバック経路でもタグを記録しておく
+        LastAcceptedCommandTag = Command.CommandTag;
     }
     else
     {
@@ -2292,9 +2300,21 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
     }
 
     // CodeRevision: INC-2025-1146-R1 (Run enemy phase after player attack/turn actions even when no move was accepted) (2025-11-20 15:00)
-    // If no pre-resolved move existed (bSequentialModeActive=false), derive sequential/simultaneous flow
-    // directly from the cached EnemyTurnData intents for this turn.
-    if (UWorld* World = GetWorld())
+    // MOVE 由来の完了通知かどうかは CachedPlayerCommand ではなく、
+    // 直近に受理されたコマンドタグで判定する。
+    // Attack/Wait 系の完了時のみ敵フェーズのフォールバックを行う。
+    const FGameplayTag InputMoveTag = RogueGameplayTags::InputTag_Move;
+
+    const bool bLastCommandWasMove =
+        LastAcceptedCommandTag.MatchesTag(InputMoveTag);
+
+    if (bLastCommandWasMove)
+    {
+        UE_LOG(LogTurnManager, Log,
+            TEXT("Turn %d: OnPlayerMoveCompleted - last accepted command was MOVE; enemy phase already handled, skipping fallback"),
+            CurrentTurnId);
+    }
+    else if (UWorld* World = GetWorld())
     {
         UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>();
         UTurnCorePhaseManager* PhaseManager = World->GetSubsystem<UTurnCorePhaseManager>();

@@ -362,6 +362,10 @@ public:
     UPROPERTY(BlueprintReadWrite, Category = "Turn|State")
     FPlayerCommand CachedPlayerCommand;
 
+    // CodeRevision: INC-2025-1149-R1 (Track last accepted player command tag to distinguish move vs attack completions in OnPlayerMoveCompleted) (2025-11-20 15:45)
+    UPROPERTY(BlueprintReadOnly, Category = "Turn|State")
+    FGameplayTag LastAcceptedCommandTag;
+
     UPROPERTY(BlueprintReadOnly, Category = "Turn|State")
     FSimulBatch CurrentSimulBatch;
 

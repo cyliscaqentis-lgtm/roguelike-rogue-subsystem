@@ -4,6 +4,8 @@
 #include "EngineUtils.h"
 #include "Turn/GameTurnManagerBase.h"
 #include "Templates/Tuple.h"
+// CodeRevision: INC-2025-1148-R1 (Allow rerouting moves off blocked attack tiles instead of forced WAIT when a closer tile exists) (2025-11-20 15:30)
+#include "Turn/DistanceFieldSubsystem.h"
 
 // Local log category (avoid circular dependencies)
 DEFINE_LOG_CATEGORY_STATIC(LogConflictResolver, Log, All);
@@ -563,13 +565,92 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                     TEXT("[ResolveAllConflicts] Revalidation: %s move to (%d,%d) blocked by stationary unit"),
                     *GetNameSafe(ActorPtr), TargetCell.X, TargetCell.Y);
 
-                Action.bIsWait         = true;
-                Action.NextCell        = Action.CurrentCell;
-                Action.AbilityTag      = WaitTag;
-                Action.FinalAbilityTag = WaitTag;
-                Action.ResolutionReason = FString::Printf(
-                    TEXT("LostConflict: Target cell (%d,%d) blocked by stationary unit (Revalidation)"),
-                    TargetCell.X, TargetCell.Y);
+                bool bRerouted = false;
+
+                // CodeRevision: INC-2025-1148-R1
+                // 近づけるマスが他にある場合は、WAIT ではなく隣接セルへ再ルーティングする。
+                if (UWorld* World = GetWorld())
+                {
+                    UGridOccupancySubsystem* GridOcc = ResolveGridOccupancy();
+                    UDistanceFieldSubsystem* DF = World->GetSubsystem<UDistanceFieldSubsystem>();
+
+                    if (GridOcc && DF && ActorPtr)
+                    {
+                        const FIntPoint CurrentCell = Action.CurrentCell;
+                        const int32 CurrentDist = DF->GetDistance(CurrentCell);
+
+                        if (CurrentDist >= 0)
+                        {
+                            const FIntPoint NeighborOffsets[4] = {
+                                FIntPoint(1, 0),
+                                FIntPoint(-1, 0),
+                                FIntPoint(0, 1),
+                                FIntPoint(0, -1)
+                            };
+
+                            FIntPoint BestCell = CurrentCell;
+                            int32 BestDist = CurrentDist;
+
+                            for (const FIntPoint& Offset : NeighborOffsets)
+                            {
+                                const FIntPoint Candidate = CurrentCell + Offset;
+
+                                // 攻撃タイルや既に固定されたセルには入らない
+                                if (StationaryCells.Contains(Candidate))
+                                {
+                                    continue;
+                                }
+
+                                // 既に他のアクターが占有しているセルも避ける（自身は許可）
+                                if (GridOcc->IsCellOccupied(Candidate))
+                                {
+                                    AActor* Occupant = GridOcc->GetActorAtCell(Candidate);
+                                    if (Occupant && Occupant != ActorPtr)
+                                    {
+                                        continue;
+                                    }
+                                }
+
+                                const int32 Dist = DF->GetDistance(Candidate);
+                                if (Dist >= 0 && Dist < BestDist)
+                                {
+                                    BestDist = Dist;
+                                    BestCell = Candidate;
+                                }
+                            }
+
+                            if (BestCell != CurrentCell)
+                            {
+                                Action.NextCell        = BestCell;
+                                Action.bIsWait         = false;
+                                Action.AbilityTag      = MoveTag;
+                                Action.FinalAbilityTag = MoveTag;
+                                Action.ResolutionReason = FString::Printf(
+                                    TEXT("Revalidated: rerouted move off blocked cell (%d,%d) to (%d,%d)"),
+                                    TargetCell.X, TargetCell.Y, BestCell.X, BestCell.Y);
+
+                                bRerouted = true;
+
+                                UE_LOG(LogConflictResolver, Log,
+                                    TEXT("[ResolveAllConflicts] Rerouted %s from blocked (%d,%d) to (%d,%d)"),
+                                    *GetNameSafe(ActorPtr),
+                                    TargetCell.X, TargetCell.Y,
+                                    BestCell.X, BestCell.Y);
+                            }
+                        }
+                    }
+                }
+
+                if (!bRerouted)
+                {
+                    Action.bIsWait         = true;
+                    Action.NextCell        = Action.CurrentCell;
+                    Action.AbilityTag      = WaitTag;
+                    Action.FinalAbilityTag = WaitTag;
+                    Action.ResolutionReason = FString::Printf(
+                        TEXT("LostConflict: Target cell (%d,%d) blocked by stationary unit (Revalidation)"),
+                        TargetCell.X, TargetCell.Y);
+                }
             }
         }
 
