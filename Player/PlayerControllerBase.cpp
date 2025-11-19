@@ -605,25 +605,15 @@ void APlayerControllerBase::Input_Attack_Triggered(const FInputActionValue& Valu
 		return;
 	}
 
-	FHitResult HitResult;
-	if (!GetHitResultUnderCursor(ECC_Visibility, false, HitResult))
-	{
-		UE_LOG(LogTemp, Log, TEXT("[Client] Attack Input: No target under cursor."));
-		return;
-	}
-
-	if (!PathFinder)
-	{
-		UE_LOG(LogTemp, Error, TEXT("[Client] Attack Input: PathFinder unavailable, cannot derive grid cell."));
-		return;
-	}
-
-	const FIntPoint TargetCell = PathFinder->WorldToGrid(HitResult.Location);
+	// ★★★ REMOVED: Mouse Cursor Targeting (2025-11-19) ★★★
+	// User requested to remove mouse functionality.
+	// Attack command will now be sent without a specific target, relying on TurnCommandHandler
+	// to determine the target based on the player's facing direction (ForwardVector).
 
 	FPlayerCommand Command;
 	Command.CommandTag = RogueGameplayTags::Command_Player_Attack;
-	Command.TargetCell = TargetCell;
-	Command.TargetActor = HitResult.GetActor();
+	Command.TargetCell = FIntPoint::ZeroValue; // No specific target cell
+	Command.TargetActor = nullptr;             // No specific target actor
 
 	if (UWorld* World = GetWorld())
 	{
@@ -638,8 +628,8 @@ void APlayerControllerBase::Input_Attack_Triggered(const FInputActionValue& Valu
 	Server_SubmitCommand(Command);
 
 	UE_LOG(LogTemp, Warning,
-		TEXT("[Client] 📤 Attack Command Sent: Tag=%s, Cell=(%d,%d), Target=%s"),
-		*Command.CommandTag.ToString(), TargetCell.X, TargetCell.Y, *GetNameSafe(Command.TargetActor.Get()));
+		TEXT("[Client] 📤 Attack Command Sent: Tag=%s, Cell=(%d,%d) (Directional Attack)"),
+		*Command.CommandTag.ToString(), Command.TargetCell.X, Command.TargetCell.Y);
 }
 
 FIntPoint APlayerControllerBase::Quantize8Way(const FVector2D& Direction, float Threshold) const

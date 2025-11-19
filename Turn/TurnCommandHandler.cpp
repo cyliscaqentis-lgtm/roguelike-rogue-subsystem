@@ -87,16 +87,52 @@ bool UTurnCommandHandler::ProcessPlayerCommand(const FPlayerCommand& Command)
 			return false;
 		}
 
-		const FVector ForwardVector = PlayerUnit->GetActorForwardVector();
-		const FVector2D ForwardDir2D = FVector2D(ForwardVector.X, ForwardVector.Y).GetSafeNormal();
-		FIntPoint Direction = FIntPoint(FMath::RoundToInt(ForwardDir2D.X), FMath::RoundToInt(ForwardDir2D.Y));
-		if (Direction == FIntPoint::ZeroValue)
+		const FIntPoint CurrentCell = PathFinder->WorldToGrid(PlayerUnit->GetActorLocation());
+		FIntPoint TargetCell = FIntPoint::ZeroValue;
+		bool bTargetFound = false;
+
+		// Strategy: Determine "Front" based on Input
+		// 1. If Command.TargetCell is provided (e.g. Mouse Cursor Position), use direction towards it.
+		// 2. If not, fallback to Actor's ForwardVector.
+
+		if (Command.TargetCell != FIntPoint::ZeroValue && Command.TargetCell != FIntPoint(-1, -1) && Command.TargetCell != CurrentCell)
 		{
-			Direction = FIntPoint(1, 0);
+			// Calculate direction from Player to Command Target
+			FVector2D DirectionDir = FVector2D(Command.TargetCell.X - CurrentCell.X, Command.TargetCell.Y - CurrentCell.Y);
+			if (!DirectionDir.IsNearlyZero())
+			{
+				DirectionDir.Normalize();
+				FIntPoint Direction = FIntPoint(FMath::RoundToInt(DirectionDir.X), FMath::RoundToInt(DirectionDir.Y));
+				
+				// Ensure we have a valid direction (at least one non-zero component)
+				if (Direction != FIntPoint::ZeroValue)
+				{
+					TargetCell = CurrentCell + Direction;
+					bTargetFound = true;
+					
+					UE_LOG(LogTurnManager, Log,
+						TEXT("[TurnCommandHandler] Input Direction derived from TargetCell (%d,%d) -> Dir(%d,%d) -> AttackCell(%d,%d)"),
+						Command.TargetCell.X, Command.TargetCell.Y, Direction.X, Direction.Y, TargetCell.X, TargetCell.Y);
+				}
+			}
 		}
 
-		const FIntPoint CurrentCell = PathFinder->WorldToGrid(PlayerUnit->GetActorLocation());
-		const FIntPoint TargetCell = CurrentCell + Direction;
+		if (!bTargetFound)
+		{
+			// Fallback: Use Actor's physical facing
+			const FVector ForwardVector = PlayerUnit->GetActorForwardVector();
+			const FVector2D ForwardDir2D = FVector2D(ForwardVector.X, ForwardVector.Y).GetSafeNormal();
+			FIntPoint Direction = FIntPoint(FMath::RoundToInt(ForwardDir2D.X), FMath::RoundToInt(ForwardDir2D.Y));
+			if (Direction == FIntPoint::ZeroValue)
+			{
+				Direction = FIntPoint(1, 0); // Default to +X
+			}
+			TargetCell = CurrentCell + Direction;
+			
+			UE_LOG(LogTurnManager, Log,
+				TEXT("[TurnCommandHandler] Using Actor ForwardVector for Attack Direction -> (%d,%d)"),
+				TargetCell.X, TargetCell.Y);
+		}
 
 		AActor* TargetActor = Occupancy->GetActorAtCell(TargetCell);
 		if (TargetActor == PlayerUnit || (TargetActor && !TargetActor->IsA(AUnitBase::StaticClass())))

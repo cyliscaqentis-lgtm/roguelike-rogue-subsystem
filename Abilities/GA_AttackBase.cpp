@@ -249,17 +249,37 @@ void UGA_AttackBase::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
     AttackActionId = AttackExecutor->GetActionIdForActor(Avatar);
     bBarrierRegistered = AttackActionId.IsValid();
 
+    // ★★★ FIX: Player Attack Support (2025-11-19) ★★★
+    // If the attack was NOT pre-registered (e.g. Player input during their turn),
+    // we must register it with the Barrier now, similar to GA_MoveBase.
     if (!bBarrierRegistered)
     {
-        UE_LOG(LogAttackAbility, Error,
-            TEXT("[GA_AttackBase] ActivateAbility: Failed to retrieve ActionId for %s - attack was not pre-registered!"),
-            *Avatar->GetName());
-        return;
-    }
+        UE_LOG(LogAttackAbility, Warning,
+            TEXT("[GA_AttackBase] ActivateAbility: ActionId not found in AttackExecutor (Normal for Player Input). Registering with Barrier directly."));
 
-    UE_LOG(LogAttackAbility, Log,
-        TEXT("[GA_AttackBase] ActivateAbility: Retrieved pre-registered ActionId from AttackExecutor (TurnId=%d, ActionId=%s, Actor=%s)"),
-        AttackTurnId, *AttackActionId.ToString(), *Avatar->GetName());
+        AttackActionId = Barrier->RegisterAction(Avatar, AttackTurnId);
+        bBarrierRegistered = AttackActionId.IsValid();
+
+        if (bBarrierRegistered)
+        {
+             UE_LOG(LogAttackAbility, Log,
+                TEXT("[GA_AttackBase] ActivateAbility: Registered with Barrier (TurnId=%d, ActionId=%s, Actor=%s)"),
+                AttackTurnId, *AttackActionId.ToString(), *Avatar->GetName());
+        }
+        else
+        {
+             UE_LOG(LogAttackAbility, Error,
+                TEXT("[GA_AttackBase] ActivateAbility: Failed to register with Barrier! (TurnId=%d, Actor=%s)"),
+                AttackTurnId, *Avatar->GetName());
+             return;
+        }
+    }
+    else
+    {
+        UE_LOG(LogAttackAbility, Log,
+            TEXT("[GA_AttackBase] ActivateAbility: Retrieved pre-registered ActionId from AttackExecutor (TurnId=%d, ActionId=%s, Actor=%s)"),
+            AttackTurnId, *AttackActionId.ToString(), *Avatar->GetName());
+    }
 }
 
 void UGA_AttackBase::EndAbility(const FGameplayAbilitySpecHandle Handle,
