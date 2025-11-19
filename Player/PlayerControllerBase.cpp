@@ -605,15 +605,33 @@ void APlayerControllerBase::Input_Attack_Triggered(const FInputActionValue& Valu
 		return;
 	}
 
-	// ★★★ REMOVED: Mouse Cursor Targeting (2025-11-19) ★★★
-	// User requested to remove mouse functionality.
-	// Attack command will now be sent without a specific target, relying on TurnCommandHandler
-	// to determine the target based on the player's facing direction (ForwardVector).
+	// ★★★ Use Input_TurnFacing direction for attack (2025-11-19) ★★★
+	// Attack direction is determined by the player's facing direction set via Input_TurnFacing.
+	// If no facing direction was set, Command.Direction will be zero and TurnCommandHandler will use ForwardVector as fallback.
 
 	FPlayerCommand Command;
 	Command.CommandTag = RogueGameplayTags::Command_Player_Attack;
 	Command.TargetCell = FIntPoint::ZeroValue; // No specific target cell
 	Command.TargetActor = nullptr;             // No specific target actor
+	
+	// Use CachedInputDirection if available (set by Input_TurnFacing_Started)
+	if (!CachedInputDirection.IsNearlyZero())
+	{
+		Command.Direction = FVector(CachedInputDirection.X, CachedInputDirection.Y, 0.0f);
+		UE_LOG(LogTemp, Log, TEXT("[PlayerController] Attack Command: Using CachedInputDirection (%.2f, %.2f)"), 
+			CachedInputDirection.X, CachedInputDirection.Y);
+	}
+	else
+	{
+		// Fallback: Use ForwardVector if no facing direction was set
+		if (APawn* PlayerPawn = GetPawn())
+		{
+			const FVector ForwardVector = PlayerPawn->GetActorForwardVector();
+			Command.Direction = ForwardVector;
+			UE_LOG(LogTemp, Log, TEXT("[PlayerController] Attack Command: Using ForwardVector (%.2f, %.2f)"), 
+				ForwardVector.X, ForwardVector.Y);
+		}
+	}
 
 	if (UWorld* World = GetWorld())
 	{

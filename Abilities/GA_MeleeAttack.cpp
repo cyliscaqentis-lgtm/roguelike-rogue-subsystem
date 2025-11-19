@@ -158,45 +158,6 @@ void UGA_MeleeAttack::ActivateAbility(
     UGridPathfindingSubsystem* GridLib = World ? World->GetSubsystem<UGridPathfindingSubsystem>() : nullptr;
     const FTargetFacingInfo FacingInfo = ComputeTargetFacingInfo(TargetUnit, World, GridLib);
     UpdateCachedTargetLocation(FacingInfo.Location, FacingInfo.ReservedCell, GridLib);
-    FVector TargetFacingLocation = FacingInfo.Location;
-
-    if (TargetUnit && ActorInfo && ActorInfo->AvatarActor.IsValid())
-    {
-        AActor* Avatar = ActorInfo->AvatarActor.Get();
-        if (Avatar && IsValid(TargetUnit))
-        {
-            FVector ToTarget = TargetFacingLocation - Avatar->GetActorLocation();
-            ToTarget.Z = 0.0f;  // Ignore vertical axis
-
-            if (!ToTarget.IsNearlyZero())
-            {
-                const FVector DirectionToTarget = ToTarget.GetSafeNormal();
-                // CodeRevision: INC-2025-00022-R1 (Correct melee attack rotation) (2025-11-17 19:00)
-                const FRotator NewRotation = DirectionToTarget.Rotation();
-                Avatar->SetActorRotation(NewRotation);
-
-                UE_LOG(LogTemp, Log, TEXT("[GA_MeleeAttack] %s: Rotated to face target %s (Yaw=%.1f)"),
-                    *GetNameSafe(Avatar), *GetNameSafe(TargetUnit), NewRotation.Yaw);
-
-                if (FacingInfo.bUsedReservedCell)
-                {
-                    UE_LOG(LogTemp, Log,
-                        TEXT("[GA_MeleeAttack] %s: Using reserved cell %s for facing rotation"),
-                        *GetNameSafe(Avatar), *FacingInfo.ReservedCell.ToString());
-                }
-            }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] %s: Cannot rotate - target is at same location"),
-                    *GetNameSafe(Avatar));
-            }
-        }
-    }
-    else if (!TargetUnit)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] %s: Cannot rotate - no target"),
-            *GetNameSafe(GetAvatarActorFromActorInfo()));
-    }
 
     UE_LOG(LogTemp, Error,
         TEXT("[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=%s"),

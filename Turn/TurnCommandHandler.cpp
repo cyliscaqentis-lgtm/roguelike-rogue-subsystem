@@ -119,10 +119,25 @@ bool UTurnCommandHandler::ProcessPlayerCommand(const FPlayerCommand& Command)
 
 		if (!bTargetFound)
 		{
-			// Fallback: Use Actor's physical facing
-			const FVector ForwardVector = PlayerUnit->GetActorForwardVector();
-			const FVector2D ForwardDir2D = FVector2D(ForwardVector.X, ForwardVector.Y).GetSafeNormal();
-			FIntPoint Direction = FIntPoint(FMath::RoundToInt(ForwardDir2D.X), FMath::RoundToInt(ForwardDir2D.Y));
+			// Fallback: Use Command.Direction (set by Input_TurnFacing) or Actor's ForwardVector
+			FVector AttackDirection = Command.Direction;
+			
+			// If Command.Direction is not set or zero, use ForwardVector
+			if (AttackDirection.IsNearlyZero())
+			{
+				AttackDirection = PlayerUnit->GetActorForwardVector();
+				UE_LOG(LogTurnManager, Log,
+					TEXT("[TurnCommandHandler] Command.Direction is zero, using ForwardVector"));
+			}
+			else
+			{
+				UE_LOG(LogTurnManager, Log,
+					TEXT("[TurnCommandHandler] Using Command.Direction from Input_TurnFacing (%.2f, %.2f)"),
+					AttackDirection.X, AttackDirection.Y);
+			}
+			
+			const FVector2D Direction2D = FVector2D(AttackDirection.X, AttackDirection.Y).GetSafeNormal();
+			FIntPoint Direction = FIntPoint(FMath::RoundToInt(Direction2D.X), FMath::RoundToInt(Direction2D.Y));
 			if (Direction == FIntPoint::ZeroValue)
 			{
 				Direction = FIntPoint(1, 0); // Default to +X
@@ -130,7 +145,7 @@ bool UTurnCommandHandler::ProcessPlayerCommand(const FPlayerCommand& Command)
 			TargetCell = CurrentCell + Direction;
 			
 			UE_LOG(LogTurnManager, Log,
-				TEXT("[TurnCommandHandler] Using Actor ForwardVector for Attack Direction -> (%d,%d)"),
+				TEXT("[TurnCommandHandler] Attack Direction -> (%d,%d)"),
 				TargetCell.X, TargetCell.Y);
 		}
 

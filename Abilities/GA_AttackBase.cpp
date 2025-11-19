@@ -91,10 +91,11 @@ void UGA_AttackBase::PostInitProperties()
     }
     else
     {
-        const FGameplayTag AttackEventTag = RogueGameplayTags::GameplayEvent_Intent_Attack;
-        UE_LOG(LogTemp, Log,
-            TEXT("[GA_AttackBase::PostInitProperties] Trigger already registered: %s"),
-            *AttackEventTag.ToString());
+        // This log is redundant because the trigger being registered is normal.
+        // const FGameplayTag AttackEventTag = RogueGameplayTags::GameplayEvent_Intent_Attack;
+        // UE_LOG(LogTemp, Log,
+        //     TEXT("[GA_AttackBase::PostInitProperties] Trigger already registered: %s"),
+        //     *AttackEventTag.ToString());
     }
 }
 
@@ -158,7 +159,8 @@ void UGA_AttackBase::OnAttackCompleted()
 
     UE_LOG(LogTemp, Verbose, TEXT("[GA_AttackBase] Attack completed"));
 
-    SendCompletionEvent(false);
+    // EndAbility will handle tag cleanup, barrier completion, and sending the completion event via its parent class.
+    // The previous call to SendCompletionEvent(false) here was causing a race condition.
     EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
 }
 
@@ -288,6 +290,12 @@ void UGA_AttackBase::EndAbility(const FGameplayAbilitySpecHandle Handle,
     bool bReplicateEndAbility,
     bool bWasCancelled)
 {
+    // To fix a race condition, we must call the parent EndAbility FIRST.
+    // This ensures all gameplay tags (like State.Action.InProgress) are removed
+    // BEFORE we notify the barrier. Notifying the barrier can synchronously
+    // trigger the next turn, and if the tags are still present, input will be blocked.
+    Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+
     // ★★★ Barrier完了通知：攻撃終了をBarrierに通知してターン進行を許可 ★★★
     if (bBarrierRegistered)
     {
@@ -313,7 +321,4 @@ void UGA_AttackBase::EndAbility(const FGameplayAbilitySpecHandle Handle,
     AttackTurnId = INDEX_NONE;
     AttackActionId.Invalidate();
     bBarrierRegistered = false;
-
-    // 親クラスのEndAbilityを呼ぶ（タイムアウトクリア、State.Ability.Executing削除など）
-    Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }

@@ -58,7 +58,38 @@ void UGA_TurnActionBase::EndAbility(const FGameplayAbilitySpecHandle Handle,
 
     GetAbilitySystemComponentFromActorInfo()->RemoveLooseGameplayTag(RogueGameplayTags::State_Ability_Executing);
 
+    // 親クラスのEndAbilityを呼ぶ (ActivationOwnedTagsの削除など)
     Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+
+    // Defensive: 念のため、EndAbility後も残っている可能性のあるタグを強制削除
+    // この時点では、ASCが有効であることを保証できない場合があるため、チェックを強化する。
+    UE_LOG(LogTemp, Warning, TEXT("[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility"));
+    UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
+    if (ASC)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[GA_TurnActionBase] Defensive check: ASC found, checking tags"));
+        
+        bool bHasExecuting = ASC->HasMatchingGameplayTag(RogueGameplayTags::State_Ability_Executing);
+        bool bHasInProgress = ASC->HasMatchingGameplayTag(RogueGameplayTags::State_Action_InProgress);
+        
+        UE_LOG(LogTemp, Warning, TEXT("[GA_TurnActionBase] Defensive check: State_Ability_Executing=%d, State_Action_InProgress=%d"), 
+            bHasExecuting ? 1 : 0, bHasInProgress ? 1 : 0);
+        
+        if (bHasExecuting)
+        {
+            ASC->RemoveLooseGameplayTag(RogueGameplayTags::State_Ability_Executing);
+            UE_LOG(LogTemp, Warning, TEXT("[GA_TurnActionBase] Defensive: Cleared lingering State_Ability_Executing on %s"), *GetNameSafe(GetAvatarActorFromActorInfo()));
+        }
+        if (bHasInProgress)
+        {
+            ASC->RemoveLooseGameplayTag(RogueGameplayTags::State_Action_InProgress);
+            UE_LOG(LogTemp, Warning, TEXT("[GA_TurnActionBase] Defensive: Cleared lingering State_Action_InProgress on %s"), *GetNameSafe(GetAvatarActorFromActorInfo()));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("[GA_TurnActionBase] Defensive check: ASC is NULL after Super::EndAbility! Cannot clear tags."));
+    }
 
     if (!bCompletionSent)
     {
