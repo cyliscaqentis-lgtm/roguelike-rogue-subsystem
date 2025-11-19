@@ -396,6 +396,26 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
         return FromCell;
     }
 
+    // CodeRevision: INC-2025-1153-R1 (Prefer straight steps over diagonals when aligned with player) (2025-11-20 18:00)
+    // If the enemy is exactly aligned on X or Y with the player, try a straight step along that axis first.
+    if ((GoalDelta.X == 0) != (GoalDelta.Y == 0))
+    {
+        const FIntPoint StraightOffset = GoalDelta;
+        const FIntPoint StraightCell   = FromCell + StraightOffset;
+
+        if (GridPathfinding->IsCellWalkableIgnoringActor(StraightCell, nullptr))
+        {
+            const int32 nd = GetDistanceAbs(StraightCell);
+            if (nd >= 0 && nd < d0)
+            {
+                DIAG_LOG(Log,
+                    TEXT("[GetNextStep] STRAIGHT preference: From=(%d,%d) -> Next=(%d,%d) (aligned axis)"),
+                    FromCell.X, FromCell.Y, StraightCell.X, StraightCell.Y);
+                return StraightCell;
+            }
+        }
+    }
+
     for (const FNeighborDef& Neighbor : Neighbors)
     {
         const FIntPoint N = FromCell + Neighbor.Offset;

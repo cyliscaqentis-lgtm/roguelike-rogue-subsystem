@@ -419,11 +419,11 @@ void UEnemyAISubsystem::FindAlternateMoveCells(
         { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 }
     };
 
-    for (const FIntPoint& Dir : Directions)
-    {
-        const FIntPoint Candidate = SelfCell + Dir;
+	for (const FIntPoint& Dir : Directions)
+	{
+		const FIntPoint Candidate = SelfCell + Dir;
 
-        if (!IsCellWalkable(EnemyActor, Candidate))
+		if (!IsCellWalkable(EnemyActor, Candidate))
         {
             continue;
         }
@@ -433,12 +433,39 @@ void UEnemyAISubsystem::FindAlternateMoveCells(
             continue;
         }
 
-        const int32 NewDist = FGridUtils::ChebyshevDistance(Candidate, PlayerGrid);
-        // CodeRevision: INC-2025-1151-R1 (Require strict distance reduction for alternate moves to avoid sideways oscillation) (2025-11-20 17:00)
-        if (NewDist >= CurrentDistanceInTiles)
-        {
-            continue;
-        }
+		const int32 NewDist = FGridUtils::ChebyshevDistance(Candidate, PlayerGrid);
+		// CodeRevision: INC-2025-1151-R1 (Require strict distance reduction for alternate moves to avoid sideways oscillation) (2025-11-20 17:00)
+		if (NewDist >= CurrentDistanceInTiles)
+		{
+			continue;
+		}
+
+		// CodeRevision: INC-2025-1154-R1 (Apply corner-cutting prevention to alternate diagonal moves so they respect LOS shoulders) (2025-11-20 18:30)
+		if (Dir.X != 0 && Dir.Y != 0)
+		{
+			if (UWorld* World = GetWorld())
+			{
+				if (const UGridPathfindingSubsystem* Pathfinding = World->GetSubsystem<UGridPathfindingSubsystem>())
+				{
+					const FIntPoint Shoulder1 = SelfCell + FIntPoint(Dir.X, 0);
+					const FIntPoint Shoulder2 = SelfCell + FIntPoint(0, Dir.Y);
+
+					const bool bShoulder1Walkable = Pathfinding->IsCellWalkableIgnoringActor(Shoulder1, nullptr);
+					const bool bShoulder2Walkable = Pathfinding->IsCellWalkableIgnoringActor(Shoulder2, nullptr);
+
+					if (!bShoulder1Walkable || !bShoulder2Walkable)
+					{
+						UE_LOG(LogEnemyAI, Verbose,
+							TEXT("[FindAlternateMoveCells] Reject diagonal (%d,%d)->(%d,%d) due to corner (Shoulder1=%d Shoulder2=%d)"),
+							SelfCell.X, SelfCell.Y,
+							Candidate.X, Candidate.Y,
+							bShoulder1Walkable ? 1 : 0,
+							bShoulder2Walkable ? 1 : 0);
+						continue;
+					}
+				}
+			}
+		}
 
         OutCandidates.Add(Candidate);
     }
