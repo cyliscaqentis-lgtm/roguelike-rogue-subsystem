@@ -1,4 +1,5 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
+// CodeRevision: INC-2025-1135-R1 (Fix encoding issues: correct garbled comments and translate Japanese comments to English) (2025-11-19 17:25)
 
 #pragma once
 
@@ -180,7 +181,7 @@ public:
     //==========================================================================
 
     /**
-     * ★★★ Phase 5補完: Force cleanup of residual InProgress tags (2025-11-09) ★★★
+     * ★★★ Phase 5 Completion: Force cleanup of residual InProgress tags (2025-11-09) ★★★
      *
      * Force remove State.Action.InProgress tags from all units (player + enemies)
      *
@@ -211,7 +212,8 @@ public:
     // Removed: HasAnyAttackIntent() - replaced with direct EnemyTurnDataSubsystem access
 
     //==========================================================================
-    // Player・・lueprintNativeEvent・・    //==========================================================================
+    // Player BlueprintNativeEvent
+    //==========================================================================
 
     UFUNCTION(BlueprintNativeEvent, Category = "Turn|Player")
     void OnPlayerCommandAccepted(const FPlayerCommand& Command);
@@ -222,7 +224,8 @@ public:
     virtual bool ShouldSimulMove_Implementation(const FPlayerCommand& Command, const FBoardSnapshot& Snapshot) const;
 
     //==========================================================================
-    // Enemy Pipeline・・lueprintNativeEvent・・    //==========================================================================
+    // Enemy Pipeline BlueprintNativeEvent
+    //==========================================================================
 
     // CodeRevision: INC-2025-00017-R1 (Remove wrapper functions - Phase 3) (2025-11-16 15:20)
     // Removed: CollectEnemies() / CollectEnemies_Implementation() - replaced with direct EnemyAISubsystem call
@@ -237,7 +240,8 @@ public:
     void OnAllAbilitiesCompleted();
 
     //==========================================================================
-    // Ally Turn・・lueprintNativeEvent・・    //==========================================================================
+    // Ally Turn BlueprintNativeEvent
+    //==========================================================================
 
     UFUNCTION(BlueprintNativeEvent, Category = "Turn|Ally")
     void BuildAllyIntents(UPARAM(ref) FTurnContext& Context);
@@ -248,7 +252,8 @@ public:
     virtual void ExecuteAllyActions_Implementation(FTurnContext& Context);
 
     //==========================================================================
-    // Move Pipeline・・lueprintNativeEvent・・    //==========================================================================
+    // Move Pipeline BlueprintNativeEvent
+    //==========================================================================
 
     UFUNCTION(BlueprintNativeEvent, Category = "Turn|Move")
     void BuildSimulBatch();
@@ -263,17 +268,20 @@ public:
     virtual void ResolveConflicts_Implementation(TArray<FPendingMove>& Moves);
 
     //==========================================================================
-    // Interrupt System・・lueprintNativeEvent・・    //==========================================================================
+    // Interrupt System BlueprintNativeEvent
+    //==========================================================================
 
     UFUNCTION(BlueprintNativeEvent, Category = "Turn|Interrupt")
     void CheckInterruptWindow(const FPendingMove& PlayerMove);
     virtual void CheckInterruptWindow_Implementation(const FPendingMove& PlayerMove);
 
     //==========================================================================
-    // Ability Completion・・lueprintNativeEvent・・    //==========================================================================
+    // Ability Completion BlueprintNativeEvent
+    //==========================================================================
 
     //==========================================================================
-    // System Hooks・・lueprintNativeEvent・・    //==========================================================================
+    // System Hooks BlueprintNativeEvent
+    //==========================================================================
 
     UFUNCTION(BlueprintNativeEvent, Category = "Turn|Hooks")
     void OnCombineSystemUpdate(const FTurnContext& Context);
@@ -665,7 +673,7 @@ private:
     // Removed: PendingTeamCountLast (unused)
     // Removed: CollectEnemiesRetryCount (unused)
 
-    // ★★★ Phase 5補完: EndTurn retry prevention (2025-11-09) ★★★
+    // ★★★ Phase 5 Completion: EndTurn retry prevention (2025-11-09) ★★★
     /**
      * Flag indicating if an EndEnemyTurn retry is already scheduled
      * - true: Retry timer already set -> suppress additional retries

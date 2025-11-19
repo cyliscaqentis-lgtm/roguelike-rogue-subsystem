@@ -4,6 +4,7 @@
 
 When modifying code in this project, add a `CodeRevision` comment to track version changes. This helps external agents like Claude Code understand the change history, so please check this file when editing related files.
 
+- `CodeRevision: INC-2025-1135-R1` - Fixed encoding issues by correcting garbled comments (7 locations: ・・lueprintNativeEvent・・ → BlueprintNativeEvent) and translating all Japanese comments to English in `GameTurnManagerBase.h` (2 locations), `GameTurnManagerBase.cpp` (16 locations), and `TurnCommandEncoding.h` (2 locations) to prevent SHIFT-JIS misinterpretation by AI tools (2025-11-19 17:25)
 - `CodeRevision: INC-2025-1134-R1` - Routed player attack commands through `TurnCommandHandler` (new command tag, controller attack input, and ability dispatch) so GameTurnManager only logs the result (2025-12-13 09:30)
 - `CodeRevision: INC-2025-1133-R1` - Added player attack command handling inside `AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation` so `InputTag_Attack` fires a GameplayEvent toward the target actor (2025-11-19 01:10)
 - `CodeRevision: INC-2025-1132-R1` - Added an anti-teleport guard in the CoreResolvePhase so movement intents that differ from live occupancy by more than one Chebyshev step become WAITs and emit a desync warning (2025-11-19 00:57)

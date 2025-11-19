@@ -1,4 +1,5 @@
 // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+// CodeRevision: INC-2025-1135-R1 (Fix encoding issues: translate Japanese comments to English) (2025-11-19 17:25)
 #include "Turn/GameTurnManagerBase.h"
 #include "TBSLyraGameMode.h"
 #include "Grid/GridPathfindingSubsystem.h"
@@ -1064,7 +1065,7 @@ TArray<AActor*> AllUnits;
         TurnId, PlayerPawn ? *PlayerPawn->GetName() : TEXT("NULL"));
 
 BeginPhase(Phase_Turn_Init);
-    // CurrentInputWindowId++ は削除: OpenInputWindow() が TFC->OpenNewInputWindow() を呼ぶため不要
+    // CurrentInputWindowId++ removed: OpenInputWindow() calls TFC->OpenNewInputWindow() so it's unnecessary
     BeginPhase(Phase_Player_Wait);
     UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] INPUT GATE OPENED EARLY (before DistanceField update)"), TurnId);
 
@@ -1300,7 +1301,7 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
     // CodeRevision: INC-2025-1117E (Failsafe: Reset bPlayerMoveInProgress to prevent move drops) (2025-11-17 18:30)
     if (bPlayerMoveInProgress)
     {
-        // 本来ここに来るべきではないが、来た場合は警告を出し、状態をリセットして処理を続行する
+        // Should not reach here, but if it does, log warning, reset state and continue
         UE_LOG(LogTurnManager, Warning, TEXT("[OnPlayerCommandAccepted] Failsafe: bPlayerMoveInProgress was true, forcing to false to prevent move drop."));
         bPlayerMoveInProgress = false;
     }
@@ -1453,7 +1454,7 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
 
         if (!bMoveValid)
         {
-            // FailureReasonから原因を判定
+            // Determine cause from FailureReason
             const TCHAR* BlockReason = FailureReason.Contains(TEXT("Corner cutting")) ? TEXT("corner_cutting") :
                 FailureReason.Contains(TEXT("terrain")) ? TEXT("terrain") :
                 FailureReason.Contains(TEXT("distance")) ? TEXT("invalid_distance") :
@@ -2126,7 +2127,7 @@ void AGameTurnManagerBase::ExecuteSimultaneousPhase()
     UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] ==== Simultaneous Move Phase (No Attacks) ===="), CurrentTurnId);
 
     // CodeRevision: INC-2025-1117K (Fix Turn 0 simultaneous movement bug) (2025-11-17 20:45)
-    // CoreResolvePhaseの呼び出しとDispatchResolvedMoveの直接実行
+    // Call CoreResolvePhase and directly execute DispatchResolvedMove
     UWorld* World = GetWorld();
     if (!World)
     {
@@ -2148,7 +2149,7 @@ void AGameTurnManagerBase::ExecuteSimultaneousPhase()
 
     TArray<FEnemyIntent> AllIntents = EnemyData->Intents;
 
-    // プレイヤーのインテントを追加
+    // Add player intent
     APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(World, 0);
     // CodeRevision: INC-2025-00032-R1 (Replace CachedPathFinder with PathFinder) (2025-01-XX XX:XX)
     if (PlayerPawn && IsValid(PathFinder))
@@ -2182,14 +2183,14 @@ void AGameTurnManagerBase::ExecuteSimultaneousPhase()
         TEXT("[Turn %d] ExecuteSimultaneousPhase: Processing %d intents via CoreResolvePhase"),
         CurrentTurnId, AllIntents.Num());
 
-    // CoreResolvePhaseを呼び出し
+    // Call CoreResolvePhase
     TArray<FResolvedAction> ResolvedActions = PhaseManager->CoreResolvePhase(AllIntents);
 
     UE_LOG(LogTurnManager, Log,
         TEXT("[Turn %d] ExecuteSimultaneousPhase: CoreResolvePhase produced %d resolved actions"),
         CurrentTurnId, ResolvedActions.Num());
 
-    // 直後にDispatchResolvedMoveをループ実行
+    // Immediately loop execute DispatchResolvedMove
     for (const FResolvedAction& Action : ResolvedActions)
     {
         DispatchResolvedMove(Action);
@@ -2446,7 +2447,7 @@ bool AGameTurnManagerBase::DoesAnyIntentHaveAttack() const
 {
     const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
 
-    // INC-2025-0002: ログ強化 - bHasAttack判定に使用されるIntents配列の内容を詳細出力
+    // INC-2025-0002: Enhanced logging - detailed output of Intents array contents used for bHasAttack determination
     UE_LOG(LogTurnManager, Warning,
         TEXT("[AttackScan] Turn=%d, Scanning CachedEnemyIntents (Count=%d)"),
         CurrentTurnId, CachedEnemyIntents.Num());
@@ -2461,7 +2462,7 @@ bool AGameTurnManagerBase::DoesAnyIntentHaveAttack() const
     {
         const FEnemyIntent& Intent = CachedEnemyIntents[i];
 
-        // カウント
+        // Count
         if (Intent.AbilityTag.MatchesTag(AttackTag))
         {
             ++AttackCount;
@@ -2475,7 +2476,7 @@ bool AGameTurnManagerBase::DoesAnyIntentHaveAttack() const
             ++WaitCount;
         }
 
-        // 各Intentの詳細をログ出力
+        // Log details of each Intent
         UE_LOG(LogTurnManager, Warning,
             TEXT("[AttackScan] Turn=%d, Intent[%d]: Actor=%s, Ability=%s, From=(%d,%d), To=(%d,%d)"),
             CurrentTurnId,
@@ -2942,14 +2943,14 @@ const int32 DirX = FMath::RoundToInt(CachedPlayerCommand.Direction.X);
 // CodeRevision: INC-2025-00030-R5 (Split attack/move phase completion handlers) (2025-11-17 02:00)
 void AGameTurnManagerBase::HandleMovePhaseCompleted(int32 FinishedTurnId)
 {
-    // ★★★ START: 新しいガード処理 ★★★
+    // ★★★ START: New guard processing ★★★
     // CodeRevision: INC-2025-1117F (Prevent move phase from triggering during sequential attack phase)
     if (bSequentialModeActive && !bSequentialMovePhaseStarted)
     {
         UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] HandleMovePhaseCompleted: Ignoring barrier completion during sequential attack phase. Waiting for HandleAttackPhaseCompleted to start the move phase."), FinishedTurnId);
         return;
     }
-    // ★★★ END: 新しいガード処理 ★★★
+    // ★★★ END: New guard processing ★★★
 
     if (!HasAuthority())
     {
@@ -3008,7 +3009,7 @@ void AGameTurnManagerBase::HandleAttackPhaseCompleted(int32 FinishedTurnId)
     UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] AttackExecutor complete - attack phase finished"), FinishedTurnId);
 
     // CodeRevision: INC-2025-1117J (Always dispatch move phase after attacks) (2025-11-17 20:30)
-    // 攻撃完了後は常に後続の移動フェーズを開始する（ソフトロック修正）
+    // Always start subsequent move phase after attack completion (soft lock fix)
     if (bSequentialModeActive)
     {
         UE_LOG(LogTurnManager, Warning,
@@ -3258,7 +3259,7 @@ void AGameTurnManagerBase::OpenInputWindow()
         return;
     }
 
-    // ① 新しい入力ウィンドウを開く（WindowId++）
+    // ① Open new input window (WindowId++)
     if (TurnFlowCoordinator)
     {
         TurnFlowCoordinator->OpenNewInputWindow();
@@ -3271,7 +3272,7 @@ void AGameTurnManagerBase::OpenInputWindow()
         TEXT("[GTM] OpenInputWindow: TurnId=%d, WindowId=%d"),
         CurrentTurnId_Local, CurrentWindowId);
 
-    // ② PlayerInputProcessor に「このターン／ウィンドウで受付開始」と伝える
+    // ② Notify PlayerInputProcessor to start accepting input for this turn/window
     if (PlayerInputProcessor && TurnFlowCoordinator)
     {
         PlayerInputProcessor->OpenInputWindow(CurrentTurnId_Local, CurrentWindowId);
@@ -3282,7 +3283,7 @@ void AGameTurnManagerBase::OpenInputWindow()
         CommandHandler->BeginInputWindow(CurrentWindowId);
     }
 
-    // ③ 内部状態更新
+    // ③ Update internal state
     ApplyWaitInputGate(true);
     WaitingForPlayerInput = true;
 

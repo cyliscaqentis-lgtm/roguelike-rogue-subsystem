@@ -1,4 +1,5 @@
 // TurnCommandEncoding.h
+// CodeRevision: INC-2025-1135-R1 (Fix encoding issues: translate Japanese comments to English) (2025-11-19 17:25)
 #pragma once
 #include "CoreMinimal.h"
 
@@ -18,10 +19,10 @@ namespace TurnCommandEncoding
         if (v < 0 || v > 9999) return false;
         outDx = FMath::Clamp(v / 100 - 1, -1, 1);
         outDy = FMath::Clamp(v % 100 - 1, -1, 1);
-        return !(outDx == 0 && outDy == 0); // ゼロ方向は無効
+        return !(outDx == 0 && outDy == 0); // Zero direction is invalid
     }
 
-    // Cell: Grid座標（-1024..+1023対応）
+    // Cell: Grid coordinates (supports -1024..+1023)
     constexpr int32 kCellBase = 2000000;
     constexpr int32 kCellBias = 1024;
     constexpr int32 kCellStride = 2048;
