@@ -227,14 +227,16 @@ void UEnemyAISubsystem::CollectIntents(
         }
     }
 
+    // CodeRevision: INC-2025-1152-R1 (Process backline movers first so outer ring units claim approach tiles before frontliners) (2025-11-20 17:30)
     MoveCandidateIndices.Sort([&Obs](int32 A, int32 B)
     {
         const FEnemyObservation& ObsA = Obs[A];
         const FEnemyObservation& ObsB = Obs[B];
 
+        // Prefer units that are currently farther from the player.
         if (ObsA.DistanceInTiles != ObsB.DistanceInTiles)
         {
-            return ObsA.DistanceInTiles < ObsB.DistanceInTiles;
+            return ObsA.DistanceInTiles > ObsB.DistanceInTiles;
         }
 
         const int32 ManA =
@@ -245,9 +247,11 @@ void UEnemyAISubsystem::CollectIntents(
             FMath::Abs(ObsB.GridPosition.X - ObsB.PlayerGridPosition.X) +
             FMath::Abs(ObsB.GridPosition.Y - ObsB.PlayerGridPosition.Y);
 
+        // For equal Chebyshev distance, prefer units that are slightly "further around the ring"
+        // so inner ring units resolve last and can yield to better global assignments.
         if (ManA != ManB)
         {
-            return ManA < ManB;
+            return ManA > ManB;
         }
 
         return A < B;
@@ -335,17 +339,20 @@ FEnemyIntent UEnemyAISubsystem::ComputeMoveOrWaitIntent(
     const int32 PrimaryDist = FGridUtils::ChebyshevDistance(PrimaryCell, Obs.PlayerGridPosition);
 
     const bool bPrimaryWalkable = IsCellWalkable(EnemyActor, PrimaryCell);
-    const bool bPrimaryCloserOrEqual = (PrimaryDist <= CurrentDist);
+    // CodeRevision: INC-2025-1151-R1 (Require strict distance reduction for primary move to avoid sideways oscillation) (2025-11-20 17:00)
+    const bool bPrimaryCloser = (PrimaryDist < CurrentDist);
 
     // Optimistic Pathing: 攻撃中の味方マス(HardBlockedCells)はここではブロックしない。
     // 実際に動けるかどうかは ConflictResolver に任せる。
     // これにより、後列ユニットが前列の攻撃ユニットの背後で待機する挙動（隊列維持）が実現される。
+    // CodeRevision: INC-2025-1150-R1 (Treat attacker origin cells as hard-blocked when picking primary move targets) (2025-11-20 16:30)
     const bool bPrimaryBlocked =
+        HardBlockedCells.Contains(PrimaryCell) ||
         ClaimedMoveTargets.Contains(PrimaryCell);
 
     if (PrimaryCell != Obs.GridPosition &&
         bPrimaryWalkable &&
-        bPrimaryCloserOrEqual &&
+        bPrimaryCloser &&
         !bPrimaryBlocked)
     {
         Intent.AbilityTag = RogueGameplayTags::AI_Intent_Move;
@@ -427,7 +434,8 @@ void UEnemyAISubsystem::FindAlternateMoveCells(
         }
 
         const int32 NewDist = FGridUtils::ChebyshevDistance(Candidate, PlayerGrid);
-        if (NewDist > CurrentDistanceInTiles)
+        // CodeRevision: INC-2025-1151-R1 (Require strict distance reduction for alternate moves to avoid sideways oscillation) (2025-11-20 17:00)
+        if (NewDist >= CurrentDistanceInTiles)
         {
             continue;
         }
@@ -476,35 +484,46 @@ FIntPoint UEnemyAISubsystem::SelectBestAlternateCell(
 }
 
 float UEnemyAISubsystem::ScoreMoveCandidate(
-    const FIntPoint& SelfCell,
-    const FIntPoint& Candidate,
-    const FIntPoint& PlayerGrid) const
+	const FIntPoint& SelfCell,
+	const FIntPoint& Candidate,
+	const FIntPoint& PlayerGrid) const
 {
     const int32 CurDist = FGridUtils::ChebyshevDistance(SelfCell, PlayerGrid);
     const int32 NewDist = FGridUtils::ChebyshevDistance(Candidate, PlayerGrid);
     const int32 dRow = FMath::Abs(Candidate.Y - PlayerGrid.Y);
     const int32 dCol = FMath::Abs(Candidate.X - PlayerGrid.X);
 
-    const float Wdist = 10.0f;
-    const float Wrow = 2.0f;
-    const float Wcol = 1.0f;
-    const float Wlane = 1.5f;
+	const float Wdist = 10.0f;
+	const float Wrow = 2.0f;
+	const float Wcol = 1.0f;
+	const float Wlane = 1.5f;
+	const float Wortho = 0.75f; // CodeRevision: INC-2025-1152-R1 (Prefer orthogonal steps over diagonals when reducing distance)
 
-    float Score = 0.0f;
-    Score += Wdist * float(CurDist - NewDist);
-    Score -= Wrow * float(dRow);
-    Score -= Wcol * float(dCol);
+	float Score = 0.0f;
+	Score += Wdist * float(CurDist - NewDist);
+	Score -= Wrow * float(dRow);
+	Score -= Wcol * float(dCol);
 
-    const FVector2D ToPlayer(float(PlayerGrid.X - SelfCell.X), float(PlayerGrid.Y - SelfCell.Y));
-    const FVector2D Step(float(Candidate.X - SelfCell.X), float(Candidate.Y - SelfCell.Y));
+	const FVector2D ToPlayer(float(PlayerGrid.X - SelfCell.X), float(PlayerGrid.Y - SelfCell.Y));
+	const FVector2D Step(float(Candidate.X - SelfCell.X), float(Candidate.Y - SelfCell.Y));
 
-    float DotContribution = 0.0f;
-    if (!ToPlayer.IsNearlyZero() && !Step.IsNearlyZero())
+	float DotContribution = 0.0f;
+	if (!ToPlayer.IsNearlyZero() && !Step.IsNearlyZero())
     {
-        const float Dot = FVector2D::DotProduct(ToPlayer.GetSafeNormal(), Step.GetSafeNormal());
-        DotContribution = Wlane * Dot;
-        Score += DotContribution;
-    }
+		const float Dot = FVector2D::DotProduct(ToPlayer.GetSafeNormal(), Step.GetSafeNormal());
+		DotContribution = Wlane * Dot;
+		Score += DotContribution;
+	}
+
+	// Prefer cardinal (N/E/S/W) steps when multiple candidates offer similar distance gains,
+	// to better match typical roguelike enemy movement where orthogonal approaches feel "smarter".
+	const int32 StepDx = Candidate.X - SelfCell.X;
+	const int32 StepDy = Candidate.Y - SelfCell.Y;
+	const bool bIsOrthogonal = (StepDx == 0 || StepDy == 0);
+	if (bIsOrthogonal)
+	{
+		Score += Wortho;
+	}
 
     UE_LOG(LogEnemyAI, VeryVerbose,
         TEXT("[ScoreMoveCandidate] Self=(%d,%d) Candidate=(%d,%d) ΔDist=%d Wdist*Δ=%.2f Wrow*%d=%.2f Wcol*%d=%.2f Wlane*dot=%.2f Total=%.2f"),

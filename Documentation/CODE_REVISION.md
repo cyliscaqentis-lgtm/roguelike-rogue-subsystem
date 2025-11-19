@@ -3,6 +3,9 @@
 ## Overview
 
 
+- `CodeRevision: INC-2025-1152-R1` - Adjusted enemy move ordering and scoring so backline units are processed first in `UEnemyAISubsystem::CollectIntents` and orthogonal steps receive a small score bonus in `ScoreMoveCandidate`, making conflicts over approach tiles resolve in favor of further units with straight-line moves while closer or diagonal-only units are more likely to WAIT (2025-11-20 17:30)
+- `CodeRevision: INC-2025-1151-R1` - Tightened enemy move intent generation in `UEnemyAISubsystem` so both primary and alternate move candidates must strictly reduce Chebyshev distance to the player, preventing side-to-side oscillation when an enemy cannot actually get closer (2025-11-20 17:00)
+- `CodeRevision: INC-2025-1150-R1` - Updated `UEnemyAISubsystem::ComputeMoveOrWaitIntent` so primary move candidates treat attacker origin cells (hard-blocked tiles) as blocked alongside already-claimed move targets, ensuring movers pick destinations after attackers have fixed their tiles instead of relying on the conflict resolver to downgrade those moves to WAIT (2025-11-20 16:30)
 - `CodeRevision: INC-2025-1144-R1` - Added an idempotency guard inside `UGA_AttackBase::EndAbility` so duplicate completion calls are ignored before any barrier updates, per `FIX_PLAN.md` (2025-11-20 13:30)
 
 - `CodeRevision: INC-2025-1142-R1` - Ensure `GA_TurnActionBase` and its attack/wait derivatives send the current `TurnId` in `Gameplay.Event.Turn.Ability.Completed` so downstream turn logic stops processing stale payloads per `FIX_PLAN.md` (2025-11-20 12:30)

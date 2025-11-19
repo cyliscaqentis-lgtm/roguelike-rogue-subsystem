@@ -1329,9 +1329,6 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
     {
         // CommandHandler が無いフォールバック経路でもタグを記録しておく
         LastAcceptedCommandTag = Command.CommandTag;
-    }
-    else
-    {
         UE_LOG(LogTurnManager, Log,
             TEXT("[GameTurnManager] OnPlayerCommandAccepted: Tag=%s, TurnId=%d, WindowId=%d, TargetCell=(%d,%d)"),
             *Command.CommandTag.ToString(), Command.TurnId, Command.WindowId,
