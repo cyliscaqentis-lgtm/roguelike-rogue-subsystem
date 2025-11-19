@@ -378,24 +378,37 @@ void APlayerControllerBase::SetupInputComponent()
             UE_LOG(LogTemp, Error, TEXT("[PlayerController] IA_Move is NULL"));
         }
 
-        if (IA_TurnFacing)
-        {
-            EnhancedInput->BindAction(IA_TurnFacing, ETriggerEvent::Started, this,
-                &APlayerControllerBase::Input_TurnFacing_Started);
-            EnhancedInput->BindAction(IA_TurnFacing, ETriggerEvent::Triggered, this,
-                &APlayerControllerBase::Input_TurnFacing_Triggered);
+		if (IA_TurnFacing)
+		{
+			EnhancedInput->BindAction(IA_TurnFacing, ETriggerEvent::Started, this,
+				&APlayerControllerBase::Input_TurnFacing_Started);
+			EnhancedInput->BindAction(IA_TurnFacing, ETriggerEvent::Triggered, this,
+				&APlayerControllerBase::Input_TurnFacing_Triggered);
 
-            UE_LOG(LogTemp, Log, TEXT("[PlayerController] IA_TurnFacing bound (Started/Triggered)"));
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("[PlayerController] IA_TurnFacing is NULL"));
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("[PlayerController] InputComponent is not EnhancedInputComponent"));
-    }
+			UE_LOG(LogTemp, Log, TEXT("[PlayerController] IA_TurnFacing bound (Started/Triggered)"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("[PlayerController] IA_TurnFacing is NULL"));
+		}
+
+		if (IA_Attack)
+		{
+			// CodeRevision: INC-2025-1134-R1 (Bind player attack action to TurnCommandHandler-backed dispatch) (2025-12-13 09:30)
+			EnhancedInput->BindAction(IA_Attack, ETriggerEvent::Triggered, this,
+				&APlayerControllerBase::Input_Attack_Triggered);
+
+			UE_LOG(LogTemp, Log, TEXT("[PlayerController] IA_Attack bound (Triggered)"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[PlayerController] IA_Attack is NULL"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("[PlayerController] InputComponent is not EnhancedInputComponent"));
+	}
 
     UE_LOG(LogTemp, Log, TEXT("[PlayerController] SetupInputComponent completed"));
 }
@@ -549,7 +562,7 @@ void APlayerControllerBase::Input_TurnFacing_Started(const FInputActionValue& Va
 
 void APlayerControllerBase::Input_TurnFacing_Triggered(const FInputActionValue& Value)
 {
-    const FVector2D Raw = Value.Get<FVector2D>();
+	const FVector2D Raw = Value.Get<FVector2D>();
     
     FVector Dir = CalculateCameraRelativeDirection(Raw);
     if (Dir.Size() < DeadzoneThreshold) 
@@ -570,9 +583,63 @@ void APlayerControllerBase::Input_TurnFacing_Triggered(const FInputActionValue& 
     }
 
     ServerLastTurnDirectionQuantized = Quant;
-    Server_TurnFacing(FVector2D(Quant.X, Quant.Y));
+	Server_TurnFacing(FVector2D(Quant.X, Quant.Y));
 
-    UE_LOG(LogTemp, Verbose, TEXT("[TurnFacing] Triggered: Quant=(%d,%d)"), Quant.X, Quant.Y);
+	UE_LOG(LogTemp, Verbose, TEXT("[TurnFacing] Triggered: Quant=(%d,%d)"), Quant.X, Quant.Y);
+}
+
+void APlayerControllerBase::Input_Attack_Triggered(const FInputActionValue& Value)
+{
+	// CodeRevision: INC-2025-1134-R1 (Dispatch attack input via TurnCommandHandler path) (2025-12-13 09:30)
+	if (!IsValid(CachedTurnManager))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Client] Attack Input: TurnManager invalid"));
+		return;
+	}
+
+	const bool bWaitingReplicated = CachedTurnManager->WaitingForPlayerInput;
+	if (!bWaitingReplicated || bSentThisInputWindow)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Client] Attack Input BLOCKED: Waiting=%d, SentLatch=%d"),
+			bWaitingReplicated, bSentThisInputWindow);
+		return;
+	}
+
+	FHitResult HitResult;
+	if (!GetHitResultUnderCursor(ECC_Visibility, false, HitResult))
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Client] Attack Input: No target under cursor."));
+		return;
+	}
+
+	if (!PathFinder)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[Client] Attack Input: PathFinder unavailable, cannot derive grid cell."));
+		return;
+	}
+
+	const FIntPoint TargetCell = PathFinder->WorldToGrid(HitResult.Location);
+
+	FPlayerCommand Command;
+	Command.CommandTag = RogueGameplayTags::Command_Player_Attack;
+	Command.TargetCell = TargetCell;
+	Command.TargetActor = HitResult.GetActor();
+
+	if (UWorld* World = GetWorld())
+	{
+		if (UTurnFlowCoordinator* TFC = World->GetSubsystem<UTurnFlowCoordinator>())
+		{
+			Command.TurnId = TFC->GetCurrentTurnId();
+			Command.WindowId = TFC->GetCurrentInputWindowId();
+		}
+	}
+
+	bSentThisInputWindow = true;
+	Server_SubmitCommand(Command);
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("[Client] 📤 Attack Command Sent: Tag=%s, Cell=(%d,%d), Target=%s"),
+		*Command.CommandTag.ToString(), TargetCell.X, TargetCell.Y, *GetNameSafe(Command.TargetActor.Get()));
 }
 
 FIntPoint APlayerControllerBase::Quantize8Way(const FVector2D& Direction, float Threshold) const

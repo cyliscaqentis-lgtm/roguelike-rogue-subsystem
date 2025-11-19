@@ -131,9 +131,14 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "Input|Actions")
     TObjectPtr<UInputAction> IA_Move;
 
-    /** 向き変更入力アクション */
-    UPROPERTY(EditDefaultsOnly, Category = "Input|Actions")
-    TObjectPtr<UInputAction> IA_TurnFacing;
+	/** 向き変更入力アクション */
+	UPROPERTY(EditDefaultsOnly, Category = "Input|Actions")
+	TObjectPtr<UInputAction> IA_TurnFacing;
+
+	// CodeRevision: INC-2025-1134-R1 (Add attack input action for explicit attack commands) (2025-12-13 09:30)
+	/** 攻撃入力アクション */
+	UPROPERTY(EditDefaultsOnly, Category = "Input|Actions")
+	TObjectPtr<UInputAction> IA_Attack;
 
     /** TBS専用入力マッピングコンテキスト */
     UPROPERTY(EditDefaultsOnly, Category = "Input|Mapping")
@@ -160,8 +165,12 @@ protected:
     /** 向き変更入力開始時 */
     void Input_TurnFacing_Started(const FInputActionValue& Value);
 
-    /** 向き変更入力トリガー時 */
-    void Input_TurnFacing_Triggered(const FInputActionValue& Value);
+	/** 向き変更入力トリガー時 */
+	void Input_TurnFacing_Triggered(const FInputActionValue& Value);
+
+	// CodeRevision: INC-2025-1134-R1 (Add player attack dispatch input handler) (2025-12-13 09:30)
+	/** 攻撃入力トリガー時 */
+	void Input_Attack_Triggered(const FInputActionValue& Value);
 
     //--------------------------------------------------------------------------
     // Utility Functions

@@ -1610,8 +1610,7 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
 
     CachedPlayerCommand = Command;
 
-    const FGameplayTag InputMove = RogueGameplayTags::InputTag_Move;
-    const FGameplayTag InputAttack = RogueGameplayTags::InputTag_Attack;
+	const FGameplayTag InputMove = RogueGameplayTags::InputTag_Move;
 
     if (Command.CommandTag.MatchesTag(InputMove))
     {
@@ -1805,79 +1804,25 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
 
             ExecuteSimultaneousPhase();
         }
-    }
-    else if (Command.CommandTag.MatchesTag(InputAttack))
-    {
-        // CodeRevision: INC-2025-1133-R1 (Handle player attack commands) (2025-11-19 01:10)
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[Turn %d] Player attack command accepted - firing attack ability event. TargetCell=(%d,%d)"),
-            CurrentTurnId, Command.TargetCell.X, Command.TargetCell.Y);
-
-        UAbilitySystemComponent* ASC = GetPlayerASC();
-        if (!PlayerPawn || !ASC)
-        {
-            UE_LOG(LogTurnManager, Error,
-                TEXT("[GameTurnManager] Attack command aborted: PlayerPawn=%s ASC=%s"),
-                PlayerPawn ? TEXT("ok") : TEXT("null"),
-                ASC ? TEXT("ok") : TEXT("null"));
-            return;
-        }
-
-        AActor* TargetActor = Command.TargetActor.Get();
-        if (!TargetActor)
-        {
-            if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
-            {
-                TargetActor = Occupancy->GetActorAtCell(Command.TargetCell);
-            }
-        }
-
-        if (!TargetActor)
-        {
-            UE_LOG(LogTurnManager, Warning,
-                TEXT("[GameTurnManager] Attack command aborted: No valid target for cell (%d,%d)"),
-                Command.TargetCell.X, Command.TargetCell.Y);
-            if (APlayerControllerBase* TPCB = Cast<APlayerControllerBase>(PlayerPawn->GetController()))
-            {
-                TPCB->Client_NotifyMoveRejected();
-            }
-            return;
-        }
-
-        FGameplayEventData AttackEventData;
-        AttackEventData.EventTag = RogueGameplayTags::GameplayEvent_Intent_Attack;
-        AttackEventData.Instigator = PlayerPawn;
-        AttackEventData.Target = TargetActor;
-        AttackEventData.OptionalObject = this;
-
-        FGameplayAbilityTargetData_SingleTargetHit* TargetData =
-            new FGameplayAbilityTargetData_SingleTargetHit();
-
-        FHitResult HitResult;
-        HitResult.HitObjectHandle = FActorInstanceHandle(TargetActor);
-        HitResult.Location = TargetActor->GetActorLocation();
-        HitResult.ImpactPoint = HitResult.Location;
-        TargetData->HitResult = HitResult;
-
-        AttackEventData.TargetData.Add(TargetData);
-
-        UE_LOG(LogTurnManager, Log,
-            TEXT("[GameTurnManager] Sending attack GameplayEvent %s (Target=%s)"),
-            *AttackEventData.EventTag.ToString(), *GetNameSafe(TargetActor));
-
-        ASC->HandleGameplayEvent(AttackEventData.EventTag, &AttackEventData);
-    }
-    else if (Command.CommandTag == RogueGameplayTags::InputTag_Turn)
-    {
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[GameTurnManager] Turn command received but ExecuteTurnFacing not implemented"));
-    }
-    else
-    {
-        UE_LOG(LogTurnManager, Error,
-            TEXT("[GameTurnManager] ❁ECommand tag does NOT match InputTag.Move or InputTag.Turn (Tag=%s)"),
-            *Command.CommandTag.ToString());
-    }
+	}
+	else if (Command.CommandTag.MatchesTag(RogueGameplayTags::Command_Player_Attack))
+	{
+		// CodeRevision: INC-2025-1134-R1 (Attack commands now execute inside TurnCommandHandler) (2025-12-13 09:30)
+		UE_LOG(LogTurnManager, Warning,
+			TEXT("[Turn %d] Player attack command routed to TurnCommandHandler (TargetCell=(%d,%d))"),
+			CurrentTurnId, Command.TargetCell.X, Command.TargetCell.Y);
+	}
+	else if (Command.CommandTag == RogueGameplayTags::InputTag_Turn)
+	{
+		UE_LOG(LogTurnManager, Warning,
+			TEXT("[GameTurnManager] Turn command received but ExecuteTurnFacing not implemented"));
+	}
+	else
+	{
+		UE_LOG(LogTurnManager, Log,
+			TEXT("[GameTurnManager] Unhandled command tag in GTM: %s (should be handled by CommandHandler)"),
+			*Command.CommandTag.ToString());
+	}
 }
 
 

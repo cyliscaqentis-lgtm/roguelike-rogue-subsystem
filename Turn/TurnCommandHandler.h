@@ -31,8 +31,11 @@ public:
 
 	/**
 	 * プレイヤーコマンドを処理
+	 * CodeRevision: INC-2025-1134-R1 (Execute validated commands inside handler) (2025-12-13 09:30)
+	 * 検証後、コマンドタグに基づいて適切なアクションを実行します。
 	 * @param Command 処理するコマンド
 	 * @return 成功した場合true
+	 * @return コマンドが受理され、実行パスに進んだ場合true
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Turn|Command")
 	bool ProcessPlayerCommand(const FPlayerCommand& Command);

@@ -27,10 +27,13 @@ namespace RogueGameplayTags
     LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Gate_Input_Open);
     LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Action_InProgress);
 
-    // Input tags -------------------------------------------------------------
-    LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(InputTag_Move);
-    LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(InputTag_Attack);
-    LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(InputTag_Turn);
+	// Input tags -------------------------------------------------------------
+	LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(InputTag_Move);
+	LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(InputTag_Attack);
+	LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(InputTag_Turn);
+
+	// CodeRevision: INC-2025-1134-R1 (Add explicit player command tags for attack dispatch) (2025-12-13 09:30)
+	LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Player_Attack);
 
     // AI intent tags ---------------------------------------------------------
     LYRAGAME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(AI_Intent_Move);

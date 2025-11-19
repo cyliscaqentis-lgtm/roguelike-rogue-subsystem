@@ -23,10 +23,13 @@ namespace RogueGameplayTags
     UE_DEFINE_GAMEPLAY_TAG(Gate_Input_Open, "Gate.Input.Open");
     UE_DEFINE_GAMEPLAY_TAG(State_Action_InProgress, "State.Action.InProgress");
 
-    // Input tags -------------------------------------------------------------
-    UE_DEFINE_GAMEPLAY_TAG(InputTag_Move, "InputTag.Move");
-    UE_DEFINE_GAMEPLAY_TAG(InputTag_Attack, "InputTag.Attack");
-    UE_DEFINE_GAMEPLAY_TAG(InputTag_Turn, "InputTag.Turn");
+	// Input tags -------------------------------------------------------------
+	UE_DEFINE_GAMEPLAY_TAG(InputTag_Move, "InputTag.Move");
+	UE_DEFINE_GAMEPLAY_TAG(InputTag_Attack, "InputTag.Attack");
+	UE_DEFINE_GAMEPLAY_TAG(InputTag_Turn, "InputTag.Turn");
+
+	// CodeRevision: INC-2025-1134-R1 (Add explicit player command tags for attack dispatch) (2025-12-13 09:30)
+	UE_DEFINE_GAMEPLAY_TAG(Command_Player_Attack, "Command.Player.Attack");
 
     // AI intent tags ---------------------------------------------------------
     UE_DEFINE_GAMEPLAY_TAG(AI_Intent_Move, "AI.Intent.Move");

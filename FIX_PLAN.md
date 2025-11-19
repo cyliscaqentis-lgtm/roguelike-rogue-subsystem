@@ -1,88 +1,113 @@
-# FIX PLAN: Player Attack Ability Not Activating
+# 修正計画書: プレイヤー攻撃処理の実装（改訂版）
 
-## 1. Target Feature / Files
+## 1. 概要
 
--   **Feature**: Player Command Processing for Attack Actions.
--   **Primary File to Modify**: `Turn/GameTurnManagerBase.cpp`
--   **Function to Modify**: `AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation`
+本計画は、プレイヤーの攻撃コマンド処理機能の実装を**訂正**するものです。
 
-## 2. Root Cause Hypothesis and Rationale
+前回の修正でコマンド処理の責務を `TurnCommandHandler` に集約する構造的なリファクタリングは成功しましたが、アビリティの**起動方法を誤った**ため、攻撃が失敗しました。この改訂版では、その起動ロジックを正しく修正します。
 
--   **Symptom**: The player's attack ability does not activate when an attack command is issued.
--   **Hypothesis**: The `OnPlayerCommandAccepted_Implementation` function in `AGameTurnManagerBase` lacks a specific logic branch to handle player commands tagged with `InputTag_Attack`. The existing implementation only checks for `InputTag_Move` and `InputTag_Turn`.
--   **Rationale**: Any command that is not a "Move" or "Turn" command falls into a final `else` block that logs an error and takes no further action. This means the player's attack command is received by the turn manager but is never processed to trigger the corresponding gameplay ability.
+## 2. 根本原因 (Root Cause)
 
-## 3. Proposed Solution (Adopted)
+前回の修正で、`TurnCommandHandler` は `TryActivateAbilityByTag` を使ってアビリティを直接起動しようとしました。しかし、ログ分析の結果、対象のアビリティ（`GA_AttackBase`）は直接起動される設計ではなく、`GameplayEvent.Intent.Attack` という名前の**Gameplay Event（合図）** を受け取って起動する「トリガー型」のアビリティであることが判明しました。
 
--   An `else if` block will be added to the `OnPlayerCommandAccepted_Implementation` function to specifically handle the `InputTag_Attack`.
--   This new block will be responsible for identifying the target from the command, creating the appropriate `GameplayEvent`, and sending it to the player's Ability System Component (ASC) to trigger the attack ability.
+従って、`TryActivateAbilityByTag` の呼び出しは空振りし、アビリティは起動しませんでした。これが失敗の根本原因です。
 
-## 4. Implementation Details
+## 3. 修正ロードマップ
 
-In `Turn/GameTurnManagerBase.cpp`, inside `OnPlayerCommandAccepted_Implementation`:
+1.  **`TurnCommandHandler.cpp` の修正**: `ProcessPlayerCommand` 関数内のロジックを、間違っていた `TryActivateAbilityByTag` の呼び出しから、正しい `HandleGameplayEvent` の呼び出しに置き換えます。これにより、アビリティが期待する通りの「合図」を送信し、攻撃が正しく実行されるようになります。
 
-1.  Locate the `if/else if` structure that checks `Command.CommandTag`.
-2.  Add a new `else if` block before the final `else`.
+その他のファイル（`RogueGameplayTags`, `PlayerControllerBase`など）への変更は前回の修正で完了しており、今回の修正対象には含まれません。
 
-    **New Code Block:**
-    ```cpp
-    else if (Command.CommandTag.MatchesTag(RogueGameplayTags::InputTag_Attack))
-    {
-        UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Player attack command accepted."), CurrentTurnId);
+## 4. Diffレベルの修正詳細
 
-        UWorld* World = GetWorld();
-        APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(World, 0);
-        UAbilitySystemComponent* ASC = GetPlayerASC();
-        UGridOccupancySubsystem* Occupancy = World ? World->GetSubsystem<UGridOccupancySubsystem>() : nullptr;
+### 4-1. `Turn/TurnCommandHandler.cpp` のヘッダーインクルード追加
 
-        if (!PlayerPawn || !ASC || !Occupancy)
-        {
-            UE_LOG(LogTurnManager, Error, TEXT("Attack command aborted: Missing critical components (PlayerPawn, ASC, or Occupancy)."));
-            return;
-        }
+ターゲット特定のために `GridOccupancySubsystem` が、イベント送信のためにアビリティ関連の型定義が必要になります。
 
-        AActor* TargetActor = Occupancy->GetActorAtCell(Command.TargetCell);
-        if (!TargetActor)
-        {
-            UE_LOG(LogTurnManager, Warning, TEXT("Attack command aborted: No target actor found at cell (%d, %d)."), Command.TargetCell.X, Command.TargetCell.Y);
-            // Optionally, notify client of rejection
-            if (APlayerControllerBase* TPCB = Cast<APlayerControllerBase>(PlayerPawn->GetController()))
-            {
-                TPCB->Client_NotifyMoveRejected();
-            }
-            return;
-        }
+```diff
+--- a/Turn/TurnCommandHandler.cpp
++++ b/Turn/TurnCommandHandler.cpp
+@@ -2,6 +2,9 @@
+ #include "Turn/TurnCommandHandler.h"
+ #include "Player/PlayerControllerBase.h"
+ #include "Utility/RogueGameplayTags.h"
++#include "Grid/GridOccupancySubsystem.h"
++#include "Abilities/GameplayAbilityTargetTypes.h"
+ #include "Character/UnitBase.h"
+ #include "AbilitySystemComponent.h"
+ #include "AbilitySystemGlobals.h"
 
-        // Close input window now that the command is validated and accepted
-        if (PlayerInputProcessor)
-        {
-            PlayerInputProcessor->CloseInputWindow();
-        }
+```
 
-        FGameplayEventData EventData;
-        EventData.EventTag = RogueGameplayTags::GameplayEvent_Intent_Attack;
-        EventData.Instigator = PlayerPawn;
-        EventData.Target = TargetActor;
-        
-        UE_LOG(LogTurnManager, Log, TEXT("Sending GameplayEvent %s to trigger attack on %s."), *EventData.EventTag.ToString(), *TargetActor->GetName());
+### 4-2. `Turn/TurnCommandHandler.cpp` のロジック修正
 
-        ASC->HandleGameplayEvent(EventData.EventTag, &EventData);
+`ProcessPlayerCommand` 内のロジックを、Gameplay Eventを送信する形に全面的に書き換えます。
 
-        // Since this consumes a turn, we can likely call a function to advance the turn state,
-        // similar to how the move command works. For now, we trigger the event.
-        // The ability itself should notify the turn manager of completion.
-    }
-    ```
-
-## 5. Impact Scope
-
--   This change enables the player to use attack abilities.
--   It correctly integrates player attacks into the turn-based command processing flow.
--   The change is localized to the turn manager and does not affect other systems directly.
-
-## 6. Testing Plan
-
--   **Test Case**: Have the player issue an attack command on an adjacent enemy.
--   **Expected Outcome**: The player's attack ability should activate, targeting the selected enemy. The game should correctly process the turn consumption.
--   **Test Case 2**: Have the player target an empty cell or an invalid target.
--   **Expected Outcome**: The attack should not activate, and the player should be able to issue another command (i.e., the turn is not consumed).
+```diff
+--- a/Turn/TurnCommandHandler.cpp
++++ b/Turn/TurnCommandHandler.cpp
+@@ -47,30 +47,49 @@
+         return false;
+     }
+ 
+-    if (Command.CommandTag.MatchesTag(RogueGameplayTags::Command_Player_Attack))
++    // ★★★ 修正(改訂): `TryActivateAbilityByTag`ではなく`HandleGameplayEvent`を使用してアビリティを起動する ★★★
++    if (Command.CommandTag.MatchesTag(RogueGameplayTags::Command_Player_Attack) || Command.CommandTag.MatchesTag(RogueGameplayTags::InputTag_Attack)) // 旧Tagとの互換性のため
+     {
+-        // 将来的にはここで遠距離・近距離を切り替える
+-        const FGameplayTag AttackAbilityTag = RogueGameplayTags::Ability_Attack_Melee;
++        AActor* TargetActor = Command.TargetActor.Get();
++        if (!TargetActor)
++        {
++            // コマンドにターゲットが含まれていない場合、セル座標からターゲットを検索する
++            if (UGridOccupancySubsystem* Occupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
++            {
++                TargetActor = Occupancy->GetActorAtCell(Command.TargetCell);
++            }
++        }
+ 
+-        FGameplayAbilityTargetDataHandle TargetDataHandle;
+-        // TargetActorがコマンドに含まれていれば、それを使う
+-        if(Command.TargetActor)
++        if (!TargetActor)
+         {
+-             FGameplayAbilityTargetData_SingleTargetHit* TargetData = new FGameplayAbilityTargetData_SingleTargetHit();
+-             TargetData->HitResult.HitObjectHandle = FActorInstanceHandle(Command.TargetActor);
+-             TargetDataHandle.Add(TargetData);
++            UE_LOG(LogTurnManager, Warning, TEXT("[TurnCommandHandler] Attack command failed: No valid target at cell (%d,%d)"), Command.TargetCell.X, Command.TargetCell.Y);
++            return false;
+         }
+ 
+-        const bool bActivated = ASC->TryActivateAbilityByTag(AttackAbilityTag, FGameplayAbilityTargetDataHandle(TargetDataHandle));
++        FGameplayEventData AttackEventData;
++        AttackEventData.EventTag = RogueGameplayTags::GameplayEvent_Intent_Attack; // アビリティが待っているトリガータグ
++        AttackEventData.Instigator = PlayerPawn;
++        AttackEventData.Target = TargetActor;
+ 
+-        UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Attempting to activate ability %s for attack. Success: %s"), *AttackAbilityTag.ToString(), bActivated ? TEXT("true") : TEXT("false"));
+-        return bActivated;
++        // アビリティにターゲット情報を渡すためのデータを作成
++        FGameplayAbilityTargetData_SingleTargetHit* TargetData = new FGameplayAbilityTargetData_SingleTargetHit();
++        FHitResult HitResult;
++        HitResult.HitObjectHandle = FActorInstanceHandle(TargetActor);
++        HitResult.Location = TargetActor->GetActorLocation();
++        HitResult.ImpactPoint = HitResult.Location;
++        TargetData->HitResult = HitResult;
++        AttackEventData.TargetData.Add(TargetData);
++
++        UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Sending GameplayEvent '%s' to trigger attack on '%s'"), *AttackEventData.EventTag.ToString(), *GetNameSafe(TargetActor));
++
++        ASC->HandleGameplayEvent(AttackEventData.EventTag, &AttackEventData);
++
++        return true; // イベントは送信された。ここから先は成功と見なす
+     }
+     else if (Command.CommandTag.MatchesTag(RogueGameplayTags::InputTag_Move))
+     {
+         // 移動ロジックはGameTurnManagerBaseがまだ持っているので、ここでは何もしない
+-        // 将来的にはこれもこちらに統合すべき
++        UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Move command received, passing through for now."));
+         return true;
+     }
+ 
+```
+以上が、攻撃を正しく機能させるための修正計画です。
