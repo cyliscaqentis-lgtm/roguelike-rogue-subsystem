@@ -294,6 +294,9 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
                     const IGenericTeamAgentInterface* OriginTeamAgent   = Cast<IGenericTeamAgentInterface>(OriginOwner);
                     const IGenericTeamAgentInterface* FollowerTeamAgent = Cast<IGenericTeamAgentInterface>(Actor);
 
+                    // CodeRevision: INC-2025-1157-R4 (Allow cross-team follow-up for chasing) (2025-11-21 01:20)
+                    // Removed team mismatch check to allow enemies to chase the player into their old cell.
+                    /*
                     if (OriginTeamAgent && FollowerTeamAgent)
                     {
                         if (OriginTeamAgent->GetGenericTeamId() != FollowerTeamAgent->GetGenericTeamId())
@@ -304,6 +307,7 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
                             return false;
                         }
                     }
+                    */
 
                     // 直近(距離1)のみフォローを許可
                     const FIntPoint* FollowerCellPtr = ActorToCell.Find(Actor);
@@ -362,14 +366,33 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
         *GetNameSafe(Actor), Cell.X, Cell.Y, CurrentTurnId);
 
     // ★★★ OriginHold implementation: place an OriginHold reservation on the origin cell ★★★
+    // ★★★ OriginHold implementation: place an OriginHold reservation on the origin cell ★★★
     if (CurrentCell != FIntPoint(-1, -1) && CurrentCell != Cell)
     {
-        // Reserve origin cell with OriginHold to prevent other actors from entering prematurely.
-        FReservationInfo OriginHoldInfo(Actor, CurrentCell, CurrentTurnId, true);
-        ReservedCells.Add(CurrentCell, OriginHoldInfo);
+        // CodeRevision: INC-2025-1157-R5 (Fix OriginHold Overwrite) (2025-11-21 01:30)
+        // Only apply OriginHold if the cell is NOT already reserved by another actor.
+        // If another actor (e.g., a follower) has already reserved this cell, we respect their reservation
+        // and do NOT overwrite it with our OriginHold. The Two-Phase Commit in UpdateActorCell will handle physical safety.
+        bool bCanApplyOriginHold = true;
+        if (const FReservationInfo* ExistingInfo = ReservedCells.Find(CurrentCell))
+        {
+            if (ExistingInfo->Owner.IsValid() && ExistingInfo->Owner.Get() != Actor)
+            {
+                UE_LOG(LogTemp, Log, TEXT("[GridOccupancy] SKIP ORIGIN-HOLD: %s skipping origin (%d, %d) - already reserved by %s"),
+                    *GetNameSafe(Actor), CurrentCell.X, CurrentCell.Y, *GetNameSafe(ExistingInfo->Owner.Get()));
+                bCanApplyOriginHold = false;
+            }
+        }
 
-        UE_LOG(LogTemp, Log, TEXT("[GridOccupancy] RESERVE ORIGIN-HOLD: %s protects origin (%d, %d) (TurnId=%d) [BACKSTAB PROTECTION]"),
-            *GetNameSafe(Actor), CurrentCell.X, CurrentCell.Y, CurrentTurnId);
+        if (bCanApplyOriginHold)
+        {
+            // Reserve origin cell with OriginHold to prevent other actors from entering prematurely.
+            FReservationInfo OriginHoldInfo(Actor, CurrentCell, CurrentTurnId, true);
+            ReservedCells.Add(CurrentCell, OriginHoldInfo);
+
+            UE_LOG(LogTemp, Log, TEXT("[GridOccupancy] RESERVE ORIGIN-HOLD: %s protects origin (%d, %d) (TurnId=%d) [BACKSTAB PROTECTION]"),
+                *GetNameSafe(Actor), CurrentCell.X, CurrentCell.Y, CurrentTurnId);
+        }
     }
 
     return true;  // Reservation succeeded

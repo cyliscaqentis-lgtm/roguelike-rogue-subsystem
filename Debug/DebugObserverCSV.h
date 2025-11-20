@@ -7,8 +7,16 @@
 #include "Debug/DebugObserverInterface.h"
 #include "Misc/OutputDevice.h"
 #include "Logging/StructuredLog.h"
+#include "HAL/CriticalSection.h"
+#include "Misc/DateTime.h"
 #include "DebugObserverCSV.generated.h"
 
+// CodeRevision: INC-2025-1120-R9 (Switched to timestamp-based session filenames) (2025-11-20 00:00)
+// CodeRevision: INC-2025-1120-R8 (Fix const-correctness compiler error in GetLogCount) (2025-11-20 00:00)
+// CodeRevision: INC-2025-1120-R7 (Add thread-safety locks to prevent crash in logging) (2025-11-20 00:00)
+// CodeRevision: INC-2025-1120-R6 (Rearchitected logger for one file per session and TurnID stamping) (2025-11-20 00:00)
+// CodeRevision: INC-2025-1120-R5 (Add GetCurrentSessionID to enable unique log filenames) (2025-11-20 00:00)
+// CodeRevision: INC-2025-1120-R3 (Removed restrictive log filtering to capture all UE_LOG messages) (2025-11-20 00:00)
 /**
  * Simple CSV logger for turn-system debug information.
  * Can be swapped out in Blueprints by implementing IDebugObserver elsewhere.
@@ -28,7 +36,6 @@ public:
 
     // FOutputDevice interface ---------------------------------------------------
     virtual void Serialize(const TCHAR* V, ELogVerbosity::Type Verbosity, const FName& Category) override;
-    virtual void SerializeRecord(const UE::FLogRecord& Record) override;
 
     // IDebugObserver interface ------------------------------------------------
     virtual void OnPhaseStarted_Implementation(FGameplayTag PhaseTag, const TArray<AActor*>& Actors) override;
@@ -43,7 +50,9 @@ public:
     void ClearLogs();
 
     UFUNCTION(BlueprintPure, Category = "Turn|Debug")
-    int32 GetLogCount() const { return LogLines.Num(); }
+    int32 GetLogCount() const;
+
+    FString GetSessionTimestamp() const;
 
     // ★★★ RogueフォルダのC++ファイルからのログ記録用 ★★★
     UFUNCTION(BlueprintCallable, Category = "Turn|Debug")
@@ -60,19 +69,20 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Turn|Debug")
     void MarkSessionEnd();
 
+    // Turn Number Management
+    void SetCurrentTurnForLogging(int32 TurnID);
+
 private:
+    /** Thread-safe access to LogLines */
+    mutable FCriticalSection LogLinesCS;
+
     UPROPERTY()
     TArray<FString> LogLines;
     
     // ★★★ セッション管理 ★★★
-    int32 CurrentSessionID = 0;
-    static int32 NextSessionID;
+    FString SessionTimestamp;
+    int32 LoggingTurnID = -1; // Current turn number for logging
     
     // ★★★ ログキャプチャ用 ★★★
     bool bIsCapturingLogs = false;
-    bool bIsCurrentRecordFromRogue = false;
-    
-    // ★★★ ログをCSVに追加するかどうかを判定 ★★★
-    bool ShouldAddToCSV(const FName& Category, const FString& Message) const;
-    bool IsRogueSourceFile(const ANSICHAR* FilePath) const;
 };

@@ -664,9 +664,14 @@ private:
     UPROPERTY(Transient)
     TObjectPtr<UTurnFlowCoordinator> TurnFlowCoordinator = nullptr;
 
-    /** Week 1: Input processing subsystem (2025-11-09 Refactoring) */
+    /** Input processing subsystem (2025-11-09 Refactoring) */
     UPROPERTY(Transient)
     TObjectPtr<UPlayerInputProcessor> PlayerInputProcessor = nullptr;
+
+    /** CSV Observer for logging */
+    // CodeRevision: INC-2025-1120-R6 (Rearchitected logger for one file per session and TurnID stamping) (2025-11-20 00:00)
+    UPROPERTY(Transient)
+    TWeakObjectPtr<UDebugObserverCSV> CachedCsvObserver;
 
     //==========================================================================
     // Internal State Flags

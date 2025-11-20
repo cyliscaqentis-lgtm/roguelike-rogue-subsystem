@@ -1,119 +1,64 @@
 import argparse
 import os
 import glob
-from datetime import datetime
-
-# This script is designed to parse and summarize Unreal Engine log files.
-# It filters for specific keywords like 'Error:' and 'Warning:' to reduce
-# the log size, making it more manageable for AI context windows while
-# retaining the most critical information.
-
-def find_latest_file(log_directory, file_extension='log'):
-    """
-    Finds the most recently modified file with the specified extension in the specified directory.
-    """
-    if not os.path.isdir(log_directory):
-        print(f"Error: Log directory not found at '{log_directory}'")
-        return None
-
-    search_pattern = os.path.join(log_directory, f'*.{file_extension}')
-    files = glob.glob(search_pattern)
-    if not files:
-        print(f"Error: No *.{file_extension} files found in '{log_directory}' with pattern '{search_pattern}'")
-        return None
-
-    latest_file = None
-    latest_mtime = 0
-
-    for f in files:
-        try:
-            mtime = os.path.getmtime(f)
-            if mtime > latest_mtime:
-                latest_mtime = mtime
-                latest_file = f
-        except OSError as e:
-            print(f"Warning: Could not get modification time for '{f}': {e}")
-            continue
-
-    if latest_file:
-        print(f"Found latest *.{file_extension} file: '{latest_file}' (Last modified: {datetime.fromtimestamp(latest_mtime)})")
-    else:
-        print(f"No latest *.{file_extension} file could be determined in '{log_directory}'")
-
-    return latest_file
-
-
-import argparse
-import os
-import glob
+import re
 from datetime import datetime
 from collections import deque
 
-# This script is designed to parse and summarize Unreal Engine log files.
-# It filters for specific keywords like 'Error:' and 'Warning:' to reduce
-# the log size, making it more manageable for AI context windows while
-# retaining the most critical information.
-
-def find_latest_file(log_directory, file_extension='log'):
-    """
-    Finds the most recently modified file with the specified extension in the specified directory.
-    """
+def find_latest_session_log(log_directory):
+    """Finds the session log with the most recent timestamp in its filename."""
     if not os.path.isdir(log_directory):
         print(f"Error: Log directory not found at '{log_directory}'")
         return None
 
-    search_pattern = os.path.join(log_directory, f'*.{file_extension}')
+    search_pattern = os.path.join(log_directory, 'Session_*.csv')
     files = glob.glob(search_pattern)
     if not files:
-        print(f"Error: No *.{file_extension} files found in '{log_directory}' with pattern '{search_pattern}'")
+        print(f"Error: No Session_*.csv files found in '{log_directory}'")
         return None
 
     latest_file = None
-    latest_mtime = 0
+    latest_timestamp = datetime.min
 
     for f in files:
-        try:
-            mtime = os.path.getmtime(f)
-            if mtime > latest_mtime:
-                latest_mtime = mtime
-                latest_file = f
-        except OSError as e:
-            print(f"Warning: Could not get modification time for '{f}': {e}")
-            continue
+        match = re.search(r'Session_(\d{8}-\d{6})\.csv', os.path.basename(f))
+        if match:
+            try:
+                timestamp = datetime.strptime(match.group(1), '%Y%m%d-%H%M%S')
+                if timestamp > latest_timestamp:
+                    latest_timestamp = timestamp
+                    latest_file = f
+            except ValueError:
+                continue
 
     if latest_file:
-        print(f"Found latest *.{file_extension} file: '{latest_file}' (Last modified: {datetime.fromtimestamp(latest_mtime)})")
+        print(f"Found latest session log: '{latest_file}'")
     else:
-        print(f"No latest *.{file_extension} file could be determined in '{log_directory}'")
+        print(f"No valid session logs found in '{log_directory}'")
 
     return latest_file
 
-
-def summarize_log(input_files, output_file, custom_keywords=None, depth=None, before=0, after=0):
+def summarize_log(lines, output_file, custom_keywords=None, depth=None, before=0, after=0):
     """
-    Reads log files, filters them for relevant lines based on keywords,
-    and writes the result to an output file, including context lines.
+    Filters a list of log lines for relevant keywords and writes the
+    result to an output file, including context lines.
     """
-    # --- Keyword and Context Rule Setup ---
     user_specified_context = (before > 0 or after > 0)
     
-    # Define keywords for different levels
     critical_keywords = ['fatal:', 'error:', 'severe:']
     high_keywords = critical_keywords + ['warning:']
     
-    # Determine the final list of keywords to search for
     filter_keywords = []
     if depth == 'critical':
         filter_keywords.extend(critical_keywords)
-    else: # high and medium
+    else:
         filter_keywords.extend(high_keywords)
         if depth == 'medium' and custom_keywords:
             filter_keywords.extend([k.lower() for k in custom_keywords])
             
     filter_keywords = list(set([k.lower() for k in filter_keywords]))
 
-    print(f"Starting log summarization...")
-    print(f"Input files ({len(input_files)}): {input_files}")
+    print(f"Starting summarization...")
     print(f"Output file: {output_file}")
     print(f"Filtering for keywords (depth={depth}): {filter_keywords}")
     if user_specified_context:
@@ -128,118 +73,69 @@ def summarize_log(input_files, output_file, custom_keywords=None, depth=None, be
 
         lines_written = 0
         with open(output_file, 'w', encoding='utf-8') as outfile:
-            for input_file in input_files:
-                print(f"Processing file: {input_file}")
-                if not os.path.exists(input_file):
-                    print(f"Warning: Input file not found, skipping: '{input_file}'")
+            max_before = before if user_specified_context else 5
+            history = deque(maxlen=max_before)
+            after_countdown = 0
+            
+            for line in lines:
+                line_lower = line.lower()
+                matched_keyword = None
+
+                if after_countdown > 0:
+                    outfile.write(line)
+                    lines_written += 1
+                    after_countdown -= 1
+                    history.append(line)
                     continue
+
+                for keyword in filter_keywords:
+                    if keyword in line_lower:
+                        matched_keyword = keyword
+                        break
                 
-                with open(input_file, 'r', encoding='utf-8', errors='ignore') as infile:
-                    # The maximum number of 'before' lines we need to store.
-                    # If using smart defaults, this is the max of the default values.
-                    max_before = before if user_specified_context else 5 # Max of (5, 1, 0)
-                    history = deque(maxlen=max_before)
-                    after_countdown = 0
-                    
-                    for line in infile:
-                        line_lower = line.lower()
-                        matched_keyword = None
-
-                        # Write lines during an 'after' countdown
-                        if after_countdown > 0:
-                            outfile.write(line)
-                            lines_written += 1
-                            after_countdown -= 1
-                            history.append(line)
-                            continue
-
-                        # Check for a keyword match
-                        for keyword in filter_keywords:
-                            if keyword in line_lower:
-                                matched_keyword = keyword
-                                break
-                        
-                        if matched_keyword:
-                            # Determine context lines for this specific match
-                            b, a = before, after
-                            if not user_specified_context:
-                                if any(k in matched_keyword for k in critical_keywords):
-                                    b, a = 5, 2
-                                elif 'warning:' in matched_keyword:
-                                    b, a = 1, 1
-                                else: # Custom keywords
-                                    b, a = 0, 0
-
-                            # Write 'before' context from history buffer
-                            # Adjust history if b is smaller than max_before
-                            context_to_write = list(history)[-b:]
-                            for context_line in context_to_write:
-                                outfile.write(context_line)
-                            lines_written += len(context_to_write)
-                            
-                            history.clear() # Clear history to prevent duplicate context
-
-                            # Write the matched line
-                            outfile.write(line)
-                            lines_written += 1
-                            
-                            # Start the 'after' countdown
-                            after_countdown = a
+                if matched_keyword:
+                    b, a = before, after
+                    if not user_specified_context:
+                        if any(k in matched_keyword for k in critical_keywords):
+                            b, a = 5, 2
+                        elif 'warning:' in matched_keyword:
+                            b, a = 1, 1
                         else:
-                            # If no match, just add to history
-                            if max_before > 0:
-                                history.append(line)
+                            b, a = 0, 0
+
+                    context_to_write = list(history)[-b:]
+                    for context_line in context_to_write:
+                        outfile.write(context_line)
+                    lines_written += len(context_to_write)
+                    
+                    history.clear()
+                    outfile.write(line)
+                    lines_written += 1
+                    after_countdown = a
+                else:
+                    if max_before > 0:
+                        history.append(line)
 
         print(f"Summarization complete. Wrote {lines_written} lines (including context).")
 
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
-def find_last_n_turn_logs(log_directory, n):
-    """Finds the last N turn logs (e.g., TurnDebug_TurnX.csv) in a directory."""
-    search_pattern = os.path.join(log_directory, 'TurnDebug_Turn*.csv')
-    files = glob.glob(search_pattern)
-    if not files:
-        return []
-
-    # Extract turn numbers from filenames
-    turn_files = []
-    for f in files:
-        try:
-            # Assumes filename is '...TurnDebug_Turn<NUMBER>.csv'
-            turn_number_str = os.path.basename(f).split('Turn')[-1].split('.')[0]
-            turn_number = int(turn_number_str)
-            turn_files.append((turn_number, f))
-        except (ValueError, IndexError):
-            continue # Ignore files that don't match the pattern
-
-    # Sort by turn number, descending
-    turn_files.sort(key=lambda x: x[0], reverse=True)
-
-    # Get the last N files
-    return [f for _, f in turn_files[:n]]
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Summarize Unreal Engine log files with context by filtering for specific keywords and predefined depths.",
+        description="Summarize Unreal Engine CSV log files with context. By default, processes the last 3 turns of the latest session log.",
         formatter_class=argparse.RawTextHelpFormatter
     )
 
     parser.add_argument("output", help="Path to the output summary file.")
-    
-    # --- Input Source Group ---
-    input_group = parser.add_mutually_exclusive_group()
-    input_group.add_argument("input", nargs='?', help="Path to a specific input log file.")
-    input_group.add_argument("--latest-from-dir", nargs='?', const='.', help="Search for the latest file (default .log, use --ext) in the specified directory.")
-    input_group.add_argument("--turn-range", metavar="START-END", help="Process 'TurnDebug_TurnX.csv' files for a given range (e.g., '5-10').")
-    input_group.add_argument("--last-N-turns", type=int, metavar='N', help="Process the last N turn log files.")
-
-    # --- General Options ---
-    parser.add_argument("--log-dir", default=os.path.join(os.getcwd(), '..', '..', '..', 'Saved', 'TurnLogs'), help="Directory to search for logs. Defaults to the project's Saved/TurnLogs directory.")
-    parser.add_argument("--ext", default='log', help="File extension to search for when using --latest-from-dir.")
+    parser.add_argument("input", nargs='?', help="Path to a specific input session log file. If not specified, the latest session log will be used.")
 
     # --- Filtering and Context ---
+    parser.add_argument("--log-dir", default=os.path.join(os.getcwd(), '..', '..', '..', 'Saved', 'TurnLogs'), help="Directory to search for session logs.")
+    turn_filter_group = parser.add_mutually_exclusive_group()
+    turn_filter_group.add_argument("--turn", type=str, help="Filter for a specific turn number, or a comma-separated list of turn numbers (e.g., '5' or '5,6,10').")
+    turn_filter_group.add_argument("--turn-range", metavar="START-END", help="Filter for a range of turn numbers (e.g., '5-10').")
+    
     parser.add_argument("-k", "--keywords", nargs='+', help="Optional list of additional custom keywords.")
     parser.add_argument("-d", "--depth", choices=['critical', 'high', 'medium'], default='medium', help="Predefined filtering depth.")
     parser.add_argument("--before", type=int, default=0, help="Number of context lines to include before a match.")
@@ -248,40 +144,95 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     
-    # --- Process Arguments ---
     if args.context is not None:
         args.before = args.context
         args.after = args.context
 
-    input_files_to_summarize = []
-    
-    # --- Determine Input Files ---
-    if args.input:
-        input_files_to_summarize.append(args.input)
-    elif args.latest_from_dir:
-        input_files_to_summarize.append(find_latest_file(args.latest_from_dir, args.ext))
-    elif args.turn_range:
-        try:
-            start_turn, end_turn = map(int, args.turn_range.split('-'))
-            for i in range(start_turn, end_turn + 1):
-                turn_log_filename = os.path.join(args.log_dir, f"TurnDebug_Turn{i}.csv")
-                input_files_to_summarize.append(turn_log_filename)
-        except ValueError:
-            print(f"Error: Invalid --turn-range format. Expected 'START-END' (e.g., '5-10'). Got '{args.turn_range}'.")
-            exit(1)
-    elif args.last_N_turns:
-        input_files_to_summarize = find_last_n_turn_logs(args.log_dir, args.last_N_turns)
-    else:
-        # NEW DEFAULT: Get last 3 turns
-        print("No input specified. Defaulting to processing last 3 turn logs.")
-        input_files_to_summarize = find_last_n_turn_logs(args.log_dir, 3)
+    # --- Determine and Read Input File ---
+    input_file = args.input
+    if not input_file:
+        print("No input file specified, searching for the latest session log...")
+        input_file = find_latest_session_log(args.log_dir)
 
-    # --- Validate Input Files and Summarize ---
-    # Filter out any None values from file searches that failed
-    input_files_to_summarize = [f for f in input_files_to_summarize if f]
-    
-    if not input_files_to_summarize:
-        print("Error: No input log files found after checking all options. Please specify a valid source.")
+    if not input_file or not os.path.exists(input_file):
+        print(f"Error: Input log file not found at '{input_file}'.")
         exit(1)
+
+    print(f"Reading input file: {input_file}")
+    try:
+        with open(input_file, 'r', encoding='utf-8-sig', errors='ignore') as f:
+            all_lines = f.readlines()
+    except Exception as e:
+        print(f"Error reading input file: {e}")
+        exit(1)
+
+
+    # --- Filter by Turn ---
+    lines_to_process = all_lines
+    is_default_behavior = not (args.turn or args.turn_range)
+
+    if is_default_behavior:
+        print("No turn filter specified. Defaulting to last 3 turns.")
+        max_turn = -1
+        for line in reversed(all_lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                parts = line.split(',')
+                if len(parts) > 1 and parts[1].strip().isdigit():
+                    turn_id = int(parts[1].strip())
+                    if turn_id > max_turn:
+                        max_turn = turn_id
+            except (ValueError, IndexError):
+                continue
         
-    summarize_log(input_files_to_summarize, args.output, args.keywords, args.depth, args.before, args.after)
+        if max_turn != -1:
+            start_turn = max(0, max_turn - 2)
+            args.turn_range = f"{start_turn}-{max_turn}"
+            print(f"Found max turn {max_turn}. Applying default range: {args.turn_range}")
+        else:
+            print("Could not determine max turn. Processing all turns.")
+
+    if args.turn or args.turn_range:
+        lines_to_process = []
+        turns_to_include = set()
+        
+        if args.turn:
+            try:
+                turns_to_include.update(int(t.strip()) for t in args.turn.split(','))
+            except ValueError:
+                print(f"Error: Invalid --turn format. Got '{args.turn}'.")
+                exit(1)
+        if args.turn_range:
+            try:
+                start_turn, end_turn = map(int, args.turn_range.split('-'))
+                turns_to_include.update(range(start_turn, end_turn + 1))
+            except ValueError:
+                print(f"Error: Invalid --turn-range format. Got '{args.turn_range}'.")
+                exit(1)
+        
+        print(f"Filtering for Turn IDs: {sorted(list(turns_to_include))}")
+
+        if all_lines:
+            lines_to_process.append(all_lines[0]) # Always include header
+
+        for line in all_lines[1:]:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                parts = line.split(',')
+                if len(parts) > 1 and parts[1].strip().isdigit():
+                    turn_id = int(parts[1].strip())
+                    if turn_id in turns_to_include:
+                        lines_to_process.append(line + '\n') # Add newline back for processing
+            except (ValueError, IndexError):
+                continue
+
+    if not lines_to_process:
+        print("No lines matched the specified turn filters.")
+        open(args.output, 'w').close()
+        exit(0)
+
+    summarize_log(lines_to_process, args.output, args.keywords, args.depth, args.before, args.after)

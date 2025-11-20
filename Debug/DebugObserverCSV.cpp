@@ -1,5 +1,12 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
+// CodeRevision: INC-2025-1120-R9 (Switched to timestamp-based session filenames) (2025-11-20 00:00)
+// CodeRevision: INC-2025-1120-R8 (Fix const-correctness compiler error in GetLogCount) (2025-11-20 00:00)
+// CodeRevision: INC-2025-1120-R7 (Add thread-safety locks to prevent crash in logging) (2025-11-20 00:00)
+// CodeRevision: INC-2025-1120-R6 (Rearchitected logger for one file per session and TurnID stamping) (2025-11-20 00:00)
+// CodeRevision: INC-2025-1120-R5 (Add GetCurrentSessionID to enable unique log filenames) (2025-11-20 00:00)
+// CodeRevision: INC-2025-1120-R4 (Fix C4459 compiler error by renaming LogLevel variable) (2025-11-20 00:00)
+// CodeRevision: INC-2025-1120-R3 (Removed restrictive log filtering to capture all UE_LOG messages) (2025-11-20 00:00)
 #include "Debug/DebugObserverCSV.h"
 
 #include "HAL/FileManager.h"
@@ -7,15 +14,14 @@
 #include "Misc/Paths.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/OutputDeviceRedirector.h"
+#include "Misc/DateTime.h"
 #include "../Utility/ProjectDiagnostics.h"
 
 // ★★★ セッションIDの静的カウンター ★★★
-int32 UDebugObserverCSV::NextSessionID = 1;
 
 UDebugObserverCSV::UDebugObserverCSV()
 {
     PrimaryComponentTick.bCanEverTick = false;
-    CurrentSessionID = 0; // セッション開始時に設定される
     bIsCapturingLogs = false;
 }
 
@@ -55,46 +61,27 @@ void UDebugObserverCSV::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void UDebugObserverCSV::Serialize(const TCHAR* V, ELogVerbosity::Type Verbosity, const FName& Category)
 {
-    if (!bIsCurrentRecordFromRogue)
-    {
-        return;
-    }
+    // The filter has been removed. All UE_LOG messages are now processed.
 
-    bIsCurrentRecordFromRogue = false;
-
-    // ★★★ RogueフォルダのC++ファイルからのログのみCSVに追加 ★★★
-    if (!ShouldAddToCSV(Category, FString(V)))
-    {
-        return;
-    }
-
-    // カテゴリ名から"Log"プレフィックスを除去
+    // Category nameから"Log"プレフィックスを除去
     FString CategoryName = Category.ToString();
     if (CategoryName.StartsWith(TEXT("Log")))
     {
         CategoryName = CategoryName.Mid(3); // "Log"を除去
     }
     
+    // Verbosity levelを文字列に変換
+    const TCHAR* VerbosityString = ToString(Verbosity);
+
     // CSVに追加
-    LogMessageWithLevel(CategoryName, FString(V), TEXT("Log"));
-}
-
-void UDebugObserverCSV::SerializeRecord(const UE::FLogRecord& Record)
-{
-    bIsCurrentRecordFromRogue = IsRogueSourceFile(Record.GetFile());
-    FOutputDevice::SerializeRecord(Record);
-}
-
-
-bool UDebugObserverCSV::ShouldAddToCSV(const FName& Category, const FString& Message) const
-{
-    return !Message.IsEmpty();
+    LogMessageWithLevel(CategoryName, FString(V), FString(VerbosityString));
 }
 
 void UDebugObserverCSV::OnPhaseStarted_Implementation(FGameplayTag PhaseTag, const TArray<AActor*>& Actors)
 {
+    FScopeLock Lock(&LogLinesCS);
     LogLines.Add(FString::Printf(TEXT("PhaseStart,%d,%s,%d,%.6f"),
-        CurrentSessionID,
+        LoggingTurnID,
         *PhaseTag.ToString(),
         Actors.Num(),
         FPlatformTime::Seconds()));
@@ -102,17 +89,19 @@ void UDebugObserverCSV::OnPhaseStarted_Implementation(FGameplayTag PhaseTag, con
 
 void UDebugObserverCSV::OnPhaseCompleted_Implementation(FGameplayTag PhaseTag, float DurationSeconds)
 {
+    FScopeLock Lock(&LogLinesCS);
     LogLines.Add(FString::Printf(TEXT("PhaseEnd,%d,%s,%.3f"),
-        CurrentSessionID,
+        LoggingTurnID,
         *PhaseTag.ToString(),
         DurationSeconds * 1000.0f));
 }
 
 void UDebugObserverCSV::OnIntentGenerated_Implementation(AActor* Enemy, const FEnemyIntent& Intent)
 {
+    FScopeLock Lock(&LogLinesCS);
     const FString EnemyName = Enemy ? Enemy->GetName() : TEXT("None");
     LogLines.Add(FString::Printf(TEXT("Intent,%d,%s,%s,%s"),
-        CurrentSessionID,
+        LoggingTurnID,
         *EnemyName,
         *Intent.AbilityTag.ToString(),
         *Intent.NextCell.ToString()));
@@ -126,14 +115,15 @@ bool UDebugObserverCSV::SaveToFile(const FString& Filename)
 
     const FString FilePath = Directory / Filename;
     
-    // ★★★ デバッグ：保存先の完全なパスをログ出力 ★★★
-    UE_LOG(LogTemp, Log, TEXT("[DebugObserverCSV] ProjectSavedDir: %s"), *ProjectSavedDir);
     UE_LOG(LogTemp, Log, TEXT("[DebugObserverCSV] Saving CSV to: %s"), *FilePath);
     
-    // ★★★ CSVヘッダー行を追加（SessionID列を追加） ★★★
     TArray<FString> LinesWithHeader;
-    LinesWithHeader.Add(TEXT("Type,SessionID,Category,Timestamp,Message"));
-    LinesWithHeader.Append(LogLines);
+    LinesWithHeader.Add(TEXT("Type,TurnID,Category,Timestamp,Message"));
+    
+    {
+        FScopeLock Lock(&LogLinesCS);
+        LinesWithHeader.Append(LogLines);
+    }
     
     if (!FFileHelper::SaveStringArrayToFile(LinesWithHeader, *FilePath))
     {
@@ -150,6 +140,17 @@ void UDebugObserverCSV::ClearLogs()
     LogLines.Reset();
 }
 
+int32 UDebugObserverCSV::GetLogCount() const
+{
+    FScopeLock Lock(&LogLinesCS);
+    return LogLines.Num();
+}
+
+FString UDebugObserverCSV::GetSessionTimestamp() const
+{
+    return SessionTimestamp;
+}
+
 void UDebugObserverCSV::LogMessage(const FString& Category, const FString& Message)
 {
     // デフォルトのログレベルで記録
@@ -158,6 +159,8 @@ void UDebugObserverCSV::LogMessage(const FString& Category, const FString& Messa
 
 void UDebugObserverCSV::LogMessageWithLevel(const FString& Category, const FString& Message, const FString& InLogLevel)
 {
+    FScopeLock Lock(&LogLinesCS);
+
     FString EscapedMessage = Message;
     EscapedMessage.ReplaceInline(TEXT("\""), TEXT("\"\""));
     if (EscapedMessage.Contains(TEXT(",")) || EscapedMessage.Contains(TEXT("\"")) || EscapedMessage.Contains(TEXT("\n")))
@@ -167,62 +170,50 @@ void UDebugObserverCSV::LogMessageWithLevel(const FString& Category, const FStri
 
     LogLines.Add(FString::Printf(TEXT("%s,%d,%s,%.6f,%s"),
         *InLogLevel,
-        CurrentSessionID,
+        LoggingTurnID,
         *Category,
         FPlatformTime::Seconds(),
         *EscapedMessage));
 }
 
+void UDebugObserverCSV::SetCurrentTurnForLogging(int32 TurnID)
+{
+    LoggingTurnID = TurnID;
+}
+
 void UDebugObserverCSV::MarkSessionStart()
 {
-    // ★★★ 変更（2025-11-12）：新しいセッション開始時に前回のログをクリア ★★★
-    // 毎回消して直前のセッションのログだけを記録する
+    FScopeLock Lock(&LogLinesCS);
     ClearLogs();
 
-    CurrentSessionID = NextSessionID++;
+    SessionTimestamp = FDateTime::Now().ToString(TEXT("%Y%m%d-%H%M%S"));
+    LoggingTurnID = 0; // Reset turn number at session start
     const double Timestamp = FPlatformTime::Seconds();
 
-    // ★★★ セッション開始マーカーを追加（CSV形式: Type,SessionID,Category,Timestamp,Message） ★★★
-    // SessionIDをわかりやすく表示するため、メッセージに含める
-    LogLines.Add(FString::Printf(TEXT("SessionStart,%d,Session,%.6f,=== SESSION %d STARTED ==="),
-        CurrentSessionID,
+    LogLines.Add(FString::Printf(TEXT("SessionStart,%d,Session,%.6f,=== SESSION %s STARTED ==="),
+        LoggingTurnID,
         Timestamp,
-        CurrentSessionID));
+        *SessionTimestamp));
 
-    UE_LOG(LogTemp, Log, TEXT("[CSV] Session %d started at %.6f (logs cleared)"), CurrentSessionID, Timestamp);
+    UE_LOG(LogTemp, Log, TEXT("[CSV] Session %s started at %.6f (logs cleared)"), *SessionTimestamp, Timestamp);
 }
 
 void UDebugObserverCSV::MarkSessionEnd()
 {
-    if (CurrentSessionID == 0)
+    if (SessionTimestamp.IsEmpty())
     {
         UE_LOG(LogTemp, Warning, TEXT("[CSV] MarkSessionEnd called but no session was started"));
         return;
     }
     
+    FScopeLock Lock(&LogLinesCS);
     const double Timestamp = FPlatformTime::Seconds();
     
-    // ★★★ セッション終了マーカーを追加（CSV形式: Type,SessionID,Category,Timestamp,Message） ★★★
-    // SessionIDをわかりやすく表示するため、メッセージに含める
-    LogLines.Add(FString::Printf(TEXT("SessionEnd,%d,Session,%.6f,=== SESSION %d ENDED ==="),
-        CurrentSessionID,
+    LogLines.Add(FString::Printf(TEXT("SessionEnd,%d,Session,%.6f,=== SESSION %s ENDED ==="),
+        LoggingTurnID,
         Timestamp,
-        CurrentSessionID));
+        *SessionTimestamp));
     
-    UE_LOG(LogTemp, Log, TEXT("[CSV] Session %d ended at %.6f"), CurrentSessionID, Timestamp);
-    
-    // セッションIDをリセット（次のセッション開始まで）
-    // CurrentSessionID = 0; // コメントアウト：セッション終了後もIDを保持
+    UE_LOG(LogTemp, Log, TEXT("[CSV] Session %s ended at %.6f"), *SessionTimestamp, Timestamp);
 }
 
-bool UDebugObserverCSV::IsRogueSourceFile(const ANSICHAR* FilePath) const
-{
-    if (!FilePath)
-    {
-        return false;
-    }
-
-    const FString SourcePath = UTF8_TO_TCHAR(FilePath);
-    return SourcePath.Contains(TEXT("/Rogue/"), ESearchCase::IgnoreCase)
-        || SourcePath.Contains(TEXT("\\Rogue\\"), ESearchCase::IgnoreCase);
-}

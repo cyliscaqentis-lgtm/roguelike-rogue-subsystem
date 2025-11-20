@@ -397,7 +397,12 @@ void AGameTurnManagerBase::BeginPlay()
 	if (CSVObserver)
 	{
 		DebugObservers.Add(CSVObserver);
+        CachedCsvObserver = CSVObserver;
 		UE_LOG(LogTurnManager, Log, TEXT("GameTurnManager::BeginPlay: Found and added UDebugObserverCSV to DebugObservers."));
+        
+        // Start the logging session
+        CachedCsvObserver->MarkSessionStart();
+        CachedCsvObserver->SetCurrentTurnForLogging(0);
 	}
 	else
 	{
@@ -916,26 +921,6 @@ if (UWorld* World = GetWorld())
         }
     }
 
-int32 SavedCount = 0;
-    for (UObject* Observer : DebugObservers)
-    {
-        if (UDebugObserverCSV* CSV = Cast<UDebugObserverCSV>(Observer))
-        {
-            FString Filename = FString::Printf(TEXT("TurnDebug_Turn%d.csv"), PreviousTurnId);
-            CSV->SaveToFile(Filename);
-            SavedCount++;
-
-            UE_LOG(LogTurnManager, Verbose,
-                TEXT("[AdvanceTurnAndRestart] CSV saved: %s"), *Filename);
-        }
-    }
-
-    if (SavedCount > 0)
-    {
-        UE_LOG(LogTurnManager, Log,
-            TEXT("[AdvanceTurnAndRestart] %d Debug Observer(s) saved"), SavedCount);
-    }
-
 bTurnContinuing = false;
 
 // CodeRevision: INC-2025-00028-R1 (Replace CurrentTurnIndex with CurrentTurnId - Phase 3.1) (2025-11-16 00:00)
@@ -958,8 +943,20 @@ void AGameTurnManagerBase::StartFirstTurn()
 OnTurnStartedHandler(CurrentTurnId);
 }
 
+// CodeRevision: INC-2025-1120-R9 (Switched to timestamp-based session filenames) (2025-11-20 00:00)
+// CodeRevision: INC-2025-1120-R6 (Rearchitected logger for one file per session and TurnID stamping) (2025-11-20 00:00)
 void AGameTurnManagerBase::EndPlay(const EEndPlayReason::Type Reason)
 {
+    if (CachedCsvObserver.IsValid())
+    {
+        const FString Timestamp = CachedCsvObserver->GetSessionTimestamp();
+        if (!Timestamp.IsEmpty())
+        {
+            FString Filename = FString::Printf(TEXT("Session_%s.csv"), *Timestamp);
+            CachedCsvObserver->SaveToFile(Filename);
+            UE_LOG(LogTurnManager, Log, TEXT("[EndPlay] Saved session log to %s"), *Filename);
+        }
+    }
     
     if (UAbilitySystemComponent* ASC = GetPlayerASC())
     {
@@ -1019,7 +1016,11 @@ void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnId)
 
     // Use TurnId directly (should match CurrentTurnId from TurnFlowCoordinator)
     CurrentTurnId = TurnId;
-    // CodeRevision: INC-2025-00030-R1 (Removed CurrentTurnIndex synchronization - use TurnFlowCoordinator directly) (2025-11-16 00:00)
+
+    if (CachedCsvObserver.IsValid())
+    {
+        CachedCsvObserver->SetCurrentTurnForLogging(TurnId);
+    }
 
     // Get PlayerPawn locally instead of caching
     APawn* PlayerPawn = nullptr;
@@ -2334,6 +2335,21 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
         UE_LOG(LogTurnManager, Log,
             TEXT("Turn %d: OnPlayerMoveCompleted - last accepted command was MOVE; enemy phase already handled, skipping fallback"),
             CurrentTurnId);
+
+        // CodeRevision: INC-2025-1121-R1 (Fix Simultaneous Mode Hang: Manually advance if barrier is quiescent) (2025-11-21 01:10)
+        if (UWorld* World = GetWorld())
+        {
+            if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
+            {
+                if (Barrier->IsQuiescent(CurrentTurnId))
+                {
+                     UE_LOG(LogTurnManager, Warning, 
+                        TEXT("[Turn %d] OnPlayerMoveCompleted: Barrier is quiescent (no enemy moves), manually calling EndEnemyTurn"),
+                        CurrentTurnId);
+                     EndEnemyTurn();
+                }
+            }
+        }
     }
     else if (UWorld* World = GetWorld())
     {
