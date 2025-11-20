@@ -336,9 +336,18 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                 // ResolutionReason for non-conflict actions
                 if (SwapActors.Contains(WinnerActorPtr))
                 {
-                    Action.ResolutionReason = TEXT("Success: Swap move allowed (no conflict)");
-                    UE_LOG(LogConflictResolver, Log,
-                        TEXT("[SWAP ALLOWED] %s at (%d,%d)->(%d,%d) (no conflict)"),
+                    // CodeRevision: INC-2025-1148-R2 (Forbid swaps to prevent GridOccupancy deadlocks) (2025-11-20 19:05)
+                    // Swaps are design-illegal and cause deadlocks due to Origin Hold (Backstab Protection).
+                    // We must force both actors to WAIT.
+                    
+                    Action.bIsWait         = true;
+                    Action.NextCell        = Action.CurrentCell;
+                    Action.AbilityTag      = WaitTag;
+                    Action.FinalAbilityTag = WaitTag;
+                    Action.ResolutionReason = TEXT("Conflict: Swap move forbidden (GridOccupancy deadlock prevention)");
+
+                    UE_LOG(LogConflictResolver, Warning,
+                        TEXT("[SWAP REJECTED] %s at (%d,%d)->(%d,%d) forced to WAIT"),
                         *GetNameSafe(WinnerActorPtr),
                         Winner.CurrentCell.X, Winner.CurrentCell.Y,
                         Winner.Cell.X, Winner.Cell.Y);
@@ -373,6 +382,34 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
             UE_LOG(LogConflictResolver, Warning,
                 TEXT("Conflict at cell (%d,%d) with %d contenders. Resolving..."),
                 Cell.X, Cell.Y, Contenders.Num());
+
+            const auto ApplySwapRejection = [&](const FReservationEntry& Entry, FResolvedAction& Action, const FString& Reason) -> bool
+            {
+                if (Entry.Actor == nullptr || !IsValid(Entry.Actor))
+                {
+                    return false;
+                }
+
+                if (!SwapActors.Contains(Entry.Actor))
+                {
+                    return false;
+                }
+
+                // CodeRevision: INC-2025-1148-R2 (Forbid swaps to prevent GridOccupancy deadlocks) (2025-11-20 19:05)
+                Action.bIsWait         = true;
+                Action.NextCell        = Action.CurrentCell;
+                Action.AbilityTag      = WaitTag;
+                Action.FinalAbilityTag = WaitTag;
+                Action.ResolutionReason = Reason;
+
+                UE_LOG(LogConflictResolver, Warning,
+                    TEXT("[SWAP REJECTED] %s at (%d,%d)->(%d,%d) forced to WAIT"),
+                    *GetNameSafe(Entry.Actor),
+                    Entry.CurrentCell.X, Entry.CurrentCell.Y,
+                    Entry.Cell.X, Entry.Cell.Y);
+
+                return true;
+            };
 
             // Default winner index (random tie-breaker for equal tiers).
             int32 WinnerIndex = FMath::RandRange(0, Contenders.Num() - 1);
@@ -421,19 +458,14 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
 
             AActor* WinnerActorPtr = Winner.Actor;
 
-            if (SwapActors.Contains(WinnerActorPtr))
-            {
-                WinnerAction.ResolutionReason = FString::Printf(
-                    TEXT("Swap move allowed at cell (%d,%d)"),
-                    Cell.X, Cell.Y);
+            const bool bWinnerSwapRejected = ApplySwapRejection(
+                Winner,
+                WinnerAction,
+                FString::Printf(
+                    TEXT("Conflict: Swap move forbidden at cell (%d,%d)"),
+                    Cell.X, Cell.Y));
 
-                UE_LOG(LogConflictResolver, Log,
-                    TEXT("[SWAP ALLOWED] Contest winner %s at (%d,%d)->(%d,%d)"),
-                    *GetNameSafe(WinnerActorPtr),
-                    Winner.CurrentCell.X, Winner.CurrentCell.Y,
-                    Winner.Cell.X, Winner.Cell.Y);
-            }
-            else
+            if (!bWinnerSwapRejected)
             {
                 WinnerAction.ResolutionReason = FString::Printf(
                     TEXT("Won contest for cell (%d,%d)"),
@@ -480,14 +512,21 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                 LoserAction.AbilityTag      = WaitTag;
                 LoserAction.FinalAbilityTag = WaitTag;
 
-                if (bAttackWonConflict && !Loser.AbilityTag.MatchesTag(AttackTag))
+                const bool bLoserSwapRejected = ApplySwapRejection(
+                    Loser,
+                    LoserAction,
+                    FString::Printf(
+                        TEXT("Conflict: Swap move forbidden (non-winning contender) at cell (%d,%d)"),
+                        Cell.X, Cell.Y));
+
+                if (!bLoserSwapRejected && bAttackWonConflict && !Loser.AbilityTag.MatchesTag(AttackTag))
                 {
                     // In Sequential mode, MOVE lost to ATTACK.
                     LoserAction.ResolutionReason = FString::Printf(
                         TEXT("LostConflict: Cell (%d,%d) locked by attacker (Sequential)"),
                         Cell.X, Cell.Y);
                 }
-                else
+                else if (!bLoserSwapRejected)
                 {
                     // Generic conflict loss (Simultaneous or Attack vs Attack).
                     LoserAction.ResolutionReason = FString::Printf(
@@ -520,150 +559,178 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
     //     downgrade it to WAIT.
     // ========================================================================
 
-    TSet<FIntPoint> StationaryCells;
-    for (const FResolvedAction& Action : OptimisticActions)
+    // ========================================================================
+    // Phase C: Revalidation against stationary cells (Priority 2.1)
+    //
+    // We must iteratively resolve blockages because a unit converting to WAIT
+    // might block another unit that was previously clear.
+    // Example: A->B->C->(Blocked).
+    // Iter 1: C blocked -> C Waits.
+    // Iter 2: B blocked by C -> B Waits.
+    // Iter 3: A blocked by B -> A Waits.
+    // ========================================================================
+
+    bool bChanged = false;
+    int32 IterationCount = 0;
+    const int32 MaxIterations = OptimisticActions.Num() + 2; // Safety cap
+
+    do
     {
-        // A stationary attack is defined as "attack that does not move"
-        const bool bIsStationaryAttack =
-            Action.AbilityTag.MatchesTag(AttackTag) &&
-            Action.NextCell == Action.CurrentCell;
+        bChanged = false;
+        IterationCount++;
 
-        if (Action.bIsWait || bIsStationaryAttack)
+        // 1. Collect all cells that are currently effectively stationary
+        TSet<FIntPoint> StationaryCells;
+        for (const FResolvedAction& Action : OptimisticActions)
         {
-            StationaryCells.Add(Action.CurrentCell);
-        }
-    }
+            // A stationary attack is defined as "attack that does not move"
+            const bool bIsStationaryAttack =
+                Action.AbilityTag.MatchesTag(AttackTag) &&
+                Action.NextCell == Action.CurrentCell;
 
-    UE_LOG(LogConflictResolver, Log,
-        TEXT("[ResolveAllConflicts] Stationary cell count after optimistic pass: %d"),
-        StationaryCells.Num());
-
-    TArray<FResolvedAction> FinalActions;
-    FinalActions.Reserve(OptimisticActions.Num());
-
-    for (FResolvedAction Action : OptimisticActions)
-    {
-        if (Action.bIsWait)
-        {
-            FinalActions.Add(Action);
-            continue;
-        }
-
-        const bool bIsMoveAction =
-            Action.FinalAbilityTag.MatchesTag(MoveTag) ||
-            Action.AbilityTag.MatchesTag(MoveTag);
-
-        if (bIsMoveAction)
-        {
-            const FIntPoint TargetCell = Action.NextCell;
-
-            if (StationaryCells.Contains(TargetCell))
+            if (Action.bIsWait || bIsStationaryAttack)
             {
-                AActor* ActorPtr = Action.Actor.Get();
+                StationaryCells.Add(Action.CurrentCell);
+            }
+        }
 
-                UE_LOG(LogConflictResolver, Warning,
-                    TEXT("[ResolveAllConflicts] Revalidation: %s move to (%d,%d) blocked by stationary unit"),
-                    *GetNameSafe(ActorPtr), TargetCell.X, TargetCell.Y);
+        UE_LOG(LogConflictResolver, Verbose,
+            TEXT("[ResolveAllConflicts] Phase C Iteration %d: %d stationary cells"),
+            IterationCount, StationaryCells.Num());
 
-                bool bRerouted = false;
+        // 2. Check for moves into stationary cells
+        for (FResolvedAction& Action : OptimisticActions)
+        {
+            if (Action.bIsWait)
+            {
+                continue;
+            }
 
-                // CodeRevision: INC-2025-1148-R1
-                // 近づけるマスが他にある場合は、WAIT ではなく隣接セルへ再ルーティングする。
-                if (UWorld* World = GetWorld())
+            const bool bIsMoveAction =
+                Action.FinalAbilityTag.MatchesTag(MoveTag) ||
+                Action.AbilityTag.MatchesTag(MoveTag);
+
+            if (bIsMoveAction)
+            {
+                const FIntPoint TargetCell = Action.NextCell;
+
+                if (StationaryCells.Contains(TargetCell))
                 {
-                    UGridOccupancySubsystem* GridOcc = ResolveGridOccupancy();
-                    UDistanceFieldSubsystem* DF = World->GetSubsystem<UDistanceFieldSubsystem>();
+                    AActor* ActorPtr = Action.Actor.Get();
 
-                    if (GridOcc && DF && ActorPtr)
+                    UE_LOG(LogConflictResolver, Warning,
+                        TEXT("[ResolveAllConflicts] Revalidation (Iter %d): %s move to (%d,%d) blocked by stationary unit"),
+                        IterationCount, *GetNameSafe(ActorPtr), TargetCell.X, TargetCell.Y);
+
+                    bool bRerouted = false;
+
+                    // CodeRevision: INC-2025-1148-R1
+                    // Try to reroute to an adjacent cell if blocked
+                    if (UWorld* World = GetWorld())
                     {
-                        const FIntPoint CurrentCell = Action.CurrentCell;
-                        const int32 CurrentDist = DF->GetDistance(CurrentCell);
+                        UGridOccupancySubsystem* GridOcc = ResolveGridOccupancy();
+                        UDistanceFieldSubsystem* DF = World->GetSubsystem<UDistanceFieldSubsystem>();
 
-                        if (CurrentDist >= 0)
+                        if (GridOcc && DF && ActorPtr)
                         {
-                            const FIntPoint NeighborOffsets[4] = {
-                                FIntPoint(1, 0),
-                                FIntPoint(-1, 0),
-                                FIntPoint(0, 1),
-                                FIntPoint(0, -1)
-                            };
+                            const FIntPoint CurrentCell = Action.CurrentCell;
+                            const int32 CurrentDist = DF->GetDistance(CurrentCell);
 
-                            FIntPoint BestCell = CurrentCell;
-                            int32 BestDist = CurrentDist;
-
-                            for (const FIntPoint& Offset : NeighborOffsets)
+                            if (CurrentDist >= 0)
                             {
-                                const FIntPoint Candidate = CurrentCell + Offset;
+                                const FIntPoint NeighborOffsets[4] = {
+                                    FIntPoint(1, 0),
+                                    FIntPoint(-1, 0),
+                                    FIntPoint(0, 1),
+                                    FIntPoint(0, -1)
+                                };
 
-                                // 攻撃タイルや既に固定されたセルには入らない
-                                if (StationaryCells.Contains(Candidate))
-                                {
-                                    continue;
-                                }
+                                FIntPoint BestCell = CurrentCell;
+                                int32 BestDist = CurrentDist;
 
-                                // 既に他のアクターが占有しているセルも避ける（自身は許可）
-                                if (GridOcc->IsCellOccupied(Candidate))
+                                for (const FIntPoint& Offset : NeighborOffsets)
                                 {
-                                    AActor* Occupant = GridOcc->GetActorAtCell(Candidate);
-                                    if (Occupant && Occupant != ActorPtr)
+                                    const FIntPoint Candidate = CurrentCell + Offset;
+
+                                    // Do not enter stationary cells
+                                    if (StationaryCells.Contains(Candidate))
                                     {
                                         continue;
                                     }
+
+                                    // Avoid cells occupied by others (unless it's us, though we are moving)
+                                    if (GridOcc->IsCellOccupied(Candidate))
+                                    {
+                                        AActor* Occupant = GridOcc->GetActorAtCell(Candidate);
+                                        if (Occupant && Occupant != ActorPtr)
+                                        {
+                                            continue;
+                                        }
+                                    }
+
+                                    const int32 Dist = DF->GetDistance(Candidate);
+                                    if (Dist >= 0 && Dist < BestDist)
+                                    {
+                                        BestDist = Dist;
+                                        BestCell = Candidate;
+                                    }
                                 }
 
-                                const int32 Dist = DF->GetDistance(Candidate);
-                                if (Dist >= 0 && Dist < BestDist)
+                                if (BestCell != CurrentCell)
                                 {
-                                    BestDist = Dist;
-                                    BestCell = Candidate;
+                                    Action.NextCell        = BestCell;
+                                    Action.bIsWait         = false;
+                                    Action.AbilityTag      = MoveTag;
+                                    Action.FinalAbilityTag = MoveTag;
+                                    Action.ResolutionReason = FString::Printf(
+                                        TEXT("Revalidated(Iter%d): rerouted move off blocked cell (%d,%d) to (%d,%d)"),
+                                        IterationCount, TargetCell.X, TargetCell.Y, BestCell.X, BestCell.Y);
+
+                                    bRerouted = true;
+                                    bChanged = true; // State changed, need another pass
+
+                                    UE_LOG(LogConflictResolver, Log,
+                                        TEXT("[ResolveAllConflicts] Rerouted %s from blocked (%d,%d) to (%d,%d)"),
+                                        *GetNameSafe(ActorPtr),
+                                        TargetCell.X, TargetCell.Y,
+                                        BestCell.X, BestCell.Y);
                                 }
-                            }
-
-                            if (BestCell != CurrentCell)
-                            {
-                                Action.NextCell        = BestCell;
-                                Action.bIsWait         = false;
-                                Action.AbilityTag      = MoveTag;
-                                Action.FinalAbilityTag = MoveTag;
-                                Action.ResolutionReason = FString::Printf(
-                                    TEXT("Revalidated: rerouted move off blocked cell (%d,%d) to (%d,%d)"),
-                                    TargetCell.X, TargetCell.Y, BestCell.X, BestCell.Y);
-
-                                bRerouted = true;
-
-                                UE_LOG(LogConflictResolver, Log,
-                                    TEXT("[ResolveAllConflicts] Rerouted %s from blocked (%d,%d) to (%d,%d)"),
-                                    *GetNameSafe(ActorPtr),
-                                    TargetCell.X, TargetCell.Y,
-                                    BestCell.X, BestCell.Y);
                             }
                         }
                     }
-                }
 
-                if (!bRerouted)
-                {
-                    Action.bIsWait         = true;
-                    Action.NextCell        = Action.CurrentCell;
-                    Action.AbilityTag      = WaitTag;
-                    Action.FinalAbilityTag = WaitTag;
-                    Action.ResolutionReason = FString::Printf(
-                        TEXT("LostConflict: Target cell (%d,%d) blocked by stationary unit (Revalidation)"),
-                        TargetCell.X, TargetCell.Y);
+                    if (!bRerouted)
+                    {
+                        Action.bIsWait         = true;
+                        Action.NextCell        = Action.CurrentCell;
+                        Action.AbilityTag      = WaitTag;
+                        Action.FinalAbilityTag = WaitTag;
+                        Action.ResolutionReason = FString::Printf(
+                            TEXT("LostConflict: Target cell (%d,%d) blocked by stationary unit (Revalidation Iter %d)"),
+                            TargetCell.X, TargetCell.Y, IterationCount);
+                        
+                        bChanged = true; // State changed, need another pass
+                    }
                 }
             }
         }
 
-        FinalActions.Add(Action);
+    } while (bChanged && IterationCount < MaxIterations);
+
+    if (IterationCount >= MaxIterations)
+    {
+        UE_LOG(LogConflictResolver, Error,
+            TEXT("[ResolveAllConflicts] Hit max iterations (%d) in Phase C! Potential cycle or complex chain."),
+            MaxIterations);
     }
 
     UE_LOG(LogConflictResolver, Log,
-        TEXT("[ResolveAllConflicts] Generated %d final actions after revalidation"),
-        FinalActions.Num());
+        TEXT("[ResolveAllConflicts] Generated %d final actions after %d iterations"),
+        OptimisticActions.Num(), IterationCount);
 
-    for (int32 i = 0; i < FinalActions.Num(); ++i)
+    for (int32 i = 0; i < OptimisticActions.Num(); ++i)
     {
-        const FResolvedAction& Action = FinalActions[i];
+        const FResolvedAction& Action = OptimisticActions[i];
         UE_LOG(LogConflictResolver, Verbose,
             TEXT("[ResolvedAction %d] SourceActor=%s, Actor=%s, From=(%d,%d), To=(%d,%d), bIsWait=%d, Reason=\"%s\""),
             i,
@@ -674,6 +741,9 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
             Action.bIsWait ? 1 : 0,
             *Action.ResolutionReason);
     }
+
+    // Use OptimisticActions as the final result
+    TArray<FResolvedAction>& FinalActions = OptimisticActions;
 
     // ========================================================================
     // CONTRACT (Priority 2): INVARIANT 1 - Intent Non-Disappearance

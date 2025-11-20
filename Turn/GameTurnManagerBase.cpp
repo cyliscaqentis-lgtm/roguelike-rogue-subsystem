@@ -653,7 +653,8 @@ if (DebugSubsystem)
     {
         
         WaitingForPlayerInput = true;
-        ApplyWaitInputGate(true);
+        // CodeRevision: INC-2025-1155-R1 (Remove redundant ApplyWaitInputGate - handled in OpenInputWindow) (2025-11-20 11:30)
+        // ApplyWaitInputGate(true); // REMOVED: Redundant, OpenInputWindow handles this via PlayerInputProcessor
         OpenInputWindow();
         UE_LOG(LogTurnManager, Log,
             TEXT("Turn%d:BeginPhase(Input) Id=%d, Gate=OPEN, Waiting=TRUE"),
@@ -682,7 +683,17 @@ void AGameTurnManagerBase::EndPhase(FGameplayTag PhaseTag)
     {
         
         WaitingForPlayerInput = false;
-        ApplyWaitInputGate(false);
+        
+        // CodeRevision: INC-2025-1155-R1 (Use PlayerInputProcessor to close window and remove tags) (2025-11-20 11:30)
+        if (PlayerInputProcessor)
+        {
+            PlayerInputProcessor->CloseInputWindow();
+        }
+        else
+        {
+            ApplyWaitInputGate(false);
+        }
+
         UE_LOG(LogTurnManager, Log, TEXT("Turn%d:[EndPhase] Gate=CLOSED, Waiting=FALSE"),
             CurrentTurnId);
     }
@@ -3359,6 +3370,11 @@ void AGameTurnManagerBase::OpenInputWindow()
     {
         PlayerInputProcessor->OpenInputWindow(CurrentTurnId_Local, CurrentWindowId);
     }
+    else
+    {
+        // Fallback: If PIP is missing, apply gate manually
+        ApplyWaitInputGate(true);
+    }
 
     if (CommandHandler)
     {
@@ -3366,7 +3382,8 @@ void AGameTurnManagerBase::OpenInputWindow()
     }
 
     // ③ Update internal state
-    ApplyWaitInputGate(true);
+    // CodeRevision: INC-2025-1155-R1 (Remove redundant ApplyWaitInputGate - handled by PIP or fallback above) (2025-11-20 11:30)
+    // ApplyWaitInputGate(true); // REMOVED: Redundant
     WaitingForPlayerInput = true;
 
     OnRep_WaitingForPlayerInput();

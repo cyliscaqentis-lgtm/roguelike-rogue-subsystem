@@ -3,6 +3,7 @@
 
 #include "GridOccupancySubsystem.h"
 #include "Grid/GridPathfindingSubsystem.h"
+#include "GenericTeamAgentInterface.h"
 #include "Kismet/GameplayStatics.h"
 
 void UGridOccupancySubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -113,21 +114,12 @@ bool UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
         {
             if (ForeignReserver != Actor)
             {
-                // Allow only if this is a perfect swap (A <-> B)
-                const bool bIsPerfectSwap = IsPerfectSwap(Actor, ForeignReserver);
-                if (!bIsPerfectSwap)
-                {
-                    UE_LOG(LogTemp, Warning,
-                        TEXT("[GridOccupancy] REJECT by foreign reservation: %s -> (%d,%d) reserved by %s (not a perfect swap)"),
-                        *GetNameSafe(Actor), NewCell.X, NewCell.Y, *GetNameSafe(ForeignReserver));
-                    return false;
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Log,
-                        TEXT("[GridOccupancy] ALLOW perfect swap: %s <-> %s at (%d,%d)"),
-                        *GetNameSafe(Actor), *GetNameSafe(ForeignReserver), NewCell.X, NewCell.Y);
-                }
+                // CodeRevision: INC-2025-1156-R1 (Disable Perfect Swap - Strict Reservation Enforcement) (2025-11-20 11:30)
+                // We strictly reject moves into cells reserved by others. Swapping is not allowed.
+                UE_LOG(LogTemp, Warning,
+                    TEXT("[GridOccupancy] REJECT by foreign reservation: %s -> (%d,%d) reserved by %s"),
+                    *GetNameSafe(Actor), NewCell.X, NewCell.Y, *GetNameSafe(ForeignReserver));
+                return false;
             }
         }
     }
@@ -296,6 +288,37 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
                     OriginOwnerDestReservation->Cell != Cell &&
                     !OriginOwnerDestReservation->bIsOriginHold)
                 {
+                    // CodeRevision: INC-2025-1157-R3 (フォローアップ制限: プレイヤー経路追尾可、距離1のみ、チーム不一致のみ拒否) (2025-11-20 21:00)
+                    // プレイヤーの元セル追随を許可しつつ、直近(チェビシェフ距離1)のユニットのみ追従を許可する。
+                    // これで遠距離の追従による重なりを防ぎ、隊列を1マス刻みで維持する。
+                    const IGenericTeamAgentInterface* OriginTeamAgent   = Cast<IGenericTeamAgentInterface>(OriginOwner);
+                    const IGenericTeamAgentInterface* FollowerTeamAgent = Cast<IGenericTeamAgentInterface>(Actor);
+
+                    if (OriginTeamAgent && FollowerTeamAgent)
+                    {
+                        if (OriginTeamAgent->GetGenericTeamId() != FollowerTeamAgent->GetGenericTeamId())
+                        {
+                            UE_LOG(LogTemp, Warning,
+                                TEXT("[GridOccupancy] REJECT FOLLOW-UP: %s -> (%d,%d) team mismatch with origin owner %s"),
+                                *GetNameSafe(Actor), Cell.X, Cell.Y, *GetNameSafe(OriginOwner));
+                            return false;
+                        }
+                    }
+
+                    // 直近(距離1)のみフォローを許可
+                    const FIntPoint* FollowerCellPtr = ActorToCell.Find(Actor);
+                    if (FollowerCellPtr)
+                    {
+                        const int32 ChebDist = FGridUtils::ChebyshevDistance(*FollowerCellPtr, Cell);
+                        if (ChebDist > 1)
+                        {
+                            UE_LOG(LogTemp, Warning,
+                                TEXT("[GridOccupancy] REJECT FOLLOW-UP: %s -> (%d,%d) distance=%d (must be <=1)"),
+                                *GetNameSafe(Actor), Cell.X, Cell.Y, ChebDist);
+                            return false;
+                        }
+                    }
+
                     // Follow-up compression: allow this as a "SoftHold" override.
                     UE_LOG(LogTemp, Log,
                         TEXT("[GridOccupancy] ALLOW FOLLOW-UP: %s -> (%d,%d) following %s who moves to (%d,%d) [SOFTHOLD -> ALLOW]"),

@@ -80,7 +80,18 @@ void UEnemyAISubsystem::BuildObservations(
         }
         else
         {
-            Obs.GridPosition = PathFinder->WorldToGrid(Enemy->GetActorLocation());
+            // CodeRevision: INC-2025-1156-R1 (Fix Intent/Live desync: Use GridOccupancy as source of truth for enemy position) (2025-11-20 20:00)
+            // CodeRevision: INC-2025-1156-R1 (Fix Intent/Live desync: Use GridOccupancy as source of truth for enemy position) (2025-11-20 20:00)
+            if (UGridOccupancySubsystem* Occupancy = GetWorld()->GetSubsystem<UGridOccupancySubsystem>())
+            {
+                Obs.GridPosition = Occupancy->GetCellOfActor(Enemy);
+            }
+
+            // Fallback to physical location if not in occupancy (or occupancy missing)
+            if (Obs.GridPosition == FIntPoint::ZeroValue)
+            {
+                Obs.GridPosition = PathFinder->WorldToGrid(Enemy->GetActorLocation());
+            }
             // CodeRevision: INC-2025-00016-R1 (Use FGridUtils::ChebyshevDistance) (2025-11-16 14:00)
             Obs.DistanceInTiles = FGridUtils::ChebyshevDistance(Obs.GridPosition, PlayerGrid);
 
@@ -127,15 +138,15 @@ void UEnemyAISubsystem::BuildObservations(
                 TEXT("[BuildObservations] GridOccupancy SAMPLE: %d/%d cells blocked around player (%d,%d)"),
                 BlockedCount, TotalCells, PlayerGrid.X, PlayerGrid.Y);
 
-            for (int32 i = 0; i < FMath::Min(3, OutObs.Num()); ++i)
+            for (int32 DebugIdx = 0; DebugIdx < FMath::Min(3, OutObs.Num()); ++DebugIdx)
             {
-                const FEnemyObservation& Obs = OutObs[i];
+                const FEnemyObservation& Obs = OutObs[DebugIdx];
                 // CodeRevision: INC-2025-00021-R1 (Replace IsCellWalkable with IsCellWalkableIgnoringActor - Phase 2.3) (2025-11-17 15:05)
                 // Debug code: only terrain check needed
                 bool bEnemyOccupied = PathFinder && !PathFinder->IsCellWalkableIgnoringActor(Obs.GridPosition, nullptr);
                 UE_LOG(LogEnemyAI, Verbose,
                     TEXT("[BuildObservations] Enemy[%d] at (%d,%d): SelfOccupied=%d"),
-                    i, Obs.GridPosition.X, Obs.GridPosition.Y, bEnemyOccupied ? 1 : 0);
+                    DebugIdx, Obs.GridPosition.X, Obs.GridPosition.Y, bEnemyOccupied ? 1 : 0);
             }
         }
         else
@@ -247,11 +258,11 @@ void UEnemyAISubsystem::CollectIntents(
             FMath::Abs(ObsB.GridPosition.X - ObsB.PlayerGridPosition.X) +
             FMath::Abs(ObsB.GridPosition.Y - ObsB.PlayerGridPosition.Y);
 
-        // For equal Chebyshev distance, prefer units that are slightly "further around the ring"
-        // so inner ring units resolve last and can yield to better global assignments.
+        // For equal Chebyshev distance, prefer units that are aligned (lower Manhattan)
+        // so they claim straight paths first, preventing diagonal units from cutting across.
         if (ManA != ManB)
         {
-            return ManA > ManB;
+            return ManA < ManB;
         }
 
         return A < B;
@@ -339,8 +350,6 @@ FEnemyIntent UEnemyAISubsystem::ComputeMoveOrWaitIntent(
     const int32 PrimaryDist = FGridUtils::ChebyshevDistance(PrimaryCell, Obs.PlayerGridPosition);
 
     const bool bPrimaryWalkable = IsCellWalkable(EnemyActor, PrimaryCell);
-    // CodeRevision: INC-2025-1151-R1 (Require strict distance reduction for primary move to avoid sideways oscillation) (2025-11-20 17:00)
-    const bool bPrimaryCloser = (PrimaryDist < CurrentDist);
 
     // Optimistic Pathing: 攻撃中の味方マス(HardBlockedCells)はここではブロックしない。
     // 実際に動けるかどうかは ConflictResolver に任せる。
@@ -350,9 +359,14 @@ FEnemyIntent UEnemyAISubsystem::ComputeMoveOrWaitIntent(
         HardBlockedCells.Contains(PrimaryCell) ||
         ClaimedMoveTargets.Contains(PrimaryCell);
 
+    // CodeRevision: INC-2025-1157-R1 (Re-introduce distance check: Allow maintain/reduce, reject increase) (2025-11-20 11:35)
+    // We allow PrimaryDist == CurrentDist to enable corner navigation (sideways moves),
+    // but we strictly reject PrimaryDist > CurrentDist to prevent moving away.
+    const bool bPrimaryCloserOrEqual = (PrimaryDist <= CurrentDist);
+
     if (PrimaryCell != Obs.GridPosition &&
         bPrimaryWalkable &&
-        bPrimaryCloser &&
+        bPrimaryCloserOrEqual &&
         !bPrimaryBlocked)
     {
         Intent.AbilityTag = RogueGameplayTags::AI_Intent_Move;
@@ -383,6 +397,26 @@ FEnemyIntent UEnemyAISubsystem::ComputeMoveOrWaitIntent(
             Obs.PlayerGridPosition);
         const int32 ChosenDist = FGridUtils::ChebyshevDistance(ChosenCell, Obs.PlayerGridPosition);
 
+        // CodeRevision: INC-2025-1158-R1 (Prevent unnecessary shuffling behind friends) (2025-11-20 11:40)
+        // If the primary path was blocked by a unit (dynamic obstacle) but was otherwise walkable (not a wall),
+        // and our best alternate move is only "Equal Distance" (not strictly closer),
+        // and we are not already at the optimal distance (e.g. range 1 for melee),
+        // then we should WAIT instead of taking a sideways step.
+        const bool bBlockedByUnit = bPrimaryBlocked && bPrimaryWalkable;
+        const bool bOnlyEqualDist = (ChosenDist == CurrentDist);
+
+        if (bBlockedByUnit && bOnlyEqualDist)
+        {
+            Intent.AbilityTag = RogueGameplayTags::AI_Intent_Wait;
+            UE_LOG(LogEnemyAI, Verbose,
+                TEXT("[ComputeMoveOrWaitIntent] %s: Blocked by unit at (%d,%d). Best alt (%d,%d) is equal dist (%d). WAITING."),
+                *GetNameSafe(EnemyActor),
+                PrimaryCell.X, PrimaryCell.Y,
+                ChosenCell.X, ChosenCell.Y,
+                ChosenDist);
+            return Intent;
+        }
+
         Intent.AbilityTag = RogueGameplayTags::AI_Intent_Move;
         Intent.NextCell = ChosenCell;
         UE_LOG(LogEnemyAI, Verbose,
@@ -396,10 +430,6 @@ FEnemyIntent UEnemyAISubsystem::ComputeMoveOrWaitIntent(
 
     Intent.AbilityTag = RogueGameplayTags::AI_Intent_Wait;
     Intent.NextCell = Obs.GridPosition;
-    UE_LOG(LogEnemyAI, Verbose,
-        TEXT("[ComputeMoveOrWaitIntent] %s: No valid move cells found, WAIT at (%d,%d)"),
-        *GetNameSafe(EnemyActor),
-        Obs.GridPosition.X, Obs.GridPosition.Y);
     return Intent;
 }
 
@@ -434,8 +464,9 @@ void UEnemyAISubsystem::FindAlternateMoveCells(
         }
 
 		const int32 NewDist = FGridUtils::ChebyshevDistance(Candidate, PlayerGrid);
-		// CodeRevision: INC-2025-1151-R1 (Require strict distance reduction for alternate moves to avoid sideways oscillation) (2025-11-20 17:00)
-		if (NewDist >= CurrentDistanceInTiles)
+		// CodeRevision: INC-2025-1155-R1 (Fix inconsistent distance comparison: Use Chebyshev vs Chebyshev, and allow equal distance for sideways moves) (2025-11-20 19:30)
+		const int32 CurrentChebyshev = FGridUtils::ChebyshevDistance(SelfCell, PlayerGrid);
+		if (NewDist > CurrentChebyshev)
 		{
 			continue;
 		}
