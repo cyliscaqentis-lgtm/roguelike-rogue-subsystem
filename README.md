@@ -8,8 +8,11 @@ This is a turn-based roguelike dungeon game built on Unreal Engine 5.6 using the
 
 All project documentation is located in the [`Documentation/`](./Documentation/) directory:
 
+- **[AGENTS.md](./Documentation/AGENTS.md)** - Guidelines for repository structure, build, testing, and development for human and AI agents.
 - **[BUILD_INSTRUCTIONS.md](./Documentation/BUILD_INSTRUCTIONS.md)** - Build commands and troubleshooting guide
 - **[CODE_REVISION.md](./Documentation/CODE_REVISION.md)** - Code revision log, change tracking, and usage guidelines
+- **[ENCODING_ISSUES.md](./Documentation/ENCODING_ISSUES.md)** - Common encoding issues and best practices to prevent file corruption.
+- **[LOG_PROCESSING_PROTOCOL.md](./Documentation/LOG_PROCESSING_PROTOCOL.md)** - Protocol for processing Unreal Engine logs for AI analysis.
 - **[REFACTORING_PLAN.md](./Documentation/REFACTORING_PLAN.md)** - Refactoring design document for large class decomposition
 
 ## 🎯 Project Overview
