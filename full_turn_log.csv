@@ -1,0 +1,11 @@
+Type,SessionID,Category,Timestamp,Message
+PhaseStart,0,Phase.Turn.Init,0,16854153.448597
+PhaseStart,0,Phase.Player.WaitInput,0,16854153.448619
+PhaseStart,0,Phase.Turn.Init,5,16854156.809218
+PhaseStart,0,Phase.Player.WaitInput,5,16854156.809239
+PhaseStart,0,Phase.Turn.Init,5,16854157.247698
+PhaseStart,0,Phase.Player.WaitInput,5,16854157.247725
+PhaseStart,0,Phase.Turn.Init,5,16854157.731420
+PhaseStart,0,Phase.Player.WaitInput,5,16854157.731451
+PhaseStart,0,Phase.Turn.Init,5,16854159.224053
+PhaseStart,0,Phase.Player.WaitInput,5,16854159.224087
