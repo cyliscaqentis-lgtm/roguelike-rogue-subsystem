@@ -385,11 +385,24 @@ void AGameTurnManagerBase::Tick(float DeltaTime)
 
 }
 
+// CodeRevision: INC-2025-1120-R2 (Fix CSV log generation by registering the UDebugObserverCSV component at BeginPlay) (2025-11-20 23:45)
 void AGameTurnManagerBase::BeginPlay()
 {
     Super::BeginPlay();
 
     UE_LOG(LogTurnManager, Warning, TEXT("GameTurnManager::BeginPlay: START..."));
+
+	// Find and add the CSV debug observer to the list of observers.
+	UDebugObserverCSV* CSVObserver = FindComponentByClass<UDebugObserverCSV>();
+	if (CSVObserver)
+	{
+		DebugObservers.Add(CSVObserver);
+		UE_LOG(LogTurnManager, Log, TEXT("GameTurnManager::BeginPlay: Found and added UDebugObserverCSV to DebugObservers."));
+	}
+	else
+	{
+		UE_LOG(LogTurnManager, Warning, TEXT("GameTurnManager::BeginPlay: UDebugObserverCSV component not found on this actor. CSV logging will be disabled."));
+	}
 
 if (!HasAuthority())
     {

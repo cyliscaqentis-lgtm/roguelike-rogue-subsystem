@@ -198,6 +198,13 @@ if __name__ == "__main__":
         if args.latest_from_dir is None:
             print(f"No input file, --latest-from-dir, or --turn-range specified. Defaulting to searching for latest *.{args.ext} in current directory ('{search_dir}').")
             actual_input_file = find_latest_file(search_dir, args.ext)
+            if not actual_input_file:
+                # If default search fails, try the specific TurnLogs directory with .csv extension
+                fallback_ext = 'csv'
+                fallback_dir = os.path.join(os.getcwd(), '..', '..', '..', 'Saved', 'TurnLogs')
+                print(f"No *.{args.ext} file found in '{search_dir}'. Falling back to UE default turn log directory: '{fallback_dir}' for *.{fallback_ext}")
+                actual_input_file = find_latest_file(fallback_dir, fallback_ext)
+
         else:
             # If --latest-from-dir was explicitly used
             print(f"Searching for latest *.{args.ext} in specified directory ('{args.latest_from_dir}').")
