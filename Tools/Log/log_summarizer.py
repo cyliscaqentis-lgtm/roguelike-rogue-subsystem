@@ -2,6 +2,7 @@ import argparse
 import os
 import glob
 import re
+import csv
 from datetime import datetime
 from collections import deque
 
@@ -76,6 +77,12 @@ def summarize_log(lines, output_file, custom_keywords=None, depth=None, before=0
             max_before = before if user_specified_context else 5
             history = deque(maxlen=max_before)
             after_countdown = 0
+            
+            # lines is now a list of strings (raw lines) because we need to preserve formatting for output
+            # But wait, if we use csv reader earlier, we might have lost the raw line.
+            # Let's adjust the caller to pass raw lines or handle it here.
+            # Actually, for summarization, we just need to search the text.
+            # Let's assume 'lines' are the raw strings.
             
             for line in lines:
                 line_lower = line.lower()
@@ -159,6 +166,8 @@ if __name__ == "__main__":
         exit(1)
 
     print(f"Reading input file: {input_file}")
+    
+    # Read all lines first to keep them for the summarizer (which expects raw strings)
     try:
         with open(input_file, 'r', encoding='utf-8-sig', errors='ignore') as f:
             all_lines = f.readlines()
@@ -166,36 +175,56 @@ if __name__ == "__main__":
         print(f"Error reading input file: {e}")
         exit(1)
 
+    # Parse CSV to determine turns
+    # We use the csv module to parse the lines we just read
+    parsed_rows = []
+    try:
+        # Using csv.reader on the list of lines
+        reader = csv.reader(all_lines)
+        parsed_rows = list(reader)
+    except Exception as e:
+        print(f"Error parsing CSV content: {e}")
+        exit(1)
 
     # --- Filter by Turn ---
-    lines_to_process = all_lines
+    lines_to_process = []
     is_default_behavior = not (args.turn or args.turn_range)
+
+    # Map row index to TurnID for filtering
+    # We assume the structure: Type, TurnID, Category, Timestamp, Message
+    # TurnID is at index 1
+    row_turn_map = {}
+    max_turn = -1
+
+    for i, row in enumerate(parsed_rows):
+        if len(row) > 1:
+            turn_str = row[1].strip()
+            if turn_str.isdigit():
+                turn_id = int(turn_str)
+                row_turn_map[i] = turn_id
+                if turn_id > max_turn:
+                    max_turn = turn_id
 
     if is_default_behavior:
         print("No turn filter specified. Defaulting to last 3 turns.")
-        max_turn = -1
-        for line in reversed(all_lines):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                parts = line.split(',')
-                if len(parts) > 1 and parts[1].strip().isdigit():
-                    turn_id = int(parts[1].strip())
-                    if turn_id > max_turn:
-                        max_turn = turn_id
-            except (ValueError, IndexError):
-                continue
         
         if max_turn != -1:
             start_turn = max(0, max_turn - 2)
             args.turn_range = f"{start_turn}-{max_turn}"
             print(f"Found max turn {max_turn}. Applying default range: {args.turn_range}")
+            
+            # Filter lines
+            if all_lines:
+                lines_to_process.append(all_lines[0]) # Header
+            
+            for i in range(1, len(all_lines)):
+                if i in row_turn_map and row_turn_map[i] >= start_turn:
+                    lines_to_process.append(all_lines[i])
         else:
             print("Could not determine max turn. Processing all turns.")
+            lines_to_process = all_lines
 
     if args.turn or args.turn_range:
-        lines_to_process = []
         turns_to_include = set()
         
         if args.turn:
@@ -217,18 +246,9 @@ if __name__ == "__main__":
         if all_lines:
             lines_to_process.append(all_lines[0]) # Always include header
 
-        for line in all_lines[1:]:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                parts = line.split(',')
-                if len(parts) > 1 and parts[1].strip().isdigit():
-                    turn_id = int(parts[1].strip())
-                    if turn_id in turns_to_include:
-                        lines_to_process.append(line + '\n') # Add newline back for processing
-            except (ValueError, IndexError):
-                continue
+        for i in range(1, len(all_lines)):
+            if i in row_turn_map and row_turn_map[i] in turns_to_include:
+                lines_to_process.append(all_lines[i])
 
     if not lines_to_process:
         print("No lines matched the specified turn filters.")
