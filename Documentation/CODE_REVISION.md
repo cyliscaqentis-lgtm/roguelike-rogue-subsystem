@@ -3,6 +3,8 @@
 ## Overview
 
 
+- `CodeRevision: INC-2025-1201-R1` - Extended `Tools/Log/log_summarizer.py` with an AI-focused `--mode player_actions` preset and optional JSON output so assistants can consume concise, structured player command summaries instead of raw logs (2025-11-21 02:30)
+- `CodeRevision: INC-2025-1200-R1` - Updated `Tools/Log/log_summarizer.py` to robustly decode UTF-8/UTF-16 CSV logs and correctly parse TurnID for the default “last 3 turns” summarization behavior across environments (2025-11-21 02:00)
 - `CodeRevision: INC-2025-1157-R1` - Restricted GridOccupancySubsystem FOLLOW-UP so only same-team units (and never the player pawn) can override an OriginHold, keeping enemy chains behind the lead pursuer instead of backfilling the player's old cell (2025-11-20 20:00)
 - `CodeRevision: INC-2025-1157-R2` - Relaxed FOLLOW-UP blocking so enemies can also chain into the player’s previous cell (team mismatch allowed if origin is player), rejecting only true team mismatches; this prevents the pursuit chain from breaking and keeps enemies stacked correctly behind the lead chaser (2025-11-20 20:40)
 - `CodeRevision: INC-2025-1157-R3` - Added a Chebyshev distance=1 guard to FOLLOW-UP so only adjacent units can step into the origin cell (including player origin) while still allowing player-path chasing; prevents long-range leapfrogs that caused stacking/overlap (2025-11-20 21:00)

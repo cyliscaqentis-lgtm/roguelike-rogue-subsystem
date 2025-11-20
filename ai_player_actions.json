@@ -1,0 +1,23 @@
+[
+  {
+    "turn": 5,
+    "tag": "Command.Player.Attack",
+    "action_type": "attack",
+    "timestamp": "16863240.082999",
+    "category": "TurnManager",
+    "target_cell": null,
+    "raw_message": "[TurnCommandHandler] Command validated: Tag=Command.Player.Attack, TurnId=5, WindowId=6"
+  },
+  {
+    "turn": 5,
+    "tag": "Command.Player.Attack",
+    "action_type": "attack",
+    "timestamp": "16863240.083026",
+    "category": "TurnManager",
+    "target_cell": {
+      "x": 0,
+      "y": 0
+    },
+    "raw_message": "[TurnCommandHandler] Command received and validated: TurnId=5, Tag=Command.Player.Attack, TargetCell=(0,0)"
+  }
+]
