@@ -158,11 +158,12 @@ public:
     // Turn Flow API
     //==========================================================================
 
-    UFUNCTION(BlueprintCallable, Category = "Turn|Flow")
+    UFUNCTION(BlueprintCallable, Category = "Turn|Flow", meta = (DeprecatedFunction, DeprecationMessage = "Use OnPlayerMoveCompleted flow instead"))
     void ContinueTurnAfterInput();
 
     UFUNCTION(BlueprintCallable, Category = "Turn|Flow")
     void AdvanceTurnAndRestart();
+
 
     UFUNCTION(BlueprintCallable, Category = "Turn|Flow")
     void StartFirstTurn();
@@ -181,18 +182,8 @@ public:
     //==========================================================================
 
     /**
-     * ★★★ Phase 5 Completion: Force cleanup of residual InProgress tags (2025-11-09) ★★★
-     *
-     * Force remove State.Action.InProgress tags from all units (player + enemies)
-     *
-     * Usage:
-     * - Called after Barrier completion at turn end
-     * - Prevents tag stacking that stops turn progression
-     * - Usually not needed, but insurance for unexpected errors that leave residual tags
-     *
-     * Log output:
-     * - Before: Number of InProgress tags before cleanup
-     * - After: After cleanup (usually 0)
+     * Force remove State.Action.InProgress tags from all units (player + enemies).
+     * Used as a safety fallback after barriers to prevent stuck turns.
      */
     void ClearResidualInProgressTags();
 
@@ -338,7 +329,8 @@ public:
     int32 CurrentFloorIndex = 0;
 
     //==========================================================================
-    // AP System Configuration    //==========================================================================
+    // AP System Configuration
+    //==========================================================================
     
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Turn System|AP")
     int32 PlayerAPPerTurn = 1;
@@ -464,8 +456,8 @@ public:
 
     /** Clear all resolved move reservations */
     void ClearResolvedMoves();
+
     /**
-     * CRITICAL FIX (2025-11-11): Changed to bool type (returns success/failure)
      * Register a resolved move for an actor.
      * @return true if reservation succeeded, false if failed
      */
@@ -512,6 +504,10 @@ protected:
     //==========================================================================
 
     void OnPlayerMoveCompleted(const FGameplayEventData* Payload);
+
+    // Centralized enemy phase entry after a player action completes.
+    // CodeRevision: INC-2025-1206-R6 (Unified Enemy Phase Helper)
+    void StartEnemyPhaseAfterPlayerAction();
 
     //==========================================================================
     // Phase 4: Turn Advance Condition
@@ -563,7 +559,6 @@ protected:
     // Phase Execution
     //==========================================================================
 
-    void ExecuteSequentialPhase();
     void ExecuteSimultaneousPhase();
     void ExecuteMovePhase(bool bSkipAttackCheck = false);
     UFUNCTION()
@@ -586,7 +581,6 @@ protected:
     UFUNCTION()
     void OnTurnStartedHandler(int32 TurnIndex);
 
-    // ★★★ BUGFIX [INC-2025-TIMING]: Function disabled ★★★
     // UFUNCTION()
     // void OnAttacksFinished(int32 TurnId);
 
@@ -684,10 +678,8 @@ private:
 
     // ★★★ Phase 5 Completion: EndTurn retry prevention (2025-11-09) ★★★
     /**
-     * Flag indicating if an EndEnemyTurn retry is already scheduled
-     * - true: Retry timer already set -> suppress additional retries
-     * - false: Retry not set -> allow new retry
-     * Reset to false in AdvanceTurnAndRestart()
+     * Flag indicating if an EndEnemyTurn retry is already scheduled.
+     * Reset to false in AdvanceTurnAndRestart().
      */
     bool bEndTurnPosted = false;
 

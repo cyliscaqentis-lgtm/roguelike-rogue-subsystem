@@ -3,6 +3,7 @@
 ## Overview
 
 
+- `CodeRevision: INC-2025-1204-R1` - Added `ts.Enemy.RegenIntentsOnMove` console variable (default 0) to gate the heavy DistanceField + enemy intent regeneration path in `AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation`, so by default player MOVE commands no longer rebuild the distance field and recompute intents synchronously on every step (keeping performance predictable) while still allowing developers to re-enable the predictive behavior when investigating AI issues (2025-11-21 16:30)
 - `CodeRevision: INC-2025-1201-R1` - Extended `Tools/Log/log_summarizer.py` with an AI-focused `--mode player_actions` preset and optional JSON output so assistants can consume concise, structured player command summaries instead of raw logs (2025-11-21 02:30)
 - `CodeRevision: INC-2025-1200-R1` - Updated `Tools/Log/log_summarizer.py` to robustly decode UTF-8/UTF-16 CSV logs and correctly parse TurnID for the default “last 3 turns” summarization behavior across environments (2025-11-21 02:00)
 - `CodeRevision: INC-2025-1157-R1` - Restricted GridOccupancySubsystem FOLLOW-UP so only same-team units (and never the player pawn) can override an OriginHold, keeping enemy chains behind the lead pursuer instead of backfilling the player's old cell (2025-11-20 20:00)
