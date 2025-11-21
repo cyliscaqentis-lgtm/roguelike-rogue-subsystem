@@ -1,0 +1,74 @@
+Log,6,TurnManager,17548171.702224,"[Turn 6] DF: Player=(41,35) Enemies=5 MaxDist=4 Margin=8"
+Warning,6,Temp,17548171.702763,"[GetNextStep] CALLED for (43,35)"
+Warning,6,Temp,17548171.702796,"[GetNextStep] CALLED for (42,34)"
+Warning,6,Temp,17548171.702831,"[GetNextStep] CALLED for (42,36)"
+Warning,6,Temp,17548171.702855,"[GetNextStep] CALLED for (44,36)"
+Warning,6,Temp,17548171.702924,"[GetNextStep] CALLED for (44,36)"
+Warning,6,Temp,17548171.702933,"[GetNextStep] CALLED for (43,35)"
+Warning,6,Temp,17548171.702940,"[GetNextStep] CALLED for (42,34)"
+Warning,6,Temp,17548171.702948,"[GetNextStep] CALLED for (42,36)"
+Warning,6,TurnManager,17548171.837650,[ROUTE CHECK] OnPlayerCommandAccepted_Implementation called!
+Log,6,TurnManager,17548171.837829,[GameTurnManager] Command marked as accepted (prevents duplicates)
+Log,6,Temp,17548171.837860,[Client] ★★★ COMMAND ACCEPTED ACK (WindowId=7) -> Latches confirmed ★★★
+Log,6,TurnManager,17548171.837886,[GameTurnManager] Sent Client_ConfirmCommandAccepted ACK (WindowId=7)
+Warning,6,TurnManager,17548171.837912,[Turn 6] Player move command accepted - regenerating intents with predicted destination
+Warning,6,Temp,17548171.838087,"[GetNextStep] CALLED for (43,35)"
+Warning,6,Temp,17548171.838111,"[GetNextStep] CALLED for (42,34)"
+Warning,6,Temp,17548171.838135,"[GetNextStep] CALLED for (42,36)"
+Warning,6,Temp,17548171.838157,"[GetNextStep] CALLED for (44,36)"
+Warning,6,Temp,17548171.838179,"[GetNextStep] CALLED for (42,35)"
+Warning,6,Temp,17548171.838217,"[GetNextStep] CALLED for (44,36)"
+Warning,6,Temp,17548171.838223,"[GetNextStep] CALLED for (43,35)"
+Warning,6,Temp,17548171.838229,"[GetNextStep] CALLED for (42,35)"
+Warning,6,Temp,17548171.838235,"[GetNextStep] CALLED for (42,34)"
+Warning,6,Temp,17548171.838241,"[GetNextStep] CALLED for (42,36)"
+Log,6,TurnManager,17548172.003941,"Turn 6: OnPlayerMoveCompleted - last accepted command was MOVE; enemy phase already handled, skipping fallback"
+Log,7,TurnManager,17548172.069792,"[Turn 7] DF: Player=(40,35) Enemies=5 MaxDist=3 Margin=8"
+Warning,7,Temp,17548172.070180,"[GetNextStep] CALLED for (42,35)"
+Warning,7,Temp,17548172.070202,"[GetNextStep] CALLED for (42,34)"
+Warning,7,Temp,17548172.070226,"[GetNextStep] CALLED for (42,36)"
+Warning,7,Temp,17548172.070250,"[GetNextStep] CALLED for (43,35)"
+Warning,7,Temp,17548172.070321,"[GetNextStep] CALLED for (43,35)"
+Warning,7,Temp,17548172.070328,"[GetNextStep] CALLED for (42,35)"
+Warning,7,Temp,17548172.070338,"[GetNextStep] CALLED for (42,34)"
+Warning,7,Temp,17548172.070345,"[GetNextStep] CALLED for (42,36)"
+Warning,7,TurnManager,17548172.089112,[ROUTE CHECK] OnPlayerCommandAccepted_Implementation called!
+Log,7,TurnManager,17548172.089279,[GameTurnManager] Command marked as accepted (prevents duplicates)
+Log,7,TurnManager,17548172.089295,[GameTurnManager] Sent Client_ConfirmCommandAccepted ACK (WindowId=8)
+Warning,7,TurnManager,17548172.089319,[Turn 7] Player move command accepted - regenerating intents with predicted destination
+Warning,7,Temp,17548172.089523,"[GetNextStep] CALLED for (42,35)"
+Warning,7,Temp,17548172.089549,"[GetNextStep] CALLED for (42,34)"
+Warning,7,Temp,17548172.089572,"[GetNextStep] CALLED for (42,36)"
+Warning,7,Temp,17548172.089595,"[GetNextStep] CALLED for (43,35)"
+Warning,7,Temp,17548172.089620,"[GetNextStep] CALLED for (41,35)"
+Warning,7,Temp,17548172.089658,"[GetNextStep] CALLED for (43,35)"
+Warning,7,Temp,17548172.089666,"[GetNextStep] CALLED for (42,35)"
+Warning,7,Temp,17548172.089673,"[GetNextStep] CALLED for (42,34)"
+Warning,7,Temp,17548172.089679,"[GetNextStep] CALLED for (42,36)"
+Warning,7,Temp,17548172.089687,"[GetNextStep] CALLED for (41,35)"
+Log,7,TurnManager,17548172.254889,"Turn 7: OnPlayerMoveCompleted - last accepted command was MOVE; enemy phase already handled, skipping fallback"
+Log,8,TurnManager,17548172.257124,"[Turn 8] DF: Player=(39,35) Enemies=5 MaxDist=4 Margin=8"
+Warning,8,Temp,17548172.257535,"[GetNextStep] CALLED for (41,35)"
+Warning,8,Temp,17548172.257558,"[GetNextStep] CALLED for (42,34)"
+Warning,8,Temp,17548172.257580,"[GetNextStep] CALLED for (42,36)"
+Warning,8,Temp,17548172.257622,"[GetNextStep] CALLED for (42,35)"
+Warning,8,Temp,17548172.257689,"[GetNextStep] CALLED for (42,35)"
+Warning,8,Temp,17548172.257697,"[GetNextStep] CALLED for (42,34)"
+Warning,8,Temp,17548172.257756,"[GetNextStep] CALLED for (42,36)"
+Warning,8,Temp,17548172.257764,"[GetNextStep] CALLED for (41,35)"
+Warning,8,TurnManager,17548172.337891,[ROUTE CHECK] OnPlayerCommandAccepted_Implementation called!
+Log,8,TurnManager,17548172.338021,[GameTurnManager] Command marked as accepted (prevents duplicates)
+Log,8,Temp,17548172.338029,[Client] ★★★ COMMAND ACCEPTED ACK (WindowId=9) -> Latches confirmed ★★★
+Log,8,TurnManager,17548172.338053,[GameTurnManager] Sent Client_ConfirmCommandAccepted ACK (WindowId=9)
+Warning,8,TurnManager,17548172.338076,[Turn 8] Player move command accepted - regenerating intents with predicted destination
+Warning,8,Temp,17548172.338319,"[GetNextStep] CALLED for (41,35)"
+Warning,8,Temp,17548172.338342,"[GetNextStep] CALLED for (42,34)"
+Warning,8,Temp,17548172.338365,"[GetNextStep] CALLED for (42,36)"
+Warning,8,Temp,17548172.338389,"[GetNextStep] CALLED for (42,35)"
+Warning,8,Temp,17548172.338411,"[GetNextStep] CALLED for (40,35)"
+Warning,8,Temp,17548172.338518,"[GetNextStep] CALLED for (42,35)"
+Warning,8,Temp,17548172.338525,"[GetNextStep] CALLED for (42,34)"
+Warning,8,Temp,17548172.338531,"[GetNextStep] CALLED for (42,36)"
+Warning,8,Temp,17548172.338538,"[GetNextStep] CALLED for (41,35)"
+Warning,8,Temp,17548172.338546,"[GetNextStep] CALLED for (40,35)"
+Log,8,TurnManager,17548172.500742,"Turn 8: OnPlayerMoveCompleted - last accepted command was MOVE; enemy phase already handled, skipping fallback"

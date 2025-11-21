@@ -187,8 +187,8 @@ def summarize_log(lines, output_file, preset_name, custom_keywords=None, before=
     
     # Filter setup
     critical_keywords = ['fatal', 'error', 'severe', 'exception', 'callstack', 'ensure']
-    whitelist = preset['whitelist'][:]
-    blacklist = preset['blacklist'][:]
+    whitelist = [k.lower() for k in preset['whitelist']]
+    blacklist = [k.lower() for k in preset['blacklist']]
     
     if custom_keywords:
         whitelist.extend([k.lower() for k in custom_keywords])

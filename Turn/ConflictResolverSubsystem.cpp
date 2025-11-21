@@ -411,13 +411,54 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                 return true;
             };
 
-            // Default winner index (random tie-breaker for equal tiers).
-            int32 WinnerIndex = FMath::RandRange(0, Contenders.Num() - 1);
+            // ------------------------------------------------------------
+            // Winner selection
+            //
+            // - Always honor Attack > Move > Wait via GetActionTier.
+            // - Among same-tier entries, prioritize:
+            //     * Larger DistanceReduction (moves that meaningfully advance)
+            //     * Straight steps over diagonals when tied
+            //     * Higher BasePriority as a final tiebreaker
+            //
+            // This replaces the previous pure random tie-breaker so that,
+            // for example, a unit advancing straight toward the player is
+            // favored over a diagonal "side-step" when both target the same
+            // cell.
+            // ------------------------------------------------------------
+            auto ComputeScore = [this, &MoveTag](const FReservationEntry& Entry) -> int32
+            {
+                const int32 Tier = GetActionTier(Entry.AbilityTag);
+                int32 Score = Tier * 100000;
+
+                // DistanceReduction is computed in TurnCorePhaseManager from
+                // DistanceField (CurrentDist - NextDist). Larger is better.
+                Score += Entry.DistanceReduction * 10;
+
+                // Prefer straight steps slightly over diagonal when competing
+                // for the same destination (helps "front-line" units win).
+                const int32 Dx = Entry.Cell.X - Entry.CurrentCell.X;
+                const int32 Dy = Entry.Cell.Y - Entry.CurrentCell.Y;
+                const bool bIsDiagonalStep = (FMath::Abs(Dx) == 1 && FMath::Abs(Dy) == 1);
+                if (!bIsDiagonalStep && (Dx != 0 || Dy != 0))
+                {
+                    Score += 25;
+                }
+
+                // Base priority from caller (currently uniform, but kept for
+                // future extension).
+                Score += Entry.BasePriority;
+
+                return Score;
+            };
+
+            int32 WinnerIndex = INDEX_NONE;
             bool bAttackWonConflict = false;
 
             // Sequential mode: ATTACK entries take absolute priority.
             if (bSequentialAttackMode)
             {
+                int32 BestAttackScore = TNumericLimits<int32>::Lowest();
+
                 for (int32 AttackIndex = 0; AttackIndex < Contenders.Num(); ++AttackIndex)
                 {
                     const FReservationEntry& Candidate = Contenders[AttackIndex];
@@ -425,13 +466,58 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                         IsValid(Candidate.Actor) &&
                         Candidate.AbilityTag.MatchesTag(AttackTag))
                     {
-                        WinnerIndex = AttackIndex;
-                        bAttackWonConflict = true;
+                        const int32 Score = ComputeScore(Candidate);
+                        if (Score > BestAttackScore)
+                        {
+                            BestAttackScore = Score;
+                            WinnerIndex = AttackIndex;
+                        }
+                    }
+                }
 
-                        UE_LOG(LogConflictResolver, Log,
-                            TEXT("[Sequential] Attack entry locks cell (%d,%d), blocking %d other contender(s)"),
-                            Cell.X, Cell.Y, Contenders.Num() - 1);
-                        break;
+                if (WinnerIndex != INDEX_NONE)
+                {
+                    bAttackWonConflict = true;
+
+                    UE_LOG(LogConflictResolver, Log,
+                        TEXT("[Sequential] Attack entry locks cell (%d,%d), blocking %d other contender(s)"),
+                        Cell.X, Cell.Y, Contenders.Num() - 1);
+                }
+            }
+
+            // If no attack winner (simultaneous mode, or no attacks),
+            // choose the best-scoring contender.
+            if (WinnerIndex == INDEX_NONE)
+            {
+                int32 BestScore = TNumericLimits<int32>::Lowest();
+
+                for (int32 Index = 0; Index < Contenders.Num(); ++Index)
+                {
+                    const FReservationEntry& Candidate = Contenders[Index];
+                    if (Candidate.Actor == nullptr || !IsValid(Candidate.Actor))
+                    {
+                        continue;
+                    }
+
+                    const int32 Score = ComputeScore(Candidate);
+                    if (Score > BestScore)
+                    {
+                        BestScore = Score;
+                        WinnerIndex = Index;
+                    }
+                }
+
+                // As a safety net, if all entries were invalid for some
+                // reason, fall back to the first valid one.
+                if (WinnerIndex == INDEX_NONE)
+                {
+                    for (int32 Index = 0; Index < Contenders.Num(); ++Index)
+                    {
+                        if (Contenders[Index].Actor != nullptr && IsValid(Contenders[Index].Actor))
+                        {
+                            WinnerIndex = Index;
+                            break;
+                        }
                     }
                 }
             }

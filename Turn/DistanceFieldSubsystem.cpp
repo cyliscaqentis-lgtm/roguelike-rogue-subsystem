@@ -414,6 +414,7 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
     };
 
     int32 CandidateCount = 0;
+    const int32 StraightFavorTolerance = 6; // Cost units: prefer straight if within this of the best diagonal gain
 
     // Get GridPathfinding for terrain-only checks (ignore dynamic occupancy)
     const UGridPathfindingSubsystem* GridPathfinding = GetPathFinder();
@@ -516,8 +517,20 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
         bool bIsBetter = false;
         FString Reason;
 
+        const int32 DistGain = d0 - nd;
+        const int32 BestGain = d0 - BestDist;
+        const bool bStraightVsDiagonal =
+            (!Neighbor.bDiagonal && bBestIsDiagonal && nd < d0 &&
+             (BestGain - DistGain) <= StraightFavorTolerance);
+
+        if (bStraightVsDiagonal)
+        {
+            // Prefer a straight step if it is almost as good as the best diagonal gain.
+            bIsBetter = true;
+            Reason = TEXT("prefer straight (within tolerance)");
+        }
         // 1. Better distance
-        if (nd < BestDist)
+        else if (nd < BestDist)
         {
             bIsBetter = true;
             Reason = TEXT("better distance");
