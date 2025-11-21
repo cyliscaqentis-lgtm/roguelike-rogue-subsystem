@@ -1,0 +1,365 @@
+Warning,1,TurnManager,17546160.149541,"[Turn 1] Pre-DistanceField check: PlayerPawn=Valid, PathFinder=Valid, Enemies=5"
+Warning,1,TurnManager,17546160.149549,[Turn 1] Attempting to update DistanceField...
+Log,1,TurnManager,17546160.149557,"[Turn 1] DF: Player=(30,46) Enemies=5 MaxDist=7 Margin=11"
+Log,1,EnemyAI,17546160.149720,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_0, Thinker found, Intent=AI.Intent.Attack"
+Warning,1,EnemyAI,17546160.149728,"[CollectIntents] Pass1[0]: BP_EnemyUnitBase_C_0 -> ATTACK at (29,46), HardBlocked"
+Warning,1,Temp,17546160.149735,"[GetNextStep] CALLED for (27,46)"
+Log,1,GridPathfinding,17546160.149743,"[GetNextStep] Neighbor (28,46): dist=272 (no reduction from 262) -> reject"
+Log,1,GridPathfinding,17546160.149752,"[GetNextStep] Neighbor (26,46): dist=244, align=-1, diag=0 -> ACCEPT (bestDist=262, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546160.149762,"[GetNextStep] Neighbor (27,47): dist=258, align=0, diag=0 -> reject (bestDist=244, bestAlign=-1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.149770,"[GetNextStep] Neighbor (27,45): dist=INF, align=NA, diag=0 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546160.149778,"[GetNextStep] Neighbor (28,47): dist=276 (no reduction from 262) -> reject"
+Log,1,GridPathfinding,17546160.149786,"[GetNextStep] Neighbor (28,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546160.149796,"[GetNextStep] Neighbor (26,47): dist=248, align=-1, diag=1 -> reject (bestDist=244, bestAlign=-1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.149803,"[GetNextStep] Neighbor (26,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546160.149814,"[GetNextStep] RESULT: From=(27,46) -> Next=(26,46) dist=262->244 align=-1 diag=0 candidates=3"
+Log,1,Temp,17546160.149822,[ComputeIntent] BP_EnemyUnitBase_C_1: MOVE intent (TileDistance=3 > Range=1)
+Log,1,EnemyAI,17546160.149832,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_1, Thinker found, Intent=AI.Intent.Move"
+Warning,1,Temp,17546160.149840,"[GetNextStep] CALLED for (26,49)"
+Log,1,GridPathfinding,17546160.149850,"[GetNextStep] Neighbor (27,49): dist=90, align=1, diag=0 -> ACCEPT (bestDist=108, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546160.149858,"[GetNextStep] Neighbor (25,49): dist=118 (no reduction from 108) -> reject"
+Log,1,GridPathfinding,17546160.149868,"[GetNextStep] Neighbor (26,50): dist=104, align=-1, diag=0 -> reject (bestDist=90, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.149881,"[GetNextStep] Neighbor (26,48): dist=118 (no reduction from 108) -> reject"
+Log,1,GridPathfinding,17546160.149891,"[GetNextStep] Neighbor (27,50): dist=94, align=0, diag=1 -> reject (bestDist=90, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.149899,"[GetNextStep] Neighbor (27,48): dist=94, align=2, diag=1 -> reject (bestDist=90, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.149910,"[GetNextStep] Neighbor (25,50): dist=122 (no reduction from 108) -> reject"
+Log,1,GridPathfinding,17546160.149918,"[GetNextStep] Neighbor (25,48): dist=122 (no reduction from 108) -> reject"
+Log,1,GridPathfinding,17546160.149926,"[GetNextStep] RESULT: From=(26,49) -> Next=(27,49) dist=108->90 align=1 diag=0 candidates=4"
+Log,1,Temp,17546160.149934,[ComputeIntent] BP_EnemyUnitBase_C_2: MOVE intent (TileDistance=4 > Range=1)
+Log,1,EnemyAI,17546160.149942,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_2, Thinker found, Intent=AI.Intent.Move"
+Warning,1,Temp,17546160.149949,"[GetNextStep] CALLED for (30,49)"
+Log,1,GridPathfinding,17546160.149958,"[GetNextStep] RESULT: STRAIGHT From=(30,49) -> Next=(30,48) dist=38->28"
+Warning,1,EnemyAI,17546160.150008,"[CollectIntents] Pass1 Complete: AttackIntents=2, HardBlockedCells=2"
+Warning,1,EnemyAI,17546160.150016,[CollectIntents] === PASS 2: Move/Wait Intent Generation ===
+Warning,1,Temp,17546160.150024,"[GetNextStep] CALLED for (26,49)"
+Log,1,GridPathfinding,17546160.150032,"[GetNextStep] Neighbor (27,49): dist=90, align=1, diag=0 -> ACCEPT (bestDist=108, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546160.150040,"[GetNextStep] Neighbor (25,49): dist=118 (no reduction from 108) -> reject"
+Log,1,GridPathfinding,17546160.150048,"[GetNextStep] Neighbor (26,50): dist=104, align=-1, diag=0 -> reject (bestDist=90, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.150057,"[GetNextStep] Neighbor (26,48): dist=118 (no reduction from 108) -> reject"
+Log,1,GridPathfinding,17546160.150064,"[GetNextStep] Neighbor (27,50): dist=94, align=0, diag=1 -> reject (bestDist=90, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.150072,"[GetNextStep] Neighbor (27,48): dist=94, align=2, diag=1 -> reject (bestDist=90, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.150081,"[GetNextStep] Neighbor (25,50): dist=122 (no reduction from 108) -> reject"
+Log,1,GridPathfinding,17546160.150089,"[GetNextStep] Neighbor (25,48): dist=122 (no reduction from 108) -> reject"
+Log,1,GridPathfinding,17546160.150098,"[GetNextStep] RESULT: From=(26,49) -> Next=(27,49) dist=108->90 align=1 diag=0 candidates=4"
+Warning,1,Temp,17546160.150106,"[GetNextStep] CALLED for (27,46)"
+Log,1,GridPathfinding,17546160.150114,"[GetNextStep] Neighbor (28,46): dist=272 (no reduction from 262) -> reject"
+Log,1,GridPathfinding,17546160.150122,"[GetNextStep] Neighbor (26,46): dist=244, align=-1, diag=0 -> ACCEPT (bestDist=262, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546160.150130,"[GetNextStep] Neighbor (27,47): dist=258, align=0, diag=0 -> reject (bestDist=244, bestAlign=-1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.150138,"[GetNextStep] Neighbor (27,45): dist=INF, align=NA, diag=0 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546160.150146,"[GetNextStep] Neighbor (28,47): dist=276 (no reduction from 262) -> reject"
+Log,1,GridPathfinding,17546160.150154,"[GetNextStep] Neighbor (28,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546160.150162,"[GetNextStep] Neighbor (26,47): dist=248, align=-1, diag=1 -> reject (bestDist=244, bestAlign=-1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.150171,"[GetNextStep] Neighbor (26,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546160.150179,"[GetNextStep] RESULT: From=(27,46) -> Next=(26,46) dist=262->244 align=-1 diag=0 candidates=3"
+Warning,1,Temp,17546160.150185,"[GetNextStep] CALLED for (30,49)"
+Log,1,GridPathfinding,17546160.150193,"[GetNextStep] RESULT: STRAIGHT From=(30,49) -> Next=(30,48) dist=38->28"
+Warning,1,Temp,17546160.865386,[Server] ★ SubmitCommand RPC RECEIVED
+Log,1,Temp,17546160.865405,[Server] WindowId validated: 2
+Warning,1,TurnManager,17546160.865414,[ROUTE CHECK] OnPlayerCommandAccepted_Implementation called!
+Log,1,Temp,17546160.865992,"[Client] ★ FACING ONLY (No Turn): Direction=(0.0,1.0), Yaw=90.0"
+Log,1,TurnManager,17546160.866002,"[MovePrecheck] Sent Client_ApplyFacingNoTurn RPC (WindowId=2, no turn consumed)"
+Warning,1,Temp,17546160.866011,[Client] ★★★ MOVE REJECTED RPC RECEIVED ★★★
+Log,1,TurnManager,17546160.866038,"Turn 1: Gate OPENED (Phase+Gate tags added), WindowId=2"
+Log,1,TurnManager,17546160.866063,[MovePrecheck] Sent Client_NotifyMoveRejected to reset client latch
+Warning,1,Temp,17546161.104712,[Server] ★ SubmitCommand RPC RECEIVED
+Log,1,Temp,17546161.104729,[Server] WindowId validated: 2
+Warning,1,TurnManager,17546161.104738,[ROUTE CHECK] OnPlayerCommandAccepted_Implementation called!
+Log,1,Temp,17546161.104791,"[GridOccupancy] RESERVE ORIGIN-HOLD: BP_PlayerUnit_C_0 protects origin (30, 46) (TurnId=1) [BACKSTAB PROTECTION]"
+Log,1,TurnManager,17546161.104800,"[MovePrecheck] OK: (30,46)->(29,47) | Walkable=true | Reservation SUCCESS"
+Log,1,TurnManager,17546161.104818,[GameTurnManager] Command marked as accepted (prevents duplicates)
+Log,1,Temp,17546161.104826,[Client] ★★★ COMMAND ACCEPTED ACK (WindowId=2) -> Latches confirmed ★★★
+Log,1,Temp,17546161.104844,[Client]   LastProcessedWindowId: -1 -> 2
+Log,1,TurnManager,17546161.104851,[GameTurnManager] Sent Client_ConfirmCommandAccepted ACK (WindowId=2)
+Warning,1,TurnManager,17546161.104874,[Turn 1] Player move command accepted - regenerating intents with predicted destination
+Log,1,EnemyAI,17546161.105186,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_0, Thinker found, Intent=AI.Intent.Attack"
+Warning,1,EnemyAI,17546161.105195,"[CollectIntents] Pass1[0]: BP_EnemyUnitBase_C_0 -> ATTACK at (29,46), HardBlocked"
+Warning,1,Temp,17546161.105203,"[GetNextStep] CALLED for (27,46)"
+Log,1,GridPathfinding,17546161.105213,"[GetNextStep] Neighbor (28,46): dist=14, align=1, diag=0 -> ACCEPT (bestDist=248, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546161.105223,"[GetNextStep] Neighbor (26,46): dist=230, align=-1, diag=0 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105232,"[GetNextStep] Neighbor (27,47): dist=244, align=1, diag=0 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105241,"[GetNextStep] Neighbor (27,45): dist=INF, align=NA, diag=0 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546161.105250,"[GetNextStep] Neighbor (28,47): dist=10, align=2, diag=1 -> ACCEPT (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105258,"[GetNextStep] Neighbor (28,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546161.105266,"[GetNextStep] Neighbor (26,47): dist=234, align=0, diag=1 -> reject (bestDist=10, bestAlign=2, bestDiag=1)"
+Log,1,GridPathfinding,17546161.105274,"[GetNextStep] Neighbor (26,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546161.105282,"[GetNextStep] RESULT: From=(27,46) -> Next=(28,47) dist=248->10 align=2 diag=1 candidates=5"
+Log,1,Temp,17546161.105296,[ComputeIntent] BP_EnemyUnitBase_C_1: MOVE intent (TileDistance=2 > Range=1)
+Log,1,EnemyAI,17546161.105304,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_1, Thinker found, Intent=AI.Intent.Move"
+Warning,1,Temp,17546161.105311,"[GetNextStep] CALLED for (26,49)"
+Log,1,GridPathfinding,17546161.105320,"[GetNextStep] Neighbor (27,49): dist=76, align=1, diag=0 -> ACCEPT (bestDist=94, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546161.105328,"[GetNextStep] Neighbor (25,49): dist=104 (no reduction from 94) -> reject"
+Log,1,GridPathfinding,17546161.105337,"[GetNextStep] Neighbor (26,50): dist=90, align=-1, diag=0 -> reject (bestDist=76, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105345,"[GetNextStep] Neighbor (26,48): dist=104 (no reduction from 94) -> reject"
+Log,1,GridPathfinding,17546161.105354,"[GetNextStep] Neighbor (27,50): dist=80, align=0, diag=1 -> reject (bestDist=76, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105363,"[GetNextStep] Neighbor (27,48): dist=80, align=2, diag=1 -> reject (bestDist=76, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105371,"[GetNextStep] Neighbor (25,50): dist=108 (no reduction from 94) -> reject"
+Log,1,GridPathfinding,17546161.105380,"[GetNextStep] Neighbor (25,48): dist=108 (no reduction from 94) -> reject"
+Log,1,GridPathfinding,17546161.105388,"[GetNextStep] RESULT: From=(26,49) -> Next=(27,49) dist=94->76 align=1 diag=0 candidates=4"
+Log,1,Temp,17546161.105396,[ComputeIntent] BP_EnemyUnitBase_C_2: MOVE intent (TileDistance=3 > Range=1)
+Log,1,EnemyAI,17546161.105404,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_2, Thinker found, Intent=AI.Intent.Move"
+Warning,1,Temp,17546161.105412,"[GetNextStep] CALLED for (30,49)"
+Log,1,GridPathfinding,17546161.105419,"[GetNextStep] Neighbor (31,49): dist=28 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105427,"[GetNextStep] Neighbor (29,49): dist=28 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105435,"[GetNextStep] Neighbor (30,50): dist=42 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105447,"[GetNextStep] Neighbor (30,48): dist=14, align=1, diag=0 -> ACCEPT (bestDist=24, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546161.105455,"[GetNextStep] Neighbor (31,50): dist=38 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105462,"[GetNextStep] Neighbor (31,48): dist=24 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105470,"[GetNextStep] Neighbor (29,50): dist=52 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105480,"[GetNextStep] Neighbor (29,48): dist=10, align=2, diag=1 -> ACCEPT (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105491,"[GetNextStep] RESULT: From=(30,49) -> Next=(29,48) dist=24->10 align=2 diag=1 candidates=2"
+Warning,1,EnemyAI,17546161.105542,"[CollectIntents] Pass1 Complete: AttackIntents=2, HardBlockedCells=2"
+Warning,1,EnemyAI,17546161.105550,[CollectIntents] === PASS 2: Move/Wait Intent Generation ===
+Warning,1,Temp,17546161.105557,"[GetNextStep] CALLED for (26,49)"
+Log,1,GridPathfinding,17546161.105565,"[GetNextStep] Neighbor (27,49): dist=76, align=1, diag=0 -> ACCEPT (bestDist=94, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546161.105575,"[GetNextStep] Neighbor (25,49): dist=104 (no reduction from 94) -> reject"
+Log,1,GridPathfinding,17546161.105583,"[GetNextStep] Neighbor (26,50): dist=90, align=-1, diag=0 -> reject (bestDist=76, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105590,"[GetNextStep] Neighbor (26,48): dist=104 (no reduction from 94) -> reject"
+Log,1,GridPathfinding,17546161.105597,"[GetNextStep] Neighbor (27,50): dist=80, align=0, diag=1 -> reject (bestDist=76, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105605,"[GetNextStep] Neighbor (27,48): dist=80, align=2, diag=1 -> reject (bestDist=76, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105612,"[GetNextStep] Neighbor (25,50): dist=108 (no reduction from 94) -> reject"
+Log,1,GridPathfinding,17546161.105621,"[GetNextStep] Neighbor (25,48): dist=108 (no reduction from 94) -> reject"
+Log,1,GridPathfinding,17546161.105629,"[GetNextStep] RESULT: From=(26,49) -> Next=(27,49) dist=94->76 align=1 diag=0 candidates=4"
+Warning,1,Temp,17546161.105637,"[GetNextStep] CALLED for (27,46)"
+Log,1,GridPathfinding,17546161.105645,"[GetNextStep] Neighbor (28,46): dist=14, align=1, diag=0 -> ACCEPT (bestDist=248, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546161.105653,"[GetNextStep] Neighbor (26,46): dist=230, align=-1, diag=0 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105660,"[GetNextStep] Neighbor (27,47): dist=244, align=1, diag=0 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105669,"[GetNextStep] Neighbor (27,45): dist=INF, align=NA, diag=0 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546161.105676,"[GetNextStep] Neighbor (28,47): dist=10, align=2, diag=1 -> ACCEPT (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105684,"[GetNextStep] Neighbor (28,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546161.105691,"[GetNextStep] Neighbor (26,47): dist=234, align=0, diag=1 -> reject (bestDist=10, bestAlign=2, bestDiag=1)"
+Log,1,GridPathfinding,17546161.105699,"[GetNextStep] Neighbor (26,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546161.105706,"[GetNextStep] RESULT: From=(27,46) -> Next=(28,47) dist=248->10 align=2 diag=1 candidates=5"
+Warning,1,Temp,17546161.105713,"[GetNextStep] CALLED for (30,49)"
+Log,1,GridPathfinding,17546161.105721,"[GetNextStep] Neighbor (31,49): dist=28 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105730,"[GetNextStep] Neighbor (29,49): dist=28 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105738,"[GetNextStep] Neighbor (30,50): dist=42 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105750,"[GetNextStep] Neighbor (30,48): dist=14, align=1, diag=0 -> ACCEPT (bestDist=24, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546161.105760,"[GetNextStep] Neighbor (31,50): dist=38 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105771,"[GetNextStep] Neighbor (31,48): dist=24 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105779,"[GetNextStep] Neighbor (29,50): dist=52 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105788,"[GetNextStep] Neighbor (29,48): dist=10, align=2, diag=1 -> ACCEPT (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105796,"[GetNextStep] RESULT: From=(30,49) -> Next=(29,48) dist=24->10 align=2 diag=1 candidates=2"
+Warning,1,AttackPhase,17546161.342637,    AssetTags: GameplayEvent.Intent.Attack
+Warning,1,AttackPhase,17546161.342660,[Turn 1] Sending GameplayEvent: Tag=GameplayEvent.Intent.Attack (to BP_EnemyUnitBase_C_0)
+Error,1,Temp,17546161.342668,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_0
+Log,1,AttackAbility,17546161.342680,"[GA_AttackBase] ActivateAbility: Retrieved pre-registered ActionId from AttackExecutor (TurnId=1, ActionId=B82CFEF4460E038354E813872A29269C, Actor=BP_EnemyUnitBase_C_0)"
+Error,1,Temp,17546161.342688,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,1,Temp,17546161.342695,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Warning,1,Temp,17546161.342703,"[GA_MeleeAttack] BP_EnemyUnitBase_C_0: Using fallback adjacent search, found: BP_PlayerUnit_C_0"
+Error,1,Temp,17546161.342711,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,1,Temp,17546161.342719,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,1,Temp,17546161.342726,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,1,Temp,17546161.342733,[GA_MeleeAttack] ActivateAbility COMPLETED
+Log,1,AttackPhase,17546161.342740,[Turn 1] Dispatched attack 1/2: BP_EnemyUnitBase_C_0 (Tag=GameplayEvent.Intent.Attack)
+Log,1,TurnBarrier,17546161.342966,[Barrier] Broadcasting OnAllMovesFinished for Turn 1
+Log,1,TurnManager,17546161.342983,[Turn 1] HandleMovePhaseCompleted: Ignoring barrier completion during sequential attack phase. Waiting for HandleAttackPhaseCompleted to start the move phase.
+Error,1,Temp,17546162.304324,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_0
+Error,1,Temp,17546162.304337,[GA_MeleeAttack] BP_EnemyUnitBase_C_0: Attacking stored target: BP_PlayerUnit_C_0
+Warning,1,Temp,17546162.304348,[GA_MeleeAttack] ==== DAMAGE DIAGNOSTIC START ====
+Warning,1,Temp,17546162.304361,"[GA_MeleeAttack] Attacker=BP_EnemyUnitBase_C_0, Target=BP_PlayerUnit_C_0, Damage=28.00"
+Warning,1,Temp,17546162.304373,"[GA_MeleeAttack] AttackerTeam=2, TargetTeam=0 (SameTeam=NO - OK)"
+Warning,1,Temp,17546162.304458,[DMG] Applied modifier to target (HealthSet.Damage += 43.00)
+Log,1,Temp,17546162.306576,"[GA_MeleeAttack] GameplayEffect applied (Instant effect, handle is invalid but this is normal)"
+Error,1,Temp,17546162.306593,"[GA_MeleeAttack] BP_EnemyUnitBase_C_0: Montage completed, calling OnAttackCompleted()"
+Warning,1,Temp,17546162.306603,[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility
+Warning,1,Temp,17546162.306614,"[GA_TurnActionBase] Defensive check: ASC found, checking tags"
+Warning,1,Temp,17546162.306625,"[GA_TurnActionBase] Defensive check: State_Ability_Executing=0, State_Action_InProgress=0"
+Log,1,AttackPhase,17546162.306634,[Turn 1] Ability completed at index 0
+Warning,1,AttackPhase,17546162.306700,    AssetTags: GameplayEvent.Intent.Attack
+Warning,1,AttackPhase,17546162.306725,[Turn 1] Sending GameplayEvent: Tag=GameplayEvent.Intent.Attack (to BP_EnemyUnitBase_C_4)
+Error,1,Temp,17546162.306734,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_4
+Log,1,AttackAbility,17546162.306745,"[GA_AttackBase] ActivateAbility: Retrieved pre-registered ActionId from AttackExecutor (TurnId=1, ActionId=C38801B145B04DFFBAADD5B10E3C01D8, Actor=BP_EnemyUnitBase_C_4)"
+Error,1,Temp,17546162.306755,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,1,Temp,17546162.306763,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Warning,1,Temp,17546162.306773,"[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Using fallback adjacent search, found: BP_PlayerUnit_C_0"
+Error,1,Temp,17546162.307502,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,1,Temp,17546162.307527,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,1,Temp,17546162.307548,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,1,Temp,17546162.307569,[GA_MeleeAttack] ActivateAbility COMPLETED
+Log,1,AttackPhase,17546162.307589,[Turn 1] Dispatched attack 2/2: BP_EnemyUnitBase_C_4 (Tag=GameplayEvent.Intent.Attack)
+Log,1,AttackAbility,17546162.307611,"[GA_AttackBase] EndAbility: Completed attack in Barrier (TurnId=1, ActionId=B82CFEF4460E038354E813872A29269C, Actor=BP_EnemyUnitBase_C_0)"
+Error,1,Temp,17546162.307631,[GA_MeleeAttack] BP_EnemyUnitBase_C_0: OnAttackCompleted RETURNED
+Error,1,Temp,17546163.266175,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_4
+Error,1,Temp,17546163.266188,[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Attacking stored target: BP_PlayerUnit_C_0
+Warning,1,Temp,17546163.266200,[GA_MeleeAttack] ==== DAMAGE DIAGNOSTIC START ====
+Warning,1,Temp,17546163.266211,"[GA_MeleeAttack] Attacker=BP_EnemyUnitBase_C_4, Target=BP_PlayerUnit_C_0, Damage=28.00"
+Warning,1,Temp,17546163.266297,[DMG] Applied modifier to target (HealthSet.Damage += 43.00)
+Log,1,Temp,17546163.268030,"[GA_MeleeAttack] GameplayEffect applied (Instant effect, handle is invalid but this is normal)"
+Error,1,Temp,17546163.268047,"[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Montage completed, calling OnAttackCompleted()"
+Warning,1,Temp,17546163.268057,[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility
+Warning,1,Temp,17546163.268067,"[GA_TurnActionBase] Defensive check: ASC found, checking tags"
+Warning,1,Temp,17546163.268078,"[GA_TurnActionBase] Defensive check: State_Ability_Executing=0, State_Action_InProgress=0"
+Log,1,AttackPhase,17546163.268093,[Turn 1] Ability completed at index 1
+Log,1,TurnManager,17546163.268206,"[DispatchResolvedMove] Registered enemy move with barrier: Actor=BP_EnemyUnitBase_C_3, TurnId=1, ActionId=27070150495FEBB8C1C9648D0CAD086C"
+Log,1,AttackAbility,17546163.268215,"[GA_AttackBase] EndAbility: Completed attack in Barrier (TurnId=1, ActionId=C38801B145B04DFFBAADD5B10E3C01D8, Actor=BP_EnemyUnitBase_C_4)"
+Error,1,Temp,17546163.268224,[GA_MeleeAttack] BP_EnemyUnitBase_C_4: OnAttackCompleted RETURNED
+Log,1,Temp,17546163.426987,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_2 -> (27,49)"
+Log,1,TurnManager,17546163.427004,[HandleManualMoveFinished] Completed barrier action for BP_EnemyUnitBase_C_2 TurnId=1 ActionId=BE82735841B972280E5281BA4CE298F0
+Log,1,Temp,17546163.427013,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,1,Temp,17546163.489306,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_1 -> (28,47)"
+Warning,2,TurnManager,17546163.490160,"[Turn 2] Pre-DistanceField check: PlayerPawn=Valid, PathFinder=Valid, Enemies=5"
+Warning,2,TurnManager,17546163.490168,[Turn 2] Attempting to update DistanceField...
+Log,2,TurnManager,17546163.490176,"[Turn 2] DF: Player=(29,47) Enemies=5 MaxDist=4 Margin=8"
+Log,2,EnemyAI,17546163.490379,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_1, Thinker found, Intent=AI.Intent.Attack"
+Warning,2,EnemyAI,17546163.490387,"[CollectIntents] Pass1[1]: BP_EnemyUnitBase_C_1 -> ATTACK at (28,47), HardBlocked"
+Warning,2,Temp,17546163.490394,"[GetNextStep] CALLED for (27,49)"
+Log,2,GridPathfinding,17546163.490404,"[GetNextStep] Neighbor (28,49): dist=66, align=1, diag=0 -> ACCEPT (bestDist=76, bestAlign=-2147483648, bestDiag=1)"
+Log,2,GridPathfinding,17546163.490414,"[GetNextStep] Neighbor (26,49): dist=94 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490423,"[GetNextStep] Neighbor (27,50): dist=80 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490432,"[GetNextStep] Neighbor (27,48): dist=80 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490442,"[GetNextStep] Neighbor (28,50): dist=62, align=0, diag=1 -> ACCEPT (bestDist=66, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.490453,"[GetNextStep] Neighbor (28,48): dist=14, align=2, diag=1 -> ACCEPT (bestDist=62, bestAlign=0, bestDiag=1)"
+Log,2,GridPathfinding,17546163.490463,"[GetNextStep] Neighbor (26,50): dist=90 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490472,"[GetNextStep] Neighbor (26,48): dist=104 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490481,"[GetNextStep] RESULT: From=(27,49) -> Next=(28,48) dist=76->14 align=2 diag=1 candidates=3"
+Warning,2,EnemyAI,17546163.490555,"[CollectIntents] Pass1 Complete: AttackIntents=4, HardBlockedCells=4"
+Warning,2,EnemyAI,17546163.490563,[CollectIntents] === PASS 2: Move/Wait Intent Generation ===
+Warning,2,Temp,17546163.490570,"[GetNextStep] CALLED for (27,49)"
+Log,2,GridPathfinding,17546163.490578,"[GetNextStep] Neighbor (28,49): dist=66, align=1, diag=0 -> ACCEPT (bestDist=76, bestAlign=-2147483648, bestDiag=1)"
+Log,2,GridPathfinding,17546163.490587,"[GetNextStep] Neighbor (26,49): dist=94 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490594,"[GetNextStep] Neighbor (27,50): dist=80 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490602,"[GetNextStep] Neighbor (27,48): dist=80 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490612,"[GetNextStep] Neighbor (28,50): dist=62, align=0, diag=1 -> ACCEPT (bestDist=66, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.490621,"[GetNextStep] Neighbor (28,48): dist=14, align=2, diag=1 -> ACCEPT (bestDist=62, bestAlign=0, bestDiag=1)"
+Log,2,GridPathfinding,17546163.490629,"[GetNextStep] Neighbor (26,50): dist=90 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490637,"[GetNextStep] Neighbor (26,48): dist=104 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490646,"[GetNextStep] RESULT: From=(27,49) -> Next=(28,48) dist=76->14 align=2 diag=1 candidates=3"
+Warning,2,Temp,17546163.920751,[Server] ★ SubmitCommand RPC RECEIVED
+Log,2,Temp,17546163.920767,[Server] WindowId validated: 3
+Warning,2,TurnManager,17546163.920775,[ROUTE CHECK] OnPlayerCommandAccepted_Implementation called!
+Log,2,Temp,17546163.920832,"[GridOccupancy] RESERVE ORIGIN-HOLD: BP_PlayerUnit_C_0 protects origin (29, 47) (TurnId=2) [BACKSTAB PROTECTION]"
+Log,2,TurnManager,17546163.920840,"[MovePrecheck] OK: (29,47)->(28,48) | Walkable=true | Reservation SUCCESS"
+Log,2,TurnManager,17546163.920864,[GameTurnManager] Command marked as accepted (prevents duplicates)
+Log,2,Temp,17546163.920872,[Client] ★★★ COMMAND ACCEPTED ACK (WindowId=3) -> Latches confirmed ★★★
+Log,2,Temp,17546163.920889,[Client]   LastProcessedWindowId: -1 -> 3
+Log,2,TurnManager,17546163.920897,[GameTurnManager] Sent Client_ConfirmCommandAccepted ACK (WindowId=3)
+Warning,2,TurnManager,17546163.920922,[Turn 2] Player move command accepted - regenerating intents with predicted destination
+Warning,2,EnemyAI,17546163.921058,"[CollectIntents] ==== START ==== Observations=5, Enemies=5"
+Warning,2,EnemyAI,17546163.921067,[CollectIntents] === PASS 1: Attack Intent Generation ===
+Warning,2,Temp,17546163.921075,"[GetNextStep] CALLED for (29,46)"
+Log,2,GridPathfinding,17546163.921085,"[GetNextStep] Neighbor (30,46): dist=76, align=-1, diag=0 -> ACCEPT (bestDist=80, bestAlign=-2147483648, bestDiag=1)"
+Log,2,GridPathfinding,17546163.921095,"[GetNextStep] Neighbor (28,46): dist=90 (no reduction from 80) -> reject"
+Log,2,GridPathfinding,17546163.921104,"[GetNextStep] Neighbor (29,47): dist=14, align=1, diag=0 -> ACCEPT (bestDist=76, bestAlign=-1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921113,"[GetNextStep] Neighbor (29,45): dist=INF, align=NA, diag=0 -> reject (terrain blocked)"
+Log,2,GridPathfinding,17546163.921122,"[GetNextStep] Neighbor (30,47): dist=66, align=0, diag=1 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921130,"[GetNextStep] Neighbor (30,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,2,GridPathfinding,17546163.921138,"[GetNextStep] Neighbor (28,47): dist=10, align=2, diag=1 -> ACCEPT (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921146,"[GetNextStep] Neighbor (28,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,2,GridPathfinding,17546163.921156,"[GetNextStep] RESULT: From=(29,46) -> Next=(28,47) dist=80->10 align=2 diag=1 candidates=4"
+Log,2,EnemyAI,17546163.921240,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_3, Thinker found, Intent=AI.Intent.Attack"
+Warning,2,EnemyAI,17546163.921248,"[CollectIntents] Pass1[3]: BP_EnemyUnitBase_C_3 -> ATTACK at (29,48), HardBlocked"
+Warning,2,Temp,17546163.921257,"[GetNextStep] CALLED for (30,47)"
+Log,2,GridPathfinding,17546163.921267,"[GetNextStep] Neighbor (31,47): dist=62, align=-1, diag=0 -> ACCEPT (bestDist=66, bestAlign=-2147483648, bestDiag=1)"
+Log,2,GridPathfinding,17546163.921276,"[GetNextStep] Neighbor (29,47): dist=14, align=1, diag=0 -> ACCEPT (bestDist=62, bestAlign=-1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921284,"[GetNextStep] Neighbor (30,48): dist=28, align=1, diag=0 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921292,"[GetNextStep] Neighbor (30,46): dist=76 (no reduction from 66) -> reject"
+Log,2,GridPathfinding,17546163.921299,"[GetNextStep] Neighbor (31,48): dist=52, align=0, diag=1 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921307,"[GetNextStep] Neighbor (31,46): dist=80 (no reduction from 66) -> reject"
+Log,2,GridPathfinding,17546163.921315,"[GetNextStep] Neighbor (29,48): dist=10, align=2, diag=1 -> ACCEPT (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921322,"[GetNextStep] Neighbor (29,46): dist=80 (no reduction from 66) -> reject"
+Log,2,GridPathfinding,17546163.921331,"[GetNextStep] RESULT: From=(30,47) -> Next=(29,48) dist=66->10 align=2 diag=1 candidates=5"
+Warning,2,EnemyAI,17546163.921356,"[CollectIntents] Pass1 Complete: AttackIntents=3, HardBlockedCells=3"
+Warning,2,EnemyAI,17546163.921363,[CollectIntents] === PASS 2: Move/Wait Intent Generation ===
+Warning,2,Temp,17546163.921370,"[GetNextStep] CALLED for (29,46)"
+Log,2,GridPathfinding,17546163.921378,"[GetNextStep] Neighbor (30,46): dist=76, align=-1, diag=0 -> ACCEPT (bestDist=80, bestAlign=-2147483648, bestDiag=1)"
+Log,2,GridPathfinding,17546163.921386,"[GetNextStep] Neighbor (28,46): dist=90 (no reduction from 80) -> reject"
+Log,2,GridPathfinding,17546163.921394,"[GetNextStep] Neighbor (29,47): dist=14, align=1, diag=0 -> ACCEPT (bestDist=76, bestAlign=-1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921401,"[GetNextStep] Neighbor (29,45): dist=INF, align=NA, diag=0 -> reject (terrain blocked)"
+Log,2,GridPathfinding,17546163.921409,"[GetNextStep] Neighbor (30,47): dist=66, align=0, diag=1 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921416,"[GetNextStep] Neighbor (30,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,2,GridPathfinding,17546163.921424,"[GetNextStep] Neighbor (28,47): dist=10, align=2, diag=1 -> ACCEPT (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921432,"[GetNextStep] Neighbor (28,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,2,GridPathfinding,17546163.921440,"[GetNextStep] RESULT: From=(29,46) -> Next=(28,47) dist=80->10 align=2 diag=1 candidates=4"
+Warning,2,Temp,17546163.921447,"[GetNextStep] CALLED for (30,47)"
+Log,2,GridPathfinding,17546163.921455,"[GetNextStep] Neighbor (31,47): dist=62, align=-1, diag=0 -> ACCEPT (bestDist=66, bestAlign=-2147483648, bestDiag=1)"
+Log,2,GridPathfinding,17546163.921465,"[GetNextStep] Neighbor (29,47): dist=14, align=1, diag=0 -> ACCEPT (bestDist=62, bestAlign=-1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921472,"[GetNextStep] Neighbor (30,48): dist=28, align=1, diag=0 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921480,"[GetNextStep] Neighbor (30,46): dist=76 (no reduction from 66) -> reject"
+Log,2,GridPathfinding,17546163.921487,"[GetNextStep] Neighbor (31,48): dist=52, align=0, diag=1 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921494,"[GetNextStep] Neighbor (31,46): dist=80 (no reduction from 66) -> reject"
+Log,2,GridPathfinding,17546163.921502,"[GetNextStep] Neighbor (29,48): dist=10, align=2, diag=1 -> ACCEPT (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921509,"[GetNextStep] Neighbor (29,46): dist=80 (no reduction from 66) -> reject"
+Log,2,GridPathfinding,17546163.921517,"[GetNextStep] RESULT: From=(30,47) -> Next=(29,48) dist=66->10 align=2 diag=1 candidates=5"
+Warning,2,AttackPhase,17546164.154314,    AssetTags: GameplayEvent.Intent.Attack
+Warning,2,AttackPhase,17546164.154338,[Turn 2] Sending GameplayEvent: Tag=GameplayEvent.Intent.Attack (to BP_EnemyUnitBase_C_1)
+Error,2,Temp,17546164.154346,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_1
+Log,2,AttackAbility,17546164.154358,"[GA_AttackBase] ActivateAbility: Retrieved pre-registered ActionId from AttackExecutor (TurnId=2, ActionId=3B1F610E4C3AC8C016B3ADA46BB13A2A, Actor=BP_EnemyUnitBase_C_1)"
+Error,2,Temp,17546164.154366,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,2,Temp,17546164.154374,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Warning,2,Temp,17546164.154383,"[GA_MeleeAttack] BP_EnemyUnitBase_C_1: Using fallback adjacent search, found: BP_PlayerUnit_C_0"
+Error,2,Temp,17546164.154945,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,2,Temp,17546164.154957,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,2,Temp,17546164.154966,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,2,Temp,17546164.154975,[GA_MeleeAttack] ActivateAbility COMPLETED
+Log,2,AttackPhase,17546164.154989,[Turn 2] Dispatched attack 1/3: BP_EnemyUnitBase_C_1 (Tag=GameplayEvent.Intent.Attack)
+Log,2,TurnBarrier,17546164.155190,[Barrier] Broadcasting OnAllMovesFinished for Turn 2
+Log,2,TurnManager,17546164.155207,[Turn 2] HandleMovePhaseCompleted: Ignoring barrier completion during sequential attack phase. Waiting for HandleAttackPhaseCompleted to start the move phase.
+Error,2,Temp,17546165.115989,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_1
+Error,2,Temp,17546165.116023,[GA_MeleeAttack] BP_EnemyUnitBase_C_1: Attacking stored target: BP_PlayerUnit_C_0
+Warning,2,Temp,17546165.116035,[GA_MeleeAttack] ==== DAMAGE DIAGNOSTIC START ====
+Warning,2,Temp,17546165.116045,"[GA_MeleeAttack] Attacker=BP_EnemyUnitBase_C_1, Target=BP_PlayerUnit_C_0, Damage=28.00"
+Warning,2,Temp,17546165.116056,"[GA_MeleeAttack] AttackerTeam=2, TargetTeam=0 (SameTeam=NO - OK)"
+Warning,2,Temp,17546165.116136,[DMG] Applied modifier to target (HealthSet.Damage += 43.00)
+Log,2,Temp,17546165.117711,"[GA_MeleeAttack] GameplayEffect applied (Instant effect, handle is invalid but this is normal)"
+Error,2,Temp,17546165.117726,"[GA_MeleeAttack] BP_EnemyUnitBase_C_1: Montage completed, calling OnAttackCompleted()"
+Warning,2,Temp,17546165.117736,[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility
+Warning,2,Temp,17546165.117747,"[GA_TurnActionBase] Defensive check: ASC found, checking tags"
+Warning,2,Temp,17546165.117757,"[GA_TurnActionBase] Defensive check: State_Ability_Executing=0, State_Action_InProgress=0"
+Log,2,AttackPhase,17546165.117766,[Turn 2] Ability completed at index 0
+Warning,2,AttackPhase,17546165.117832,    AssetTags: GameplayEvent.Intent.Attack
+Warning,2,AttackPhase,17546165.117860,[Turn 2] Sending GameplayEvent: Tag=GameplayEvent.Intent.Attack (to BP_EnemyUnitBase_C_2)
+Error,2,Temp,17546165.117868,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_2
+Log,2,AttackAbility,17546165.117880,"[GA_AttackBase] ActivateAbility: Retrieved pre-registered ActionId from AttackExecutor (TurnId=2, ActionId=BEA440134A279AC15372428FFA07C1D4, Actor=BP_EnemyUnitBase_C_2)"
+Error,2,Temp,17546165.117888,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,2,Temp,17546165.117896,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Warning,2,Temp,17546165.117910,"[GA_MeleeAttack] BP_EnemyUnitBase_C_2: Using fallback adjacent search, found: BP_PlayerUnit_C_0"
+Error,2,Temp,17546165.118522,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,2,Temp,17546165.118533,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,2,Temp,17546165.118543,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,2,Temp,17546165.118552,[GA_MeleeAttack] ActivateAbility COMPLETED
+Log,2,AttackPhase,17546165.118561,[Turn 2] Dispatched attack 2/3: BP_EnemyUnitBase_C_2 (Tag=GameplayEvent.Intent.Attack)
+Log,2,AttackAbility,17546165.118573,"[GA_AttackBase] EndAbility: Completed attack in Barrier (TurnId=2, ActionId=3B1F610E4C3AC8C016B3ADA46BB13A2A, Actor=BP_EnemyUnitBase_C_1)"
+Error,2,Temp,17546165.118583,[GA_MeleeAttack] BP_EnemyUnitBase_C_1: OnAttackCompleted RETURNED
+Error,2,Temp,17546166.090034,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_2
+Error,2,Temp,17546166.090048,[GA_MeleeAttack] BP_EnemyUnitBase_C_2: Attacking stored target: BP_PlayerUnit_C_0
+Warning,2,Temp,17546166.090060,[GA_MeleeAttack] ==== DAMAGE DIAGNOSTIC START ====
+Warning,2,Temp,17546166.090071,"[GA_MeleeAttack] Attacker=BP_EnemyUnitBase_C_2, Target=BP_PlayerUnit_C_0, Damage=28.00"
+Warning,2,Temp,17546166.090162,[DMG] Applied modifier to target (HealthSet.Damage += 43.00)
+Log,2,Temp,17546166.091838,"[GA_MeleeAttack] GameplayEffect applied (Instant effect, handle is invalid but this is normal)"
+Error,2,Temp,17546166.091859,"[GA_MeleeAttack] BP_EnemyUnitBase_C_2: Montage completed, calling OnAttackCompleted()"
+Warning,2,Temp,17546166.091868,[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility
+Warning,2,Temp,17546166.091879,"[GA_TurnActionBase] Defensive check: ASC found, checking tags"
+Warning,2,Temp,17546166.091890,"[GA_TurnActionBase] Defensive check: State_Ability_Executing=0, State_Action_InProgress=0"
+Log,2,AttackPhase,17546166.091899,[Turn 2] Ability completed at index 1
+Warning,2,AttackPhase,17546166.091960,    AssetTags: GameplayEvent.Intent.Attack
+Warning,2,AttackPhase,17546166.091986,[Turn 2] Sending GameplayEvent: Tag=GameplayEvent.Intent.Attack (to BP_EnemyUnitBase_C_3)
+Error,2,Temp,17546166.091994,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_3
+Log,2,AttackAbility,17546166.092006,"[GA_AttackBase] ActivateAbility: Retrieved pre-registered ActionId from AttackExecutor (TurnId=2, ActionId=6033EB6C431E47477EBB7D990D273CE4, Actor=BP_EnemyUnitBase_C_3)"
+Error,2,Temp,17546166.092014,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,2,Temp,17546166.092022,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Warning,2,Temp,17546166.092031,"[GA_MeleeAttack] BP_EnemyUnitBase_C_3: Using fallback adjacent search, found: BP_PlayerUnit_C_0"
+Error,2,Temp,17546166.092465,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,2,Temp,17546166.092480,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,2,Temp,17546166.092490,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,2,Temp,17546166.092498,[GA_MeleeAttack] ActivateAbility COMPLETED
+Log,2,AttackPhase,17546166.092508,[Turn 2] Dispatched attack 3/3: BP_EnemyUnitBase_C_3 (Tag=GameplayEvent.Intent.Attack)
+Log,2,AttackAbility,17546166.092519,"[GA_AttackBase] EndAbility: Completed attack in Barrier (TurnId=2, ActionId=BEA440134A279AC15372428FFA07C1D4, Actor=BP_EnemyUnitBase_C_2)"
+Error,2,Temp,17546166.092528,[GA_MeleeAttack] BP_EnemyUnitBase_C_2: OnAttackCompleted RETURNED
+Error,2,Temp,17546167.058475,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_3
+Error,2,Temp,17546167.058490,[GA_MeleeAttack] BP_EnemyUnitBase_C_3: Attacking stored target: BP_PlayerUnit_C_0
+Warning,2,Temp,17546167.058501,[GA_MeleeAttack] ==== DAMAGE DIAGNOSTIC START ====
+Warning,2,Temp,17546167.058511,"[GA_MeleeAttack] Attacker=BP_EnemyUnitBase_C_3, Target=BP_PlayerUnit_C_0, Damage=28.00"
+Warning,2,Temp,17546167.058598,[DMG] Applied modifier to target (HealthSet.Damage += 43.00)
+Log,2,Temp,17546167.060555,"[GA_MeleeAttack] GameplayEffect applied (Instant effect, handle is invalid but this is normal)"
+Error,2,Temp,17546167.060572,"[GA_MeleeAttack] BP_EnemyUnitBase_C_3: Montage completed, calling OnAttackCompleted()"
+Warning,2,Temp,17546167.060582,[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility
+Warning,2,Temp,17546167.060594,"[GA_TurnActionBase] Defensive check: ASC found, checking tags"
+Warning,2,Temp,17546167.060604,"[GA_TurnActionBase] Defensive check: State_Ability_Executing=0, State_Action_InProgress=0"
+Log,2,AttackPhase,17546167.060614,[Turn 2] Ability completed at index 2
+Log,2,TurnManager,17546167.060684,"[DispatchResolvedMove] Registered enemy move with barrier: Actor=BP_EnemyUnitBase_C_0, TurnId=2, ActionId=3FDB42E94489C86EE5AE1183EB12DB7F"
+Log,2,AttackAbility,17546167.060694,"[GA_AttackBase] EndAbility: Completed attack in Barrier (TurnId=2, ActionId=6033EB6C431E47477EBB7D990D273CE4, Actor=BP_EnemyUnitBase_C_3)"
+Error,2,Temp,17546167.060702,[GA_MeleeAttack] BP_EnemyUnitBase_C_3: OnAttackCompleted RETURNED
+Log,2,Temp,17546167.221083,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_0 -> (29,47)"
+Warning,2,TurnBarrier,17546167.221101,[Barrier] Turn 2: ALL ACTIONS COMPLETED (Remaining=0) -> Scheduling OnAllMovesFinished (NextTick)
+Log,2,TurnManager,17546167.221114,[HandleManualMoveFinished] Completed barrier action for BP_EnemyUnitBase_C_0 TurnId=2 ActionId=3FDB42E94489C86EE5AE1183EB12DB7F
+Log,2,Temp,17546167.221124,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)

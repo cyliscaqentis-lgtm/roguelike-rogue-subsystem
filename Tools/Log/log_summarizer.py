@@ -60,7 +60,7 @@ PRESETS = {
         'whitelist': [
             'intent', 'score', 'observation', 'behavior', 'think', 'enemy', 
             'computeintent', 'collectintents', 'hardblocked', 'pass1', 'pass2',
-            'valid', 'invalid', 'fallback'
+            'valid', 'invalid', 'fallback', 'logroguediagnostics', 'getnextstep'
         ],
         'blacklist': [
             'input', 'rendering', 'physics', 'texture', 'audio', 'animation',
@@ -83,6 +83,22 @@ PRESETS = {
         'blacklist': [
             'input', 'rpc', 'render', 'audio', 'animation', 'gate', 'latch',
             'attack', 'damage', 'health', 'gameplayeffect'
+        ]
+    },
+
+    # 【移動詳細デバッグ】 (NEW)
+    # 経路探索のスコア、GetNextStepの詳細ログ
+    'movement_detailed': {
+        'description': 'Deep dive into pathfinding scores and neighbor selection.',
+        'whitelist': [
+            'getnextstep', 'logroguediagnostics', 'loggridpathfinding', 'logdistancefield',
+            'neighbor', 'dist=', 'align=', 'diag=', 'accept', 'reject', 'candidate'
+        ],
+        'blacklist': [
+            # 入出力や描画ノイズ
+            'input', 'render', 'audio', 'animation',
+            # RPC / ウィンドウID検証ノイズ（移動ロジック解析には不要）
+            'submitcommand', 'windowid validated'
         ]
     },
 
@@ -166,7 +182,7 @@ def find_latest_session_log(log_directory):
                 continue
     return latest_file or files[-1]
 
-def summarize_log(lines, output_file, preset_name, custom_keywords=None, before=0, after=0):
+def summarize_log(lines, output_file, preset_name, custom_keywords=None, before=0, after=0, no_context=False):
     preset = PRESETS.get(preset_name, PRESETS['default'])
     
     # Filter setup
@@ -187,7 +203,11 @@ def summarize_log(lines, output_file, preset_name, custom_keywords=None, before=
 
         lines_written = 0
         with open(output_file, 'w', encoding='utf-8') as outfile:
-            max_before = before if (before > 0) else 2
+            # コンテキスト行（前後）を付与するかどうか
+            if no_context:
+                max_before = 0
+            else:
+                max_before = before if (before > 0) else 2
             history = deque(maxlen=max_before)
             after_countdown = 0
             
@@ -209,7 +229,8 @@ def summarize_log(lines, output_file, preset_name, custom_keywords=None, before=
                     after_countdown -= 1
                 elif is_critical:
                     matched = True
-                    if before == 0 and after == 0: # Auto context for errors
+                    # エラー時の自動コンテキストは no_context が False の場合のみ有効
+                    if not no_context and before == 0 and after == 0:  # Auto context for errors
                         after_countdown = 4
                 elif preset_name == 'raw':
                     matched = True
@@ -285,6 +306,8 @@ if __name__ == "__main__":
     parser.add_argument("-k", "--keywords", nargs='+', help="Extra keywords to include")
     parser.add_argument("--before", type=int, default=0)
     parser.add_argument("--after", type=int, default=0)
+    parser.add_argument("--no-context", action="store_true",
+                        help="Do not include extra context lines before/after matches or errors")
     
     # Mode Options
     parser.add_argument("--mode", choices=['summary', 'player_actions'], default='summary', help="Operation mode")
@@ -296,6 +319,14 @@ if __name__ == "__main__":
     input_file = args.input or find_latest_session_log(args.log_dir)
     if not input_file: exit(1)
     print(f"Reading: {input_file}")
+
+    # Auto-redirect output to Tools/Log if no path provided
+    output_path = args.output
+    if not os.path.dirname(output_path):
+        if os.path.exists(os.path.join('Tools', 'Log')):
+            output_path = os.path.join('Tools', 'Log', output_path)
+            print(f"Redirecting output to: {output_path}")
+        args.output = output_path
 
     # 2. Encoding & Read
     try:
@@ -344,7 +375,15 @@ if __name__ == "__main__":
                 filtered_lines.append(lines[i])
         
         if not filtered_lines: print("No lines found."); exit(0)
-        summarize_log(filtered_lines, args.output, args.preset, args.keywords, args.before, args.after)
+        summarize_log(
+            filtered_lines,
+            args.output,
+            args.preset,
+            args.keywords,
+            before=args.before,
+            after=args.after,
+            no_context=args.no_context
+        )
 
     elif args.mode == 'player_actions':
         actions = extract_player_actions(parsed_rows, row_turn_map, turns)

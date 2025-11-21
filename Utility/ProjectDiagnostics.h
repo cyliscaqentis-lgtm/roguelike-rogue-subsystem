@@ -16,9 +16,19 @@ DECLARE_LOG_CATEGORY_EXTERN(LogTurnManager, Log, All);
 DECLARE_LOG_CATEGORY_EXTERN(LogTurnPhase, Log, All);
 
 // ラッパーマクロ：Shipping では沈黙、開発時もフラグで制御
+extern int32 GRogueDebugVerboseLogging;
+
 #if !UE_BUILD_SHIPPING
   #define DIAG_LOG(Verbosity, Format, ...) \
-    do { if (ENABLE_DIAGNOSTICS) { UE_LOG(LogRogueDiagnostics, Verbosity, Format, ##__VA_ARGS__); } } while(0)
+    do { \
+        if (ENABLE_DIAGNOSTICS) { \
+            if (GRogueDebugVerboseLogging > 0) { \
+                UE_LOG(LogRogueDiagnostics, Warning, Format, ##__VA_ARGS__); \
+            } else { \
+                UE_LOG(LogRogueDiagnostics, Verbosity, Format, ##__VA_ARGS__); \
+            } \
+        } \
+    } while(0)
 #else
   #define DIAG_LOG(Verbosity, Format, ...)
 #endif

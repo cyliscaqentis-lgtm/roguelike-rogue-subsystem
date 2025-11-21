@@ -36,6 +36,8 @@ Example:
 python Tools\Log\log_summarizer.py summary_default.txt
 ```
 
+> **Note:** If no directory is specified in the output filename, the script will automatically save the file to `Tools/Log/` to keep the root directory clean.
+
 This command produces a filtered text summary for the last three turns using the default preset.
 
 ### 3.2. Turn Filtering
@@ -77,6 +79,15 @@ Instead of manually specifying keywords, the script exposes named presets tailor
 
 - `--preset dungeon_gen`  
   Focus on procedural dungeon generation, room selection, and initial spawns.
+
+- `--preset movement_detailed`  
+  Deep dive into pathfinding scores and neighbor selection. Useful for debugging `GetNextStep` logic.
+
+- `--preset gas_stats`  
+  Debug Gameplay Ability System, Attributes, and Effects.
+
+- `--preset turn_hang`  
+  Debug turn flow, phase transitions, and barrier locks.
 
 Each preset defines an internal **whitelist** (keywords to keep) and **blacklist** (noise to drop). The whitelist can be extended via:
 
@@ -166,3 +177,18 @@ python Tools\Log\log_summarizer.py ai_player_turn4_6.json --mode player_actions 
 ```
 
 This is the recommended entry point for AI workflows that need structured player action timelines.
+
+### 3.6. Deep Dive Debugging
+
+For complex algorithmic issues (like pathfinding or AI scoring), standard logs may be insufficient.
+The project includes a `DIAG_LOG` macro that outputs to `LogRogueDiagnostics`.
+
+- **Enabling Verbose Logs:**
+  Use the console variable `Rogue.Debug.VerboseLogging 1` to enable `VeryVerbose` diagnostic logs at runtime.
+  
+- **Analyzing:**
+  Use `--preset movement_detailed` to capture these high-volume logs.
+  
+  ```cmd
+  python Tools\Log\log_summarizer.py detailed_move.txt --preset movement_detailed --turn 5
+  ```

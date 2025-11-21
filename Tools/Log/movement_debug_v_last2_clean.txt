@@ -1,0 +1,234 @@
+Log,1,TurnManager,17546160.149557,"[Turn 1] DF: Player=(30,46) Enemies=5 MaxDist=7 Margin=11"
+Warning,1,Temp,17546160.149735,"[GetNextStep] CALLED for (27,46)"
+Log,1,GridPathfinding,17546160.149743,"[GetNextStep] Neighbor (28,46): dist=272 (no reduction from 262) -> reject"
+Log,1,GridPathfinding,17546160.149752,"[GetNextStep] Neighbor (26,46): dist=244, align=-1, diag=0 -> ACCEPT (bestDist=262, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546160.149762,"[GetNextStep] Neighbor (27,47): dist=258, align=0, diag=0 -> reject (bestDist=244, bestAlign=-1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.149770,"[GetNextStep] Neighbor (27,45): dist=INF, align=NA, diag=0 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546160.149778,"[GetNextStep] Neighbor (28,47): dist=276 (no reduction from 262) -> reject"
+Log,1,GridPathfinding,17546160.149786,"[GetNextStep] Neighbor (28,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546160.149796,"[GetNextStep] Neighbor (26,47): dist=248, align=-1, diag=1 -> reject (bestDist=244, bestAlign=-1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.149803,"[GetNextStep] Neighbor (26,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546160.149814,"[GetNextStep] RESULT: From=(27,46) -> Next=(26,46) dist=262->244 align=-1 diag=0 candidates=3"
+Warning,1,Temp,17546160.149840,"[GetNextStep] CALLED for (26,49)"
+Log,1,GridPathfinding,17546160.149850,"[GetNextStep] Neighbor (27,49): dist=90, align=1, diag=0 -> ACCEPT (bestDist=108, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546160.149858,"[GetNextStep] Neighbor (25,49): dist=118 (no reduction from 108) -> reject"
+Log,1,GridPathfinding,17546160.149868,"[GetNextStep] Neighbor (26,50): dist=104, align=-1, diag=0 -> reject (bestDist=90, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.149881,"[GetNextStep] Neighbor (26,48): dist=118 (no reduction from 108) -> reject"
+Log,1,GridPathfinding,17546160.149891,"[GetNextStep] Neighbor (27,50): dist=94, align=0, diag=1 -> reject (bestDist=90, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.149899,"[GetNextStep] Neighbor (27,48): dist=94, align=2, diag=1 -> reject (bestDist=90, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.149910,"[GetNextStep] Neighbor (25,50): dist=122 (no reduction from 108) -> reject"
+Log,1,GridPathfinding,17546160.149918,"[GetNextStep] Neighbor (25,48): dist=122 (no reduction from 108) -> reject"
+Log,1,GridPathfinding,17546160.149926,"[GetNextStep] RESULT: From=(26,49) -> Next=(27,49) dist=108->90 align=1 diag=0 candidates=4"
+Warning,1,Temp,17546160.149949,"[GetNextStep] CALLED for (30,49)"
+Log,1,GridPathfinding,17546160.149958,"[GetNextStep] RESULT: STRAIGHT From=(30,49) -> Next=(30,48) dist=38->28"
+Warning,1,Temp,17546160.150024,"[GetNextStep] CALLED for (26,49)"
+Log,1,GridPathfinding,17546160.150032,"[GetNextStep] Neighbor (27,49): dist=90, align=1, diag=0 -> ACCEPT (bestDist=108, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546160.150040,"[GetNextStep] Neighbor (25,49): dist=118 (no reduction from 108) -> reject"
+Log,1,GridPathfinding,17546160.150048,"[GetNextStep] Neighbor (26,50): dist=104, align=-1, diag=0 -> reject (bestDist=90, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.150057,"[GetNextStep] Neighbor (26,48): dist=118 (no reduction from 108) -> reject"
+Log,1,GridPathfinding,17546160.150064,"[GetNextStep] Neighbor (27,50): dist=94, align=0, diag=1 -> reject (bestDist=90, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.150072,"[GetNextStep] Neighbor (27,48): dist=94, align=2, diag=1 -> reject (bestDist=90, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.150081,"[GetNextStep] Neighbor (25,50): dist=122 (no reduction from 108) -> reject"
+Log,1,GridPathfinding,17546160.150089,"[GetNextStep] Neighbor (25,48): dist=122 (no reduction from 108) -> reject"
+Log,1,GridPathfinding,17546160.150098,"[GetNextStep] RESULT: From=(26,49) -> Next=(27,49) dist=108->90 align=1 diag=0 candidates=4"
+Warning,1,Temp,17546160.150106,"[GetNextStep] CALLED for (27,46)"
+Log,1,GridPathfinding,17546160.150114,"[GetNextStep] Neighbor (28,46): dist=272 (no reduction from 262) -> reject"
+Log,1,GridPathfinding,17546160.150122,"[GetNextStep] Neighbor (26,46): dist=244, align=-1, diag=0 -> ACCEPT (bestDist=262, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546160.150130,"[GetNextStep] Neighbor (27,47): dist=258, align=0, diag=0 -> reject (bestDist=244, bestAlign=-1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.150138,"[GetNextStep] Neighbor (27,45): dist=INF, align=NA, diag=0 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546160.150146,"[GetNextStep] Neighbor (28,47): dist=276 (no reduction from 262) -> reject"
+Log,1,GridPathfinding,17546160.150154,"[GetNextStep] Neighbor (28,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546160.150162,"[GetNextStep] Neighbor (26,47): dist=248, align=-1, diag=1 -> reject (bestDist=244, bestAlign=-1, bestDiag=0)"
+Log,1,GridPathfinding,17546160.150171,"[GetNextStep] Neighbor (26,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546160.150179,"[GetNextStep] RESULT: From=(27,46) -> Next=(26,46) dist=262->244 align=-1 diag=0 candidates=3"
+Warning,1,Temp,17546160.150185,"[GetNextStep] CALLED for (30,49)"
+Log,1,GridPathfinding,17546160.150193,"[GetNextStep] RESULT: STRAIGHT From=(30,49) -> Next=(30,48) dist=38->28"
+Warning,1,TurnManager,17546160.865414,[ROUTE CHECK] OnPlayerCommandAccepted_Implementation called!
+Warning,1,Temp,17546160.866011,[Client] ★★★ MOVE REJECTED RPC RECEIVED ★★★
+Log,1,TurnManager,17546160.866063,[MovePrecheck] Sent Client_NotifyMoveRejected to reset client latch
+Warning,1,TurnManager,17546161.104738,[ROUTE CHECK] OnPlayerCommandAccepted_Implementation called!
+Log,1,TurnManager,17546161.104818,[GameTurnManager] Command marked as accepted (prevents duplicates)
+Log,1,Temp,17546161.104826,[Client] ★★★ COMMAND ACCEPTED ACK (WindowId=2) -> Latches confirmed ★★★
+Log,1,TurnManager,17546161.104851,[GameTurnManager] Sent Client_ConfirmCommandAccepted ACK (WindowId=2)
+Warning,1,TurnManager,17546161.104874,[Turn 1] Player move command accepted - regenerating intents with predicted destination
+Warning,1,Temp,17546161.105203,"[GetNextStep] CALLED for (27,46)"
+Log,1,GridPathfinding,17546161.105213,"[GetNextStep] Neighbor (28,46): dist=14, align=1, diag=0 -> ACCEPT (bestDist=248, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546161.105223,"[GetNextStep] Neighbor (26,46): dist=230, align=-1, diag=0 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105232,"[GetNextStep] Neighbor (27,47): dist=244, align=1, diag=0 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105241,"[GetNextStep] Neighbor (27,45): dist=INF, align=NA, diag=0 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546161.105250,"[GetNextStep] Neighbor (28,47): dist=10, align=2, diag=1 -> ACCEPT (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105258,"[GetNextStep] Neighbor (28,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546161.105266,"[GetNextStep] Neighbor (26,47): dist=234, align=0, diag=1 -> reject (bestDist=10, bestAlign=2, bestDiag=1)"
+Log,1,GridPathfinding,17546161.105274,"[GetNextStep] Neighbor (26,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546161.105282,"[GetNextStep] RESULT: From=(27,46) -> Next=(28,47) dist=248->10 align=2 diag=1 candidates=5"
+Warning,1,Temp,17546161.105311,"[GetNextStep] CALLED for (26,49)"
+Log,1,GridPathfinding,17546161.105320,"[GetNextStep] Neighbor (27,49): dist=76, align=1, diag=0 -> ACCEPT (bestDist=94, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546161.105328,"[GetNextStep] Neighbor (25,49): dist=104 (no reduction from 94) -> reject"
+Log,1,GridPathfinding,17546161.105337,"[GetNextStep] Neighbor (26,50): dist=90, align=-1, diag=0 -> reject (bestDist=76, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105345,"[GetNextStep] Neighbor (26,48): dist=104 (no reduction from 94) -> reject"
+Log,1,GridPathfinding,17546161.105354,"[GetNextStep] Neighbor (27,50): dist=80, align=0, diag=1 -> reject (bestDist=76, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105363,"[GetNextStep] Neighbor (27,48): dist=80, align=2, diag=1 -> reject (bestDist=76, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105371,"[GetNextStep] Neighbor (25,50): dist=108 (no reduction from 94) -> reject"
+Log,1,GridPathfinding,17546161.105380,"[GetNextStep] Neighbor (25,48): dist=108 (no reduction from 94) -> reject"
+Log,1,GridPathfinding,17546161.105388,"[GetNextStep] RESULT: From=(26,49) -> Next=(27,49) dist=94->76 align=1 diag=0 candidates=4"
+Warning,1,Temp,17546161.105412,"[GetNextStep] CALLED for (30,49)"
+Log,1,GridPathfinding,17546161.105419,"[GetNextStep] Neighbor (31,49): dist=28 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105427,"[GetNextStep] Neighbor (29,49): dist=28 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105435,"[GetNextStep] Neighbor (30,50): dist=42 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105447,"[GetNextStep] Neighbor (30,48): dist=14, align=1, diag=0 -> ACCEPT (bestDist=24, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546161.105455,"[GetNextStep] Neighbor (31,50): dist=38 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105462,"[GetNextStep] Neighbor (31,48): dist=24 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105470,"[GetNextStep] Neighbor (29,50): dist=52 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105480,"[GetNextStep] Neighbor (29,48): dist=10, align=2, diag=1 -> ACCEPT (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105491,"[GetNextStep] RESULT: From=(30,49) -> Next=(29,48) dist=24->10 align=2 diag=1 candidates=2"
+Warning,1,Temp,17546161.105557,"[GetNextStep] CALLED for (26,49)"
+Log,1,GridPathfinding,17546161.105565,"[GetNextStep] Neighbor (27,49): dist=76, align=1, diag=0 -> ACCEPT (bestDist=94, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546161.105575,"[GetNextStep] Neighbor (25,49): dist=104 (no reduction from 94) -> reject"
+Log,1,GridPathfinding,17546161.105583,"[GetNextStep] Neighbor (26,50): dist=90, align=-1, diag=0 -> reject (bestDist=76, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105590,"[GetNextStep] Neighbor (26,48): dist=104 (no reduction from 94) -> reject"
+Log,1,GridPathfinding,17546161.105597,"[GetNextStep] Neighbor (27,50): dist=80, align=0, diag=1 -> reject (bestDist=76, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105605,"[GetNextStep] Neighbor (27,48): dist=80, align=2, diag=1 -> reject (bestDist=76, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105612,"[GetNextStep] Neighbor (25,50): dist=108 (no reduction from 94) -> reject"
+Log,1,GridPathfinding,17546161.105621,"[GetNextStep] Neighbor (25,48): dist=108 (no reduction from 94) -> reject"
+Log,1,GridPathfinding,17546161.105629,"[GetNextStep] RESULT: From=(26,49) -> Next=(27,49) dist=94->76 align=1 diag=0 candidates=4"
+Warning,1,Temp,17546161.105637,"[GetNextStep] CALLED for (27,46)"
+Log,1,GridPathfinding,17546161.105645,"[GetNextStep] Neighbor (28,46): dist=14, align=1, diag=0 -> ACCEPT (bestDist=248, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546161.105653,"[GetNextStep] Neighbor (26,46): dist=230, align=-1, diag=0 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105660,"[GetNextStep] Neighbor (27,47): dist=244, align=1, diag=0 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105669,"[GetNextStep] Neighbor (27,45): dist=INF, align=NA, diag=0 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546161.105676,"[GetNextStep] Neighbor (28,47): dist=10, align=2, diag=1 -> ACCEPT (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105684,"[GetNextStep] Neighbor (28,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546161.105691,"[GetNextStep] Neighbor (26,47): dist=234, align=0, diag=1 -> reject (bestDist=10, bestAlign=2, bestDiag=1)"
+Log,1,GridPathfinding,17546161.105699,"[GetNextStep] Neighbor (26,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,1,GridPathfinding,17546161.105706,"[GetNextStep] RESULT: From=(27,46) -> Next=(28,47) dist=248->10 align=2 diag=1 candidates=5"
+Warning,1,Temp,17546161.105713,"[GetNextStep] CALLED for (30,49)"
+Log,1,GridPathfinding,17546161.105721,"[GetNextStep] Neighbor (31,49): dist=28 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105730,"[GetNextStep] Neighbor (29,49): dist=28 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105738,"[GetNextStep] Neighbor (30,50): dist=42 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105750,"[GetNextStep] Neighbor (30,48): dist=14, align=1, diag=0 -> ACCEPT (bestDist=24, bestAlign=-2147483648, bestDiag=1)"
+Log,1,GridPathfinding,17546161.105760,"[GetNextStep] Neighbor (31,50): dist=38 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105771,"[GetNextStep] Neighbor (31,48): dist=24 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105779,"[GetNextStep] Neighbor (29,50): dist=52 (no reduction from 24) -> reject"
+Log,1,GridPathfinding,17546161.105788,"[GetNextStep] Neighbor (29,48): dist=10, align=2, diag=1 -> ACCEPT (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,1,GridPathfinding,17546161.105796,"[GetNextStep] RESULT: From=(30,49) -> Next=(29,48) dist=24->10 align=2 diag=1 candidates=2"
+Error,1,Temp,17546161.342668,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_0
+Error,1,Temp,17546161.342688,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,1,Temp,17546161.342695,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Error,1,Temp,17546161.342711,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,1,Temp,17546161.342719,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,1,Temp,17546161.342726,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,1,Temp,17546161.342733,[GA_MeleeAttack] ActivateAbility COMPLETED
+Error,1,Temp,17546162.304324,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_0
+Error,1,Temp,17546162.304337,[GA_MeleeAttack] BP_EnemyUnitBase_C_0: Attacking stored target: BP_PlayerUnit_C_0
+Error,1,Temp,17546162.306593,"[GA_MeleeAttack] BP_EnemyUnitBase_C_0: Montage completed, calling OnAttackCompleted()"
+Error,1,Temp,17546162.306734,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_4
+Error,1,Temp,17546162.306755,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,1,Temp,17546162.306763,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Error,1,Temp,17546162.307502,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,1,Temp,17546162.307527,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,1,Temp,17546162.307548,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,1,Temp,17546162.307569,[GA_MeleeAttack] ActivateAbility COMPLETED
+Error,1,Temp,17546162.307631,[GA_MeleeAttack] BP_EnemyUnitBase_C_0: OnAttackCompleted RETURNED
+Error,1,Temp,17546163.266175,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_4
+Error,1,Temp,17546163.266188,[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Attacking stored target: BP_PlayerUnit_C_0
+Error,1,Temp,17546163.268047,"[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Montage completed, calling OnAttackCompleted()"
+Error,1,Temp,17546163.268224,[GA_MeleeAttack] BP_EnemyUnitBase_C_4: OnAttackCompleted RETURNED
+Log,2,TurnManager,17546163.490176,"[Turn 2] DF: Player=(29,47) Enemies=5 MaxDist=4 Margin=8"
+Warning,2,Temp,17546163.490394,"[GetNextStep] CALLED for (27,49)"
+Log,2,GridPathfinding,17546163.490404,"[GetNextStep] Neighbor (28,49): dist=66, align=1, diag=0 -> ACCEPT (bestDist=76, bestAlign=-2147483648, bestDiag=1)"
+Log,2,GridPathfinding,17546163.490414,"[GetNextStep] Neighbor (26,49): dist=94 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490423,"[GetNextStep] Neighbor (27,50): dist=80 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490432,"[GetNextStep] Neighbor (27,48): dist=80 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490442,"[GetNextStep] Neighbor (28,50): dist=62, align=0, diag=1 -> ACCEPT (bestDist=66, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.490453,"[GetNextStep] Neighbor (28,48): dist=14, align=2, diag=1 -> ACCEPT (bestDist=62, bestAlign=0, bestDiag=1)"
+Log,2,GridPathfinding,17546163.490463,"[GetNextStep] Neighbor (26,50): dist=90 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490472,"[GetNextStep] Neighbor (26,48): dist=104 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490481,"[GetNextStep] RESULT: From=(27,49) -> Next=(28,48) dist=76->14 align=2 diag=1 candidates=3"
+Warning,2,Temp,17546163.490570,"[GetNextStep] CALLED for (27,49)"
+Log,2,GridPathfinding,17546163.490578,"[GetNextStep] Neighbor (28,49): dist=66, align=1, diag=0 -> ACCEPT (bestDist=76, bestAlign=-2147483648, bestDiag=1)"
+Log,2,GridPathfinding,17546163.490587,"[GetNextStep] Neighbor (26,49): dist=94 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490594,"[GetNextStep] Neighbor (27,50): dist=80 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490602,"[GetNextStep] Neighbor (27,48): dist=80 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490612,"[GetNextStep] Neighbor (28,50): dist=62, align=0, diag=1 -> ACCEPT (bestDist=66, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.490621,"[GetNextStep] Neighbor (28,48): dist=14, align=2, diag=1 -> ACCEPT (bestDist=62, bestAlign=0, bestDiag=1)"
+Log,2,GridPathfinding,17546163.490629,"[GetNextStep] Neighbor (26,50): dist=90 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490637,"[GetNextStep] Neighbor (26,48): dist=104 (no reduction from 76) -> reject"
+Log,2,GridPathfinding,17546163.490646,"[GetNextStep] RESULT: From=(27,49) -> Next=(28,48) dist=76->14 align=2 diag=1 candidates=3"
+Warning,2,TurnManager,17546163.920775,[ROUTE CHECK] OnPlayerCommandAccepted_Implementation called!
+Log,2,TurnManager,17546163.920864,[GameTurnManager] Command marked as accepted (prevents duplicates)
+Log,2,Temp,17546163.920872,[Client] ★★★ COMMAND ACCEPTED ACK (WindowId=3) -> Latches confirmed ★★★
+Log,2,TurnManager,17546163.920897,[GameTurnManager] Sent Client_ConfirmCommandAccepted ACK (WindowId=3)
+Warning,2,TurnManager,17546163.920922,[Turn 2] Player move command accepted - regenerating intents with predicted destination
+Warning,2,Temp,17546163.921075,"[GetNextStep] CALLED for (29,46)"
+Log,2,GridPathfinding,17546163.921085,"[GetNextStep] Neighbor (30,46): dist=76, align=-1, diag=0 -> ACCEPT (bestDist=80, bestAlign=-2147483648, bestDiag=1)"
+Log,2,GridPathfinding,17546163.921095,"[GetNextStep] Neighbor (28,46): dist=90 (no reduction from 80) -> reject"
+Log,2,GridPathfinding,17546163.921104,"[GetNextStep] Neighbor (29,47): dist=14, align=1, diag=0 -> ACCEPT (bestDist=76, bestAlign=-1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921113,"[GetNextStep] Neighbor (29,45): dist=INF, align=NA, diag=0 -> reject (terrain blocked)"
+Log,2,GridPathfinding,17546163.921122,"[GetNextStep] Neighbor (30,47): dist=66, align=0, diag=1 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921130,"[GetNextStep] Neighbor (30,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,2,GridPathfinding,17546163.921138,"[GetNextStep] Neighbor (28,47): dist=10, align=2, diag=1 -> ACCEPT (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921146,"[GetNextStep] Neighbor (28,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,2,GridPathfinding,17546163.921156,"[GetNextStep] RESULT: From=(29,46) -> Next=(28,47) dist=80->10 align=2 diag=1 candidates=4"
+Warning,2,Temp,17546163.921257,"[GetNextStep] CALLED for (30,47)"
+Log,2,GridPathfinding,17546163.921267,"[GetNextStep] Neighbor (31,47): dist=62, align=-1, diag=0 -> ACCEPT (bestDist=66, bestAlign=-2147483648, bestDiag=1)"
+Log,2,GridPathfinding,17546163.921276,"[GetNextStep] Neighbor (29,47): dist=14, align=1, diag=0 -> ACCEPT (bestDist=62, bestAlign=-1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921284,"[GetNextStep] Neighbor (30,48): dist=28, align=1, diag=0 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921292,"[GetNextStep] Neighbor (30,46): dist=76 (no reduction from 66) -> reject"
+Log,2,GridPathfinding,17546163.921299,"[GetNextStep] Neighbor (31,48): dist=52, align=0, diag=1 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921307,"[GetNextStep] Neighbor (31,46): dist=80 (no reduction from 66) -> reject"
+Log,2,GridPathfinding,17546163.921315,"[GetNextStep] Neighbor (29,48): dist=10, align=2, diag=1 -> ACCEPT (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921322,"[GetNextStep] Neighbor (29,46): dist=80 (no reduction from 66) -> reject"
+Log,2,GridPathfinding,17546163.921331,"[GetNextStep] RESULT: From=(30,47) -> Next=(29,48) dist=66->10 align=2 diag=1 candidates=5"
+Warning,2,Temp,17546163.921370,"[GetNextStep] CALLED for (29,46)"
+Log,2,GridPathfinding,17546163.921378,"[GetNextStep] Neighbor (30,46): dist=76, align=-1, diag=0 -> ACCEPT (bestDist=80, bestAlign=-2147483648, bestDiag=1)"
+Log,2,GridPathfinding,17546163.921386,"[GetNextStep] Neighbor (28,46): dist=90 (no reduction from 80) -> reject"
+Log,2,GridPathfinding,17546163.921394,"[GetNextStep] Neighbor (29,47): dist=14, align=1, diag=0 -> ACCEPT (bestDist=76, bestAlign=-1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921401,"[GetNextStep] Neighbor (29,45): dist=INF, align=NA, diag=0 -> reject (terrain blocked)"
+Log,2,GridPathfinding,17546163.921409,"[GetNextStep] Neighbor (30,47): dist=66, align=0, diag=1 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921416,"[GetNextStep] Neighbor (30,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,2,GridPathfinding,17546163.921424,"[GetNextStep] Neighbor (28,47): dist=10, align=2, diag=1 -> ACCEPT (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921432,"[GetNextStep] Neighbor (28,45): dist=INF, align=NA, diag=1 -> reject (terrain blocked)"
+Log,2,GridPathfinding,17546163.921440,"[GetNextStep] RESULT: From=(29,46) -> Next=(28,47) dist=80->10 align=2 diag=1 candidates=4"
+Warning,2,Temp,17546163.921447,"[GetNextStep] CALLED for (30,47)"
+Log,2,GridPathfinding,17546163.921455,"[GetNextStep] Neighbor (31,47): dist=62, align=-1, diag=0 -> ACCEPT (bestDist=66, bestAlign=-2147483648, bestDiag=1)"
+Log,2,GridPathfinding,17546163.921465,"[GetNextStep] Neighbor (29,47): dist=14, align=1, diag=0 -> ACCEPT (bestDist=62, bestAlign=-1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921472,"[GetNextStep] Neighbor (30,48): dist=28, align=1, diag=0 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921480,"[GetNextStep] Neighbor (30,46): dist=76 (no reduction from 66) -> reject"
+Log,2,GridPathfinding,17546163.921487,"[GetNextStep] Neighbor (31,48): dist=52, align=0, diag=1 -> reject (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921494,"[GetNextStep] Neighbor (31,46): dist=80 (no reduction from 66) -> reject"
+Log,2,GridPathfinding,17546163.921502,"[GetNextStep] Neighbor (29,48): dist=10, align=2, diag=1 -> ACCEPT (bestDist=14, bestAlign=1, bestDiag=0)"
+Log,2,GridPathfinding,17546163.921509,"[GetNextStep] Neighbor (29,46): dist=80 (no reduction from 66) -> reject"
+Log,2,GridPathfinding,17546163.921517,"[GetNextStep] RESULT: From=(30,47) -> Next=(29,48) dist=66->10 align=2 diag=1 candidates=5"
+Error,2,Temp,17546164.154346,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_1
+Error,2,Temp,17546164.154366,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,2,Temp,17546164.154374,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Error,2,Temp,17546164.154945,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,2,Temp,17546164.154957,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,2,Temp,17546164.154966,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,2,Temp,17546164.154975,[GA_MeleeAttack] ActivateAbility COMPLETED
+Error,2,Temp,17546165.115989,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_1
+Error,2,Temp,17546165.116023,[GA_MeleeAttack] BP_EnemyUnitBase_C_1: Attacking stored target: BP_PlayerUnit_C_0
+Error,2,Temp,17546165.117726,"[GA_MeleeAttack] BP_EnemyUnitBase_C_1: Montage completed, calling OnAttackCompleted()"
+Error,2,Temp,17546165.117868,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_2
+Error,2,Temp,17546165.117888,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,2,Temp,17546165.117896,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Error,2,Temp,17546165.118522,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,2,Temp,17546165.118533,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,2,Temp,17546165.118543,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,2,Temp,17546165.118552,[GA_MeleeAttack] ActivateAbility COMPLETED
+Error,2,Temp,17546165.118583,[GA_MeleeAttack] BP_EnemyUnitBase_C_1: OnAttackCompleted RETURNED
+Error,2,Temp,17546166.090034,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_2
+Error,2,Temp,17546166.090048,[GA_MeleeAttack] BP_EnemyUnitBase_C_2: Attacking stored target: BP_PlayerUnit_C_0
+Error,2,Temp,17546166.091859,"[GA_MeleeAttack] BP_EnemyUnitBase_C_2: Montage completed, calling OnAttackCompleted()"
+Error,2,Temp,17546166.091994,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_3
+Error,2,Temp,17546166.092014,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,2,Temp,17546166.092022,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Error,2,Temp,17546166.092465,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,2,Temp,17546166.092480,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,2,Temp,17546166.092490,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,2,Temp,17546166.092498,[GA_MeleeAttack] ActivateAbility COMPLETED
+Error,2,Temp,17546166.092528,[GA_MeleeAttack] BP_EnemyUnitBase_C_2: OnAttackCompleted RETURNED
+Error,2,Temp,17546167.058475,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_3
+Error,2,Temp,17546167.058490,[GA_MeleeAttack] BP_EnemyUnitBase_C_3: Attacking stored target: BP_PlayerUnit_C_0
+Error,2,Temp,17546167.060572,"[GA_MeleeAttack] BP_EnemyUnitBase_C_3: Montage completed, calling OnAttackCompleted()"
+Error,2,Temp,17546167.060702,[GA_MeleeAttack] BP_EnemyUnitBase_C_3: OnAttackCompleted RETURNED

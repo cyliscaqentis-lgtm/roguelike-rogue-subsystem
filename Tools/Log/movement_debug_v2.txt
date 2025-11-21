@@ -1,0 +1,96 @@
+Warning,3,TurnManager,17540196.759563,"[Turn 3] Pre-DistanceField check: PlayerPawn=Valid, PathFinder=Valid, Enemies=5"
+Warning,3,TurnManager,17540196.759571,[Turn 3] Attempting to update DistanceField...
+Log,3,TurnManager,17540196.759578,"[Turn 3] DF: Player=(17,53) Enemies=5 MaxDist=7 Margin=11"
+Warning,3,Temp,17540197.471461,[Server] ★ SubmitCommand RPC RECEIVED
+Log,3,Temp,17540197.471477,[Server] WindowId validated: 4
+Warning,3,TurnManager,17540197.471486,[ROUTE CHECK] OnPlayerCommandAccepted_Implementation called!
+Log,3,Temp,17540197.471803,"[Client] ★ FACING ONLY (No Turn): Direction=(-1.0,0.0), Yaw=180.0"
+Log,3,TurnManager,17540197.471811,"[MovePrecheck] Sent Client_ApplyFacingNoTurn RPC (WindowId=4, no turn consumed)"
+Warning,3,Temp,17540197.471820,[Client] ★★★ MOVE REJECTED RPC RECEIVED ★★★
+Log,3,TurnManager,17540197.471845,"Turn 3: Gate OPENED (Phase+Gate tags added), WindowId=4"
+Log,3,TurnManager,17540197.471872,[MovePrecheck] Sent Client_NotifyMoveRejected to reset client latch
+Warning,3,Temp,17540197.856695,"[Server] Client sent WindowId=4, TurnId=3, Tag=Command.Player.Attack, Dir=(-1.0, 0.0)"
+Log,3,Temp,17540197.856704,[Server] WindowId validated: 4
+Warning,3,TurnManager,17540197.856716,[ROUTE CHECK] OnPlayerCommandAccepted_Implementation called!
+Log,3,TurnManager,17540197.856748,"[TurnCommandHandler] Attack Direction -> (16,53)"
+Log,3,TurnManager,17540197.856757,"[TurnCommandHandler] Sending GameplayEvent 'GameplayEvent.Intent.Attack' to trigger attack. TargetActor: 'BP_EnemyUnitBase_C_4', TargetCell: (16,53)"
+Error,3,Temp,17540197.856765,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_PlayerUnit_C_0
+Warning,3,AttackPhase,17540197.856776,[GetActionIdForActor] Actor BP_PlayerUnit_C_0 not found in attack queue
+Log,3,AttackAbility,17540197.856794,"[GA_AttackBase] ActivateAbility: Registered with Barrier (TurnId=3, ActionId=9CF366794164D9A04397B1AF541B4364, Actor=BP_PlayerUnit_C_0)"
+Error,3,Temp,17540197.856802,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,3,Temp,17540197.856809,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Log,3,Temp,17540197.856816,[GA_MeleeAttack] BP_PlayerUnit_C_0: Target from EventData: BP_EnemyUnitBase_C_4
+Error,3,Temp,17540197.856823,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,3,Temp,17540197.856831,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,3,Temp,17540197.856838,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,3,Temp,17540197.856846,[GA_MeleeAttack] ActivateAbility COMPLETED
+Log,3,TurnManager,17540197.856855,"[GameTurnManager] EventData prepared - Tag=GameplayEvent.Intent.Move, Magnitude=4130997.00, Direction=(-1,0)"
+Log,3,Temp,17540197.856927,"[Client] ★ FACING ONLY (No Turn): Direction=(-1.0,0.0), Yaw=180.0"
+Log,3,TurnManager,17540197.856935,"[MovePrecheck] Sent Client_ApplyFacingNoTurn RPC (WindowId=4, no turn consumed)"
+Warning,3,Temp,17540197.856942,[Client] ★★★ MOVE REJECTED RPC RECEIVED ★★★
+Log,3,TurnManager,17540197.856966,"Turn 3: Gate OPENED (Phase+Gate tags added), WindowId=4"
+Log,3,TurnManager,17540197.856986,[MovePrecheck] Sent Client_NotifyMoveRejected to reset client latch
+Warning,3,Temp,17540197.856994,"[Client] 📤 Attack Command Sent: Tag=Command.Player.Attack, Cell=(0,0) (Directional Attack)"
+Error,3,Temp,17540198.798307,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_PlayerUnit_C_0
+Error,3,Temp,17540198.798319,[GA_MeleeAttack] BP_PlayerUnit_C_0: Attacking stored target: BP_EnemyUnitBase_C_4
+Warning,3,Temp,17540198.798328,[GA_MeleeAttack] ==== DAMAGE DIAGNOSTIC START ====
+Warning,3,Temp,17540198.798339,"[GA_MeleeAttack] Attacker=BP_PlayerUnit_C_0, Target=BP_EnemyUnitBase_C_4, Damage=28.00"
+Warning,3,Temp,17540198.798349,"[GA_MeleeAttack] AttackerTeam=0, TargetTeam=2 (SameTeam=NO - OK)"
+Warning,3,Temp,17540198.798428,[DMG] Applied modifier to target (HealthSet.Damage += 43.00)
+Log,3,Temp,17540198.860898,"[GA_MeleeAttack] GameplayEffect applied (Instant effect, handle is invalid but this is normal)"
+Error,3,Temp,17540198.860926,"[GA_MeleeAttack] BP_PlayerUnit_C_0: Montage completed, calling OnAttackCompleted()"
+Warning,3,Temp,17540198.860968,[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility
+Warning,3,Temp,17540198.860988,"[GA_TurnActionBase] Defensive check: ASC found, checking tags"
+Warning,3,Temp,17540198.861008,"[GA_TurnActionBase] Defensive check: State_Ability_Executing=0, State_Action_InProgress=0"
+Log,3,TurnManager,17540198.861028,Turn 3: OnPlayerMoveCompleted Tag=Gameplay.Event.Turn.Ability.Completed
+Warning,3,AttackPhase,17540198.861380,    AssetTags: GameplayEvent.Intent.Attack
+Warning,3,AttackPhase,17540198.861402,[Turn 3] Sending GameplayEvent: Tag=GameplayEvent.Intent.Attack (to BP_EnemyUnitBase_C_4)
+Error,3,Temp,17540198.861410,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_4
+Log,3,AttackAbility,17540198.861421,"[GA_AttackBase] ActivateAbility: Retrieved pre-registered ActionId from AttackExecutor (TurnId=3, ActionId=84CB179A419D93E9C019EDA581A0846E, Actor=BP_EnemyUnitBase_C_4)"
+Error,3,Temp,17540198.861429,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,3,Temp,17540198.861436,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Warning,3,Temp,17540198.861446,"[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Using fallback adjacent search, found: BP_PlayerUnit_C_0"
+Error,3,Temp,17540198.861983,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,3,Temp,17540198.861995,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,3,Temp,17540198.862003,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,3,Temp,17540198.862025,[GA_MeleeAttack] ActivateAbility COMPLETED
+Log,3,AttackPhase,17540198.862036,[Turn 3] Dispatched attack 1/1: BP_EnemyUnitBase_C_4 (Tag=GameplayEvent.Intent.Attack)
+Log,3,AttackAbility,17540198.862046,"[GA_AttackBase] EndAbility: Completed attack in Barrier (TurnId=3, ActionId=9CF366794164D9A04397B1AF541B4364, Actor=BP_PlayerUnit_C_0)"
+Error,3,Temp,17540198.862055,[GA_MeleeAttack] BP_PlayerUnit_C_0: OnAttackCompleted RETURNED
+Log,3,Niagara,17540198.885801,Compiling System NiagaraSystem /Game/Effects/Particles/Impacts/NS_ImactSparksCharacter.NS_ImactSparksCharacter took 0.086131 sec (time since issued).
+Error,3,Temp,17540199.759121,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_4
+Error,3,Temp,17540199.759137,[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Attacking stored target: BP_PlayerUnit_C_0
+Warning,3,Temp,17540199.759150,[GA_MeleeAttack] ==== DAMAGE DIAGNOSTIC START ====
+Warning,3,Temp,17540199.759259,[DMG] Applied modifier to target (HealthSet.Damage += 43.00)
+Log,3,Temp,17540199.791232,"[GA_MeleeAttack] GameplayEffect applied (Instant effect, handle is invalid but this is normal)"
+Error,3,Temp,17540199.791260,"[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Montage completed, calling OnAttackCompleted()"
+Warning,3,Temp,17540199.791270,[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility
+Warning,3,Temp,17540199.791280,"[GA_TurnActionBase] Defensive check: ASC found, checking tags"
+Warning,3,Temp,17540199.791289,"[GA_TurnActionBase] Defensive check: State_Ability_Executing=0, State_Action_InProgress=0"
+Log,3,AttackPhase,17540199.791298,[Turn 3] Ability completed at index 0
+Log,3,TurnManager,17540199.791406,"[DispatchResolvedMove] Registered enemy move with barrier: Actor=BP_EnemyUnitBase_C_3, TurnId=3, ActionId=CE90B9DC415D88743F4093B7DCEBD703"
+Log,3,AttackAbility,17540199.791414,"[GA_AttackBase] EndAbility: Completed attack in Barrier (TurnId=3, ActionId=84CB179A419D93E9C019EDA581A0846E, Actor=BP_EnemyUnitBase_C_4)"
+Error,3,Temp,17540199.791422,[GA_MeleeAttack] BP_EnemyUnitBase_C_4: OnAttackCompleted RETURNED
+Log,3,Niagara,17540199.809205,Compiling System NiagaraSystem /Game/Effects/Camera/Damage/NS_Screen_DamageDirection.NS_Screen_DamageDirection took 0.048270 sec (time since issued).
+Log,3,Temp,17540199.936265,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_2 -> (13,53)"
+Log,3,TurnManager,17540199.936286,[HandleManualMoveFinished] Completed barrier action for BP_EnemyUnitBase_C_2 TurnId=3 ActionId=6C54A2444CCBF36C01B449B0550F5783
+Log,3,Temp,17540199.936296,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Warning,4,TurnManager,17540200.003360,"[Turn 4] Pre-DistanceField check: PlayerPawn=Valid, PathFinder=Valid, Enemies=5"
+Warning,4,TurnManager,17540200.003368,[Turn 4] Attempting to update DistanceField...
+Log,4,TurnManager,17540200.003376,"[Turn 4] DF: Player=(17,53) Enemies=5 MaxDist=5 Margin=9"
+Warning,4,Temp,17540200.164503,[Server] ★ SubmitCommand RPC RECEIVED
+Log,4,Temp,17540200.164520,[Server] WindowId validated: 5
+Warning,4,TurnManager,17540200.164528,[ROUTE CHECK] OnPlayerCommandAccepted_Implementation called!
+Log,4,Temp,17540200.164581,"[GridOccupancy] RESERVE ORIGIN-HOLD: BP_PlayerUnit_C_0 protects origin (17, 53) (TurnId=4) [BACKSTAB PROTECTION]"
+Log,4,TurnManager,17540200.164589,"[MovePrecheck] OK: (17,53)->(18,53) | Walkable=true | Reservation SUCCESS"
+Log,4,TurnManager,17540200.164604,[GameTurnManager] Command marked as accepted (prevents duplicates)
+Log,4,Temp,17540200.164612,[Client] ★★★ COMMAND ACCEPTED ACK (WindowId=5) -> Latches confirmed ★★★
+Log,4,Temp,17540200.164627,[Client]   LastProcessedWindowId: -1 -> 5
+Log,4,TurnManager,17540200.164634,[GameTurnManager] Sent Client_ConfirmCommandAccepted ACK (WindowId=5)
+Warning,4,TurnManager,17540200.164657,[Turn 4] Player move command accepted - regenerating intents with predicted destination
+Log,4,TurnManager,17540200.329075,"Turn 4: Gate CLOSED (Gate tag removed), WindowId=5"
+Log,4,TurnManager,17540200.329089,[Turn 4] Client: Gate CLOSED after replication
+Log,4,TurnManager,17540200.329100,"Turn 4: OnPlayerMoveCompleted - last accepted command was MOVE; enemy phase already handled, skipping fallback"
+Warning,5,TurnManager,17540200.449410,"[Turn 5] Pre-DistanceField check: PlayerPawn=Valid, PathFinder=Valid, Enemies=5"
+Warning,5,TurnManager,17540200.449417,[Turn 5] Attempting to update DistanceField...
+Log,5,TurnManager,17540200.449425,"[Turn 5] DF: Player=(18,53) Enemies=5 MaxDist=5 Margin=9"

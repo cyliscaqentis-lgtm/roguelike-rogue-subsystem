@@ -30,6 +30,17 @@ static FAutoConsoleVariableRef CVarTS_DF_AllowDiag(
     ECVF_Default
 );
 
+// Detailed GetNextStep debug logging (neighbor scoring, alignment, etc.)
+static int32 GTS_DF_DebugGetNextStep = 0;
+static FAutoConsoleVariableRef CVarTS_DF_DebugGetNextStep(
+    TEXT("ts.DistanceField.DebugGetNextStep"),
+    GTS_DF_DebugGetNextStep,
+    TEXT("Enable detailed logging for GetNextStepTowardsPlayer.\n")
+    TEXT("0: Off (default)\n")
+    TEXT("1: On (log neighbor scores and final choice)"),
+    ECVF_Cheat
+);
+
 //-----------------------------------------------------------------------------
 
 void UDistanceFieldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -329,12 +340,22 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
     const FIntPoint& FromCell,
     AActor* IgnoreActor) const
 {
+    UE_LOG(LogTemp, Warning, TEXT("[GetNextStep] CALLED for (%d,%d)"), FromCell.X, FromCell.Y);
+
+    const bool bDebugNeighbors = (GTS_DF_DebugGetNextStep != 0);
+
     const int32 d0 = GetDistanceAbs(FromCell);
     if (d0 < 0)
     {
         DIAG_LOG(Warning,
             TEXT("[GetNextStep] Enemy out of bounds (%d,%d) - staying put"),
             FromCell.X, FromCell.Y);
+        if (bDebugNeighbors)
+        {
+            UE_LOG(LogGridPathfinding, Log,
+                TEXT("[GetNextStep] RESULT: OUT OF BOUNDS (%d,%d) -> stay"),
+                FromCell.X, FromCell.Y);
+        }
         return FromCell;
     }
 
@@ -344,6 +365,12 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
         DIAG_LOG(Log,
             TEXT("[GetNextStep] FromCell=(%d,%d) ALREADY AT PLAYER"),
             FromCell.X, FromCell.Y);
+        if (bDebugNeighbors)
+        {
+            UE_LOG(LogGridPathfinding, Log,
+                TEXT("[GetNextStep] RESULT: ALREADY AT PLAYER (%d,%d) -> stay"),
+                FromCell.X, FromCell.Y);
+        }
         return FromCell;
     }
 
@@ -411,6 +438,14 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
                 DIAG_LOG(Log,
                     TEXT("[GetNextStep] STRAIGHT preference: From=(%d,%d) -> Next=(%d,%d) (aligned axis)"),
                     FromCell.X, FromCell.Y, StraightCell.X, StraightCell.Y);
+                if (bDebugNeighbors)
+                {
+                    UE_LOG(LogGridPathfinding, Log,
+                        TEXT("[GetNextStep] RESULT: STRAIGHT From=(%d,%d) -> Next=(%d,%d) dist=%d->%d"),
+                        FromCell.X, FromCell.Y,
+                        StraightCell.X, StraightCell.Y,
+                        d0, nd);
+                }
                 return StraightCell;
             }
         }
@@ -427,6 +462,12 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
             DIAG_LOG(VeryVerbose,
                 TEXT("[GetNextStep]   Neighbor (%d,%d) REJECTED: terrain blocked"),
                 N.X, N.Y);
+            if (bDebugNeighbors)
+            {
+                UE_LOG(LogGridPathfinding, Log,
+                    TEXT("[GetNextStep] Neighbor (%d,%d): dist=INF, align=NA, diag=%d -> reject (terrain blocked)"),
+                    N.X, N.Y, Neighbor.bDiagonal ? 1 : 0);
+            }
             continue;
         }
 
@@ -443,6 +484,12 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
                 DIAG_LOG(VeryVerbose,
                     TEXT("[GetNextStep]   Neighbor (%d,%d) REJECTED: diagonal path blocked"),
                     N.X, N.Y);
+                if (bDebugNeighbors)
+                {
+                    UE_LOG(LogGridPathfinding, Log,
+                        TEXT("[GetNextStep] Neighbor (%d,%d): dist=INF, align=NA, diag=%d -> reject (diagonal blocked)"),
+                        N.X, N.Y, Neighbor.bDiagonal ? 1 : 0);
+                }
                 continue;
             }
         }
@@ -454,6 +501,12 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
             DIAG_LOG(VeryVerbose,
                 TEXT("[GetNextStep]   Neighbor (%d,%d) REJECTED: dist %d (no reduction from %d)"),
                 N.X, N.Y, nd, d0);
+            if (bDebugNeighbors)
+            {
+                UE_LOG(LogGridPathfinding, Log,
+                    TEXT("[GetNextStep] Neighbor (%d,%d): dist=%d (no reduction from %d) -> reject"),
+                    N.X, N.Y, nd, d0);
+            }
             continue;
         }
 
@@ -488,11 +541,26 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
             }
         }
 
-        DIAG_LOG(VeryVerbose,
+        DIAG_LOG(Log,
             TEXT("[GetNextStep]   Neighbor (%d,%d): dist=%d, align=%d, diag=%d -> %s (best: dist=%d, align=%d, diag=%d)"),
             N.X, N.Y, nd, Align, Neighbor.bDiagonal ? 1 : 0,
             bIsBetter ? *FString::Printf(TEXT("ACCEPT (%s)"), *Reason) : TEXT("reject"),
             BestDist, BestAlign, bBestIsDiagonal ? 1 : 0);
+
+        if (bDebugNeighbors)
+        {
+            const TCHAR* Decision = bIsBetter ? TEXT("ACCEPT") : TEXT("reject");
+            UE_LOG(LogGridPathfinding, Log,
+                TEXT("[GetNextStep] Neighbor (%d,%d): dist=%d, align=%d, diag=%d -> %s (bestDist=%d, bestAlign=%d, bestDiag=%d)"),
+                N.X, N.Y,
+                nd,
+                Align,
+                Neighbor.bDiagonal ? 1 : 0,
+                Decision,
+                BestDist,
+                BestAlign,
+                bBestIsDiagonal ? 1 : 0);
+        }
 
         if (bIsBetter)
         {
@@ -508,12 +576,30 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
         DIAG_LOG(Log,
             TEXT("[GetNextStep] STAY at (%d,%d) - no better neighbor found (checked %d candidates)"),
             FromCell.X, FromCell.Y, CandidateCount);
+        if (bDebugNeighbors)
+        {
+            UE_LOG(LogGridPathfinding, Log,
+                TEXT("[GetNextStep] RESULT: STAY at (%d,%d) (candidates=%d)"),
+                FromCell.X, FromCell.Y, CandidateCount);
+        }
         return FromCell;
     }
 
     DIAG_LOG(Log,
         TEXT("[GetNextStep] FromCell=(%d,%d) -> NextCell=(%d,%d) (Dist: %d -> %d, Align=%d, Diag=%d, Candidates=%d)"),
         FromCell.X, FromCell.Y, Best.X, Best.Y, d0, BestDist, BestAlign, bBestIsDiagonal ? 1 : 0, CandidateCount);
+
+    if (bDebugNeighbors)
+    {
+        UE_LOG(LogGridPathfinding, Log,
+            TEXT("[GetNextStep] RESULT: From=(%d,%d) -> Next=(%d,%d) dist=%d->%d align=%d diag=%d candidates=%d"),
+            FromCell.X, FromCell.Y,
+            Best.X, Best.Y,
+            d0, BestDist,
+            BestAlign,
+            bBestIsDiagonal ? 1 : 0,
+            CandidateCount);
+    }
 
     return Best;
 }
