@@ -46,7 +46,7 @@
 
 ---
 
-## 3. ターン進行と Barrier 仕様
+## 3. ターン進行と管理サブシステム
 
 ### 3.1 ターン ID 管理
 
@@ -66,6 +66,31 @@
 
   * 各アクション（Move / Attack / Wait 等）は **必ずターン ID とセットで登録／完了**すること。
   * Barrier に登録された全 Action が `CompleteAction` を受け取った時点で、そのターンは「行動完了」と見なされる。
+
+### 3.3 コマンド処理: TurnCommandHandler
+
+* **`UTurnCommandHandler`** はプレイヤーの入力コマンド（移動、攻撃、待機など）の検証と実行を担う。
+* 主な責務:
+  * コマンドのバリデーション（ターンID整合性、入力ウィンドウ状態など）。
+  * 移動コマンド（`TryExecuteMoveCommand`）と攻撃コマンドの振り分けと実行。
+  * プレイヤー入力ウィンドウ（Input Window）の開閉管理。
+* `AGameTurnManagerBase` はコマンド受信時にこのサブシステムへ処理を委譲する。
+
+### 3.4 攻撃フェーズ実行: AttackPhaseExecutorSubsystem
+
+* **`UAttackPhaseExecutorSubsystem`** は敵（および味方）のシーケンシャルな攻撃フェーズの実行管理を担う。
+* 主な責務:
+  * 解決済みアクション（`FResolvedAction`）のリストを受け取り、順次実行する。
+  * 各攻撃アクションを `UTurnActionBarrierSubsystem` に一括登録する。
+  * 攻撃実行中の状態管理と、完了時のコールバック処理。
+
+### 3.5 ユニット状態管理: UnitTurnStateSubsystem
+
+* **`UUnitTurnStateSubsystem`** はターン内における各ユニットの状態（行動済み、移動済みなど）を一元管理する。
+* 主な責務:
+  * ターン開始時の敵リストのキャッシュと状態リセット。
+  * `HasActed`, `HasMoved` フラグの管理。
+  * `GameTurnManagerBase` からの敵リスト参照要求への応答。
 
 ---
 

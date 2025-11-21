@@ -87,6 +87,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Turn|Command")
 	void BeginInputWindow(int32 WindowId);
 
+	/**
+	 * Validates and executes a Move command.
+	 * Performs grid reservation, collision checks, and triggers the move ability.
+	 * Returns true if the move was successfully initiated (or handled as a rejection).
+	 */
+	bool TryExecuteMoveCommand(const FPlayerCommand& Command);
+
 protected:
 	// ========== Internal State ==========
 

@@ -22,6 +22,8 @@ class UEnemyAISubsystem;
 class UAttackPhaseExecutorSubsystem;
 class UTurnActionBarrierSubsystem;
 class UAbilitySystemComponent;
+class UUnitTurnStateSubsystem;
+class UTurnSystemInitializer;
 // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 class UGridPathfindingSubsystem;
 class AUnitBase;
@@ -32,6 +34,7 @@ class UTurnCorePhaseManager;
 class UTurnCommandHandler;
 class UTurnDebugSubsystem;
 class UTurnFlowCoordinator;
+class UTurnAdvanceGuardSubsystem;
 class UPlayerInputProcessor;
 struct FGameplayEventData;
 class ULyraExperienceDefinition;
@@ -372,13 +375,6 @@ public:
     // Removed: TObjectPtr<UDebugObserverCSV> DebugObserverCSV = nullptr; (use DebugObservers array and cast)
     // Removed: TObjectPtr<UEnemyTurnDataSubsystem> EnemyTurnData = nullptr; (use GetWorld()->GetSubsystem<UEnemyTurnDataSubsystem>())
 
-    // CodeRevision: INC-2025-00030-R1 (Removed CachedEnemies - use CachedEnemiesForTurn or EnemyAISubsystem instead) (2025-11-16 00:00)
-    // Removed: TArray<TObjectPtr<AActor>> CachedEnemies; (use CachedEnemiesForTurn or EnemyAISubsystem->CollectAllEnemies())
-
-    /** Cached and sorted list of enemies for the current turn */
-    UPROPERTY(BlueprintReadOnly, Category = "Turn|State")
-    TArray<TObjectPtr<AActor>> CachedEnemiesForTurn;
-
     /** Cached enemy intents for the current turn (used for sequential checks) */
     UPROPERTY(Transient)
     TArray<FEnemyIntent> CachedEnemyIntents;
@@ -393,10 +389,6 @@ public:
     /** Resolved move reservations for the current turn (Actor -> Cell) */
     UPROPERTY(Transient)
     TMap<TWeakObjectPtr<AActor>, FIntPoint> PendingMoveReservations;
-
-    /** Enemy list revision number, increments each time CollectEnemies completes */
-    UPROPERTY(BlueprintReadOnly, Category = "Turn|State")
-    int32 EnemiesRevision = 0;
 
     // CodeRevision: INC-2025-00030-R1 (Removed InputWindowId - use TurnFlowCoordinator->GetCurrentInputWindowId() instead) (2025-11-16 00:00)
     // Removed: int32 InputWindowId = 0;
@@ -497,7 +489,6 @@ protected:
 public:
     // Public access for TurnCorePhaseManager
     bool DispatchResolvedMove(const FResolvedAction& Action);
-
 protected:
     //==========================================================================
     // Phase 5: Gate Synchronization
@@ -548,6 +539,11 @@ protected:
     UGridPathfindingSubsystem* FindPathFinder(UWorld* World) const;
     UAbilitySystemComponent* GetPlayerASC() const;
 
+    void RefreshEnemyRoster(APawn* PlayerPawn, int32 TurnId, const TCHAR* ContextLabel);
+    void CopyEnemyActors(TArray<AActor*>& OutEnemies) const;
+
+    void EnsureEnemyIntents(APawn* PlayerPawn);
+
     /** Try to start the first turn after ASC is ready */
     UFUNCTION()
     void TryStartFirstTurnAfterASCReady();
@@ -560,6 +556,7 @@ protected:
     //==========================================================================
 
     void ExecuteSimultaneousPhase();
+    void ExecuteSequentialPhase();
     void ExecuteMovePhase(bool bSkipAttackCheck = false);
     UFUNCTION()
     void HandleManualMoveFinished(AUnitBase* Unit);
@@ -570,7 +567,7 @@ protected:
     // CodeRevision: INC-2025-1117H-R1 (Generalize attack execution) (2025-11-17 19:10)
     void ExecuteAttacks(const TArray<FResolvedAction>& PreResolvedAttacks = TArray<FResolvedAction>());
     void EndEnemyTurn();
-    void ExecutePlayerMove();
+
     void OnPlayerMoveAccepted();
     
 
@@ -605,6 +602,9 @@ protected:
 
     UPROPERTY()
     TObjectPtr<UEnemyAISubsystem> EnemyAISubsystem = nullptr;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UUnitTurnStateSubsystem> UnitTurnStateSubsystem = nullptr;
 
     // CodeRevision: INC-2025-00030-R5 (Split attack/move phase completion handlers) (2025-11-17 02:00)
     UPROPERTY(Transient)
@@ -642,6 +642,7 @@ protected:
     FTimerHandle EndEnemyTurnDelayHandle;
 
 private:
+    friend class UTurnAdvanceGuardSubsystem;
     //==========================================================================
     // New Subsystem References (2025-11-09 Refactoring)
     //==========================================================================
@@ -661,6 +662,9 @@ private:
     /** Input processing subsystem (2025-11-09 Refactoring) */
     UPROPERTY(Transient)
     TObjectPtr<UPlayerInputProcessor> PlayerInputProcessor = nullptr;
+
+    /** Helper subsystem that performs the heavy InitializeTurnSystem sequence. */
+    friend class UTurnSystemInitializer;
 
     /** CSV Observer for logging */
     // CodeRevision: INC-2025-1120-R6 (Rearchitected logger for one file per session and TurnID stamping) (2025-11-20 00:00)
@@ -714,6 +718,21 @@ private:
     static int32 PackDirection(const FIntPoint& Dir);
     static FIntPoint UnpackDirection(int32 Magnitude);
 
+    bool ResolveMovePhaseDependencies(const TCHAR* ContextLabel, bool bLogSubsystemPresence, UTurnCorePhaseManager*& OutPhaseManager, UEnemyTurnDataSubsystem*& OutEnemyData);
+    void AppendPlayerIntentIfPending(APawn* PlayerPawn, TArray<FEnemyIntent>& InOutIntents, bool bSimultaneousContext);
+    void LogPlayerPositionBeforeAdvance() const;
+    void PerformTurnAdvanceAndBeginNextTurn();
+
+    // CodeRevision: INC-2025-1208-R1 (Split DispatchResolvedMove and centralize tag cleanup helpers) (2025-11-22 01:10)
+    bool HandleWaitResolvedAction(AUnitBase* Unit, const FResolvedAction& Action);
+    bool HandlePlayerResolvedMove(AUnitBase* Unit, const FResolvedAction& Action);
+    bool HandleEnemyResolvedMove(AUnitBase* Unit, const FResolvedAction& Action, UGridPathfindingSubsystem* PathFinder);
+
+    void CollectEnemiesViaPawnScan(APawn* PlayerPawn, int32 TurnId, const TCHAR* Label, TArray<AActor*>& OutEnemies);
+    void CollectEnemiesViaActorTag(APawn* PlayerPawn, int32 TurnId, const TCHAR* Label, TArray<AActor*>& InOutEnemies);
+
+    static int32 RemoveGameplayTagLoose(UAbilitySystemComponent* ASC, const FGameplayTag& TagToRemove);
+    static int32 CleanseBlockingTags(UAbilitySystemComponent* ASC, AActor* ActorForLog);
 
     void ExecuteEnemyMoves_Sequential();
     // CodeRevision: INC-2025-1117H-R1 (Centralized move dispatch) (2025-11-17 19:10)

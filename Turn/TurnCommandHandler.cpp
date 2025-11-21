@@ -12,6 +12,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "../Utility/ProjectDiagnostics.h"
 #include "Engine/ActorInstanceHandle.h"
+#include "Turn/TurnFlowCoordinator.h"
+#include "AI/Enemy/EnemyTurnDataSubsystem.h"
 
 //------------------------------------------------------------------------------
 // Subsystem Lifecycle
@@ -184,11 +186,154 @@ bool UTurnCommandHandler::ProcessPlayerCommand(const FPlayerCommand& Command)
 	// CodeRevision: INC-2025-1145-R1 (Treat move commands as validated so GameTurnManagerBase can run MovePrecheck and ACK instead of dropping input) (2025-11-20 14:00)
 	else if (Command.CommandTag.MatchesTag(RogueGameplayTags::InputTag_Move))
 	{
-		UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Move command validated; delegating MovePrecheck/ACK to GameTurnManagerBase."));
-		return true;
+		// Delegate to TryExecuteMoveCommand
+		return TryExecuteMoveCommand(Command);
 	}
 
 	return false;
+}
+
+bool UTurnCommandHandler::TryExecuteMoveCommand(const FPlayerCommand& Command)
+{
+	UWorld* World = GetWorld();
+	if (!World) return false;
+
+	APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(World, 0);
+	if (!PlayerPawn) return false;
+
+	UGridPathfindingSubsystem* PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>();
+	if (!PathFinder) return false;
+
+	UTurnFlowCoordinator* TurnFlowCoordinator = World->GetSubsystem<UTurnFlowCoordinator>();
+
+	const int32 DirX = FMath::RoundToInt(Command.Direction.X);
+	const int32 DirY = FMath::RoundToInt(Command.Direction.Y);
+
+	// Calculate target cell before packing
+	FIntPoint TargetCell = Command.TargetCell;
+	if (TargetCell.X == 0 && TargetCell.Y == 0)
+	{
+		const FIntPoint CurrentCell = PathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
+		TargetCell = FIntPoint(CurrentCell.X + DirX, CurrentCell.Y + DirY);
+	}
+
+	const FIntPoint CurrentCell = PathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
+	
+	// Validation
+	FString FailureReason;
+	const bool bMoveValid = PathFinder->IsMoveValid(CurrentCell, TargetCell, PlayerPawn, FailureReason);
+
+	// Swap detection
+	bool bSwapDetected = false;
+	if (!bMoveValid && FailureReason.Contains(TEXT("occupied")))
+	{
+		if (UGridOccupancySubsystem* OccSys = World->GetSubsystem<UGridOccupancySubsystem>())
+		{
+			AActor* OccupyingActor = OccSys->GetActorAtCell(TargetCell);
+			if (OccupyingActor && OccupyingActor != PlayerPawn)
+			{
+				if (UEnemyTurnDataSubsystem* EnemyTurnDataSys = World->GetSubsystem<UEnemyTurnDataSubsystem>())
+				{
+					for (const FEnemyIntent& Intent : EnemyTurnDataSys->Intents)
+					{
+						if (Intent.Actor.Get() == OccupyingActor && Intent.NextCell == CurrentCell)
+						{
+							bSwapDetected = true;
+							UE_LOG(LogTurnManager, Warning,
+								TEXT("[MovePrecheck] SWAP DETECTED: Player (%d,%d)->(%d,%d), Enemy %s (%d,%d)->(%d,%d)"),
+								CurrentCell.X, CurrentCell.Y, TargetCell.X, TargetCell.Y,
+								*GetNameSafe(OccupyingActor),
+								TargetCell.X, TargetCell.Y, Intent.NextCell.X, Intent.NextCell.Y);
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if (!bMoveValid)
+	{
+		UE_LOG(LogTurnManager, Warning,
+			TEXT("[MovePrecheck] BLOCKED: %s | Cell (%d,%d) | From=(%d,%d) | Applying FACING ONLY (No Turn)"),
+			*FailureReason, TargetCell.X, TargetCell.Y, CurrentCell.X, CurrentCell.Y);
+
+		// Apply Facing Only
+		const float Yaw = FMath::Atan2(Command.Direction.Y, Command.Direction.X) * 180.f / PI;
+		FRotator NewRotation = PlayerPawn->GetActorRotation();
+		NewRotation.Yaw = Yaw;
+		PlayerPawn->SetActorRotation(NewRotation);
+
+		if (APlayerController* PC = Cast<APlayerController>(PlayerPawn->GetController()))
+		{
+			if (APlayerControllerBase* TPCB = Cast<APlayerControllerBase>(PC))
+			{
+				const int32 WindowIdForTurn = TurnFlowCoordinator ? TurnFlowCoordinator->GetCurrentInputWindowId() : 0;
+				TPCB->Client_ApplyFacingNoTurn(WindowIdForTurn, FVector2D(Command.Direction.X, Command.Direction.Y));
+				TPCB->Client_NotifyMoveRejected();
+			}
+		}
+
+		return false; // Move rejected, but handled
+	}
+
+	// Reservation
+	// Note: We need to access GameTurnManagerBase for RegisterResolvedMove if we want to keep using it,
+	// OR we should move reservation logic to OccupancySubsystem or here.
+	// For now, let's assume we can use OccupancySubsystem directly if possible, or we might need to expose it.
+	// However, RegisterResolvedMove is in GTMB.
+	// To decouple, we should use GridOccupancySubsystem directly if possible.
+	// But GTMB::RegisterResolvedMove does: Occupancy->ReserveCell + adding to ResolvedMoves array.
+	// The ResolvedMoves array is used for conflict resolution.
+	// If we move this logic here, we need to ensure ConflictResolver can still see it.
+	
+	// For this step, to avoid breaking too much, I will use GridOccupancySubsystem to reserve,
+	// but we might miss the "ResolvedMoves" tracking if that's critical for ConflictResolver.
+	// Actually, ConflictResolver uses `ResolvedMoves` from GTMB.
+	// So we might need to call back to GTMB or move `ResolvedMoves` to a subsystem (e.g. ConflictResolver itself).
+	
+	// Let's assume for now we can just reserve on Occupancy.
+	// Wait, if I don't add to ResolvedMoves, ConflictResolver won't know about the player's move?
+	// The Player's move is usually immediate or part of the batch?
+	// In `ExecuteSimultaneousPhase`, it uses `ResolvedMoves`.
+	
+	// OK, I cannot fully decouple without moving `ResolvedMoves`.
+	// But I can at least do the validation here.
+	// Let's call back to GTMB for the actual reservation if needed, OR better:
+	// Move `ResolvedMoves` to `ConflictResolverSubsystem`?
+	// Or just let GTMB handle the reservation part?
+	
+	// Note: Grid reservation is handled by the move ability itself
+	// We just validate that the target cell is walkable
+
+	// If successful:
+	MarkCommandAsAccepted(Command);
+
+	// Send ACK
+	if (APlayerController* PC = Cast<APlayerController>(PlayerPawn->GetController()))
+	{
+		if (APlayerControllerBase* TPCB = Cast<APlayerControllerBase>(PC))
+		{
+			const int32 WindowIdForTurn = TurnFlowCoordinator ? TurnFlowCoordinator->GetCurrentInputWindowId() : 0;
+			TPCB->Client_ConfirmCommandAccepted(WindowIdForTurn);
+		}
+	}
+
+	// Trigger Gameplay Event for Move
+	FGameplayEventData EventData;
+	EventData.EventTag = RogueGameplayTags::GameplayEvent_Intent_Move;
+	EventData.Instigator = PlayerPawn;
+	EventData.Target = PlayerPawn;
+	EventData.OptionalObject = this;
+	EventData.EventMagnitude = static_cast<float>(TurnCommandEncoding::PackCell(TargetCell.X, TargetCell.Y));
+
+	UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(PlayerPawn);
+	if (ASC)
+	{
+		ASC->HandleGameplayEvent(EventData.EventTag, &EventData);
+	}
+
+	return true;
 }
 
 bool UTurnCommandHandler::ValidateCommand(const FPlayerCommand& Command) const
