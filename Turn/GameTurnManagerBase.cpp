@@ -23,6 +23,8 @@
 #include "AI/Ally/AllyTurnDataSubsystem.h"
 #include "Debug/DebugObserverCSV.h"
 #include "Utility/TurnSystemUtils.h"
+#include "GameModes/LyraExperienceManagerComponent.h"
+#include "GameFramework/GameStateBase.h"
 
 // Console variable for turn logging
 TAutoConsoleVariable<int32> CVarTurnLog(
@@ -58,6 +60,30 @@ void AGameTurnManagerBase::BeginPlay()
 {
     Super::BeginPlay();
     LOG_TURN(Log, TEXT("[TurnManager] BeginPlay"));
+
+    // Bind to Experience loaded event and trigger initialization
+    if (UWorld* World = GetWorld())
+    {
+        if (AGameStateBase* GameState = World->GetGameState())
+        {
+            if (ULyraExperienceManagerComponent* ExperienceManager = GameState->FindComponentByClass<ULyraExperienceManagerComponent>())
+            {
+                ExperienceManager->CallOrRegister_OnExperienceLoaded(
+                    FOnLyraExperienceLoaded::FDelegate::CreateUObject(this, &ThisClass::OnExperienceLoaded));
+                LOG_TURN(Log, TEXT("[TurnManager] Bound to Experience load event"));
+            }
+            else
+            {
+                LOG_TURN(Warning, TEXT("[TurnManager] ExperienceManagerComponent not found, initializing directly"));
+                InitializeTurnSystem();
+            }
+        }
+        else
+        {
+            LOG_TURN(Warning, TEXT("[TurnManager] GameState not found, initializing directly"));
+            InitializeTurnSystem();
+        }
+    }
 }
 
 void AGameTurnManagerBase::HandleDungeonReady(URogueDungeonSubsystem* InDungeonSys)
