@@ -338,41 +338,34 @@ int32 UDistanceFieldSubsystem::GetDistance(const FIntPoint& Cell) const
 // Path-following: get next step towards player, using absolute grid coords
 //-----------------------------------------------------------------------------
 
+// CodeRevision: INC-2025-1123-LOG-R1 (Add detailed terrain and pathfinding logs to GetNextStepTowardsPlayer) (2025-11-23 01:42)
 FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
     const FIntPoint& FromCell,
     AActor* IgnoreActor) const
 {
-    UE_LOG(LogDistanceField, Warning, TEXT("[GetNextStep] CALLED for (%d,%d)"), FromCell.X, FromCell.Y);
+    const int32 d0 = GetDistanceAbs(FromCell);
+    
+    // Always log the start of pathfinding decision for diagnostics
+    UE_LOG(LogDistanceField, Warning, 
+        TEXT("[GetNextStep] START: From=(%d,%d) Player=(%d,%d) CurrentDist=%d"),
+        FromCell.X, FromCell.Y, PlayerPosition.X, PlayerPosition.Y, d0);
 
     const bool bDebugNeighbors = (GTS_DF_DebugGetNextStep != 0);
 
-    const int32 d0 = GetDistanceAbs(FromCell);
     if (d0 < 0)
     {
-        DIAG_LOG(Warning,
-            TEXT("[GetNextStep] Enemy out of bounds (%d,%d) - staying put"),
+        UE_LOG(LogDistanceField, Warning,
+            TEXT("[GetNextStep] RESULT: OUT OF BOUNDS (%d,%d) -> staying put"),
             FromCell.X, FromCell.Y);
-        if (bDebugNeighbors)
-        {
-            UE_LOG(LogGridPathfinding, Log,
-                TEXT("[GetNextStep] RESULT: OUT OF BOUNDS (%d,%d) -> stay"),
-                FromCell.X, FromCell.Y);
-        }
         return FromCell;
     }
 
     // Already at the player's cell – do not move.
     if (d0 == 0)
     {
-        DIAG_LOG(Log,
-            TEXT("[GetNextStep] FromCell=(%d,%d) ALREADY AT PLAYER"),
+        UE_LOG(LogDistanceField, Warning,
+            TEXT("[GetNextStep] RESULT: ALREADY AT PLAYER (%d,%d) -> staying put"),
             FromCell.X, FromCell.Y);
-        if (bDebugNeighbors)
-        {
-            UE_LOG(LogGridPathfinding, Log,
-                TEXT("[GetNextStep] RESULT: ALREADY AT PLAYER (%d,%d) -> stay"),
-                FromCell.X, FromCell.Y);
-        }
         return FromCell;
     }
 
@@ -382,9 +375,9 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
         FMath::Clamp(PlayerPosition.Y - FromCell.Y, -1, 1)
     );
 
-    DIAG_LOG(VeryVerbose,
-        TEXT("[GetNextStep] FromCell=(%d,%d), Player=(%d,%d), GoalDelta=(%d,%d)"),
-        FromCell.X, FromCell.Y, PlayerPosition.X, PlayerPosition.Y, GoalDelta.X, GoalDelta.Y);
+    UE_LOG(LogDistanceField, Warning,
+        TEXT("[GetNextStep] GoalDelta=(%d,%d) (direction to player)"),
+        GoalDelta.X, GoalDelta.Y);
 
     auto ComputeAlignment = [&GoalDelta](const FIntPoint& Offset) -> int32
     {
@@ -460,17 +453,13 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
 
         // Check terrain walkability only (ignore dynamic unit occupancy for optimistic pathing)
         // Actual conflicts will be resolved by ConflictResolverSubsystem
-        if (!GridPathfinding->IsCellWalkableIgnoringActor(N, nullptr))
+        const bool bWalkable = GridPathfinding->IsCellWalkableIgnoringActor(N, nullptr);
+        if (!bWalkable)
         {
-            DIAG_LOG(VeryVerbose,
-                TEXT("[GetNextStep]   Neighbor (%d,%d) REJECTED: terrain blocked"),
+            // Always log terrain blocks for diagnostics
+            UE_LOG(LogDistanceField, Log,
+                TEXT("[GetNextStep]   Neighbor (%d,%d): BLOCKED BY TERRAIN"),
                 N.X, N.Y);
-            if (bDebugNeighbors)
-            {
-                UE_LOG(LogGridPathfinding, Log,
-                    TEXT("[GetNextStep] Neighbor (%d,%d): dist=INF, align=NA, diag=%d -> reject (terrain blocked)"),
-                    N.X, N.Y, Neighbor.bDiagonal ? 1 : 0);
-            }
             continue;
         }
 
@@ -480,19 +469,15 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
             const FIntPoint Delta = Neighbor.Offset;
             const FIntPoint Side1 = FromCell + FIntPoint(Delta.X, 0);
             const FIntPoint Side2 = FromCell + FIntPoint(0, Delta.Y);
+            const bool bSide1Walkable = GridPathfinding->IsCellWalkableIgnoringActor(Side1, nullptr);
+            const bool bSide2Walkable = GridPathfinding->IsCellWalkableIgnoringActor(Side2, nullptr);
 
-            if (!GridPathfinding->IsCellWalkableIgnoringActor(Side1, nullptr) ||
-                !GridPathfinding->IsCellWalkableIgnoringActor(Side2, nullptr))
+            if (!bSide1Walkable || !bSide2Walkable)
             {
-                DIAG_LOG(VeryVerbose,
-                    TEXT("[GetNextStep]   Neighbor (%d,%d) REJECTED: diagonal path blocked"),
-                    N.X, N.Y);
-                if (bDebugNeighbors)
-                {
-                    UE_LOG(LogGridPathfinding, Log,
-                        TEXT("[GetNextStep] Neighbor (%d,%d): dist=INF, align=NA, diag=%d -> reject (diagonal blocked)"),
-                        N.X, N.Y, Neighbor.bDiagonal ? 1 : 0);
-                }
+                // Always log diagonal blocks for diagnostics
+                UE_LOG(LogDistanceField, Log,
+                    TEXT("[GetNextStep]   Neighbor (%d,%d): DIAGONAL BLOCKED (Side1=(%d,%d):%d, Side2=(%d,%d):%d)"),
+                    N.X, N.Y, Side1.X, Side1.Y, bSide1Walkable ? 1 : 0, Side2.X, Side2.Y, bSide2Walkable ? 1 : 0);
                 continue;
             }
         }
@@ -501,15 +486,10 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
         // Cells that do not reduce distance are not candidates
         if (nd < 0 || nd >= d0)
         {
-            DIAG_LOG(VeryVerbose,
-                TEXT("[GetNextStep]   Neighbor (%d,%d) REJECTED: dist %d (no reduction from %d)"),
+            // Always log non-improving moves for diagnostics
+            UE_LOG(LogDistanceField, Log,
+                TEXT("[GetNextStep]   Neighbor (%d,%d): NO IMPROVEMENT (Dist=%d, Current=%d)"),
                 N.X, N.Y, nd, d0);
-            if (bDebugNeighbors)
-            {
-                UE_LOG(LogGridPathfinding, Log,
-                    TEXT("[GetNextStep] Neighbor (%d,%d): dist=%d (no reduction from %d) -> reject"),
-                    N.X, N.Y, nd, d0);
-            }
             continue;
         }
 
@@ -556,26 +536,13 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
             }
         }
 
-        DIAG_LOG(Log,
-            TEXT("[GetNextStep]   Neighbor (%d,%d): dist=%d, align=%d, diag=%d -> %s (best: dist=%d, align=%d, diag=%d)"),
-            N.X, N.Y, nd, Align, Neighbor.bDiagonal ? 1 : 0,
-            bIsBetter ? *FString::Printf(TEXT("ACCEPT (%s)"), *Reason) : TEXT("reject"),
-            BestDist, BestAlign, bBestIsDiagonal ? 1 : 0);
-
-        if (bDebugNeighbors)
-        {
-            const TCHAR* Decision = bIsBetter ? TEXT("ACCEPT") : TEXT("reject");
-            UE_LOG(LogGridPathfinding, Log,
-                TEXT("[GetNextStep] Neighbor (%d,%d): dist=%d, align=%d, diag=%d -> %s (bestDist=%d, bestAlign=%d, bestDiag=%d)"),
-                N.X, N.Y,
-                nd,
-                Align,
-                Neighbor.bDiagonal ? 1 : 0,
-                Decision,
-                BestDist,
-                BestAlign,
-                bBestIsDiagonal ? 1 : 0);
-        }
+        // Always log candidate evaluation for diagnostics
+        UE_LOG(LogDistanceField, Log,
+            TEXT("[GetNextStep]   Neighbor (%d,%d): %s (Dist=%d->%d, Align=%d, Diag=%d) %s"),
+            N.X, N.Y,
+            bIsBetter ? TEXT("CANDIDATE ACCEPTED") : TEXT("candidate rejected"),
+            d0, nd, Align, Neighbor.bDiagonal ? 1 : 0,
+            bIsBetter ? *FString::Printf(TEXT("- %s"), *Reason) : TEXT(""));
 
         if (bIsBetter)
         {
@@ -588,33 +555,17 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
 
     if (Best == FromCell)
     {
-        DIAG_LOG(Log,
-            TEXT("[GetNextStep] STAY at (%d,%d) - no better neighbor found (checked %d candidates)"),
+        // Always log when staying in place for diagnostics
+        UE_LOG(LogDistanceField, Log,
+            TEXT("[GetNextStep] RESULT: STAY at (%d,%d) - no better neighbor found (checked %d candidates)"),
             FromCell.X, FromCell.Y, CandidateCount);
-        if (bDebugNeighbors)
-        {
-            UE_LOG(LogGridPathfinding, Log,
-                TEXT("[GetNextStep] RESULT: STAY at (%d,%d) (candidates=%d)"),
-                FromCell.X, FromCell.Y, CandidateCount);
-        }
         return FromCell;
     }
 
-    DIAG_LOG(Log,
-        TEXT("[GetNextStep] FromCell=(%d,%d) -> NextCell=(%d,%d) (Dist: %d -> %d, Align=%d, Diag=%d, Candidates=%d)"),
-        FromCell.X, FromCell.Y, Best.X, Best.Y, d0, BestDist, BestAlign, bBestIsDiagonal ? 1 : 0, CandidateCount);
-
-    if (bDebugNeighbors)
-    {
-        UE_LOG(LogGridPathfinding, Log,
-            TEXT("[GetNextStep] RESULT: From=(%d,%d) -> Next=(%d,%d) dist=%d->%d align=%d diag=%d candidates=%d"),
-            FromCell.X, FromCell.Y,
-            Best.X, Best.Y,
-            d0, BestDist,
-            BestAlign,
-            bBestIsDiagonal ? 1 : 0,
-            CandidateCount);
-    }
+    // Always log the final decision for diagnostics
+    UE_LOG(LogDistanceField, Log,
+        TEXT("[GetNextStep] RESULT: From=(%d,%d) -> Next=(%d,%d) (Dist=%d->%d, Candidates=%d)"),
+        FromCell.X, FromCell.Y, Best.X, Best.Y, d0, BestDist, CandidateCount);
 
     return Best;
 }

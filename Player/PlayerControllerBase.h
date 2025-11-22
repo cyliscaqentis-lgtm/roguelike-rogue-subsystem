@@ -295,4 +295,14 @@ private:
 
     /** Process buffered input when gate opens */
     void ProcessBufferedInput();
+
+    // CodeRevision: INC-2025-1122-PERF-R6 (Input polling on gate open for consistent timing)
+    /** Last known raw input value (updated every Triggered event) */
+    FVector2D LastRawInputValue = FVector2D::ZeroVector;
+
+    /** Whether input is currently being held */
+    bool bInputHeld = false;
+
+    /** Poll current input state and process if gate just opened */
+    void PollInputOnGateOpen();
 };

@@ -8,6 +8,7 @@ This is a turn-based roguelike dungeon game built on Unreal Engine 5.6 using the
 
 All project documentation is located in the [`Documentation/`](./Documentation/) directory:
 
+- **[DEVELOPER_HANDBOOK.md](./Documentation/DEVELOPER_HANDBOOK.md)** - Comprehensive development guidelines including diagnostic logging best practices
 - **[AGENTS.md](./Documentation/AGENTS.md)** - Guidelines for repository structure, build, testing, and development for human and AI agents.
 - **[BUILD_INSTRUCTIONS.md](./Documentation/BUILD_INSTRUCTIONS.md)** - Build commands and troubleshooting guide
 - **[CODE_REVISION.md](./Documentation/CODE_REVISION.md)** - Code revision log, change tracking, and usage guidelines
@@ -49,5 +50,9 @@ See [BUILD_INSTRUCTIONS.md](./Documentation/BUILD_INSTRUCTIONS.md) for detailed 
 
 ---
 
-**For AI Assistants**: When working on this project, please review the documentation in the `Documentation/` directory first, especially `CODE_REVISION.md` to understand the project's coding standards and change tracking system.
+**For AI Assistants**: When working on this project:
+1. Review the documentation in the `Documentation/` directory first
+2. Follow the `CodeRevision` system in `CODE_REVISION.md` for all changes
+3. **Important**: Follow the diagnostic logging guidelines in `DEVELOPER_HANDBOOK.md` Section 5 when adding or modifying game logic
+4. Use the `enemy_pathfinding` preset in `log_summarizer.py` to diagnose enemy movement issues
 

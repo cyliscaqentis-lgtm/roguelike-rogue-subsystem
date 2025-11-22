@@ -207,3 +207,165 @@ python Tools/Log/log_summarizer.py A_RECENT_RAW_LOG.log FILTERED_DEMO_LOG.log -k
 *   **Efficient Debugging:** Human developers also benefit from a concise log for quicker troubleshooting.
 
 This demonstrates the script's effectiveness in achieving "parsing depth" for context minimization.
+
+---
+
+## 5. Diagnostic Logging Guidelines
+
+*Added: 2025-11-23*
+
+### 5.1. Core Principle: Log-Only Problem Diagnosis
+
+**Design Rule:** All critical game logic must produce logs sufficient to diagnose problems **without** launching the game.
+
+A well-designed logging system enables:
+- ✅ **Remote Debugging:** Analyze issues from log files alone
+- ✅ **Historical Analysis:** Understand past bugs from archived logs
+- ✅ **AI-Assisted Debugging:** AI agents can identify root causes from logs
+- ✅ **Faster Iteration:** No need to reproduce bugs in-game
+
+### 5.2. Enemy Pathfinding Diagnostic Logs
+
+**CodeRevision:** `INC-2025-1123-LOG-R1` (2025-11-23 01:42)
+
+The `GetNextStepTowardsPlayer` function in `DistanceFieldSubsystem.cpp` now produces comprehensive diagnostic logs:
+
+#### Log Output Structure
+
+```
+[GetNextStep] START: From=(X,Y) Player=(X,Y) CurrentDist=N
+[GetNextStep] GoalDelta=(dX,dY) (direction to player)
+[GetNextStep]   Neighbor (X,Y): BLOCKED BY TERRAIN
+[GetNextStep]   Neighbor (X,Y): DIAGONAL BLOCKED (Side1=(X,Y):0/1, Side2=(X,Y):0/1)
+[GetNextStep]   Neighbor (X,Y): NO IMPROVEMENT (Dist=N, Current=M)
+[GetNextStep]   Neighbor (X,Y): CANDIDATE ACCEPTED (Dist=M->N, Align=A, Diag=0/1) - reason
+[GetNextStep]   Neighbor (X,Y): candidate rejected (Dist=M->N, Align=A, Diag=0/1)
+[GetNextStep] RESULT: From=(X,Y) -> Next=(X,Y) (Dist=M->N, Candidates=C)
+```
+
+#### Information Provided
+
+1. **START:** Initial position, player position, current distance
+2. **GoalDelta:** Direction vector to player (clamped to -1, 0, 1)
+3. **BLOCKED BY TERRAIN:** Cells that are unwalkable due to terrain
+4. **DIAGONAL BLOCKED:** Diagonal moves blocked by corner-cutting prevention
+5. **NO IMPROVEMENT:** Cells that don't reduce distance to player
+6. **CANDIDATE ACCEPTED/rejected:** Valid candidates and why they were chosen/rejected
+7. **RESULT:** Final decision and movement destination
+
+### 5.3. Using the `enemy_pathfinding` Preset
+
+**CodeRevision:** `INC-2025-1123-LOG-R4` (2025-11-23 01:42)
+
+The `log_summarizer.py` script includes a dedicated preset for enemy pathfinding diagnosis:
+
+```bash
+# Basic usage (analyzes last 3 turns by default)
+python Tools/Log/log_summarizer.py enemy_path.txt --preset enemy_pathfinding
+
+# Analyze specific turn
+python Tools/Log/log_summarizer.py enemy_path_turn5.txt --preset enemy_pathfinding --turn 5
+
+# Analyze turn range
+python Tools/Log/log_summarizer.py enemy_path_turn3_5.txt --preset enemy_pathfinding --turn-range 3-5
+```
+
+**What it filters:**
+- GetNextStep decision logs
+- Terrain blocking information
+- Diagonal movement validation
+- Distance field values
+- Candidate evaluation results
+
+**What it excludes:**
+- Input/RPC noise
+- Rendering/audio logs
+- Unrelated gameplay events
+
+### 5.4. Diagnostic Workflow Example
+
+**Problem:** Enemies not moving toward player in Y-axis direction
+
+**Step 1:** Play game and generate logs
+
+**Step 2:** Extract pathfinding logs
+```bash
+python Tools/Log/log_summarizer.py enemy_diagnosis.txt --preset enemy_pathfinding --turn-range 43-45
+```
+
+**Step 3:** Analyze the output
+```
+[GetNextStep] START: From=(32,16) Player=(48,18) CurrentDist=230
+[GetNextStep] GoalDelta=(1,1) (direction to player)
+[GetNextStep]   Neighbor (33,16): CANDIDATE ACCEPTED (Dist=230->220, Align=1, Diag=0)
+[GetNextStep]   Neighbor (32,17): BLOCKED BY TERRAIN  ← Root cause identified!
+[GetNextStep]   Neighbor (33,17): DIAGONAL BLOCKED (Side1=(33,16):1, Side2=(32,17):0)
+[GetNextStep] RESULT: From=(32,16) -> Next=(33,16) (Dist=230->220, Candidates=1)
+```
+
+**Diagnosis:** Y=17 row is blocked by terrain, preventing vertical movement.
+
+**Solution:** Fix dungeon generation or remove blocking terrain.
+
+### 5.5. Best Practices for Adding Diagnostic Logs
+
+When implementing new game logic, follow these guidelines:
+
+#### DO:
+- ✅ Log decision points with clear reasons
+- ✅ Log validation failures with specific causes
+- ✅ Use consistent log prefixes (e.g., `[GetNextStep]`, `[ComputeIntent]`)
+- ✅ Include relevant coordinates, IDs, and state values
+- ✅ Use `UE_LOG(LogCategory, Log, ...)` for always-on diagnostics
+- ✅ Use `UE_LOG(LogCategory, Warning/Error, ...)` for anomalies
+
+#### DON'T:
+- ❌ Rely solely on `DIAG_LOG` (requires VerboseLogging enabled)
+- ❌ Log without context (e.g., "Move failed" without coordinates)
+- ❌ Use vague messages (e.g., "Error occurred")
+- ❌ Omit critical decision factors (e.g., why a candidate was rejected)
+- ❌ Assume developers will reproduce bugs in-game
+
+#### Example: Good vs. Bad Logging
+
+**Bad:**
+```cpp
+if (!IsValid)
+{
+    UE_LOG(LogAI, Warning, TEXT("Invalid move"));
+    return;
+}
+```
+
+**Good:**
+```cpp
+if (!IsValid)
+{
+    UE_LOG(LogAI, Warning, 
+        TEXT("[ComputeIntent] %s: Move to (%d,%d) INVALID - Reason: %s (Dist=%d, Walkable=%d)"),
+        *GetNameSafe(Actor), TargetCell.X, TargetCell.Y, 
+        *Reason, Distance, bWalkable ? 1 : 0);
+    return;
+}
+```
+
+### 5.6. Log Categories Reference
+
+| Category | Purpose | Example Usage |
+|----------|---------|---------------|
+| `LogDistanceField` | Pathfinding, distance calculations | GetNextStep decisions |
+| `LogEnemyAI` | Enemy intent generation | ComputeIntent, CollectIntents |
+| `LogTurnManager` | Turn flow, phase transitions | Turn start/end, phase changes |
+| `LogGridOccupancy` | Grid reservation, conflicts | RESERVE, COMMIT, REJECT |
+| `LogMoveVerbose` | Movement execution details | Path following, snapping |
+| `LogAttackAbility` | Attack execution | Target selection, damage |
+
+### 5.7. Maintenance
+
+When modifying game logic:
+1. **Update logs** to reflect new decision factors
+2. **Test log output** to ensure it's understandable
+3. **Update presets** in `log_summarizer.py` if new keywords are needed
+4. **Document** new log patterns in this handbook
+
+**Remember:** Good logs are as important as good code. They are your first line of defense against bugs.

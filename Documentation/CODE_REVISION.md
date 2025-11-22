@@ -74,11 +74,15 @@ When working on this project (including Claude Code and other AI assistants):
 
 ### 2025-11-23
 
+- `INC-2025-1123-LOG-R1` - Added detailed terrain and pathfinding logs to `GetNextStepTowardsPlayer`: Always log start conditions, terrain blocks, diagonal blocks, distance improvements, candidate evaluations, and final decisions to enable log-only problem diagnosis (`Turn/DistanceFieldSubsystem.cpp`) (2025-11-23 01:42)
+- `INC-2025-1123-LOG-R2` - Added movement decision logs to `EnemyThinkerBase::ComputeIntent`: Log GetNextStep call with current position and player position, and log the returned next cell with movement status (`AI/Enemy/EnemyThinkerBase.cpp`) (2025-11-23 01:52)
+- `INC-2025-1123-LOG-R4` - Added `enemy_pathfinding` preset to `log_summarizer.py` for diagnosing enemy movement decisions, terrain blocks, and pathfinding logic (`Tools/Log/log_summarizer.py`) (2025-11-23 01:42)
 - `INC-2025-1123-R1` - Rejects DistanceField suggestions that do not reduce the distance to the player as outlined in `FIX_PLAN_23.md` (2025-11-23 12:00)
 
 ### 2025-11-22
 
 #### Performance
+- `INC-2025-1122-PERF-R6` - Added input polling on gate open: tracks whether input is currently held (`bInputHeld`, `LastRawInputValue`) and polls this state when gate opens or window changes, eliminating timing variability when player releases and re-presses input between turns (`Player/PlayerControllerBase.h`, `Player/PlayerControllerBase.cpp`) (2025-11-23 02:00)
 - `INC-2025-1122-PERF-R5` - Enhanced input buffering for seamless continuous movement: now buffers input even after command is sent (for next turn), and processes buffer on window change in addition to gate opening; enables uninterrupted walking rhythm when holding direction (`Player/PlayerControllerBase.cpp`) (2025-11-23 01:30)
 - `INC-2025-1122-PERF-R4` - Implemented input buffering to eliminate gate replication delay: when player inputs while gate is closed (waiting for replication), the input is buffered and processed immediately when gate opens in Tick, reducing perceived latency by ~200-300ms (`Player/PlayerControllerBase.h`, `Player/PlayerControllerBase.cpp`) (2025-11-23 01:00)
 - `INC-2025-1122-PERF-R3` - Changed `UpdateActorCell` retry from timed delay (0.02s) to `SetTimerForNextTick` for instant retry on next frame; eliminates retry latency entirely when Two-Phase Commit requires waiting for previous occupant (`Character/UnitMovementComponent.cpp`) (2025-11-23 00:45)

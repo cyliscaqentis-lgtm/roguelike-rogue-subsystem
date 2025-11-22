@@ -157,6 +157,23 @@ PRESETS = {
         'blacklist': [
             'input', 'damage', 'render', 'audio', 'animation', 'ui', 'grid'
         ]
+    },
+
+    # CodeRevision: INC-2025-1123-LOG-R4 (Add enemy_pathfinding preset to log_summarizer.py) (2025-11-23 01:42)
+    # 【敵経路探索診断】 (NEW)
+    # 敵がなぜその方向に移動したのか、地形ブロック、距離改善、候補評価の詳細を調査
+    'enemy_pathfinding': {
+        'description': 'Enemy pathfinding decisions and terrain checks (GetNextStep details).',
+        'whitelist': [
+            'getnextstep', 'blocked by terrain', 'diagonal blocked', 'no improvement',
+            'candidate accepted', 'candidate rejected', 'result:', 'start:', 
+            'computeintent', 'distancefield', 'neighbor', 'dist=', 'walkable',
+            'from=', 'next=', 'current=', 'goaldelta'
+        ],
+        'blacklist': [
+            'input', 'render', 'audio', 'animation', 'rpc', 'windowid', 
+            'submitcommand', 'gate', 'latch', 'damage', 'health', 'attack'
+        ]
     }
 }
 

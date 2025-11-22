@@ -100,6 +100,7 @@ void APlayerControllerBase::Tick(float DeltaTime)
 
     // CodeRevision: INC-2025-1128-R1 (Reset latches only when a new window id is detected or after rejection) (2025-11-27 15:00)
     // CodeRevision: INC-2025-1122-PERF-R5 (Process buffered input on window change for seamless movement)
+    // CodeRevision: INC-2025-1122-PERF-R6 (Poll input on window change for consistent timing)
     if (CurrentInputWindowId != LastHandledInputWindowId)
     {
         bSentThisInputWindow = false;
@@ -111,10 +112,19 @@ void APlayerControllerBase::Tick(float DeltaTime)
             PreviousWindowId, NewWindowId, CurrentInputWindowId);
 
         // Process buffered input immediately on new window (for seamless continuous movement)
-        if (bHasBufferedInput && bNow)
+        if (bNow)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[Client] New window with buffered input - processing immediately"));
-            ProcessBufferedInput();
+            if (bHasBufferedInput)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[Client] New window with buffered input - processing immediately"));
+                ProcessBufferedInput();
+            }
+            else if (bInputHeld)
+            {
+                // No buffer but input is held - use current input state
+                UE_LOG(LogTemp, Warning, TEXT("[Client] New window with held input - polling immediately"));
+                PollInputOnGateOpen();
+            }
         }
     }
 
@@ -128,11 +138,20 @@ void APlayerControllerBase::Tick(float DeltaTime)
     }
 
     // CodeRevision: INC-2025-1122-PERF-R4 (Process buffered input immediately when gate opens)
-    // Detect gate opening transition and process any buffered input
-    if (!bPrevWaitingForPlayerInput && bNow && bHasBufferedInput)
+    // CodeRevision: INC-2025-1122-PERF-R6 (Poll input on gate open for consistent timing)
+    // Detect gate opening transition and process any buffered or held input
+    if (!bPrevWaitingForPlayerInput && bNow)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Client] Gate OPENED with buffered input - processing immediately"));
-        ProcessBufferedInput();
+        if (bHasBufferedInput)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[Client] Gate OPENED with buffered input - processing immediately"));
+            ProcessBufferedInput();
+        }
+        else if (bInputHeld)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[Client] Gate OPENED with held input - polling immediately"));
+            PollInputOnGateOpen();
+        }
     }
 
     bPrevWaitingForPlayerInput = bNow;
@@ -434,13 +453,17 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
 {
     UE_LOG(LogTemp, Warning, TEXT("[Client] Input_Move_Triggered fired"));
 
+    const FVector2D RawInput = Value.Get<FVector2D>();
+
+    // CodeRevision: INC-2025-1122-PERF-R6 (Track input state for polling)
+    LastRawInputValue = RawInput;
+    bInputHeld = (RawInput.Size() >= DeadzoneThreshold);
+
     if (!IsValid(CachedTurnManager))
     {
         UE_LOG(LogTemp, Warning, TEXT("[Client] InputMoveTriggered: TurnManager invalid"));
         return;
     }
-
-    const FVector2D RawInput = Value.Get<FVector2D>();
 
     const bool bWaitingReplicated = CachedTurnManager->WaitingForPlayerInput;
 
@@ -547,6 +570,9 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
 
 void APlayerControllerBase::Input_Move_Canceled(const FInputActionValue& Value)
 {
+    // CodeRevision: INC-2025-1122-PERF-R6 (Clear input state on cancel)
+    bInputHeld = false;
+    LastRawInputValue = FVector2D::ZeroVector;
     UE_LOG(LogTemp, Log, TEXT("[PlayerController] Input_Move_Canceled"));
 }
 
@@ -917,8 +943,65 @@ void APlayerControllerBase::ProcessBufferedInput()
         Command.WindowId);
 }
 
+// CodeRevision: INC-2025-1122-PERF-R6 (Poll input on gate open for consistent timing)
+void APlayerControllerBase::PollInputOnGateOpen()
+{
+    if (!bInputHeld)
+    {
+        return;
+    }
 
+    if (!IsValid(CachedTurnManager))
+    {
+        return;
+    }
 
+    if (bSentThisInputWindow)
+    {
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[Client] PollInputOnGateOpen: Processing held input=(%.2f, %.2f)"),
+        LastRawInputValue.X, LastRawInputValue.Y);
+
+    // Process the held input as if it was just received
+    FVector Direction = CalculateCameraRelativeDirection(LastRawInputValue);
+
+    if (Direction.Size() < DeadzoneThreshold)
+    {
+        return;
+    }
+
+    Direction.Normalize();
+    CachedInputDirection = FVector2D(Direction.X, Direction.Y);
+
+    FIntPoint GridOffset = Quantize8Way(CachedInputDirection, AxisThreshold);
+    GridOffset.Y *= -1;
+
+    FPlayerCommand Command;
+    Command.CommandTag = MoveInputTag;
+    Command.Direction = FVector(GridOffset.X, GridOffset.Y, 0.0f);
+    Command.TargetActor = GetPawn();
+    Command.TargetCell = GetCurrentGridCell() + GridOffset;
+
+    if (UWorld* World = GetWorld())
+    {
+        if (UTurnFlowCoordinator* TFC = World->GetSubsystem<UTurnFlowCoordinator>())
+        {
+            Command.TurnId = TFC->GetCurrentTurnId();
+            Command.WindowId = TFC->GetCurrentInputWindowId();
+        }
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("[Client] PollInputOnGateOpen: Command created TurnId=%d WindowId=%d"),
+        Command.TurnId, Command.WindowId);
+
+    bSentThisInputWindow = true;
+    Server_SubmitCommand(Command);
+
+    UE_LOG(LogTemp, Warning, TEXT("[Client] 📤 POLLED RPC sent: Server_SubmitCommand(WindowId=%d)"),
+        Command.WindowId);
+}
 
 //------------------------------------------------------------------------------
 // Debug Commands (Exec Functions)

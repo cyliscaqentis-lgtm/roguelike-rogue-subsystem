@@ -1,0 +1,55 @@
+Warning,1,TurnInit,17036041.330917,[Turn 1] ==== TurnInitialization START ====
+Log,1,TurnInit,17036041.330945,[Turn 1] GridOccupancy initialized with 6 units
+Log,1,TurnInit,17036041.330954,[Turn 1] Skipped initial DistanceField update (will be updated in ExecuteEnemyPhase)
+Warning,1,TurnCore,17036041.827492,"[TurnCore] CoreObservationPhase received PlayerCell=(39, 33)"
+Log,1,TurnCore,17036041.827503,[TurnCore] ObservationPhase: Purged outdated reservations for turn 1
+Log,1,TurnCore,17036041.827514,[TurnCore] ObservationPhase: Updating DistanceField with Margin=16 (Enemies=5)
+Log,1,TurnCore,17036041.827528,[TurnCore] ObservationPhase: Complete
+Log,1,EnemyAI,17036041.827542,"[BuildObservations] DistanceField updated with PlayerGrid=(39,33)"
+Log,1,EnemyAI,17036041.827590,"[BuildObservations] ==== RESULT ==== Generated 5 observations (Valid=5, Invalid=0)"
+Warning,1,EnemyAI,17036041.827602,"[CollectIntents] ==== START ==== Observations=5, Enemies=5"
+Log,1,EnemyThinker,17036041.827620,"[ComputeIntent] BP_EnemyUnitBase_C_0: Calling GetNextStep from (36,35) to Player at (39,33)"
+Log,1,EnemyThinker,17036041.827631,"[ComputeIntent] BP_EnemyUnitBase_C_0: GetNextStep returned (37,36) (moved=1)"
+Log,1,EnemyThinker,17036041.827642,[ComputeIntent] BP_EnemyUnitBase_C_0: MOVE intent (TileDistance=3 > Range=1)
+Log,1,EnemyAI,17036041.827653,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_0, Thinker found, Intent=AI.Intent.Move"
+Log,1,EnemyThinker,17036041.827664,"[ComputeIntent] BP_EnemyUnitBase_C_1: Calling GetNextStep from (35,35) to Player at (39,33)"
+Log,1,EnemyThinker,17036041.827675,"[ComputeIntent] BP_EnemyUnitBase_C_1: GetNextStep returned (36,36) (moved=1)"
+Log,1,EnemyThinker,17036041.827686,[ComputeIntent] BP_EnemyUnitBase_C_1: MOVE intent (TileDistance=4 > Range=1)
+Log,1,EnemyAI,17036041.827700,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_1, Thinker found, Intent=AI.Intent.Move"
+Log,1,EnemyThinker,17036041.827709,"[ComputeIntent] BP_EnemyUnitBase_C_2: Calling GetNextStep from (39,36) to Player at (39,33)"
+Log,1,EnemyThinker,17036041.827719,"[ComputeIntent] BP_EnemyUnitBase_C_2: GetNextStep returned (39,35) (moved=1)"
+Log,1,EnemyThinker,17036041.827730,[ComputeIntent] BP_EnemyUnitBase_C_2: MOVE intent (TileDistance=3 > Range=1)
+Log,1,EnemyAI,17036041.827741,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_2, Thinker found, Intent=AI.Intent.Move"
+Log,1,EnemyThinker,17036041.827753,"[ComputeIntent] BP_EnemyUnitBase_C_3: Calling GetNextStep from (37,33) to Player at (39,33)"
+Log,1,EnemyThinker,17036041.827766,"[ComputeIntent] BP_EnemyUnitBase_C_3: GetNextStep returned (38,33) (moved=1)"
+Log,1,EnemyThinker,17036041.827777,[ComputeIntent] BP_EnemyUnitBase_C_3: MOVE intent (TileDistance=2 > Range=1)
+Log,1,EnemyAI,17036041.827788,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_3, Thinker found, Intent=AI.Intent.Move"
+Log,1,GridOccupancy,17036041.827954,"[GridOccupancy] RESERVE DEST: BP_EnemyUnitBase_C_0 -> (37, 36) (TurnId=1)"
+Log,1,GridOccupancy,17036041.827968,"[GridOccupancy] RESERVE DEST: BP_EnemyUnitBase_C_3 -> (37, 34) (TurnId=1)"
+Error,1,AttackAbility,17036041.828120,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_4
+Error,1,AttackAbility,17036041.828146,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,1,AttackAbility,17036041.828157,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Error,1,AttackAbility,17036041.828282,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,1,AttackAbility,17036041.828300,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,1,AttackAbility,17036041.828313,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,1,AttackAbility,17036041.828364,[GA_MeleeAttack] ActivateAbility COMPLETED
+Log,1,GridOccupancy,17036041.991059,"[GridOccupancy] COMMIT: BP_PlayerUnit_C_0 -> (39,33)"
+Log,1,MoveAbility,17036041.991080,"[MoveComplete] Unit BP_PlayerUnit_C_0 reached destination, GA_MoveBase ending."
+Log,1,MoveAbility,17036041.991093,"[GA_MoveBase] Barrier completed in EndAbility for BP_PlayerUnit_C_0 (Turn=1, ActionId=AB1B98CB46B5523C2C57FB93D7D71D68)"
+Log,1,TurnManager,17036041.991267,[Turn 1] Player action complete - enemy phase already in progress (skipping redundant AI calc)
+Log,1,UnitMovement,17036041.991280,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Error,1,AttackAbility,17036042.792138,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_4
+Error,1,AttackAbility,17036042.792167,[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Attacking stored target: BP_PlayerUnit_C_0
+Warning,1,Temp,17036042.792337,[DMG] Src=BP_EnemyUnitBase_C_4  Tgt=BP_PlayerUnit_C_0
+Error,1,AttackAbility,17036042.895284,"[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Montage completed, calling OnAttackCompleted()"
+Warning,1,TurnAction,17036042.895299,[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility
+Log,1,UnitMovement,17036042.895528,[UnitMovementComponent] Movement started with 1 waypoints
+Log,1,MoveReservation,17036042.895546,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_3, TurnId=1, ActionId=564818DE45EC2159400F45B7ED856855"
+Error,1,AttackAbility,17036042.895572,[GA_MeleeAttack] BP_EnemyUnitBase_C_4: OnAttackCompleted RETURNED
+Log,1,Niagara,17036042.931894,Compiling System NiagaraSystem /Game/Effects/Particles/Impacts/NS_ImactSparksCharacter.NS_ImactSparksCharacter took 0.138718 sec (time since issued).
+Log,1,GridOccupancy,17036042.979988,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_2 -> (39,35)"
+Log,1,MoveReservation,17036042.980013,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_2 TurnId=1
+Log,1,UnitMovement,17036042.980028,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Warning,2,TurnInit,17036043.026809,[Turn 2] ==== TurnInitialization START ====
+Log,2,TurnInit,17036043.026828,[Turn 2] GridOccupancy initialized with 6 units
+Log,2,TurnInit,17036043.026836,[Turn 2] Skipped initial DistanceField update (will be updated in ExecuteEnemyPhase)

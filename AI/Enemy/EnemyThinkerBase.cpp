@@ -413,8 +413,21 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
 
         if (UDistanceFieldSubsystem* DistanceField = World->GetSubsystem<UDistanceFieldSubsystem>())
         {
+            // CodeRevision: INC-2025-1123-LOG-R2 (Add movement decision logs to EnemyThinkerBase::ComputeIntent) (2025-11-23 01:52)
+            // Log before calling GetNextStep for diagnostics
+            UE_LOG(LogEnemyThinker, Log,
+                TEXT("[ComputeIntent] %s: Calling GetNextStep from (%d,%d) to Player at (%d,%d)"),
+                *GetNameSafe(GetOwner()), Intent.CurrentCell.X, Intent.CurrentCell.Y,
+                PlayerGridCell.X, PlayerGridCell.Y);
+
             // CodeRevision: INC-2025-1124-R1 (Delegate move validation to CoreResolvePhase) (2025-11-24 09:30)
             Intent.NextCell = DistanceField->GetNextStepTowardsPlayer(Intent.CurrentCell, GetOwner());
+
+            // Log the result of GetNextStep
+            const bool bMoved = (Intent.NextCell != Intent.CurrentCell);
+            UE_LOG(LogEnemyThinker, Log,
+                TEXT("[ComputeIntent] %s: GetNextStep returned (%d,%d) (moved=%d)"),
+                *GetNameSafe(GetOwner()), Intent.NextCell.X, Intent.NextCell.Y, bMoved ? 1 : 0);
         }
         else
         {

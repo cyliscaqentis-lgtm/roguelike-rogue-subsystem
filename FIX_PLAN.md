@@ -1,180 +1,113 @@
-# フリーズ&アニメーション修正プラン
+# 現在の修正プラン
 
-## 問題1: 移動完了時のラグ
-
-### 原因分析
-`HandleManualMoveFinished`や`FinishMovement`で以下の処理が行われており、これが遅延を引き起こしている可能性：
-
-1. **GridOccupancy更新のリトライロジック** (最大5回、100msタイマー)
-   - `FinishMovement()`内で`UpdateActorCell`が失敗すると、タイマーで再試行
-   - これが最悪500msの遅延を生む可能性
-
-2. **TurnActionBarrier完了通知**
-   - `CompleteAction`がNextTickでブロードキャストをスケジュール
-   - 次のターンの開始がフレーム遅延する
-
-### 修正方針
-
-#### A. GridOccupancy更新の即時化
-現在のリトライロジックを見直し、失敗時の処理を改善：
-
-```cpp
-// UnitMovementComponent.cpp の FinishMovement()
-
-// 現在のコード (問題):
-if (!bSuccess)
-{
-    // タイマーで100ms後に再試行 → これが遅延を生む
-    World->GetTimerManager().SetTimer(..., 0.1f, false);
-}
-
-// 修正案:
-if (!bSuccess)
-{
-    // リトライを即座に複数回試行
-    for (int32 RetryIdx = 0; RetryIdx < 3 && !bSuccess; ++RetryIdx)
-    {
-        bSuccess = GridOccupancy->UpdateActorCell(OwnerUnit, FinalCell);
-    }
-    
-    if (!bSuccess)
-    {
-        // それでも失敗なら強制更新
-        GridOccupancy->ForceUpdateActorCell(OwnerUnit, FinalCell);
-        UE_LOG(LogUnitMovement, Warning, 
-            TEXT("Force updated GridOccupancy for %s"), *GetNameSafe(OwnerUnit));
-    }
-}
-```
-
-#### B. Barrier通知の即時化
-`TurnActionBarrierSubsystem::CompleteAction`のNextTickスケジュールを削除して即座にブロードキャスト：
-
-```cpp
-// TurnActionBarrierSubsystem.cpp の CompleteAction()
-
-// 現在のコード (問題):
-GetWorld()->GetTimerManager().SetTimerForNextTick([this, TurnId]()
-{
-    OnAllMovesFinished.Broadcast(TurnId);
-});
-
-// 修正案:
-OnAllMovesFinished.Broadcast(TurnId);  // 即座にブロードキャスト
-```
+**最終更新**: 2025-11-23
 
 ---
 
-## 問題2: 歩行アニメーションが再生されない
+## 🔍 問題: 敵がプレイヤーに詰めてこない（Y軸方向に移動しない）
 
-### 原因分析
-`UnitMovementComponent`は独自の移動システムを使用しており、`CharacterMovementComponent`の`Velocity`を更新していない。Lyraの`ABP_Mannequin_Base`は`Velocity`を参照して歩行アニメーションを判定するため、常に`Velocity = 0`となり、Idleアニメーションのままになっている。
+### 根本的な問題
 
-### 修正方針
+**ログから地形の状態や移動判断の理由が分からない** - これは設計上の重大な欠陥でした。
 
-#### オプション1: CharacterMovementComponent Velocityの同期 (推奨)
+✅ **Phase 1完了**: 診断可能なログシステムを実装しました！
 
-`UnitMovementComponent`の移動中に`CharacterMovementComponent`の`Velocity`を更新：
+### 実装完了した改善
 
-```cpp
-// UnitMovementComponent.cpp の UpdateMovement()
+#### ✅ 1. GetNextStepTowardsPlayerの詳細ログ
+`DistanceFieldSubsystem.cpp`に以下のログを追加：
 
-void UUnitMovementComponent::UpdateMovement(float DeltaTime)
-{
-    // ... 既存の移動ロジック ...
-    
-    // 移動方向と速度を計算
-    const FVector Direction = (TargetLocation - CurrentLocation).GetSafeNormal();
-    
-    // CharacterMovementComponentにVelocityを設定してアニメーションを駆動
-    if (ACharacter* Character = Cast<ACharacter>(Owner))
-    {
-        if (UCharacterMovementComponent* CharMoveComp = Character->GetCharacterMovement())
-        {
-            // 歩行アニメーションのためにVelocityを設定
-            CharMoveComp->Velocity = Direction * PixelsPerSec;
-        }
-    }
-    
-    // Ownerの実際の位置を更新 (既存の処理)
-    Owner->SetActorLocation(NewLocation);
-}
+- **開始ログ**: 現在位置、プレイヤー位置、現在の距離を常に出力
+- **地形ブロックログ**: どのセルが地形でブロックされているか明示
+- **斜め移動ブロックログ**: 両肩のどちらがブロックされているか詳細表示
+- **距離改善なしログ**: 距離が改善しないセルを明示
+- **候補評価ログ**: 各候補がなぜ選ばれたか/選ばれなかったかを記録
+- **最終決定ログ**: 最終的な移動先と理由を出力
+
+#### ✅ 2. log_summarizerの新プリセット
+`log_summarizer.py`に`enemy_pathfinding`プリセットを追加：
+
+```bash
+python Tools\Log\log_summarizer.py enemy_path.txt --preset enemy_pathfinding
 ```
 
-**FinishMovement()でのVelocityリセット:**
+このプリセットは以下をフィルタリング：
+- GetNextStepの詳細ログ
+- 地形ブロック情報
+- 候補評価プロセス
+- 最終的な移動決定
 
-```cpp
-void UUnitMovementComponent::FinishMovement()
-{
-    bIsMoving = false;
-    SetComponentTickEnabled(false);
-    
-    // CharacterMovementComponentのVelocityをリセット
-    if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
-    {
-        if (UCharacterMovementComponent* CharMoveComp = Character->GetCharacterMovement())
-        {
-            CharMoveComp->Velocity = FVector::ZeroVector;
-        }
-    }
-    
-    // ... 既存の処理 ...
-}
-```
+### 期待されるログ出力例
 
-#### オプション2: AnimBPでUnitMovementComponentを直接参照
-
-Lyraの`ABP_Mannequin_Base`を継承したカスタムABPを作成し、`UnitMovementComponent`の状態を直接参照：
+改善後、以下のようなログが出力されます：
 
 ```
-// AnimBP内のEvent Graph:
-1. Get Owner -> Cast to UnitBase
-2. Get Movement Component (UnitMovementComponent)
-3. Get IsMoving -> Boolean
-4. Set to IsMoving変数
-5. Locomotionステートマシンで使用
+[GetNextStep] START: From=(32,16) Player=(48,18) CurrentDist=230
+[GetNextStep] GoalDelta=(1,1) (direction to player)
+[GetNextStep]   Neighbor (33,16): CANDIDATE ACCEPTED (Dist=230->220, Align=1, Diag=0) - better distance
+[GetNextStep]   Neighbor (31,16): NO IMPROVEMENT (Dist=240, Current=230)
+[GetNextStep]   Neighbor (32,17): BLOCKED BY TERRAIN
+[GetNextStep]   Neighbor (32,15): BLOCKED BY TERRAIN
+[GetNextStep]   Neighbor (33,17): DIAGONAL BLOCKED (Side1=(33,16):1, Side2=(32,17):0)
+[GetNextStep]   Neighbor (33,15): candidate rejected (Dist=230->224, Align=1, Diag=1)
+[GetNextStep]   Neighbor (31,17): DIAGONAL BLOCKED (Side1=(31,16):1, Side2=(32,17):0)
+[GetNextStep]   Neighbor (31,15): NO IMPROVEMENT (Dist=244, Current=230)
+[GetNextStep] RESULT: From=(32,16) -> Next=(33,16) (Dist=230->220, Candidates=2)
 ```
 
-**長所**: 既存のMovementロジックを変更不要
-**短所**: AnimBPの変更が必要、Blueprint作業が増える
+このログから以下が即座に分かります：
+- ✅ Y=17の列が地形でブロックされている
+- ✅ 斜め移動も片側がブロックされて使えない
+- ✅ X軸方向のみが有効な候補
+- ✅ なぜ(33,16)が選ばれたのか明確
 
 ---
 
-## 実装優先順位
+## 次のステップ
 
-### Phase 1: 移動完了ラグの修正 (高優先度)
-1. `UnitMovementComponent::FinishMovement()`のGridOccupancy更新を即時リトライに変更
-2. `TurnActionBarrierSubsystem::CompleteAction()`のNextTickスケジュールを削除
+### Phase 2: 診断実行（次回）
+1. ⏳ ゲームをプレイして新しいログを取得
+2. ⏳ `enemy_pathfinding`プリセットでログを抽出
+3. ⏳ 敵がY方向に移動しない理由を特定
+4. ⏳ 地形ブロックかロジック問題かを判断
 
-### Phase 2: 歩行アニメーションの修正 (中優先度)
-オプション1を推奨:
-1. `UnitMovementComponent::UpdateMovement()`で`CharacterMovementComponent::Velocity`を設定
-2. `UnitMovementComponent::FinishMovement()`で`Velocity`をリセット
-3. `UnitMovementComponent::CancelMovement()`でも`Velocity`をリセット
+### 使用方法
 
----
+```bash
+# 新しいログを取得した後、以下のコマンドを実行:
+python Tools\Log\log_summarizer.py enemy_path_diagnosis.txt --preset enemy_pathfinding
 
-## テスト項目
+# 特定のターンのみを分析:
+python Tools\Log\log_summarizer.py enemy_path_turn5.txt --preset enemy_pathfinding --turn 5
 
-### Phase 1テスト:
-- [ ] 移動完了から次の移動開始までのラグが無くなったか
-- [ ] GridOccupancy更新が正常に動作するか
-- [ ] ターン進行が正常に動作するか
+# ターン範囲を指定:
+python Tools\Log\log_summarizer.py enemy_path_turn3_5.txt --preset enemy_pathfinding --turn-range 3-5
+```
 
-### Phase 2テスト:
-- [ ] プレイヤーの歩行アニメーションが再生されるか
-- [ ] 敵の歩行アニメーションが再生されるか (敵もUnitBaseを継承している場合)
-- [ ] 移動停止時にIdleアニメーションに戻るか
-- [ ] 移動速度とアニメーション速度が一致するか
+### Phase 3: 問題修正（診断結果に基づく）
+- [ ] 地形問題の場合: ダンジョン生成/マップ修正
+- [ ] ロジック問題の場合: GetNextStep修正
+- [ ] DistanceField問題の場合: Dijkstra修正
 
 ---
 
 ## コードリビジョンタグ
 
-### Phase 1:
-- `INC-2025-1122-PERF-R6`: Remove GridOccupancy retry timer, use immediate retry loop
-- `INC-2025-1122-PERF-R7`: Remove NextTick delay from TurnActionBarrier broadcast
+### ✅ Phase 1完了:
+- `INC-2025-1123-LOG-R1`: Add detailed terrain and pathfinding logs to GetNextStepTowardsPlayer
+- `INC-2025-1123-LOG-R4`: Add enemy_pathfinding preset to log_summarizer.py
 
-### Phase 2:
-- `INC-2025-1122-ANIM-R1`: Sync CharacterMovementComponent Velocity with UnitMovementComponent
+### Phase 2-3（予定）:
+- `INC-2025-1123-FIX-R1`: Fix terrain blocking enemy Y-axis movement
+- `INC-2025-1123-FIX-R2`: Fix GetNextStep logic for Y-axis movement
+- `INC-2025-1123-FIX-R3`: Fix DistanceField calculation for Y-axis pathfinding
 
+---
+
+## 完了した修正
+
+以下の問題は解決済みです。詳細は `FIX_PLAN_COMPLETED_20251123.md` を参照してください。
+
+1. **移動完了時のラグ** - GridOccupancy更新の即時化、Barrier通知の即時化
+2. **歩行アニメーションが再生されない** - CharacterMovementComponent Velocityの同期
+3. **ログから問題を診断できない設計上の欠陥** - 診断可能なログシステムの構築 ✅
