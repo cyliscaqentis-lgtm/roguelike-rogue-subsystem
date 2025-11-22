@@ -60,7 +60,8 @@ PRESETS = {
         'whitelist': [
             'intent', 'score', 'observation', 'behavior', 'think', 'enemy', 
             'computeintent', 'collectintents', 'hardblocked', 'pass1', 'pass2',
-            'valid', 'invalid', 'fallback', 'logroguediagnostics', 'getnextstep'
+            'valid', 'invalid', 'fallback', 'logroguediagnostics', 'getnextstep',
+            'conflict', 'resolution', 'reroute', 'loser', 'winner'
         ],
         'blacklist': [
             'input', 'rendering', 'physics', 'texture', 'audio', 'animation',

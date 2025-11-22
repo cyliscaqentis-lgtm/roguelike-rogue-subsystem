@@ -1,0 +1,85 @@
+Type,TurnID,Category,Timestamp,Message
+Log,1,TurnManager,17021141.106896,[Turn 1] Player action complete - enemy phase already in progress (skipping redundant AI calc)
+Log,1,UnitMovement,17021141.106905,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,2,TurnInit,17021141.107309,[Turn 2] Enemy roster updated: 5 -> 5
+Warning,2,TurnInit,17021141.107319,[Turn 2] ==== TurnInitialization START ====
+Log,2,TurnInit,17021141.107340,[Turn 2] GridOccupancy initialized with 6 units
+Log,2,MoveAbility,17021141.491896,[GA_MoveBase] TurnId retrieved from TurnManager: 2 (Actor=BP_PlayerUnit_C_0)
+Log,2,MoveAbility,17021141.491909,"[GA_MoveBase] Starting move to resolved cell: Target=(58,40) Actor=BP_PlayerUnit_C_0 Magnitude=4217000"
+Log,2,UnitBase,17021141.491937,[MoveUnit] BP_PlayerUnit_C_0: Delegating to MovementComponent (PathNum=1)
+Log,2,UnitMovement,17021141.491948,[UnitMovementComponent] Movement started with 1 waypoints
+Log,2,GridOccupancy,17021141.491957,"[GridOccupancy] RESERVE DEST: BP_PlayerUnit_C_0 -> (58, 40) (TurnId=2)"
+Log,2,GridOccupancy,17021141.491970,"[GridOccupancy] RESERVE ORIGIN-HOLD: BP_PlayerUnit_C_0 protects origin (58, 41) (TurnId=2) [BACKSTAB PROTECTION]"
+Log,2,TurnManager,17021141.491981,"[TurnCommandHandler] Player move reserved (58,40) - triggering enemy phase for simultaneous movement."
+Log,2,TurnManager,17021141.491991,"[Turn 2] ExecuteEnemyPhase: Using RESERVED PlayerTargetCell=(58,40)"
+Log,2,TurnManager,17021141.492622,[Turn 2] ExecuteSimultaneousPhase: Processing 5 intents via CoreResolvePhase
+Log,2,TurnCore,17021141.492646,"[TurnCore] ResolvePhase: Resolved 5 actions, Hash=0x65F405D4"
+Log,2,GridOccupancy,17021141.492666,"[GridOccupancy] RESERVE DEST: BP_EnemyUnitBase_C_0 -> (58, 42) (TurnId=2)"
+Log,2,GridOccupancy,17021141.492686,"[GridOccupancy] RESERVE ORIGIN-HOLD: BP_EnemyUnitBase_C_0 protects origin (58, 43) (TurnId=2) [BACKSTAB PROTECTION]"
+Log,2,GridOccupancy,17021141.492708,"[GridOccupancy] RESERVE DEST: BP_EnemyUnitBase_C_4 -> (60, 42) (TurnId=2)"
+Log,2,GridOccupancy,17021141.492731,"[GridOccupancy] RESERVE ORIGIN-HOLD: BP_EnemyUnitBase_C_4 protects origin (60, 43) (TurnId=2) [BACKSTAB PROTECTION]"
+Log,2,TurnManager,17021141.492752,[Turn 2] ExecuteSimultaneousPhase: CoreResolvePhase produced 5 resolved actions
+Log,2,UnitBase,17021141.492772,[MoveUnit] BP_EnemyUnitBase_C_0: Delegating to MovementComponent (PathNum=1)
+Log,2,UnitMovement,17021141.492792,[UnitMovementComponent] Movement started with 1 waypoints
+Log,2,MoveReservation,17021141.492814,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_0, TurnId=2, ActionId=C100DDD543BC21CA2F580286D98404D4"
+Log,2,UnitBase,17021141.492833,[MoveUnit] BP_EnemyUnitBase_C_4: Delegating to MovementComponent (PathNum=1)
+Log,2,UnitMovement,17021141.492852,[UnitMovementComponent] Movement started with 1 waypoints
+Log,2,MoveReservation,17021141.492874,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_4, TurnId=2, ActionId=2E65A7B04F7F0A7C1B4F4395E1ED456D"
+Log,2,TurnManager,17021141.492894,[Turn 2] ExecuteSimultaneousPhase complete - 5 movements dispatched
+Log,2,GridOccupancy,17021141.644212,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_4 -> (60,42)"
+Log,2,MoveReservation,17021141.644232,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_4 TurnId=2
+Log,2,UnitMovement,17021141.644245,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,2,GridOccupancy,17021141.645287,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_0 -> (58,42)"
+Log,2,MoveReservation,17021141.645306,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_0 TurnId=2
+Log,2,UnitMovement,17021141.645318,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,2,GridOccupancy,17021141.645702,"[GridOccupancy] COMMIT: BP_PlayerUnit_C_0 -> (58,40)"
+Log,2,TurnManager,17021141.645878,Turn 2: OnPlayerMoveCompleted Tag=Gameplay.Event.Turn.Ability.Completed
+Log,2,TurnManager,17021141.645971,[Turn 2] Player action complete - enemy phase already in progress (skipping redundant AI calc)
+Log,2,UnitMovement,17021141.645987,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,3,TurnInit,17021141.646493,[Turn 3] Enemy roster updated: 5 -> 5
+Warning,3,TurnInit,17021141.646507,[Turn 3] ==== TurnInitialization START ====
+Log,3,TurnInit,17021141.646532,[Turn 3] GridOccupancy initialized with 6 units
+Log,3,MoveAbility,17021142.347428,[GA_MoveBase] TurnId retrieved from TurnManager: 3 (Actor=BP_PlayerUnit_C_0)
+Log,3,MoveAbility,17021142.347441,"[GA_MoveBase] Starting move to resolved cell: Target=(58,39) Actor=BP_PlayerUnit_C_0 Magnitude=4216999"
+Log,3,UnitBase,17021142.347465,[MoveUnit] BP_PlayerUnit_C_0: Delegating to MovementComponent (PathNum=1)
+Log,3,UnitMovement,17021142.347476,[UnitMovementComponent] Movement started with 1 waypoints
+Log,3,GridOccupancy,17021142.347487,"[GridOccupancy] RESERVE DEST: BP_PlayerUnit_C_0 -> (58, 39) (TurnId=3)"
+Log,3,GridOccupancy,17021142.347500,"[GridOccupancy] RESERVE ORIGIN-HOLD: BP_PlayerUnit_C_0 protects origin (58, 40) (TurnId=3) [BACKSTAB PROTECTION]"
+Log,3,TurnManager,17021142.347515,"[TurnCommandHandler] Player move reserved (58,39) - triggering enemy phase for simultaneous movement."
+Log,3,TurnManager,17021142.347525,"[Turn 3] ExecuteEnemyPhase: Using RESERVED PlayerTargetCell=(58,39)"
+Log,3,TurnManager,17021142.348271,[Turn 3] ExecuteSimultaneousPhase: Processing 5 intents via CoreResolvePhase
+Log,3,TurnCore,17021142.348290,"[TurnCore] ResolvePhase: Resolved 5 actions, Hash=0xCA5D6A19"
+Log,3,GridOccupancy,17021142.348301,"[GridOccupancy] RESERVE DEST: BP_EnemyUnitBase_C_3 -> (58, 42) (TurnId=3)"
+Log,3,GridOccupancy,17021142.348312,"[GridOccupancy] RESERVE ORIGIN-HOLD: BP_EnemyUnitBase_C_3 protects origin (59, 43) (TurnId=3) [BACKSTAB PROTECTION]"
+Log,3,GridOccupancy,17021142.348322,"[GridOccupancy] RESERVE DEST: BP_EnemyUnitBase_C_0 -> (58, 41) (TurnId=3)"
+Log,3,GridOccupancy,17021142.348334,"[GridOccupancy] SKIP ORIGIN-HOLD: BP_EnemyUnitBase_C_0 skipping origin (58, 42) - already reserved by BP_EnemyUnitBase_C_3"
+Log,3,GridOccupancy,17021142.348344,"[GridOccupancy] RESERVE DEST: BP_EnemyUnitBase_C_4 -> (60, 41) (TurnId=3)"
+Log,3,GridOccupancy,17021142.348354,"[GridOccupancy] RESERVE ORIGIN-HOLD: BP_EnemyUnitBase_C_4 protects origin (60, 42) (TurnId=3) [BACKSTAB PROTECTION]"
+Log,3,TurnManager,17021142.348365,[Turn 3] ExecuteSimultaneousPhase: CoreResolvePhase produced 5 resolved actions
+Log,3,UnitBase,17021142.348378,[MoveUnit] BP_EnemyUnitBase_C_3: Delegating to MovementComponent (PathNum=1)
+Log,3,UnitMovement,17021142.348389,[UnitMovementComponent] Movement started with 1 waypoints
+Log,3,MoveReservation,17021142.348402,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_3, TurnId=3, ActionId=DDE131B94B01C3197B49B0B36EFABEA1"
+Log,3,UnitBase,17021142.348413,[MoveUnit] BP_EnemyUnitBase_C_0: Delegating to MovementComponent (PathNum=1)
+Log,3,UnitMovement,17021142.348423,[UnitMovementComponent] Movement started with 1 waypoints
+Log,3,MoveReservation,17021142.348434,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_0, TurnId=3, ActionId=5CDF4BF2466A551660DEB1BBCE154683"
+Log,3,UnitBase,17021142.348446,[MoveUnit] BP_EnemyUnitBase_C_4: Delegating to MovementComponent (PathNum=1)
+Log,3,UnitMovement,17021142.348455,[UnitMovementComponent] Movement started with 1 waypoints
+Log,3,MoveReservation,17021142.348467,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_4, TurnId=3, ActionId=43960CEF497CB2957B6CD68DD7AF2E74"
+Log,3,TurnManager,17021142.348478,[Turn 3] ExecuteSimultaneousPhase complete - 5 movements dispatched
+Log,3,GridOccupancy,17021142.509457,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_0 -> (58,41)"
+Log,3,MoveReservation,17021142.509476,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_0 TurnId=3
+Log,3,UnitMovement,17021142.509489,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,3,GridOccupancy,17021142.510586,"[GridOccupancy] COMMIT: BP_PlayerUnit_C_0 -> (58,39)"
+Log,3,TurnManager,17021142.510678,Turn 3: OnPlayerMoveCompleted Tag=Gameplay.Event.Turn.Ability.Completed
+Log,3,TurnManager,17021142.510741,[Turn 3] Player action complete - enemy phase already in progress (skipping redundant AI calc)
+Log,3,UnitMovement,17021142.510751,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,3,GridOccupancy,17021142.510993,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_4 -> (60,41)"
+Log,3,MoveReservation,17021142.511007,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_4 TurnId=3
+Log,3,UnitMovement,17021142.511017,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,3,GridOccupancy,17021142.574469,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_3 -> (58,42)"
+Warning,3,TurnBarrier,17021142.574530,[Barrier] Turn 3: ALL ACTIONS COMPLETED (Remaining=0) -> Scheduling OnAllMovesFinished (NextTick)
+Log,3,MoveReservation,17021142.574549,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_3 TurnId=3
+Log,3,UnitMovement,17021142.574563,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,4,TurnInit,17021142.575102,[Turn 4] Enemy roster updated: 5 -> 5
+Warning,4,TurnInit,17021142.575114,[Turn 4] ==== TurnInitialization START ====
+Log,4,TurnInit,17021142.575135,[Turn 4] GridOccupancy initialized with 6 units

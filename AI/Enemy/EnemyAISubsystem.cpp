@@ -116,6 +116,7 @@ void UEnemyAISubsystem::BuildObservations(
     {
         if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
         {
+            /*
             int32 SampleRadius = 3;
             int32 BlockedCount = 0;
             int32 TotalCells = (SampleRadius * 2 + 1) * (SampleRadius * 2 + 1);
@@ -137,6 +138,7 @@ void UEnemyAISubsystem::BuildObservations(
             UE_LOG(LogEnemyAI, Verbose,
                 TEXT("[BuildObservations] GridOccupancy SAMPLE: %d/%d cells blocked around player (%d,%d)"),
                 BlockedCount, TotalCells, PlayerGrid.X, PlayerGrid.Y);
+            */
 
             for (int32 DebugIdx = 0; DebugIdx < FMath::Min(3, OutObs.Num()); ++DebugIdx)
             {

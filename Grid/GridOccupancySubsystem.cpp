@@ -370,6 +370,8 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
 
     // ★★★ OriginHold implementation: place an OriginHold reservation on the origin cell ★★★
     // ★★★ OriginHold implementation: place an OriginHold reservation on the origin cell ★★★
+    // CodeRevision: INC-2025-1122-DISABLE-ORIGIN-HOLD (User Request: Disable OriginHold to allow chasing)
+    /*
     if (CurrentCell != FIntPoint(-1, -1) && CurrentCell != Cell)
     {
         // CodeRevision: INC-2025-1157-R5 (Fix OriginHold Overwrite) (2025-11-21 01:30)
@@ -397,6 +399,7 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
                 *GetNameSafe(Actor), CurrentCell.X, CurrentCell.Y, CurrentTurnId);
         }
     }
+    */
 
     return true;  // Reservation succeeded
 }

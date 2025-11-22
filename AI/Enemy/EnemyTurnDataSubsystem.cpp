@@ -9,6 +9,7 @@
 #include "Grid/GridOccupancySubsystem.h"
 #include "Turn/DistanceFieldSubsystem.h"
 #include "GameFramework/Pawn.h"
+#include "Turn/UnitTurnStateSubsystem.h"
 
 // ログカテゴリ定義
 DEFINE_LOG_CATEGORY(LogEnemyTurnDataSys);
@@ -125,6 +126,39 @@ void UEnemyTurnDataSubsystem::ClearAllRegistrations()
 // 🌟 統合API（Lumina提言A4: RebuildEnemyList）
 //--------------------------------------------------------------------------
 
+void UEnemyTurnDataSubsystem::SyncEnemiesFromList(const TArray<AActor*>& EnemyList)
+{
+    UE_LOG(LogEnemyTurnDataSys, Verbose,
+        TEXT("[SyncEnemiesFromList] Syncing with %d enemies"), EnemyList.Num());
+
+    int32 RegisteredCount = 0;
+    int32 AlreadyRegisteredCount = 0;
+
+    for (AActor* Enemy : EnemyList)
+    {
+        if (!Enemy) continue;
+
+        if (EnemyToOrder.Contains(Enemy))
+        {
+            AlreadyRegisteredCount++;
+        }
+        else
+        {
+            RegisterEnemyAndAssignOrder(Enemy);
+            RegisteredCount++;
+        }
+    }
+
+    if (RegisteredCount > 0)
+    {
+        UE_LOG(LogEnemyTurnDataSys, Log,
+            TEXT("[SyncEnemiesFromList] Registered %d new enemies, %d already registered"),
+            RegisteredCount, AlreadyRegisteredCount);
+    }
+
+    RebuildSortedArray();
+}
+
 void UEnemyTurnDataSubsystem::RebuildEnemyList(FName TagFilter)
 {
     UE_LOG(LogEnemyTurnDataSys, Log,
@@ -150,41 +184,13 @@ void UEnemyTurnDataSubsystem::RebuildEnemyList(FName TagFilter)
     // Step 2: 登録（既存を保持、新規のみ採番）
     // ────────────────────────────────────────────────────────────────────
 
-    int32 RegisteredCount = 0;
-    int32 AlreadyRegisteredCount = 0;
-
-    for (AActor* Enemy : FoundEnemies)
-    {
-        if (!Enemy)
-        {
-            continue;
-        }
-
-        if (EnemyToOrder.Contains(Enemy))
-        {
-            AlreadyRegisteredCount++;
-        }
-        else
-        {
-            RegisterEnemyAndAssignOrder(Enemy);
-            RegisteredCount++;
-        }
-    }
-
-    UE_LOG(LogEnemyTurnDataSys, Log,
-        TEXT("[RebuildEnemyList] Registered %d new enemies, %d already registered"),
-        RegisteredCount, AlreadyRegisteredCount);
-
-    // ────────────────────────────────────────────────────────────────────
-    // Step 3: ソート済み配列を再構成
-    // ────────────────────────────────────────────────────────────────────
-
-    RebuildSortedArray();
+    SyncEnemiesFromList(FoundEnemies);
 
     UE_LOG(LogEnemyTurnDataSys, Log,
         TEXT("[RebuildEnemyList] Complete. Total enemies: %d (Revision=%d)"),
         EnemiesSorted.Num(), DataRevision);
 }
+
 
 void UEnemyTurnDataSubsystem::RebuildSortedArray()
 {
@@ -425,7 +431,8 @@ bool UEnemyTurnDataSubsystem::HasIntents() const
     return Intents.Num() > 0;
 }
 
-int32 UEnemyTurnDataSubsystem::UpgradeIntentsForAdjacency(const FIntPoint& PlayerCell, int32 AttackRange)
+// CodeRevision: INC-2025-1122-ADJ-ATTACK-R3 (Upgrade to attack only if adjacent to BOTH current AND target positions) (2025-11-22)
+int32 UEnemyTurnDataSubsystem::UpgradeIntentsForAdjacency(const FIntPoint& PlayerCurrentCell, const FIntPoint& PlayerTargetCell, int32 AttackRange)
 {
     // Use local variable to avoid needing RogueGameplayTags include here
     static const FGameplayTag AttackTag = FGameplayTag::RequestGameplayTag(FName("AI.Intent.Attack"));
@@ -447,29 +454,34 @@ int32 UEnemyTurnDataSubsystem::UpgradeIntentsForAdjacency(const FIntPoint& Playe
             continue;
         }
 
-        // Check Chebyshev distance from enemy's current position to player
-        const int32 DeltaX = FMath::Abs(Intent.CurrentCell.X - PlayerCell.X);
-        const int32 DeltaY = FMath::Abs(Intent.CurrentCell.Y - PlayerCell.Y);
-        const int32 ChebyshevDist = FMath::Max(DeltaX, DeltaY);
+        // Check Chebyshev distance from enemy's current position to BOTH player positions
+        // Must be adjacent to current position (to attack now) AND target position (to still be adjacent after player moves)
+        const int32 DistToCurrent = FMath::Max(
+            FMath::Abs(Intent.CurrentCell.X - PlayerCurrentCell.X),
+            FMath::Abs(Intent.CurrentCell.Y - PlayerCurrentCell.Y));
+        const int32 DistToTarget = FMath::Max(
+            FMath::Abs(Intent.CurrentCell.X - PlayerTargetCell.X),
+            FMath::Abs(Intent.CurrentCell.Y - PlayerTargetCell.Y));
 
-        if (ChebyshevDist <= AttackRange)
+        if (DistToCurrent <= AttackRange && DistToTarget <= AttackRange)
         {
-            // Upgrade to attack intent
+            // Upgrade to attack intent - enemy is adjacent to both positions
             Intent.AbilityTag = AttackTag;
             Intent.NextCell = Intent.CurrentCell; // Attack from current position
             UpgradedCount++;
 
             UE_LOG(LogEnemyTurnDataSys, Log,
-                TEXT("[UpgradeIntentsForAdjacency] Upgraded enemy at (%d,%d) to ATTACK (Dist=%d, PlayerAt=(%d,%d))"),
-                Intent.CurrentCell.X, Intent.CurrentCell.Y, ChebyshevDist, PlayerCell.X, PlayerCell.Y);
+                TEXT("[UpgradeIntentsForAdjacency] Upgraded enemy at (%d,%d) to ATTACK (DistCurrent=%d, DistTarget=%d, PlayerCurrent=(%d,%d), PlayerTarget=(%d,%d))"),
+                Intent.CurrentCell.X, Intent.CurrentCell.Y, DistToCurrent, DistToTarget,
+                PlayerCurrentCell.X, PlayerCurrentCell.Y, PlayerTargetCell.X, PlayerTargetCell.Y);
         }
     }
 
     if (UpgradedCount > 0)
     {
         UE_LOG(LogEnemyTurnDataSys, Warning,
-            TEXT("[UpgradeIntentsForAdjacency] Upgraded %d intents to ATTACK based on adjacency to player at (%d,%d)"),
-            UpgradedCount, PlayerCell.X, PlayerCell.Y);
+            TEXT("[UpgradeIntentsForAdjacency] Upgraded %d intents to ATTACK (PlayerCurrent=(%d,%d), PlayerTarget=(%d,%d))"),
+            UpgradedCount, PlayerCurrentCell.X, PlayerCurrentCell.Y, PlayerTargetCell.X, PlayerTargetCell.Y);
     }
 
     return UpgradedCount;
@@ -642,7 +654,18 @@ bool UEnemyTurnDataSubsystem::RegenerateIntentsForPlayerPosition(int32 TurnId, c
     }
 
     // Rebuild enemy list
-    RebuildEnemyList(FName("Enemy"));
+    // CodeRevision: INC-2025-1122-PERF-R4 (Use cached enemies instead of RebuildEnemyList)
+    if (UUnitTurnStateSubsystem* UnitState = World->GetSubsystem<UUnitTurnStateSubsystem>())
+    {
+        TArray<AActor*> CachedEnemies;
+        UnitState->CopyEnemiesTo(CachedEnemies);
+        SyncEnemiesFromList(CachedEnemies);
+    }
+    else
+    {
+        // Fallback if UnitState is missing
+        RebuildEnemyList(FName("Enemy"));
+    }
 
     // Get enemy actors
     TArray<AActor*> EnemyActors = GetEnemiesSortedCopy();

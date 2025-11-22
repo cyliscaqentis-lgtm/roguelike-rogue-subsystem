@@ -1,0 +1,33 @@
+Warning,52,AttackPhase,17015709.910756,    AssetTags: GameplayEvent.Intent.Attack
+Warning,52,AttackPhase,17015709.910790,[Turn 52] Sending GameplayEvent: Tag=GameplayEvent.Intent.Attack (to BP_EnemyUnitBase_C_3)
+Error,52,AttackAbility,17015709.910802,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_3
+Log,52,AttackAbility,17015709.910819,"[GA_AttackBase] ActivateAbility: Retrieved pre-registered ActionId from AttackExecutor (TurnId=52, ActionId=75C3EEA04C8E1C042138D28C705ECD09, Actor=BP_EnemyUnitBase_C_3)"
+Error,52,AttackAbility,17015709.910829,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,52,AttackAbility,17015709.910841,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Error,52,AttackAbility,17015709.910854,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,52,AttackAbility,17015709.910866,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,52,AttackAbility,17015709.910878,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,52,AttackAbility,17015709.910890,[GA_MeleeAttack] ActivateAbility COMPLETED
+Log,52,AttackPhase,17015709.910907,[Turn 52] Dispatched attack 1/1: BP_EnemyUnitBase_C_3 (Tag=GameplayEvent.Intent.Attack)
+Log,52,GridOccupancy,17015710.062753,"[GridOccupancy] COMMIT: BP_PlayerUnit_C_0 -> (10,16)"
+Log,52,TurnManager,17015710.063770,[Turn 52] Player action complete - enemy phase already in progress
+Log,52,UnitMovement,17015710.063784,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Error,52,AttackAbility,17015710.878771,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_3
+Error,52,AttackAbility,17015710.878801,[GA_MeleeAttack] BP_EnemyUnitBase_C_3: Attacking stored target: BP_PlayerUnit_C_0
+Warning,52,AttackAbility,17015710.878816,[GA_MeleeAttack] ==== DAMAGE DIAGNOSTIC START ====
+Warning,52,AttackAbility,17015710.878830,"[GA_MeleeAttack] Attacker=BP_EnemyUnitBase_C_3, Target=BP_PlayerUnit_C_0, Damage=28.00"
+Warning,52,AttackAbility,17015710.878844,"[GA_MeleeAttack] AttackerTeam=2, TargetTeam=0 (SameTeam=NO - OK)"
+Warning,52,Temp,17015710.878946,[DMG] Applied modifier to target (HealthSet.Damage += 43.00)
+Log,52,AttackAbility,17015710.879706,"[GA_MeleeAttack] GameplayEffect applied (Instant effect, handle is invalid but this is normal)"
+Error,52,AttackAbility,17015710.879724,"[GA_MeleeAttack] BP_EnemyUnitBase_C_3: Montage completed, calling OnAttackCompleted()"
+Warning,52,TurnAction,17015710.879737,[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility
+Warning,52,TurnAction,17015710.879748,"[GA_TurnActionBase] Defensive check: ASC found, checking tags"
+Warning,52,TurnAction,17015710.879762,"[GA_TurnActionBase] Defensive check: State_Ability_Executing=0, State_Action_InProgress=0"
+Log,52,AttackPhase,17015710.879780,[Turn 52] Ability completed at index 0
+Log,52,MoveReservation,17015710.880034,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_1, TurnId=52, ActionId=4AF1B41948A7A61694BCC78C91722FD8"
+Log,52,AttackAbility,17015710.880067,"[GA_AttackBase] EndAbility: Completed attack in Barrier (TurnId=52, ActionId=75C3EEA04C8E1C042138D28C705ECD09, Actor=BP_EnemyUnitBase_C_3)"
+Error,52,AttackAbility,17015710.880091,[GA_MeleeAttack] BP_EnemyUnitBase_C_3: OnAttackCompleted RETURNED
+Log,52,GridOccupancy,17015711.038993,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_1 -> (11,16)"
+Log,52,MoveReservation,17015711.039014,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_1 TurnId=52
+Log,52,UnitMovement,17015711.039027,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,52,GridOccupancy,17015711.101556,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_2 -> (13,16)"

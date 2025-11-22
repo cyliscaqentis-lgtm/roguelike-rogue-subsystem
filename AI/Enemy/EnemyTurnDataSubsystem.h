@@ -96,6 +96,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Turn|Enemy")
     void RebuildEnemyList(FName TagFilter = TEXT("Enemy"));
 
+    /**
+     * Update internal enemy list from a provided list of actors.
+     * Used to sync with UnitTurnStateSubsystem's cache.
+     */
+    void SyncEnemiesFromList(const TArray<AActor*>& EnemyList);
+
     //--------------------------------------------------------------------------
     // 🌟 統合API（Lumina提言B1: HasAttackIntent）
     //--------------------------------------------------------------------------
@@ -187,12 +193,16 @@ public:
      * ターン開始時には遠かったが、プレイヤーが歩いて隣接した敵も
      * 攻撃インテントを持つようになる。
      *
-     * @param PlayerCell プレイヤーの現在グリッド位置
+     * @param PlayerCurrentCell プレイヤーの現在グリッド位置
+     * @param PlayerTargetCell プレイヤーの移動先グリッド位置
      * @param AttackRange 攻撃範囲（Chebyshev距離、デフォルト=1で隣接）
      * @return アップグレードされたインテント数
+     *
+     * Note: 敵は両方の位置に隣接している場合のみATTACKにアップグレードされる。
+     * これにより、プレイヤーの移動先に到達できない敵が空振り攻撃をすることを防ぐ。
      */
     UFUNCTION(BlueprintCallable, Category = "Turn|Enemy")
-    int32 UpgradeIntentsForAdjacency(const FIntPoint& PlayerCell, int32 AttackRange = 1);
+    int32 UpgradeIntentsForAdjacency(const FIntPoint& PlayerCurrentCell, const FIntPoint& PlayerTargetCell, int32 AttackRange = 1);
 
     /**
      * Intentが存在しない場合のフォールバック生成

@@ -149,7 +149,39 @@ void UTurnCorePhaseManager::CoreObservationPhase(const FIntPoint& PlayerCell)
         }
     }
 
-    DistanceField->UpdateDistanceField(PlayerCell);
+    // CodeRevision: INC-2025-1122-PERF-R5 (Optimize DistanceField update with dynamic margin)
+    int32 Margin = 100; // Default fallback
+    TSet<FIntPoint> EnemyPositions;
+
+    if (UUnitTurnStateSubsystem* UnitState = World->GetSubsystem<UUnitTurnStateSubsystem>())
+    {
+        TArray<AActor*> Enemies;
+        UnitState->CopyEnemiesTo(Enemies);
+
+        if (UGridPathfindingSubsystem* PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>())
+        {
+            int32 MaxDist = 0;
+            for (AActor* Enemy : Enemies)
+            {
+                if (IsValid(Enemy))
+                {
+                    FIntPoint GridPos = PathFinder->WorldToGrid(Enemy->GetActorLocation());
+                    EnemyPositions.Add(GridPos);
+                    
+                    int32 Dist = FMath::Abs(GridPos.X - PlayerCell.X) + FMath::Abs(GridPos.Y - PlayerCell.Y);
+                    if (Dist > MaxDist)
+                    {
+                        MaxDist = Dist;
+                    }
+                }
+            }
+            // Dynamic margin: MaxDist + buffer, clamped between 15 and 100
+            Margin = FMath::Clamp(MaxDist + 10, 15, 100);
+        }
+    }
+
+    UE_LOG(LogTurnCore, Log, TEXT("[TurnCore] ObservationPhase: Updating DistanceField with Margin=%d (Enemies=%d)"), Margin, EnemyPositions.Num());
+    DistanceField->UpdateDistanceFieldOptimized(PlayerCell, EnemyPositions, Margin);
     UE_LOG(LogTurnCore, Log, TEXT("[TurnCore] ObservationPhase: Complete"));
 }
 
@@ -382,11 +414,12 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
             }
             else
             {
-                UE_LOG(LogTurnCore, Verbose,
-                    TEXT("[TurnCore] Skip RegisterResolvedMove for %s (bIsWait=%d, FinalTag=%s)"),
+                UE_LOG(LogTurnCore, Log,
+                    TEXT("[TurnCore] Skip RegisterResolvedMove for %s (bIsWait=%d, FinalTag=%s, Reason=%s)"),
                     *GetNameSafe(Action.SourceActor.Get()),
                     Action.bIsWait ? 1 : 0,
-                    *Action.FinalAbilityTag.ToString());
+                    *Action.FinalAbilityTag.ToString(),
+                    *Action.ResolutionReason);
             }
         }
     }

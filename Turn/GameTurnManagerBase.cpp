@@ -493,6 +493,21 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
 	UWorld* World = GetWorld();
 	if (!World) { EndEnemyTurn(); return; }
 
+    // CodeRevision: INC-2025-1122-PERF-R1 (Skip redundant AI calculations when enemy phase already executed) (2025-11-22)
+    // If enemy phase was already triggered (simultaneous movement case), we've already:
+    // - Collected enemies (RebuildEnemyList)
+    // - Updated DistanceField
+    // - Generated intents (RegenerateIntentsForPlayerPosition)
+    // So we skip the duplicate AI calculations here.
+    if (bEnemyPhaseExecutedThisTurn)
+    {
+        LOG_TURN(Log, TEXT("[Turn %d] Player action complete - enemy phase already in progress (skipping redundant AI calc)"), CurrentTurnId);
+        return;
+    }
+
+    // Enemy phase not yet executed (player attacked without moving) - need full AI calculation
+    LOG_TURN(Log, TEXT("[Turn %d] Player action complete - starting enemy phase"), CurrentTurnId);
+
 	UPlayerMoveHandlerSubsystem* MoveHandler = World->GetSubsystem<UPlayerMoveHandlerSubsystem>();
 	if (!MoveHandler) { EndEnemyTurn(); return; }
 
@@ -517,17 +532,8 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
     }
 
     // CodeRevision: INC-2025-1122-ATTACK-SEQ-R2 (Trigger enemy phase after player action completes) (2025-11-22)
-    // If enemy phase hasn't been executed yet (e.g., player attacked without moving),
-    // start the enemy phase now that the player's action is complete.
-    if (!bEnemyPhaseExecutedThisTurn)
-    {
-        LOG_TURN(Log, TEXT("[Turn %d] Player action complete - starting enemy phase"), CurrentTurnId);
-        ExecuteEnemyPhase();
-    }
-    else
-    {
-        LOG_TURN(Log, TEXT("[Turn %d] Player action complete - enemy phase already in progress"), CurrentTurnId);
-    }
+    // Player attacked without moving, so we need to start enemy phase now
+    ExecuteEnemyPhase();
 }
 
 // CodeRevision: INC-2025-1122-SIMUL-R5 (Simplified - delegate intent regeneration to EnemyTurnDataSubsystem) (2025-11-22)
@@ -578,6 +584,23 @@ void AGameTurnManagerBase::ExecuteEnemyPhase()
         // Delegate intent regeneration to EnemyTurnDataSubsystem
         TArray<FEnemyIntent> FinalIntents;
         EnemyData->RegenerateIntentsForPlayerPosition(CurrentTurnId, PlayerFinalCell, FinalIntents);
+
+        // CodeRevision: INC-2025-1122-ADJ-ATTACK-R3 (Upgrade adjacent enemies only if they can reach both positions) (2025-11-22)
+        // After regenerating intents based on player's target position, upgrade any enemies
+        // that are adjacent to BOTH the player's current AND target positions.
+        // This ensures:
+        // 1. Enemies adjacent to player's current position get a chance to attack
+        // 2. Enemies that can't reach the player's target position won't attack thin air
+        const FIntPoint PlayerCurrentCell = LocalPathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
+        if (PlayerCurrentCell != PlayerFinalCell)
+        {
+            const int32 UpgradedCount = EnemyData->UpgradeIntentsForAdjacency(PlayerCurrentCell, PlayerFinalCell, 1);
+            if (UpgradedCount > 0)
+            {
+                LOG_TURN(Log, TEXT("[Turn %d] ExecuteEnemyPhase: Upgraded %d enemies to ATTACK (adjacent to both PlayerCurrent=(%d,%d) and PlayerTarget=(%d,%d))"),
+                    CurrentTurnId, UpgradedCount, PlayerCurrentCell.X, PlayerCurrentCell.Y, PlayerFinalCell.X, PlayerFinalCell.Y);
+            }
+        }
     }
     else
     {

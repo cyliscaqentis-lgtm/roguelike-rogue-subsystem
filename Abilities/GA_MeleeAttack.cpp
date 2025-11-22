@@ -254,6 +254,7 @@ void UGA_MeleeAttack::OnMontageCancelled()
     EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
 }
 
+// CodeRevision: INC-2025-1122-TARGET-R1 (Check player's reserved cell for target finding during simultaneous movement) (2025-11-22)
 AActor* UGA_MeleeAttack::FindAdjacentTarget()
 {
     AActor* Avatar = GetAvatarActorFromActorInfo();
@@ -262,13 +263,58 @@ AActor* UGA_MeleeAttack::FindAdjacentTarget()
         return nullptr;
     }
 
-    if (AUnitBase* Unit = Cast<AUnitBase>(Avatar))
+    AUnitBase* Unit = Cast<AUnitBase>(Avatar);
+    if (!Unit)
     {
-        TArray<AUnitBase*> AdjacentPlayers = Unit->GetAdjacentPlayers();
-        if (AdjacentPlayers.Num() > 0 && IsValid(AdjacentPlayers[0]))
-        {
-            return AdjacentPlayers[0];
-        }
+        return nullptr;
+    }
+
+    // First try the standard adjacent search (player at current position)
+    TArray<AUnitBase*> AdjacentPlayers = Unit->GetAdjacentPlayers();
+    if (AdjacentPlayers.Num() > 0 && IsValid(AdjacentPlayers[0]))
+    {
+        return AdjacentPlayers[0];
+    }
+
+    // If not found, check if player's RESERVED cell is adjacent to us
+    // This handles the case where player is moving but hasn't arrived yet
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return nullptr;
+    }
+
+    UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>();
+    UGridPathfindingSubsystem* GridLib = World->GetSubsystem<UGridPathfindingSubsystem>();
+    if (!Occupancy || !GridLib)
+    {
+        return nullptr;
+    }
+
+    // Get player pawn
+    APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(World, 0);
+    if (!PlayerPawn)
+    {
+        return nullptr;
+    }
+
+    // Check if player's reserved cell is adjacent to our current position
+    const FIntPoint PlayerReservedCell = Occupancy->GetReservedCellForActor(PlayerPawn);
+    if (PlayerReservedCell.X < 0 || PlayerReservedCell.Y < 0)
+    {
+        return nullptr; // No reservation, player not moving
+    }
+
+    const FIntPoint MyCell = GridLib->WorldToGrid(Avatar->GetActorLocation());
+    const int32 ChebyshevDist = FMath::Max(
+        FMath::Abs(MyCell.X - PlayerReservedCell.X),
+        FMath::Abs(MyCell.Y - PlayerReservedCell.Y));
+
+    if (ChebyshevDist <= 1)
+    {
+        UE_LOG(LogAttackAbility, Log, TEXT("[GA_MeleeAttack] %s: Found player via reserved cell (%d,%d), MyCell=(%d,%d), Dist=%d"),
+            *GetNameSafe(Avatar), PlayerReservedCell.X, PlayerReservedCell.Y, MyCell.X, MyCell.Y, ChebyshevDist);
+        return PlayerPawn;
     }
 
     return nullptr;

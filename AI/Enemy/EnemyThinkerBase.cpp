@@ -67,6 +67,7 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
         UE_LOG(LogEnemyThinker, Warning, TEXT("[PathFinder] Enemy at (%d,%d): Walkable=%d"), 
             Intent.CurrentCell.X, Intent.CurrentCell.Y, bCurrentWalkable ? 1 : 0);
         
+        /*
         FIntPoint Neighbors[4] = {
             Intent.CurrentCell + FIntPoint(1, 0),   // Right
             Intent.CurrentCell + FIntPoint(-1, 0),  // Left
@@ -86,6 +87,7 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
         }
         
         UE_LOG(LogEnemyThinker, Warning, TEXT("[PathFinder] SUMMARY: %d/4 neighbors are blocked"), BlockedCount);
+        */
     }
     else
     {
@@ -139,6 +141,7 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
 
     bool bPathFound = false;
     int32 PathLen = 0;
+    /*
     if (GridPathfinding && Intent.NextCell != Intent.CurrentCell)
     {
         TArray<FVector> DebugPath;
@@ -154,6 +157,7 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
             TEXT("[Thinker] %s FindPath RESULT Success=%d PathLen=%d"),
             *GetNameSafe(GetOwner()), bPathFound ? 1 : 0, PathLen);
     }
+    */
     
     if (Intent.NextCell.X < -100 || Intent.NextCell.X > 100 || Intent.NextCell.Y < -100 || Intent.NextCell.Y > 100)
     {

@@ -1,0 +1,245 @@
+Type,TurnID,Category,Timestamp,Message
+Warning,1,TurnAdvanceGuard,17021741.612552,[EndEnemyTurn] Retry scheduled in 0.5s
+Warning,1,TurnBarrier,17021741.612563,[Barrier] Turn 1: ALL ACTIONS COMPLETED (Remaining=0) -> Scheduling OnAllMovesFinished (NextTick)
+Log,1,AttackAbility,17021741.612575,"[GA_AttackBase] EndAbility: Completed attack in Barrier (TurnId=1, ActionId=24AD59554F82C14E6B79948A784CA80C, Actor=BP_EnemyUnitBase_C_4)"
+Error,1,AttackAbility,17021741.612590,[GA_MeleeAttack] BP_EnemyUnitBase_C_4: OnAttackCompleted RETURNED
+Log,2,TurnBarrier,17021741.612718,[Barrier] Broadcasting OnAllMovesFinished for Turn 1
+Log,2,TurnManager,17021741.612734,[Turn 1] Barrier complete - all move actions finished (EnemyPhaseInProgress=1)
+Log,2,TurnManager,17021741.612745,[Turn 1] Enemy phase complete. Ending turn.
+Log,2,TurnManager,17021741.612766,[Turn 1] Sequential mode flags cleared
+Warning,2,TurnManager,17021741.612775,[Turn 1] ==== EndEnemyTurn ====
+Warning,2,TurnInit,17021741.612885,[Turn 2] ==== OnTurnStarted (Subsystem) START ====
+Log,2,TurnInit,17021741.612895,[Turn 2] ClearResidualInProgressTags called
+Log,2,EnemyAI,17021741.612904,[CollectAllEnemies] ==== START ====
+Log,2,EnemyAI,17021741.612932,[CollectAllEnemies] GetAllActorsOfClass found 6 Pawns
+Log,2,EnemyAI,17021741.612943,"[CollectAllEnemies] Added[0]: BP_EnemyUnitBase_C_0 (TeamId=2, GTag=1, ByTeam=1, ActorTag=1)"
+Log,2,EnemyAI,17021741.612953,"[CollectAllEnemies] Added[1]: BP_EnemyUnitBase_C_1 (TeamId=2, GTag=1, ByTeam=1, ActorTag=1)"
+Log,2,EnemyAI,17021741.612962,"[CollectAllEnemies] Added[2]: BP_EnemyUnitBase_C_2 (TeamId=2, GTag=1, ByTeam=1, ActorTag=1)"
+Log,2,EnemyAI,17021741.612972,[CollectAllEnemies] ==== RESULT ==== found=6  collected=5  byGTag=5  byTeam=5  byActorTag=5
+Log,2,TurnInit,17021741.612982,[Turn 2] Enemy roster updated: 5 -> 5
+Log,2,TurnInit,17021741.613030,"[Turn 2] DF: Player=(17,42) Enemies=5 Margin=9"
+Log,2,TurnInit,17021741.613040,[Turn 2] ✅All enemies reachable with Margin=9
+Warning,2,TurnInit,17021741.613049,[Turn 2] Generating preliminary enemy intents...
+Log,2,EnemyAI,17021741.613057,"[BuildObservations] PlayerGrid=(17, 42)"
+Warning,2,TurnCore,17021741.613067,"[TurnCore] CoreObservationPhase received PlayerCell=(17, 42)"
+Log,2,TurnCore,17021741.613077,[TurnCore] ObservationPhase: Purged outdated reservations for turn 2
+Log,2,TurnCore,17021741.613087,[TurnCore] ObservationPhase: Complete
+Log,2,EnemyAI,17021741.613101,"[BuildObservations] DistanceField updated with PlayerGrid=(17,42)"
+Log,2,EnemyAI,17021741.613111,"[BuildObservations] Enemy[0]: BP_EnemyUnitBase_C_0, Grid=(19, 45), DistToPlayer=3"
+Log,2,EnemyAI,17021741.613123,"[BuildObservations] Enemy[1]: BP_EnemyUnitBase_C_1, Grid=(19, 44), DistToPlayer=2"
+Log,2,EnemyAI,17021741.613132,"[BuildObservations] Enemy[2]: BP_EnemyUnitBase_C_2, Grid=(18, 44), DistToPlayer=2"
+Log,2,EnemyAI,17021741.613142,"[BuildObservations] ==== RESULT ==== Generated 5 observations (Valid=5, Invalid=0)"
+Warning,2,EnemyAI,17021741.613152,"[CollectIntents] ==== START ==== Observations=5, Enemies=5"
+Warning,2,EnemyAI,17021741.613163,[CollectIntents] === PASS 1: Attack Intent Generation ===
+Log,2,EnemyThinker,17021741.613174,[ComputeIntent] BP_EnemyUnitBase_C_0: MOVE intent (TileDistance=3 > Range=1)
+Log,2,EnemyAI,17021741.613185,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_0, Thinker found, Intent=AI.Intent.Move"
+Log,2,EnemyThinker,17021741.613195,[ComputeIntent] BP_EnemyUnitBase_C_1: MOVE intent (TileDistance=2 > Range=1)
+Log,2,EnemyAI,17021741.613205,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_1, Thinker found, Intent=AI.Intent.Move"
+Log,2,EnemyThinker,17021741.613249,[ComputeIntent] BP_EnemyUnitBase_C_2: MOVE intent (TileDistance=2 > Range=1)
+Log,2,EnemyAI,17021741.613258,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_2, Thinker found, Intent=AI.Intent.Move"
+Log,2,EnemyThinker,17021741.613267,[ComputeIntent] BP_EnemyUnitBase_C_3: MOVE intent (TileDistance=3 > Range=1)
+Log,2,EnemyAI,17021741.613277,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_3, Thinker found, Intent=AI.Intent.Move"
+Log,2,EnemyThinker,17021741.613287,"[ComputeIntent] BP_EnemyUnitBase_C_4: ATTACK intent (TileDistance=1, Range=1, Target=BP_PlayerUnit_C_0)"
+Log,2,EnemyAI,17021741.613297,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_4, Thinker found, Intent=AI.Intent.Attack"
+Warning,2,EnemyAI,17021741.613307,"[CollectIntents] Pass1[4]: BP_EnemyUnitBase_C_4 -> ATTACK at (18,43), HardBlocked"
+Warning,2,EnemyAI,17021741.613316,"[CollectIntents] Pass1 Complete: AttackIntents=1, HardBlockedCells=1"
+Warning,2,EnemyAI,17021741.613324,[CollectIntents] === PASS 2: Move/Wait Intent Generation ===
+Warning,2,EnemyAI,17021741.613334,"[CollectIntents] ==== RESULT ==== Generated 5 intents (Attack=1, Move=3, Wait=1)"
+Warning,2,TurnInit,17021741.613343,[Turn 2] Preliminary intents generated: 5 intents from 5 enemies (will be updated after player move)
+Log,2,TurnInit,17021741.613353,[Turn 2] Stored 5 preliminary intents in EnemyTurnDataSubsystem
+Log,2,TurnManager,17021741.613443,[Turn 2] Client: Gate OPENED after replication (WindowId=3)
+Warning,2,Temp,17021741.613452,"[Client] OnRep: Window OPEN, gate reset"
+Warning,3,TurnManager,17021742.120993,[Turn 2] ==== EndEnemyTurn ====
+Warning,3,TurnInit,17021742.121107,[Turn 3] ==== OnTurnStarted (Subsystem) START ====
+Log,3,TurnInit,17021742.121116,[Turn 3] ClearResidualInProgressTags called
+Log,3,EnemyAI,17021742.121125,[CollectAllEnemies] ==== START ====
+Log,3,EnemyAI,17021742.121134,[CollectAllEnemies] GetAllActorsOfClass found 6 Pawns
+Log,3,EnemyAI,17021742.121155,"[CollectAllEnemies] Added[0]: BP_EnemyUnitBase_C_0 (TeamId=2, GTag=1, ByTeam=1, ActorTag=1)"
+Log,3,EnemyAI,17021742.121165,"[CollectAllEnemies] Added[1]: BP_EnemyUnitBase_C_1 (TeamId=2, GTag=1, ByTeam=1, ActorTag=1)"
+Log,3,EnemyAI,17021742.121176,"[CollectAllEnemies] Added[2]: BP_EnemyUnitBase_C_2 (TeamId=2, GTag=1, ByTeam=1, ActorTag=1)"
+Log,3,EnemyAI,17021742.121186,[CollectAllEnemies] ==== RESULT ==== found=6  collected=5  byGTag=5  byTeam=5  byActorTag=5
+Log,3,TurnInit,17021742.121199,[Turn 3] Enemy roster updated: 5 -> 5
+Log,3,TurnInit,17021742.121247,"[Turn 3] DF: Player=(17,42) Enemies=5 Margin=9"
+Log,3,TurnInit,17021742.121255,[Turn 3] ✅All enemies reachable with Margin=9
+Warning,3,TurnInit,17021742.121264,[Turn 3] Generating preliminary enemy intents...
+Log,3,EnemyAI,17021742.121271,"[BuildObservations] PlayerGrid=(17, 42)"
+Warning,3,TurnCore,17021742.121282,"[TurnCore] CoreObservationPhase received PlayerCell=(17, 42)"
+Log,3,TurnCore,17021742.121292,[TurnCore] ObservationPhase: Purged outdated reservations for turn 3
+Log,3,TurnCore,17021742.121301,[TurnCore] ObservationPhase: Complete
+Log,3,EnemyAI,17021742.121309,"[BuildObservations] DistanceField updated with PlayerGrid=(17,42)"
+Log,3,EnemyAI,17021742.121317,"[BuildObservations] Enemy[0]: BP_EnemyUnitBase_C_0, Grid=(19, 45), DistToPlayer=3"
+Log,3,EnemyAI,17021742.121326,"[BuildObservations] Enemy[1]: BP_EnemyUnitBase_C_1, Grid=(19, 44), DistToPlayer=2"
+Log,3,EnemyAI,17021742.121335,"[BuildObservations] Enemy[2]: BP_EnemyUnitBase_C_2, Grid=(18, 44), DistToPlayer=2"
+Log,3,EnemyAI,17021742.121343,"[BuildObservations] ==== RESULT ==== Generated 5 observations (Valid=5, Invalid=0)"
+Warning,3,EnemyAI,17021742.121352,"[CollectIntents] ==== START ==== Observations=5, Enemies=5"
+Warning,3,EnemyAI,17021742.121360,[CollectIntents] === PASS 1: Attack Intent Generation ===
+Log,3,EnemyThinker,17021742.121369,[ComputeIntent] BP_EnemyUnitBase_C_0: MOVE intent (TileDistance=3 > Range=1)
+Log,3,EnemyAI,17021742.121381,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_0, Thinker found, Intent=AI.Intent.Move"
+Log,3,EnemyThinker,17021742.121392,[ComputeIntent] BP_EnemyUnitBase_C_1: MOVE intent (TileDistance=2 > Range=1)
+Log,3,EnemyAI,17021742.121401,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_1, Thinker found, Intent=AI.Intent.Move"
+Log,3,EnemyThinker,17021742.121409,[ComputeIntent] BP_EnemyUnitBase_C_2: MOVE intent (TileDistance=2 > Range=1)
+Log,3,EnemyAI,17021742.121417,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_2, Thinker found, Intent=AI.Intent.Move"
+Log,3,EnemyThinker,17021742.121427,[ComputeIntent] BP_EnemyUnitBase_C_3: MOVE intent (TileDistance=3 > Range=1)
+Log,3,EnemyAI,17021742.121436,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_3, Thinker found, Intent=AI.Intent.Move"
+Log,3,EnemyThinker,17021742.121446,"[ComputeIntent] BP_EnemyUnitBase_C_4: ATTACK intent (TileDistance=1, Range=1, Target=BP_PlayerUnit_C_0)"
+Log,3,EnemyAI,17021742.121468,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_4, Thinker found, Intent=AI.Intent.Attack"
+Warning,3,EnemyAI,17021742.121482,"[CollectIntents] Pass1[4]: BP_EnemyUnitBase_C_4 -> ATTACK at (18,43), HardBlocked"
+Warning,3,EnemyAI,17021742.121491,"[CollectIntents] Pass1 Complete: AttackIntents=1, HardBlockedCells=1"
+Warning,3,EnemyAI,17021742.121499,[CollectIntents] === PASS 2: Move/Wait Intent Generation ===
+Warning,3,EnemyAI,17021742.121509,"[CollectIntents] ==== RESULT ==== Generated 5 intents (Attack=1, Move=3, Wait=1)"
+Warning,3,TurnInit,17021742.121519,[Turn 3] Preliminary intents generated: 5 intents from 5 enemies (will be updated after player move)
+Log,3,TurnInit,17021742.121530,[Turn 3] Stored 5 preliminary intents in EnemyTurnDataSubsystem
+Log,3,Temp,17021744.607789,[Client] Command created: TurnId=3 (from TurnManager) WindowId=4
+Warning,3,Temp,17021744.607814,[Server] ☁ESubmitCommand RPC RECEIVED
+Log,3,Temp,17021744.607837,[Server] WindowId validated: 4
+Log,3,GridOccupancy,17021744.608016,"[GridOccupancy] RESERVE DEST: BP_PlayerUnit_C_0 -> (18, 42) (TurnId=3)"
+Log,3,GridOccupancy,17021744.608029,"[GridOccupancy] RESERVE ORIGIN-HOLD: BP_PlayerUnit_C_0 protects origin (17, 42) (TurnId=3) [BACKSTAB PROTECTION]"
+Log,3,TurnManager,17021744.608041,"[TurnCommandHandler] Player move reserved (18,42) - triggering enemy phase for simultaneous movement."
+Log,3,TurnManager,17021744.608053,"[Turn 3] ExecuteEnemyPhase: Using RESERVED PlayerTargetCell=(18,42)"
+Log,3,EnemyTurnDataSys,17021744.608066,[RebuildEnemyList] Starting rebuild with Tag='Enemy'
+Log,3,EnemyTurnDataSys,17021744.608077,[RebuildEnemyList] Found 5 actors with tag 'Enemy'
+Log,3,EnemyTurnDataSys,17021744.608088,"[RebuildEnemyList] Registered 0 new enemies, 5 already registered"
+Log,3,EnemyTurnDataSys,17021744.608099,[RebuildEnemyList] Complete. Total enemies: 5 (Revision=3)
+Log,3,EnemyTurnDataSys,17021744.608110,[Turn 3] RegenerateIntents: Found 5 enemies after RebuildEnemyList
+Log,3,EnemyAI,17021744.608122,"[BuildObservations] PlayerGrid=(18, 42)"
+Warning,3,TurnCore,17021744.608134,"[TurnCore] CoreObservationPhase received PlayerCell=(18, 42)"
+Log,3,TurnCore,17021744.608148,[TurnCore] ObservationPhase: Purged outdated reservations for turn 3
+Log,3,TurnCore,17021744.608163,[TurnCore] ObservationPhase: Complete
+Log,3,EnemyAI,17021744.608176,"[BuildObservations] DistanceField updated with PlayerGrid=(18,42)"
+Log,3,EnemyAI,17021744.608190,"[BuildObservations] Enemy[0]: BP_EnemyUnitBase_C_0, Grid=(19, 45), DistToPlayer=3"
+Log,3,EnemyAI,17021744.608201,"[BuildObservations] Enemy[1]: BP_EnemyUnitBase_C_1, Grid=(19, 44), DistToPlayer=2"
+Log,3,EnemyAI,17021744.608212,"[BuildObservations] Enemy[2]: BP_EnemyUnitBase_C_2, Grid=(18, 44), DistToPlayer=2"
+Log,3,EnemyAI,17021744.608224,"[BuildObservations] ==== RESULT ==== Generated 5 observations (Valid=5, Invalid=0)"
+Warning,3,EnemyAI,17021744.608234,"[CollectIntents] ==== START ==== Observations=5, Enemies=5"
+Warning,3,EnemyAI,17021744.608245,[CollectIntents] === PASS 1: Attack Intent Generation ===
+Log,3,EnemyThinker,17021744.608256,[ComputeIntent] BP_EnemyUnitBase_C_0: MOVE intent (TileDistance=3 > Range=1)
+Log,3,EnemyAI,17021744.608268,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_0, Thinker found, Intent=AI.Intent.Move"
+Log,3,EnemyThinker,17021744.608278,[ComputeIntent] BP_EnemyUnitBase_C_1: MOVE intent (TileDistance=2 > Range=1)
+Log,3,EnemyAI,17021744.608289,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_1, Thinker found, Intent=AI.Intent.Move"
+Log,3,EnemyThinker,17021744.608300,[ComputeIntent] BP_EnemyUnitBase_C_2: MOVE intent (TileDistance=2 > Range=1)
+Log,3,EnemyAI,17021744.608309,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_2, Thinker found, Intent=AI.Intent.Move"
+Log,3,EnemyThinker,17021744.608320,[ComputeIntent] BP_EnemyUnitBase_C_3: MOVE intent (TileDistance=3 > Range=1)
+Log,3,EnemyAI,17021744.608332,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_3, Thinker found, Intent=AI.Intent.Move"
+Log,3,EnemyThinker,17021744.608344,"[ComputeIntent] BP_EnemyUnitBase_C_4: ATTACK intent (TileDistance=1, Range=1, Target=BP_PlayerUnit_C_0)"
+Log,3,EnemyAI,17021744.608355,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_4, Thinker found, Intent=AI.Intent.Attack"
+Warning,3,EnemyAI,17021744.608366,"[CollectIntents] Pass1[4]: BP_EnemyUnitBase_C_4 -> ATTACK at (18,43), HardBlocked"
+Warning,3,EnemyAI,17021744.608377,"[CollectIntents] Pass1 Complete: AttackIntents=1, HardBlockedCells=1"
+Warning,3,EnemyAI,17021744.608388,[CollectIntents] === PASS 2: Move/Wait Intent Generation ===
+Warning,3,EnemyAI,17021744.608399,"[CollectIntents] ==== RESULT ==== Generated 5 intents (Attack=1, Move=3, Wait=1)"
+Log,3,EnemyTurnDataSys,17021744.608410,"[Turn 3] RegenerateIntents: Generated 5 intents (Attack=1, Move=3, Wait=1) for PlayerCell=(18,42)"
+Log,3,TurnManager,17021744.608421,[Turn 3] Mode: SEQUENTIAL
+Log,3,TurnCore,17021744.608431,"[TurnCore] ResolvePhase: Resolved 5 actions, Hash=0x81BF305A"
+Log,3,TurnCore,17021744.608446,"[TurnCore] Skip RegisterResolvedMove for BP_EnemyUnitBase_C_4 (bIsWait=0, FinalTag=AI.Intent.Attack, Reason=Success: Attack (no conflict))"
+Log,3,GridOccupancy,17021744.608457,"[GridOccupancy] RESERVE DEST: BP_EnemyUnitBase_C_3 -> (18, 44) (TurnId=3)"
+Log,3,GridOccupancy,17021744.608470,"[GridOccupancy] RESERVE ORIGIN-HOLD: BP_EnemyUnitBase_C_3 protects origin (18, 45) (TurnId=3) [BACKSTAB PROTECTION]"
+Log,3,GridOccupancy,17021744.608481,"[GridOccupancy] RESERVE DEST: BP_EnemyUnitBase_C_0 -> (20, 45) (TurnId=3)"
+Log,3,GridOccupancy,17021744.608492,"[GridOccupancy] RESERVE ORIGIN-HOLD: BP_EnemyUnitBase_C_0 protects origin (19, 45) (TurnId=3) [BACKSTAB PROTECTION]"
+Log,3,TurnCore,17021744.608505,"[TurnCore] Skip RegisterResolvedMove for BP_EnemyUnitBase_C_1 (bIsWait=1, FinalTag=AI.Intent.Wait, Reason=LostConflict: Cell (19,44) occupied by higher priority)"
+Log,3,GridOccupancy,17021744.608516,"[GridOccupancy] RESERVE DEST: BP_EnemyUnitBase_C_2 -> (19, 43) (TurnId=3)"
+Log,3,GridOccupancy,17021744.608526,"[GridOccupancy] SKIP ORIGIN-HOLD: BP_EnemyUnitBase_C_2 skipping origin (18, 44) - already reserved by BP_EnemyUnitBase_C_3"
+Log,3,AttackPhase,17021744.608550,[Turn 3] BeginSequentialAttacks: 1 attacks queued
+Log,3,AttackPhase,17021744.608561,[Turn 3] Pre-registering 1 attacks with TurnActionBarrier
+Warning,3,AttackPhase,17021744.608574,[Turn 3] BP_EnemyUnitBase_C_4: ASC has 4 activatable abilities
+Warning,3,AttackPhase,17021744.608597,"    AssetTags: AI.Intent.Move, Ability.Move"
+Warning,3,AttackPhase,17021744.608642,    AssetTags: GameplayEvent.Intent.Attack
+Warning,3,AttackPhase,17021744.608674,[Turn 3] Sending GameplayEvent: Tag=GameplayEvent.Intent.Attack (to BP_EnemyUnitBase_C_4)
+Error,3,AttackAbility,17021744.608686,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_4
+Log,3,AttackAbility,17021744.608699,"[GA_AttackBase] ActivateAbility: Retrieved pre-registered ActionId from AttackExecutor (TurnId=3, ActionId=D50D77F9402642242A0825B2ABCB4A1A, Actor=BP_EnemyUnitBase_C_4)"
+Error,3,AttackAbility,17021744.608711,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,3,AttackAbility,17021744.608722,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Error,3,AttackAbility,17021744.609010,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,3,AttackAbility,17021744.609027,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,3,AttackAbility,17021744.609040,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,3,AttackAbility,17021744.609052,[GA_MeleeAttack] ActivateAbility COMPLETED
+Log,3,AttackPhase,17021744.609064,[Turn 3] Dispatched attack 1/1: BP_EnemyUnitBase_C_4 (Tag=GameplayEvent.Intent.Attack)
+Warning,3,Temp,17021744.609096,[Client] 📤 RPC sent: Server_SubmitCommand(WindowId=4)
+Log,3,TurnManager,17021744.773803,Turn 3: OnPlayerMoveCompleted Tag=Gameplay.Event.Turn.Ability.Completed
+Log,3,TurnManager,17021744.773862,[Turn 3] Client: Gate CLOSED after replication
+Log,3,TurnManager,17021744.773876,[Turn 3] Player action complete - enemy phase already in progress (skipping redundant AI calc)
+Log,3,UnitMovement,17021744.773888,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Error,3,AttackAbility,17021745.573774,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_4
+Error,3,AttackAbility,17021745.573792,[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Attacking stored target: BP_PlayerUnit_C_0
+Warning,3,AttackAbility,17021745.573808,[GA_MeleeAttack] ==== DAMAGE DIAGNOSTIC START ====
+Warning,3,AttackAbility,17021745.573820,"[GA_MeleeAttack] Attacker=BP_EnemyUnitBase_C_4, Target=BP_PlayerUnit_C_0, Damage=28.00"
+Warning,3,AttackAbility,17021745.573833,"[GA_MeleeAttack] AttackerTeam=2, TargetTeam=0 (SameTeam=NO - OK)"
+Warning,3,AttackAbility,17021745.573879,[GA_MeleeAttack] Set attacker CombatSet.BaseDamage = 28.00 (was 20.00)
+Warning,3,AttackAbility,17021745.573906,[GA_MeleeAttack] Applying GameplayEffect: GE_Damage_Basic_Instant_C (LyraDamageExecution will capture BaseDamage=28.00)
+Warning,3,Temp,17021745.573922,[DMG] Src=BP_EnemyUnitBase_C_4  Tgt=BP_PlayerUnit_C_0
+Warning,3,Temp,17021745.573943,[DMG] => DamageDone=43.00
+Warning,3,Temp,17021745.573953,[DMG] Applied modifier to target (HealthSet.Damage += 43.00)
+Log,3,AttackAbility,17021745.574827,"[GA_MeleeAttack] GameplayEffect applied (Instant effect, handle is invalid but this is normal)"
+Error,3,AttackAbility,17021745.574846,"[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Montage completed, calling OnAttackCompleted()"
+Warning,3,TurnAction,17021745.574859,[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility
+Warning,3,TurnAction,17021745.574871,"[GA_TurnActionBase] Defensive check: ASC found, checking tags"
+Warning,3,TurnAction,17021745.574882,"[GA_TurnActionBase] Defensive check: State_Ability_Executing=0, State_Action_InProgress=0"
+Log,3,AttackPhase,17021745.574892,[Turn 3] Ability completed at index 0
+Log,3,TurnManager,17021745.574914,[Turn 3] AttackExecutor complete - attack phase finished
+Warning,3,TurnManager,17021745.574924,"[Turn 3] Sequential attack phase complete, dispatching move-only phase"
+Log,3,TurnManager,17021745.574935,"[Turn 3] Dispatching 3 cached enemy actions sequentially (Moves=3, Waits=1, NonMove=1)"
+Log,3,UnitBase,17021745.574945,[MoveUnit] BP_EnemyUnitBase_C_3: Delegating to MovementComponent (PathNum=1)
+Log,3,UnitMovement,17021745.574955,[UnitMovementComponent] Movement started with 1 waypoints
+Log,3,MoveReservation,17021745.574973,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_3, TurnId=3, ActionId=B139E7C64E9A1D34DB1D569B02399EE5"
+Log,3,UnitBase,17021745.574985,[MoveUnit] BP_EnemyUnitBase_C_0: Delegating to MovementComponent (PathNum=1)
+Log,3,UnitMovement,17021745.574995,[UnitMovementComponent] Movement started with 1 waypoints
+Log,3,MoveReservation,17021745.575006,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_0, TurnId=3, ActionId=728C9B344FD12A2DA891B4B1BB581E70"
+Log,3,UnitBase,17021745.575016,[MoveUnit] BP_EnemyUnitBase_C_2: Delegating to MovementComponent (PathNum=1)
+Log,3,UnitMovement,17021745.575029,[UnitMovementComponent] Movement started with 1 waypoints
+Log,3,MoveReservation,17021745.575040,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_2, TurnId=3, ActionId=033A5E9443715F64AE1E0AB643720412"
+Log,3,AttackAbility,17021745.575053,"[GA_AttackBase] EndAbility: Completed attack in Barrier (TurnId=3, ActionId=D50D77F9402642242A0825B2ABCB4A1A, Actor=BP_EnemyUnitBase_C_4)"
+Error,3,AttackAbility,17021745.575062,[GA_MeleeAttack] BP_EnemyUnitBase_C_4: OnAttackCompleted RETURNED
+Log,3,GridOccupancy,17021745.735449,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_0 -> (20,45)"
+Log,3,MoveReservation,17021745.735468,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_0 TurnId=3
+Log,3,UnitMovement,17021745.735480,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Warning,3,UnitMovement,17021745.736734,"[UnitMovementComponent] UpdateActorCell FAILED (Retry=1/5) for BP_EnemyUnitBase_C_3 at (18,44) - scheduling retry"
+Log,3,GridOccupancy,17021745.823992,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_2 -> (19,43)"
+Log,3,MoveReservation,17021745.824015,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_2 TurnId=3
+Log,3,UnitMovement,17021745.824029,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,3,GridOccupancy,17021745.837116,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_3 -> (18,44)"
+Warning,3,TurnBarrier,17021745.837150,[Barrier] Turn 3: ALL ACTIONS COMPLETED (Remaining=0) -> Scheduling OnAllMovesFinished (NextTick)
+Log,3,MoveReservation,17021745.837170,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_3 TurnId=3
+Log,3,UnitMovement,17021745.837184,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,4,TurnBarrier,17021745.847231,[Barrier] Broadcasting OnAllMovesFinished for Turn 3
+Log,4,TurnManager,17021745.847253,[Turn 3] Barrier complete - all move actions finished (EnemyPhaseInProgress=1)
+Log,4,TurnManager,17021745.847264,[Turn 3] Enemy phase complete. Ending turn.
+Log,4,TurnManager,17021745.847286,[Turn 3] Sequential mode flags cleared
+Warning,4,TurnManager,17021745.847298,[Turn 3] ==== EndEnemyTurn ====
+Warning,4,TurnInit,17021745.847464,[Turn 4] ==== OnTurnStarted (Subsystem) START ====
+Log,4,TurnInit,17021745.847472,[Turn 4] ClearResidualInProgressTags called
+Log,4,EnemyAI,17021745.847484,[CollectAllEnemies] ==== START ====
+Log,4,EnemyAI,17021745.847494,[CollectAllEnemies] GetAllActorsOfClass found 6 Pawns
+Log,4,EnemyAI,17021745.847505,"[CollectAllEnemies] Added[0]: BP_EnemyUnitBase_C_0 (TeamId=2, GTag=1, ByTeam=1, ActorTag=1)"
+Log,4,EnemyAI,17021745.847516,"[CollectAllEnemies] Added[1]: BP_EnemyUnitBase_C_1 (TeamId=2, GTag=1, ByTeam=1, ActorTag=1)"
+Log,4,EnemyAI,17021745.847533,"[CollectAllEnemies] Added[2]: BP_EnemyUnitBase_C_2 (TeamId=2, GTag=1, ByTeam=1, ActorTag=1)"
+Log,4,EnemyAI,17021745.847545,[CollectAllEnemies] ==== RESULT ==== found=6  collected=5  byGTag=5  byTeam=5  byActorTag=5
+Log,4,TurnInit,17021745.847554,[Turn 4] Enemy roster updated: 5 -> 5
+Log,4,TurnInit,17021745.847610,"[Turn 4] DF: Player=(18,42) Enemies=5 Margin=9"
+Log,4,TurnInit,17021745.847621,[Turn 4] ✅All enemies reachable with Margin=9
+Warning,4,TurnInit,17021745.847635,[Turn 4] Generating preliminary enemy intents...
+Log,4,EnemyAI,17021745.847646,"[BuildObservations] PlayerGrid=(18, 42)"
+Warning,4,TurnCore,17021745.847659,"[TurnCore] CoreObservationPhase received PlayerCell=(18, 42)"
+Log,4,TurnCore,17021745.847670,[TurnCore] ObservationPhase: Purged outdated reservations for turn 4
+Log,4,TurnCore,17021745.847681,[TurnCore] ObservationPhase: Complete
+Log,4,EnemyAI,17021745.847690,"[BuildObservations] DistanceField updated with PlayerGrid=(18,42)"
+Log,4,EnemyAI,17021745.847700,"[BuildObservations] Enemy[0]: BP_EnemyUnitBase_C_0, Grid=(20, 45), DistToPlayer=3"
+Log,4,EnemyAI,17021745.847711,"[BuildObservations] Enemy[1]: BP_EnemyUnitBase_C_1, Grid=(19, 44), DistToPlayer=2"
+Log,4,EnemyAI,17021745.847723,"[BuildObservations] Enemy[2]: BP_EnemyUnitBase_C_2, Grid=(19, 43), DistToPlayer=1"
+Log,4,EnemyAI,17021745.847734,"[BuildObservations] ==== RESULT ==== Generated 5 observations (Valid=5, Invalid=0)"
+Warning,4,EnemyAI,17021745.847745,"[CollectIntents] ==== START ==== Observations=5, Enemies=5"
+Warning,4,EnemyAI,17021745.847754,[CollectIntents] === PASS 1: Attack Intent Generation ===
+Log,4,EnemyThinker,17021745.847762,[ComputeIntent] BP_EnemyUnitBase_C_0: MOVE intent (TileDistance=3 > Range=1)
+Log,4,EnemyAI,17021745.847772,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_0, Thinker found, Intent=AI.Intent.Move"
+Log,4,EnemyThinker,17021745.847782,[ComputeIntent] BP_EnemyUnitBase_C_1: MOVE intent (TileDistance=2 > Range=1)
+Log,4,EnemyAI,17021745.847791,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_1, Thinker found, Intent=AI.Intent.Move"
+Log,4,EnemyThinker,17021745.847803,"[ComputeIntent] BP_EnemyUnitBase_C_2: ATTACK intent (TileDistance=1, Range=1, Target=BP_PlayerUnit_C_0)"
+Log,4,EnemyAI,17021745.847815,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_2, Thinker found, Intent=AI.Intent.Attack"
+Warning,4,EnemyAI,17021745.847826,"[CollectIntents] Pass1[2]: BP_EnemyUnitBase_C_2 -> ATTACK at (19,43), HardBlocked"
+Log,4,EnemyThinker,17021745.847834,[ComputeIntent] BP_EnemyUnitBase_C_3: MOVE intent (TileDistance=2 > Range=1)
+Log,4,EnemyAI,17021745.847844,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_3, Thinker found, Intent=AI.Intent.Move"
+Log,4,EnemyThinker,17021745.847852,"[ComputeIntent] BP_EnemyUnitBase_C_4: ATTACK intent (TileDistance=1, Range=1, Target=BP_PlayerUnit_C_0)"
+Log,4,EnemyAI,17021745.847862,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_4, Thinker found, Intent=AI.Intent.Attack"
+Warning,4,EnemyAI,17021745.847871,"[CollectIntents] Pass1[4]: BP_EnemyUnitBase_C_4 -> ATTACK at (18,43), HardBlocked"
+Warning,4,EnemyAI,17021745.847879,"[CollectIntents] Pass1 Complete: AttackIntents=2, HardBlockedCells=2"
+Warning,4,EnemyAI,17021745.847889,[CollectIntents] === PASS 2: Move/Wait Intent Generation ===
+Warning,4,EnemyAI,17021745.847900,"[CollectIntents] ==== RESULT ==== Generated 5 intents (Attack=2, Move=2, Wait=1)"
+Warning,4,TurnInit,17021745.847912,[Turn 4] Preliminary intents generated: 5 intents from 5 enemies (will be updated after player move)
+Log,4,TurnInit,17021745.847921,[Turn 4] Stored 5 preliminary intents in EnemyTurnDataSubsystem

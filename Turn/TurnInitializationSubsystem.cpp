@@ -353,6 +353,8 @@ void UTurnInitializationSubsystem::InitializeTurn(int32 TurnId, APawn* PlayerPaw
 	InitializeGridOccupancy(TurnId, PlayerPawn, Enemies);
 
 	// 2. DistanceField update
+	// CodeRevision: INC-2025-1122-PERF-R2 (Disable redundant DF update at turn start)
+	/*
 	if (PlayerPawn && Enemies.Num() > 0)
 	{
 		UpdateDistanceField(PlayerPawn, Enemies);
@@ -362,8 +364,12 @@ void UTurnInitializationSubsystem::InitializeTurn(int32 TurnId, APawn* PlayerPaw
 		UE_LOG(LogTurnInit, Warning, TEXT("[Turn %d] Skipping DistanceField update: PlayerPawn=%s, Enemies=%d"),
 			TurnId, PlayerPawn ? TEXT("Valid") : TEXT("NULL"), Enemies.Num());
 	}
+	*/
+	UE_LOG(LogTurnInit, Log, TEXT("[Turn %d] Skipped initial DistanceField update (will be updated in ExecuteEnemyPhase)"), TurnId);
 
 	// 3. Preliminary intent generation
+	// CodeRevision: INC-2025-1122-PERF-R3 (Disable preliminary intents to prevent freeze)
+	/*
 	TArray<FEnemyIntent> PreliminaryIntents;
 	if (GeneratePreliminaryIntents(PlayerPawn, Enemies, PreliminaryIntents))
 	{
@@ -375,6 +381,8 @@ void UTurnInitializationSubsystem::InitializeTurn(int32 TurnId, APawn* PlayerPaw
 				TurnId, PreliminaryIntents.Num());
 		}
 	}
+	*/
+	UE_LOG(LogTurnInit, Log, TEXT("[Turn %d] Skipped preliminary intent generation (will be generated in ExecuteEnemyPhase)"), TurnId);
 
 	UE_LOG(LogTurnInit, Warning, TEXT("[Turn %d] ==== TurnInitialization END ===="), TurnId);
 }
