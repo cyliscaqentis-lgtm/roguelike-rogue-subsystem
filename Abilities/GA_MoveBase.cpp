@@ -31,7 +31,7 @@
 
 #include "../Utility/ProjectDiagnostics.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogMoveVerbose, Log, All);
+DEFINE_LOG_CATEGORY(LogMoveAbility);
 
 namespace GA_MoveBase_Private
 {
@@ -122,7 +122,7 @@ UGA_MoveBase::UGA_MoveBase(const FObjectInitializer& ObjectInitializer)
     Trigger.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
     AbilityTriggers.Add(Trigger);
 
-    UE_LOG(LogMoveVerbose, Verbose,
+    UE_LOG(LogMoveAbility, Verbose,
         TEXT("[GA_MoveBase] Constructor registered trigger %s"),
         *Trigger.TriggerTag.ToString());
 }
@@ -148,13 +148,13 @@ bool UGA_MoveBase::ShouldRespondToEvent(
 {
     if (!Payload)
     {
-        UE_LOG(LogMoveVerbose, Verbose, TEXT("[GA_MoveBase] ShouldRespondToEvent: Payload is null"));
+        UE_LOG(LogMoveAbility, Verbose, TEXT("[GA_MoveBase] ShouldRespondToEvent: Payload is null"));
         return false;
     }
 
     if (!Payload->EventTag.MatchesTagExact(RogueGameplayTags::GameplayEvent_Intent_Move))
     {
-        UE_LOG(LogMoveVerbose, Verbose,
+        UE_LOG(LogMoveAbility, Verbose,
             TEXT("[GA_MoveBase] ShouldRespondToEvent: EventTag mismatch (Expected=%s, Got=%s)"),
             *RogueGameplayTags::GameplayEvent_Intent_Move.GetTag().ToString(),
             *Payload->EventTag.ToString());
@@ -164,7 +164,7 @@ bool UGA_MoveBase::ShouldRespondToEvent(
     const int32 RawMagnitude = FMath::RoundToInt(Payload->EventMagnitude);
     if (RawMagnitude < TurnCommandEncoding::kDirBase)
     {
-        UE_LOG(LogMoveVerbose, Verbose,
+        UE_LOG(LogMoveAbility, Verbose,
             TEXT("[GA_MoveBase] ShouldRespondToEvent: Invalid magnitude %d (expected >= %d)"),
             RawMagnitude, TurnCommandEncoding::kDirBase);
         return false;
@@ -172,11 +172,11 @@ bool UGA_MoveBase::ShouldRespondToEvent(
 
     if (!ActorInfo || !ActorInfo->AvatarActor.IsValid())
     {
-        UE_LOG(LogMoveVerbose, Verbose, TEXT("[GA_MoveBase] ShouldRespondToEvent: Invalid ActorInfo"));
+        UE_LOG(LogMoveAbility, Verbose, TEXT("[GA_MoveBase] ShouldRespondToEvent: Invalid ActorInfo"));
         return false;
     }
 
-    UE_LOG(LogMoveVerbose, Log,
+    UE_LOG(LogMoveAbility, Log,
         TEXT("[GA_MoveBase] ShouldRespondToEvent: ✅ Passed all checks (Actor=%s, EventTag=%s, Magnitude=%d)"),
         *GetNameSafe(ActorInfo->AvatarActor.Get()),
         *Payload->EventTag.ToString(),
@@ -199,7 +199,7 @@ void UGA_MoveBase::ActivateAbility(
     {
         TeamId = Unit->Team;
     }
-    UE_LOG(LogTurnManager, Log,
+    UE_LOG(LogMoveAbility, Log,
         TEXT("[GA_MoveBase] ABILITY ACTIVATED: Actor=%s, Team=%d"),
         *GetNameSafe(Avatar), TeamId);
 
@@ -219,7 +219,7 @@ void UGA_MoveBase::ActivateAbility(
                 MoveActionId = Barrier->RegisterAction(Avatar, MoveTurnId);
                 bBarrierRegistered = MoveActionId.IsValid();
 
-                UE_LOG(LogTurnManager, Log,
+                UE_LOG(LogMoveAbility, Log,
                     TEXT("[GA_MoveBase] Registered with Barrier: Turn=%d ActionId=%s Registered=%d"),
                     MoveTurnId,
                     *MoveActionId.ToString(),
@@ -242,7 +242,7 @@ void UGA_MoveBase::ActivateAbility(
 
     if (!TriggerEventData)
     {
-        UE_LOG(LogTurnManager, Error, TEXT("[GA_MoveBase] ActivateAbility failed: TriggerEventData is null"));
+        UE_LOG(LogMoveAbility, Error, TEXT("[GA_MoveBase] ActivateAbility failed: TriggerEventData is null"));
         EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
         return;
     }
@@ -267,14 +267,14 @@ void UGA_MoveBase::ActivateAbility(
         {
             CompletedTurnIdForEvent = TurnManager->GetCurrentTurnId();
         }
-        UE_LOG(LogTurnManager, Log,
+        UE_LOG(LogMoveAbility, Log,
             TEXT("[GA_MoveBase] TurnId retrieved from TurnManager: %d (Actor=%s)"),
             CompletedTurnIdForEvent, *GetNameSafe(Avatar));
     }
     else
     {
         CompletedTurnIdForEvent = INDEX_NONE;
-        UE_LOG(LogTurnManager, Warning,
+        UE_LOG(LogMoveAbility, Warning,
             TEXT("[GA_MoveBase] TurnManager not available in TriggerEventData - CompletedTurnIdForEvent set to INDEX_NONE"));
     }
 
@@ -282,7 +282,7 @@ void UGA_MoveBase::ActivateAbility(
     const int32 RawMagnitude = FMath::RoundToInt(TriggerEventData->EventMagnitude);
     if (RawMagnitude < TurnCommandEncoding::kDirBase)
     {
-        UE_LOG(LogTurnManager, Error,
+        UE_LOG(LogMoveAbility, Error,
             TEXT("[GA_MoveBase] ActivateAbility failed: Invalid magnitude %d (expected >= %d)"),
             RawMagnitude, TurnCommandEncoding::kDirBase);
         EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
@@ -292,7 +292,7 @@ void UGA_MoveBase::ActivateAbility(
     FVector EncodedDirection = FVector::ZeroVector;
     if (!ExtractDirectionFromEventData(TriggerEventData, EncodedDirection))
     {
-        UE_LOG(LogTurnManager, Error,
+        UE_LOG(LogMoveAbility, Error,
             TEXT("[GA_MoveBase] ActivateAbility failed: ExtractDirectionFromEventData failed (magnitude=%d)"),
             RawMagnitude);
         EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
@@ -306,7 +306,7 @@ void UGA_MoveBase::ActivateAbility(
             FMath::RoundToInt(EncodedDirection.X),
             FMath::RoundToInt(EncodedDirection.Y));
 
-        UE_LOG(LogTurnManager, Log,
+        UE_LOG(LogMoveAbility, Log,
             TEXT("[GA_MoveBase] Starting move to resolved cell: Target=(%d,%d) Actor=%s Magnitude=%d"),
             TargetCell.X, TargetCell.Y, *GetNameSafe(Avatar), RawMagnitude);
 
@@ -318,7 +318,7 @@ void UGA_MoveBase::ActivateAbility(
     const FVector2D GridDir = QuantizeToGridDirection(EncodedDirection);
     if (GridDir.IsNearlyZero())
     {
-        UE_LOG(LogTurnManager, Warning,
+        UE_LOG(LogMoveAbility, Warning,
             TEXT("[GA_MoveBase] Quantized direction is zero; aborting move"));
         EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
         return;
@@ -327,7 +327,7 @@ void UGA_MoveBase::ActivateAbility(
     UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
     if (!Pathfinding)
     {
-        UE_LOG(LogTurnManager, Error,
+        UE_LOG(LogMoveAbility, Error,
             TEXT("[GA_MoveBase] GridPathfindingSubsystem not available - aborting move"));
         EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
         return;
@@ -336,7 +336,7 @@ void UGA_MoveBase::ActivateAbility(
     AUnitBase* Unit = Cast<AUnitBase>(Avatar);
     if (!Unit)
     {
-        UE_LOG(LogTurnManager, Error,
+        UE_LOG(LogMoveAbility, Error,
             TEXT("[GA_MoveBase] Avatar is not a UnitBase - aborting move"));
         EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
         return;
@@ -362,7 +362,7 @@ void UGA_MoveBase::ActivateAbility(
 
     if (Step == FIntPoint::ZeroValue)
     {
-        UE_LOG(LogTurnManager, Warning,
+        UE_LOG(LogMoveAbility, Warning,
             TEXT("[GA_MoveBase] Step after quantization is zero; aborting move"));
         EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
         return;
@@ -380,7 +380,7 @@ void UGA_MoveBase::ActivateAbility(
             OccupyingActor = Occupancy->GetActorAtCell(TargetCell);
         }
 
-        UE_LOG(LogTurnManager, Warning,
+        UE_LOG(LogMoveAbility, Warning,
             TEXT("[GA_MoveBase] MOVEMENT BLOCKED: Actor=%s tried to move from Cell(%d,%d) to Cell(%d,%d), but target is NOT WALKABLE. Reason: %s"),
             *GetNameSafe(Unit),
             CurrentCell.X, CurrentCell.Y,
@@ -397,7 +397,7 @@ void UGA_MoveBase::ActivateAbility(
     const float MoveDistance = FVector::Dist(CurrentLocation, NextTileStep);
     if (MoveDistance > GA_MoveBase_Private::MaxAllowedStepDistance)
     {
-        UE_LOG(LogTurnManager, Warning,
+        UE_LOG(LogMoveAbility, Warning,
             TEXT("[GA_MoveBase] Step distance %.1f is suspicious (from %s to %s)"),
             MoveDistance,
             *CurrentLocation.ToCompactString(),
@@ -406,7 +406,7 @@ void UGA_MoveBase::ActivateAbility(
 
     if (MoveDistance < KINDA_SMALL_NUMBER)
     {
-        UE_LOG(LogTurnManager, Verbose,
+        UE_LOG(LogMoveAbility, Verbose,
             TEXT("[GA_MoveBase] Zero distance move detected – ending ability"));
         EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
         return;
@@ -415,7 +415,7 @@ void UGA_MoveBase::ActivateAbility(
     if (!IsTileWalkable(NextTileStep, Unit))
     {
         // デバッグ: WorldPos ベースの歩行可能性チェック失敗
-        UE_LOG(LogTurnManager, Warning,
+        UE_LOG(LogMoveAbility, Warning,
             TEXT("[GA_MoveBase] WALKABILITY CHECK FAILED: Actor=%s, NextTileWorldPos=%s (Cell=%d,%d) is not walkable (world position-based check)"),
             *GetNameSafe(Unit),
             *NextTileStep.ToCompactString(),
@@ -461,7 +461,7 @@ void UGA_MoveBase::CancelAbility(
     const FGameplayAbilityActivationInfo ActivationInfo,
     bool bReplicateCancelAbility)
 {
-    UE_LOG(LogMoveVerbose, Verbose, TEXT("[GA_MoveBase] Ability cancelled"));
+    UE_LOG(LogMoveAbility, Verbose, TEXT("[GA_MoveBase] Ability cancelled"));
 
     Super::CancelAbility(Handle, ActorInfo, ActivationInfo, bReplicateCancelAbility);
 }
@@ -476,7 +476,7 @@ void UGA_MoveBase::EndAbility(
     // Sparky fix: Prevent re-entry
     if (bIsEnding)
     {
-        UE_LOG(LogTurnManager, Warning, TEXT("[GA_MoveBase] Already ending, ignoring recursive call"));
+        UE_LOG(LogMoveAbility, Warning, TEXT("[GA_MoveBase] Already ending, ignoring recursive call"));
         return;
     }
     bIsEnding = true;
@@ -486,7 +486,7 @@ void UGA_MoveBase::EndAbility(
         : 0.0;
     AbilityStartTime = 0.0;
 
-    UE_LOG(LogMoveVerbose, Verbose,
+    UE_LOG(LogMoveAbility, Verbose,
         TEXT("[GA_MoveBase] EndAbility (cancelled=%d, elapsed=%.2fs)"),
         bWasCancelled ? 1 : 0,
         Elapsed);
@@ -501,7 +501,7 @@ void UGA_MoveBase::EndAbility(
             {
                 Barrier->CompleteAction(GetAvatarActorFromActorInfo(), MoveTurnId, MoveActionId);
 
-                UE_LOG(LogTurnManager, Log,
+                UE_LOG(LogMoveAbility, Log,
                     TEXT("[GA_MoveBase] Barrier completed in EndAbility for %s (Turn=%d, ActionId=%s)"),
                     *GetNameSafe(GetAvatarActorFromActorInfo()),
                     MoveTurnId,
@@ -551,13 +551,13 @@ void UGA_MoveBase::SendCompletionEvent(bool bTimedOut)
 
         if (NotifiedTurnId == INDEX_NONE || NotifiedTurnId < 0)
         {
-            UE_LOG(LogTurnManager, Error,
+            UE_LOG(LogMoveAbility, Error,
                 TEXT("[SendCompletionEvent] INVALID TurnId=%d, NOT sending completion event! (Actor=%s)"),
                 NotifiedTurnId, *GetNameSafe(GetAvatarActorFromActorInfo()));
             return;
         }
 
-        UE_LOG(LogTurnManager, Warning,
+        UE_LOG(LogMoveAbility, Warning,
             TEXT("[TurnNotify] GA_MoveBase completion: Actor=%s TurnId=%d"),
             *GetNameSafe(GetAvatarActorFromActorInfo()), NotifiedTurnId);
 
@@ -580,7 +580,7 @@ bool UGA_MoveBase::ExtractDirectionFromEventData(
 {
     if (!EventData)
     {
-        UE_LOG(LogTurnManager, Error,
+        UE_LOG(LogMoveAbility, Error,
             TEXT("[GA_MoveBase] ExtractDirectionFromEventData: EventData is null"));
         return false;
     }
@@ -600,7 +600,7 @@ bool UGA_MoveBase::ExtractDirectionFromEventData(
             return true;
         }
 
-        UE_LOG(LogTurnManager, Warning,
+        UE_LOG(LogMoveAbility, Warning,
             TEXT("[GA_MoveBase] UnpackCell failed for magnitude=%d"), Magnitude);
         return false;
     }
@@ -615,12 +615,12 @@ bool UGA_MoveBase::ExtractDirectionFromEventData(
             return true;
         }
 
-        UE_LOG(LogTurnManager, Warning,
+        UE_LOG(LogMoveAbility, Warning,
             TEXT("[GA_MoveBase] UnpackDir failed for code=%d"), Magnitude);
         return false;
     }
 
-    UE_LOG(LogTurnManager, Warning,
+    UE_LOG(LogMoveAbility, Warning,
         TEXT("[GA_MoveBase] Invalid magnitude=%d (expected >= %d)"),
         Magnitude, TurnCommandEncoding::kDirBase);
     return false;
@@ -667,7 +667,7 @@ bool UGA_MoveBase::IsTileWalkable(const FIntPoint& Cell) const
     AActor* IgnoreActor = const_cast<AActor*>(GetAvatarActorFromActorInfo());
     if (!Pathfinding->IsCellWalkableIgnoringActor(Cell, IgnoreActor))
     {
-        UE_LOG(LogTurnManager, Verbose,
+        UE_LOG(LogMoveAbility, Verbose,
             TEXT("[IsTileWalkable] Cell (%d,%d) blocked for %s."),
             Cell.X, Cell.Y, *GetNameSafe(IgnoreActor));
         return false;
@@ -732,7 +732,7 @@ void UGA_MoveBase::BindMoveFinishedDelegate()
 {
     if (bMoveFinishedDelegateBound)
     {
-        UE_LOG(LogTurnManager, Warning,
+        UE_LOG(LogMoveAbility, Warning,
             TEXT("[BindMoveFinishedDelegate] %s: Already bound, skipping"),
             *GetNameSafe(GetAvatarActorFromActorInfo()));
         return;
@@ -746,20 +746,20 @@ void UGA_MoveBase::BindMoveFinishedDelegate()
             MovementComp->OnMoveFinished.AddDynamic(this, &UGA_MoveBase::OnMoveFinished);
             bMoveFinishedDelegateBound = true;
 
-            UE_LOG(LogTurnManager, Log,
+            UE_LOG(LogMoveAbility, Log,
                 TEXT("[BindMoveFinishedDelegate] SUCCESS: Unit %s delegate bound to UnitMovementComponent::OnMoveFinished"),
                 *GetNameSafe(Unit));
             return;
         }
 
-        UE_LOG(LogTurnManager, Error,
+        UE_LOG(LogMoveAbility, Error,
             TEXT("[BindMoveFinishedDelegate] FAILED: MovementComp missing for Unit %s - cannot bind OnMoveFinished"),
             *GetNameSafe(Unit));
     }
     else
     {
         // Sparky diagnostic: Cast failed
-        UE_LOG(LogTurnManager, Error,
+        UE_LOG(LogMoveAbility, Error,
             TEXT("[BindMoveFinishedDelegate] FAILED: Avatar is not a UnitBase! Avatar=%s"),
             *GetNameSafe(GetAvatarActorFromActorInfo()));
     }
@@ -771,7 +771,7 @@ void UGA_MoveBase::OnMoveFinished(AUnitBase* Unit)
     // Position snap and rotation are now handled in UnitMovementComponent::FinishMovement()
     // This function only handles ability termination (barrier completion is now in EndAbility)
 
-    UE_LOG(LogTurnManager, Log,
+    UE_LOG(LogMoveAbility, Log,
         TEXT("[MoveComplete] Unit %s reached destination, GA_MoveBase ending."),
         *GetNameSafe(Unit));
 
@@ -783,7 +783,7 @@ void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
     AUnitBase* Unit = Cast<AUnitBase>(GetAvatarActorFromActorInfo());
     if (!Unit)
     {
-        UE_LOG(LogTurnManager, Error, TEXT("[GA_MoveBase] StartMoveToCell failed: Avatar is not a UnitBase"));
+        UE_LOG(LogMoveAbility, Error, TEXT("[GA_MoveBase] StartMoveToCell failed: Avatar is not a UnitBase"));
         EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, true);
         return;
     }
@@ -792,7 +792,7 @@ void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
     UGridPathfindingSubsystem* Pathfinding = GetGridPathfindingSubsystem();
     if (!Pathfinding)
     {
-        UE_LOG(LogTurnManager, Error, TEXT("[GA_MoveBase] StartMoveToCell failed: GridPathfindingSubsystem missing"));
+        UE_LOG(LogMoveAbility, Error, TEXT("[GA_MoveBase] StartMoveToCell failed: GridPathfindingSubsystem missing"));
         EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, true);
         return;
     }
@@ -810,7 +810,7 @@ void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
         // Fallback for non-turn-based scenarios (exploration mode, etc.)
         if (!IsTileWalkable(TargetCell))
         {
-            UE_LOG(LogTurnManager, Warning,
+            UE_LOG(LogMoveAbility, Warning,
                 TEXT("[GA_MoveBase] Target cell (%d,%d) not reserved and not walkable - Move blocked"),
                 TargetCell.X, TargetCell.Y);
             EndAbility(CachedSpecHandle, &CachedActorInfo, CachedActivationInfo, true, true);
@@ -818,7 +818,7 @@ void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
         }
 
         // Allow movement but log warning if no reservation system is active
-        UE_LOG(LogTurnManager, Verbose,
+        UE_LOG(LogMoveAbility, Verbose,
             TEXT("[GA_MoveBase] Target cell (%d,%d) not reserved but walkable - Allowing (exploration mode?)"),
             TargetCell.X, TargetCell.Y);
     }
@@ -951,7 +951,7 @@ void UGA_MoveBase::DebugDumpAround(const FIntPoint& Center)
                 (DeltaX == 0 && DeltaY == 0) ? TEXT("[") : TEXT(" "),
                 bWalkable ? 1 : 0);
         }
-        UE_LOG(LogMoveVerbose, Verbose, TEXT("[GA_MoveBase] %s"), *Row);
+        UE_LOG(LogMoveAbility, Verbose, TEXT("[GA_MoveBase] %s"), *Row);
     }
 #endif
 }

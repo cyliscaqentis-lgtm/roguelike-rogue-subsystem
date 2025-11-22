@@ -6,7 +6,8 @@
 #include "Turn/GameTurnManagerBase.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
-#include "../Utility/ProjectDiagnostics.h"
+
+DEFINE_LOG_CATEGORY(LogWaitAbility);
 
 UGA_WaitBase::UGA_WaitBase(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -42,7 +43,7 @@ void UGA_WaitBase::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
     RegisterBarrierAction();
     NotifyTurnManagerStarted();
 
-    DIAG_LOG(Verbose, TEXT("[GA_WaitBase] Wait ability activated"));
+    UE_LOG(LogWaitAbility, Verbose, TEXT("[GA_WaitBase] Wait ability activated"));
 
     ExecuteWait();
 }
@@ -77,11 +78,11 @@ void UGA_WaitBase::OnWaitCompleted()
 {
     if (!HasAuthority(&CurrentActivationInfo))
     {
-        DIAG_LOG(Warning, TEXT("[GA_WaitBase] OnWaitCompleted called on client (ignored)"));
+        UE_LOG(LogWaitAbility, Warning, TEXT("[GA_WaitBase] OnWaitCompleted called on client (ignored)"));
         return;
     }
 
-    DIAG_LOG(Verbose, TEXT("[GA_WaitBase] Wait completed - ending ability"));
+    UE_LOG(LogWaitAbility, Verbose, TEXT("[GA_WaitBase] Wait completed - ending ability"));
 
     // EndAbility内でCompleteBarrierActionとNotifyTurnManagerCompletedが呼ばれるため、
     // ここではEndAbilityのみを呼ぶ
@@ -111,7 +112,7 @@ void UGA_WaitBase::RegisterBarrierAction()
             WaitActionId = Barrier->RegisterAction(Avatar, WaitTurnId);
             bBarrierActionRegistered = WaitActionId.IsValid();
 
-            DIAG_LOG(Verbose,
+            UE_LOG(LogWaitAbility, Verbose,
                 TEXT("[GA_WaitBase] Barrier register: Turn=%d ActionId=%s Registered=%d"),
                 WaitTurnId,
                 *WaitActionId.ToString(),
@@ -120,7 +121,7 @@ void UGA_WaitBase::RegisterBarrierAction()
     }
     else
     {
-        DIAG_LOG(Warning, TEXT("[GA_WaitBase] Barrier subsystem not found; wait action untracked"));
+        UE_LOG(LogWaitAbility, Warning, TEXT("[GA_WaitBase] Barrier subsystem not found; wait action untracked"));
     }
 }
 
@@ -147,7 +148,7 @@ void UGA_WaitBase::CompleteBarrierAction()
         if (AActor* Avatar = GetAvatarActorFromActorInfo())
         {
             Barrier->CompleteAction(Avatar, WaitTurnId, WaitActionId);
-            DIAG_LOG(Verbose,
+            UE_LOG(LogWaitAbility, Verbose,
                 TEXT("[GA_WaitBase] Barrier complete: Turn=%d ActionId=%s"),
                 WaitTurnId,
                 *WaitActionId.ToString());
@@ -155,7 +156,7 @@ void UGA_WaitBase::CompleteBarrierAction()
     }
     else
     {
-        DIAG_LOG(Warning, TEXT("[GA_WaitBase] Barrier subsystem not found during completion"));
+        UE_LOG(LogWaitAbility, Warning, TEXT("[GA_WaitBase] Barrier subsystem not found during completion"));
     }
 
     bBarrierActionCompleted = true;

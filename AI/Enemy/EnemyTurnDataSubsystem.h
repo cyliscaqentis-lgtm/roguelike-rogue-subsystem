@@ -7,6 +7,9 @@
 #include "../../Turn/TurnSystemTypes.h"
 #include "EnemyTurnDataSubsystem.generated.h"
 
+// Forward declarations
+class UGridPathfindingSubsystem;
+
 // ログカテゴリ宣言（.cppでDEFINE）
 DECLARE_LOG_CATEGORY_EXTERN(LogEnemyTurnDataSys, Log, All);
 
@@ -173,6 +176,23 @@ public:
      */
     UFUNCTION(BlueprintPure, Category = "Turn|Enemy")
     bool HasIntents() const;
+
+    /**
+     * Intentが存在しない場合のフォールバック生成
+     *
+     * @param TurnId 現在のターンID
+     * @param PlayerPawn プレイヤーポーン
+     * @param PathFinder パス探索サブシステム
+     * @param InEnemyActors 敵アクター配列
+     * @param OutIntents 生成されたインテント出力
+     * @return インテント生成に成功した場合true
+     */
+    bool EnsureIntentsFallback(
+        int32 TurnId,
+        APawn* PlayerPawn,
+        class UGridPathfindingSubsystem* PathFinder,
+        const TArray<AActor*>& InEnemyActors,
+        TArray<FEnemyIntent>& OutIntents);
 
     /**
      * 指定TimeSlotのIntentを抽出（BPループ削減）

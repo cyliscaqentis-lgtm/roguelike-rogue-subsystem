@@ -10,6 +10,9 @@
 #include "Components/ActorComponent.h"
 #include "UnitMovementComponent.generated.h"
 
+// Log category
+DECLARE_LOG_CATEGORY_EXTERN(LogUnitMovement, Log, All);
+
 class AUnitBase;
 class UGridPathfindingSubsystem;
 struct FUnitStatBlock;

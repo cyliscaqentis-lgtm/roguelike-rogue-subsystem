@@ -8,6 +8,8 @@
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
 
+DEFINE_LOG_CATEGORY(LogDistanceField);
+
 //-----------------------------------------------------------------------------
 // Console variables
 //-----------------------------------------------------------------------------
@@ -52,17 +54,17 @@ void UDistanceFieldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     CachedPathFinder = GetWorld()->GetSubsystem<UGridPathfindingSubsystem>();
     if (CachedPathFinder.IsValid())
     {
-        UE_LOG(LogTemp, Log, TEXT("[DistanceField] UGridPathfindingSubsystem cached"));
+        UE_LOG(LogDistanceField, Log, TEXT("[DistanceField] UGridPathfindingSubsystem cached"));
     }
 
-    UE_LOG(LogTemp, Log, TEXT("[DistanceField] Initialized (PathFinder will be lazily loaded if needed)"));
+    UE_LOG(LogDistanceField, Log, TEXT("[DistanceField] Initialized (PathFinder will be lazily loaded if needed)"));
 }
 
 void UDistanceFieldSubsystem::Deinitialize()
 {
     DistanceMap.Empty();
     NextStepMap.Empty();
-    UE_LOG(LogTemp, Log, TEXT("[DistanceField] Deinitialized"));
+    UE_LOG(LogDistanceField, Log, TEXT("[DistanceField] Deinitialized"));
     Super::Deinitialize();
 }
 
@@ -153,7 +155,7 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(
     const UGridPathfindingSubsystem* GridPathfinding = GetPathFinder();
     if (!GridPathfinding)
     {
-        UE_LOG(LogTemp, Error, TEXT("[DistanceField] UGridPathfindingSubsystem not found"));
+        UE_LOG(LogDistanceField, Error, TEXT("[DistanceField] UGridPathfindingSubsystem not found"));
         return;
     }
 
@@ -185,7 +187,7 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(
 
         if (++ProcessedCells > MaxCells)
         {
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogDistanceField, Warning,
                 TEXT("[DistanceField] MaxCells limit reached: Processed=%d (Queue=%d)"),
                 ProcessedCells, Open.Num());
             break;
@@ -205,13 +207,13 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(
             --RemainingTargets;
             if (RemainingTargets == 0 && OptionalTargets.Num() > 0)
             {
-                UE_LOG(LogTemp, Log,
+                UE_LOG(LogDistanceField, Log,
                     TEXT("[DistanceField] All requested targets reached after %d cells"),
                     ProcessedCells);
             }
         }
 
-        UE_LOG(LogTemp, VeryVerbose,
+        UE_LOG(LogDistanceField, VeryVerbose,
             TEXT("[DistanceField] Processing Cell=(%d,%d) Cost=%d Queue=%d Closed=%d"),
             Current.Cell.X, Current.Cell.Y, Current.Cost, Open.Num(), ClosedSet.Num());
 
@@ -272,18 +274,18 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(
         }
     }
 
-    UE_LOG(LogTemp, Log,
+    UE_LOG(LogDistanceField, Log,
         TEXT("[DistanceField] Dijkstra complete: PlayerCell=(%d,%d), Cells=%d, Processed=%d, TargetsLeft=%d"),
         PlayerCell.X, PlayerCell.Y, DistanceMap.Num(), ProcessedCells, RemainingTargets);
 
     // Enemy movement diagnostics – log unreachable targets / enemies
-    UE_LOG(LogTemp, Warning,
+    UE_LOG(LogDistanceField, Warning,
         TEXT("[DistanceField] BuildComplete: TotalCells=%d, ProcessedCells=%d, UnreachedTargets=%d"),
         DistanceMap.Num(), ProcessedCells, RemainingTargets);
 
     if (RemainingTargets > 0)
     {
-        UE_LOG(LogTemp, Error,
+        UE_LOG(LogDistanceField, Error,
             TEXT("[DistanceField] %d targets could not be reached by the distance field!"),
             RemainingTargets);
 
@@ -291,7 +293,7 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(
         for (const FIntPoint& Pending : PendingTargets)
         {
             const int32* DistEntry = DistanceMap.Find(Pending);
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogDistanceField, Warning,
                 TEXT("[DistanceField] Pending target Cell=(%d,%d) DistEntry=%s"),
                 Pending.X, Pending.Y,
                 DistEntry ? *FString::Printf(TEXT("%d"), *DistEntry) : TEXT("NONE"));
@@ -311,13 +313,13 @@ void UDistanceFieldSubsystem::UpdateDistanceFieldInternal(
                 AActor* Actor = *It;
                 if (Actor && Actor->ActorHasTag(TEXT("Enemy")))
                 {
-                    UE_LOG(LogTemp, Warning,
+                    UE_LOG(LogDistanceField, Warning,
                         TEXT("[DistanceField] Found enemy: %s"),
                         *GetNameSafe(Actor));
                     ++UnreachedCount;
                 }
             }
-            UE_LOG(LogTemp, Error,
+            UE_LOG(LogDistanceField, Error,
                 TEXT("[DistanceField] Total enemies found in world: %d (all may be unreachable)"),
                 UnreachedCount);
         }
@@ -340,7 +342,7 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
     const FIntPoint& FromCell,
     AActor* IgnoreActor) const
 {
-    UE_LOG(LogTemp, Warning, TEXT("[GetNextStep] CALLED for (%d,%d)"), FromCell.X, FromCell.Y);
+    UE_LOG(LogDistanceField, Warning, TEXT("[GetNextStep] CALLED for (%d,%d)"), FromCell.X, FromCell.Y);
 
     const bool bDebugNeighbors = (GTS_DF_DebugGetNextStep != 0);
 
@@ -627,7 +629,7 @@ bool UDistanceFieldSubsystem::IsWalkable(const FIntPoint& Cell, AActor* IgnoreAc
     const UGridPathfindingSubsystem* GridPathfinding = GetPathFinder();
     if (!GridPathfinding)
     {
-        UE_LOG(LogTemp, Error,
+        UE_LOG(LogDistanceField, Error,
             TEXT("[IsWalkable] UGridPathfindingSubsystem not found, returning false"));
         return false;
     }

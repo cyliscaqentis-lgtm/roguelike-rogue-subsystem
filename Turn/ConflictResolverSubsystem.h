@@ -10,6 +10,9 @@
 #include "GameplayTagContainer.h"
 #include "ConflictResolverSubsystem.generated.h"
 
+// Log category
+DECLARE_LOG_CATEGORY_EXTERN(LogConflictResolver, Log, All);
+
 class AGameTurnManagerBase;
 
 /**

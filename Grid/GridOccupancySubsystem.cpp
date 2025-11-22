@@ -5,11 +5,14 @@
 #include "Grid/GridPathfindingSubsystem.h"
 #include "GenericTeamAgentInterface.h"
 #include "Kismet/GameplayStatics.h"
+#include "Utility/GridUtils.h"
+
+DEFINE_LOG_CATEGORY(LogGridOccupancy);
 
 void UGridOccupancySubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
-    UE_LOG(LogTemp, Log, TEXT("[GridOccupancy] Initialized"));
+    UE_LOG(LogGridOccupancy, Log, TEXT("[GridOccupancy] Initialized"));
 }
 
 void UGridOccupancySubsystem::Deinitialize()
@@ -18,7 +21,7 @@ void UGridOccupancySubsystem::Deinitialize()
     OccupiedCells.Empty();
     ReservedCells.Empty();
     ActorToReservation.Empty();
-    UE_LOG(LogTemp, Log, TEXT("[GridOccupancy] Deinitialized"));
+    UE_LOG(LogGridOccupancy, Log, TEXT("[GridOccupancy] Deinitialized"));
     Super::Deinitialize();
 }
 
@@ -116,7 +119,7 @@ bool UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
             {
                 // CodeRevision: INC-2025-1156-R1 (Disable Perfect Swap - Strict Reservation Enforcement) (2025-11-20 11:30)
                 // We strictly reject moves into cells reserved by others. Swapping is not allowed.
-                UE_LOG(LogTemp, Warning,
+                UE_LOG(LogGridOccupancy, Warning,
                     TEXT("[GridOccupancy] REJECT by foreign reservation: %s -> (%d,%d) reserved by %s"),
                     *GetNameSafe(Actor), NewCell.X, NewCell.Y, *GetNameSafe(ForeignReserver));
                 return false;
@@ -141,7 +144,7 @@ bool UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
             // ★★★ Two-phase commit: follower must wait until owner commits ★★★
             if (bOccupantWillLeave && !bOccupantCommitted)
             {
-                UE_LOG(LogTemp, Verbose,
+                UE_LOG(LogGridOccupancy, Verbose,
                     TEXT("[GridOccupancy] REJECT (follower before owner commit): %s -> (%d,%d), occupant=%s will leave but not committed yet"),
                     *GetNameSafe(Actor), NewCell.X, NewCell.Y, *GetNameSafe(ExistingActor));
                 return false; // Follower arrived before leader's commit; reject for now
@@ -151,7 +154,7 @@ bool UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
             // This prevents "crushing" a waiting unit.
             if (!(bMoverHasReservation && bOccupantWillLeave))
             {
-                UE_LOG(LogTemp, Error,
+                UE_LOG(LogGridOccupancy, Error,
                     TEXT("[GridOccupancy] REJECT UPDATE: %s cannot move to (%d,%d) - occupied by %s (moverReserved=%d, occupantLeaves=%d)"),
                     *GetNameSafe(Actor), NewCell.X, NewCell.Y, *GetNameSafe(ExistingActor),
                     bMoverHasReservation ? 1 : 0, bOccupantWillLeave ? 1 : 0);
@@ -159,7 +162,7 @@ bool UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
             }
             else
             {
-                UE_LOG(LogTemp, Log,
+                UE_LOG(LogGridOccupancy, Log,
                     TEXT("[GridOccupancy] ACCEPT (reserved + occupant committed): %s -> (%d,%d) - was occupied by %s (left to %s)"),
                     *GetNameSafe(Actor), NewCell.X, NewCell.Y, *GetNameSafe(ExistingActor),
                     *GetReservedCellForActor(ExistingActor).ToString());
@@ -181,7 +184,7 @@ bool UGridOccupancySubsystem::UpdateActorCell(AActor* Actor, FIntPoint NewCell)
     // ★★★ Two-phase commit: mark the move as committed so followers can proceed ★★★
     CommittedThisTick.Add(Actor);
 
-    UE_LOG(LogTemp, Log, TEXT("[GridOccupancy] COMMIT: %s -> (%d,%d)"),
+    UE_LOG(LogGridOccupancy, Log, TEXT("[GridOccupancy] COMMIT: %s -> (%d,%d)"),
         *GetNameSafe(Actor), NewCell.X, NewCell.Y);
 
     return true;
@@ -229,14 +232,14 @@ void UGridOccupancySubsystem::OccupyCell(const FIntPoint& Cell, AActor* Actor)
     OccupiedCells.Add(Cell, Actor);
     ActorToCell.Add(Actor, Cell);
 
-    UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] Cell (%d, %d) occupied by %s"),
+    UE_LOG(LogGridOccupancy, Verbose, TEXT("[GridOccupancy] Cell (%d, %d) occupied by %s"),
         Cell.X, Cell.Y, *GetNameSafe(Actor));
 }
 
 void UGridOccupancySubsystem::ReleaseCell(const FIntPoint& Cell)
 {
     OccupiedCells.Remove(Cell);
-    UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] Cell (%d, %d) released"),
+    UE_LOG(LogGridOccupancy, Verbose, TEXT("[GridOccupancy] Cell (%d, %d) released"),
         Cell.X, Cell.Y);
 }
 
@@ -254,7 +257,7 @@ void UGridOccupancySubsystem::UnregisterActor(AActor* Actor)
     ActorToCell.Remove(Actor);
     ReleaseReservationForActor(Actor);
 
-    UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] Actor %s unregistered"),
+    UE_LOG(LogGridOccupancy, Verbose, TEXT("[GridOccupancy] Actor %s unregistered"),
         *GetNameSafe(Actor));
 }
 
@@ -301,7 +304,7 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
                     {
                         if (OriginTeamAgent->GetGenericTeamId() != FollowerTeamAgent->GetGenericTeamId())
                         {
-                            UE_LOG(LogTemp, Warning,
+                            UE_LOG(LogGridOccupancy, Warning,
                                 TEXT("[GridOccupancy] REJECT FOLLOW-UP: %s -> (%d,%d) team mismatch with origin owner %s"),
                                 *GetNameSafe(Actor), Cell.X, Cell.Y, *GetNameSafe(OriginOwner));
                             return false;
@@ -316,7 +319,7 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
                         const int32 ChebDist = FGridUtils::ChebyshevDistance(*FollowerCellPtr, Cell);
                         if (ChebDist > 1)
                         {
-                            UE_LOG(LogTemp, Warning,
+                            UE_LOG(LogGridOccupancy, Warning,
                                 TEXT("[GridOccupancy] REJECT FOLLOW-UP: %s -> (%d,%d) distance=%d (must be <=1)"),
                                 *GetNameSafe(Actor), Cell.X, Cell.Y, ChebDist);
                             return false;
@@ -324,7 +327,7 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
                     }
 
                     // Follow-up compression: allow this as a "SoftHold" override.
-                    UE_LOG(LogTemp, Log,
+                    UE_LOG(LogGridOccupancy, Log,
                         TEXT("[GridOccupancy] ALLOW FOLLOW-UP: %s -> (%d,%d) following %s who moves to (%d,%d) [SOFTHOLD -> ALLOW]"),
                         *GetNameSafe(Actor), Cell.X, Cell.Y, *GetNameSafe(OriginOwner),
                         OriginOwnerDestReservation->Cell.X, OriginOwnerDestReservation->Cell.Y);
@@ -333,7 +336,7 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
                 else
                 {
                     // Hard block remains: no valid follow-up pattern, keep OriginHold.
-                    UE_LOG(LogTemp, Error,
+                    UE_LOG(LogGridOccupancy, Error,
                         TEXT("[GridOccupancy] REJECT RESERVATION: %s cannot reserve (%d,%d) - OriginHold by %s (TurnId=%d) [HARDHOLD -> BLOCKED]"),
                         *GetNameSafe(Actor), Cell.X, Cell.Y, *GetNameSafe(OriginOwner), ExistingInfo->TurnId);
                     return false;  // Block reservation to prevent backstab
@@ -341,7 +344,7 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
             }
             else
             {
-                UE_LOG(LogTemp, Error,
+                UE_LOG(LogGridOccupancy, Error,
                     TEXT("[GridOccupancy] REJECT RESERVATION: %s cannot reserve (%d,%d) - already reserved by %s (TurnId=%d)"),
                     *GetNameSafe(Actor), Cell.X, Cell.Y, *GetNameSafe(ExistingInfo->Owner.Get()), ExistingInfo->TurnId);
                 return false;  // Reservation denied - another actor already reserved this cell
@@ -362,7 +365,7 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
     ReservedCells.Add(Cell, DestInfo);
     ActorToReservation.Add(Actor, DestInfo);
 
-    UE_LOG(LogTemp, Log, TEXT("[GridOccupancy] RESERVE DEST: %s -> (%d, %d) (TurnId=%d)"),
+    UE_LOG(LogGridOccupancy, Log, TEXT("[GridOccupancy] RESERVE DEST: %s -> (%d, %d) (TurnId=%d)"),
         *GetNameSafe(Actor), Cell.X, Cell.Y, CurrentTurnId);
 
     // ★★★ OriginHold implementation: place an OriginHold reservation on the origin cell ★★★
@@ -378,7 +381,7 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
         {
             if (ExistingInfo->Owner.IsValid() && ExistingInfo->Owner.Get() != Actor)
             {
-                UE_LOG(LogTemp, Log, TEXT("[GridOccupancy] SKIP ORIGIN-HOLD: %s skipping origin (%d, %d) - already reserved by %s"),
+                UE_LOG(LogGridOccupancy, Log, TEXT("[GridOccupancy] SKIP ORIGIN-HOLD: %s skipping origin (%d, %d) - already reserved by %s"),
                     *GetNameSafe(Actor), CurrentCell.X, CurrentCell.Y, *GetNameSafe(ExistingInfo->Owner.Get()));
                 bCanApplyOriginHold = false;
             }
@@ -390,7 +393,7 @@ bool UGridOccupancySubsystem::ReserveCellForActor(AActor* Actor, const FIntPoint
             FReservationInfo OriginHoldInfo(Actor, CurrentCell, CurrentTurnId, true);
             ReservedCells.Add(CurrentCell, OriginHoldInfo);
 
-            UE_LOG(LogTemp, Log, TEXT("[GridOccupancy] RESERVE ORIGIN-HOLD: %s protects origin (%d, %d) (TurnId=%d) [BACKSTAB PROTECTION]"),
+            UE_LOG(LogGridOccupancy, Log, TEXT("[GridOccupancy] RESERVE ORIGIN-HOLD: %s protects origin (%d, %d) (TurnId=%d) [BACKSTAB PROTECTION]"),
                 *GetNameSafe(Actor), CurrentCell.X, CurrentCell.Y, CurrentTurnId);
         }
     }
@@ -410,7 +413,7 @@ void UGridOccupancySubsystem::ReleaseReservationForActor(AActor* Actor)
     if (const FReservationInfo* InfoPtr = ActorToReservation.Find(Actor))
     {
         ReservedCells.Remove(InfoPtr->Cell);
-        UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] Reservation cleared for %s (destination: %d,%d)"),
+        UE_LOG(LogGridOccupancy, Verbose, TEXT("[GridOccupancy] Reservation cleared for %s (destination: %d,%d)"),
             *GetNameSafe(Actor), InfoPtr->Cell.X, InfoPtr->Cell.Y);
     }
     ActorToReservation.Remove(Actor);
@@ -421,7 +424,7 @@ void UGridOccupancySubsystem::ReleaseReservationForActor(AActor* Actor)
         const FReservationInfo& Info = It.Value();
         if (Info.bIsOriginHold && Info.Owner.IsValid() && Info.Owner.Get() == Actor)
         {
-            UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] OriginHold cleared for %s (origin: %d,%d)"),
+            UE_LOG(LogGridOccupancy, Verbose, TEXT("[GridOccupancy] OriginHold cleared for %s (origin: %d,%d)"),
                 *GetNameSafe(Actor), It.Key().X, It.Key().Y);
             It.RemoveCurrent();
         }
@@ -432,7 +435,7 @@ void UGridOccupancySubsystem::ClearAllReservations()
 {
     ReservedCells.Reset();
     ActorToReservation.Reset();
-    UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] All reservations cleared"));
+    UE_LOG(LogGridOccupancy, Verbose, TEXT("[GridOccupancy] All reservations cleared"));
 }
 
 bool UGridOccupancySubsystem::IsCellReserved(const FIntPoint& Cell) const
@@ -504,13 +507,13 @@ bool UGridOccupancySubsystem::TryReserveCell(AActor* Actor, const FIntPoint& Cel
     {
         if (Owner != Actor)
         {
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogGridOccupancy, Warning,
                 TEXT("[Reserve] FAIL: (%d,%d) already reserved by %s (attempt by %s)"),
                 Cell.X, Cell.Y, *GetNameSafe(Owner), *GetNameSafe(Actor));
             return false; // Exclusive reservation - first come first served
         }
         // Already reserved by this actor - OK
-        UE_LOG(LogTemp, Verbose,
+        UE_LOG(LogGridOccupancy, Verbose,
             TEXT("[Reserve] ALREADY OWNED: %s -> (%d,%d)"),
             *GetNameSafe(Actor), Cell.X, Cell.Y);
         return true;
@@ -518,7 +521,7 @@ bool UGridOccupancySubsystem::TryReserveCell(AActor* Actor, const FIntPoint& Cel
 
     // Reserve the cell
     ReserveCellForActor(Actor, Cell);
-    UE_LOG(LogTemp, Log,
+    UE_LOG(LogGridOccupancy, Log,
         TEXT("[Reserve] OK: %s -> (%d,%d) TurnId=%d"),
         *GetNameSafe(Actor), Cell.X, Cell.Y, TurnId);
     return true;
@@ -527,13 +530,13 @@ bool UGridOccupancySubsystem::TryReserveCell(AActor* Actor, const FIntPoint& Cel
 void UGridOccupancySubsystem::BeginMovePhase()
 {
     CommittedThisTick.Reset();
-    UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] BeginMovePhase - committed set cleared"));
+    UE_LOG(LogGridOccupancy, Verbose, TEXT("[GridOccupancy] BeginMovePhase - committed set cleared"));
 }
 
 void UGridOccupancySubsystem::EndMovePhase()
 {
     CommittedThisTick.Reset();
-    UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] EndMovePhase - committed set cleared"));
+    UE_LOG(LogGridOccupancy, Verbose, TEXT("[GridOccupancy] EndMovePhase - committed set cleared"));
 }
 
 bool UGridOccupancySubsystem::HasCommittedThisTick(AActor* Actor) const
@@ -563,7 +566,7 @@ void UGridOccupancySubsystem::MarkReservationCommitted(AActor* Actor, int32 Turn
                 CellInfoPtr->bCommitted = true;
             }
 
-            UE_LOG(LogTemp, Log,
+            UE_LOG(LogGridOccupancy, Log,
                 TEXT("[GridOccupancy] MarkCommitted: %s -> (%d,%d) TurnId=%d"),
                 *GetNameSafe(Actor), InfoPtr->Cell.X, InfoPtr->Cell.Y, TurnId);
         }
@@ -579,7 +582,7 @@ void UGridOccupancySubsystem::PurgeOutdatedReservations(int32 InCurrentTurnId)
     {
         if (It.Value().TurnId != InCurrentTurnId)
         {
-            UE_LOG(LogTemp, Verbose,
+            UE_LOG(LogGridOccupancy, Verbose,
                 TEXT("[GridOccupancy] Purging outdated reservation: Cell=(%d,%d) TurnId=%d (Current=%d)"),
                 It.Key().X, It.Key().Y, It.Value().TurnId, InCurrentTurnId);
             It.RemoveCurrent();
@@ -598,7 +601,7 @@ void UGridOccupancySubsystem::PurgeOutdatedReservations(int32 InCurrentTurnId)
 
     if (PurgedCount > 0)
     {
-        UE_LOG(LogTemp, Log,
+        UE_LOG(LogGridOccupancy, Log,
             TEXT("[GridOccupancy] PurgeOutdatedReservations: Removed %d old reservations (CurrentTurnId=%d)"),
             PurgedCount, InCurrentTurnId);
     }
@@ -607,7 +610,7 @@ void UGridOccupancySubsystem::PurgeOutdatedReservations(int32 InCurrentTurnId)
 void UGridOccupancySubsystem::SetCurrentTurnId(int32 TurnId)
 {
     CurrentTurnId = TurnId;
-    UE_LOG(LogTemp, Verbose, TEXT("[GridOccupancy] SetCurrentTurnId: %d"), CurrentTurnId);
+    UE_LOG(LogGridOccupancy, Verbose, TEXT("[GridOccupancy] SetCurrentTurnId: %d"), CurrentTurnId);
 }
 
 // ★★★ CRITICAL FIX (2025-11-11): Consistency check - detect and fix overlapping occupancy ★★★
@@ -640,7 +643,7 @@ void UGridOccupancySubsystem::EnforceUniqueOccupancy()
         }
 
         // ★★★ Overlap detected ★★★
-        UE_LOG(LogTemp, Error,
+        UE_LOG(LogGridOccupancy, Error,
             TEXT("[GridOccupancy] OVERLAP DETECTED at (%d,%d): %d actors stacked!"),
             Cell.X, Cell.Y, Actors.Num());
 
@@ -648,13 +651,13 @@ void UGridOccupancySubsystem::EnforceUniqueOccupancy()
         AActor* Keeper = ChooseKeeperActor(Cell, Actors);
         if (!Keeper)
         {
-            UE_LOG(LogTemp, Error,
+            UE_LOG(LogGridOccupancy, Error,
                 TEXT("[GridOccupancy] Failed to choose keeper for (%d,%d) - skipping"),
                 Cell.X, Cell.Y);
             continue;
         }
 
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGridOccupancy, Warning,
             TEXT("[GridOccupancy] Keeper for (%d,%d): %s"),
             Cell.X, Cell.Y, *GetNameSafe(Keeper));
 
@@ -671,7 +674,7 @@ void UGridOccupancySubsystem::EnforceUniqueOccupancy()
             const FIntPoint SafeCell = FindNearestFreeCell(Cell, 10);
             if (SafeCell == FIntPoint(-1, -1))
             {
-                UE_LOG(LogTemp, Error,
+                UE_LOG(LogGridOccupancy, Error,
                     TEXT("[GridOccupancy] No free cell found for %s - keeping stacked (WARN)"),
                     *GetNameSafe(Actor));
                 continue;  // No safe cell; leave overlapping (logical best effort)
@@ -681,7 +684,7 @@ void UGridOccupancySubsystem::EnforceUniqueOccupancy()
             ForceRelocate(Actor, SafeCell);
             FixedCount++;
 
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogGridOccupancy, Warning,
                 TEXT("[GridOccupancy] [OCC FIX] Split stack: keep=%s at (%d,%d) | move %s -> (%d,%d)"),
                 *GetNameSafe(Keeper), Cell.X, Cell.Y, *GetNameSafe(Actor), SafeCell.X, SafeCell.Y);
         }
@@ -689,7 +692,7 @@ void UGridOccupancySubsystem::EnforceUniqueOccupancy()
 
     if (FixedCount > 0)
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogGridOccupancy, Warning,
             TEXT("[GridOccupancy] EnforceUniqueOccupancy: Fixed %d overlapping actors"),
             FixedCount);
     }
@@ -763,7 +766,7 @@ void UGridOccupancySubsystem::ForceRelocate(AActor* Actor, const FIntPoint& NewC
     if (const FIntPoint* OldCellPtr = ActorToCell.Find(Actor))
     {
         OccupiedCells.Remove(*OldCellPtr);
-        UE_LOG(LogTemp, Verbose,
+        UE_LOG(LogGridOccupancy, Verbose,
             TEXT("[GridOccupancy] ForceRelocate: %s released old cell (%d,%d)"),
             *GetNameSafe(Actor), OldCellPtr->X, OldCellPtr->Y);
     }
@@ -783,7 +786,7 @@ void UGridOccupancySubsystem::ForceRelocate(AActor* Actor, const FIntPoint& NewC
     );
     Actor->SetActorLocation(NewWorldLocation, false, nullptr, ETeleportType::TeleportPhysics);
 
-    UE_LOG(LogTemp, Log,
+    UE_LOG(LogGridOccupancy, Log,
         TEXT("[GridOccupancy] ForceRelocate: %s -> (%d,%d) at World=(%f,%f,%f)"),
         *GetNameSafe(Actor), NewCell.X, NewCell.Y,
         NewWorldLocation.X, NewWorldLocation.Y, NewWorldLocation.Z);
@@ -811,7 +814,7 @@ AActor* UGridOccupancySubsystem::ChooseKeeperActor(const FIntPoint& Cell, const 
         {
             if (Info->bIsOriginHold && Info->Owner.Get() == Actor)
             {
-                UE_LOG(LogTemp, Verbose,
+                UE_LOG(LogGridOccupancy, Verbose,
                     TEXT("[GridOccupancy] ChooseKeeper: %s has OriginHold at (%d,%d)"),
                     *GetNameSafe(Actor), Cell.X, Cell.Y);
                 return Actor;
@@ -825,7 +828,7 @@ AActor* UGridOccupancySubsystem::ChooseKeeperActor(const FIntPoint& Cell, const 
         AActor* Actor = ActorPtr.Get();
         if (Actor)
         {
-            UE_LOG(LogTemp, Verbose,
+            UE_LOG(LogGridOccupancy, Verbose,
                 TEXT("[GridOccupancy] ChooseKeeper: %s (first valid)"),
                 *GetNameSafe(Actor));
             return Actor;
@@ -839,7 +842,7 @@ AActor* UGridOccupancySubsystem::ChooseKeeperActor(const FIntPoint& Cell, const 
 
 void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& AllUnits)
 {
-    UE_LOG(LogTemp, Warning,
+    UE_LOG(LogGridOccupancy, Warning,
         TEXT("[GridOccupancy] RebuildFromWorldPositions: Rebuilding occupancy map from physical positions for %d units"),
         AllUnits.Num());
 
@@ -847,7 +850,7 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
     UWorld* World = GetWorld();
     if (!World)
     {
-        UE_LOG(LogTemp, Error, TEXT("[GridOccupancy] RebuildFromWorldPositions: No World!"));
+        UE_LOG(LogGridOccupancy, Error, TEXT("[GridOccupancy] RebuildFromWorldPositions: No World!"));
         return;
     }
 
@@ -857,7 +860,7 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
 
     if (!PathFinder)
     {
-        UE_LOG(LogTemp, Error, TEXT("[GridOccupancy] RebuildFromWorldPositions: No PathFinder found!"));
+        UE_LOG(LogGridOccupancy, Error, TEXT("[GridOccupancy] RebuildFromWorldPositions: No PathFinder found!"));
         return;
     }
 
@@ -879,7 +882,7 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
 
         CellToActors.FindOrAdd(CurrentCell).Add(Unit);
 
-        UE_LOG(LogTemp, Verbose,
+        UE_LOG(LogGridOccupancy, Verbose,
             TEXT("[GridOccupancy] RebuildFromWorldPositions: %s at World=(%s) -> Cell=(%d,%d)"),
             *GetNameSafe(Unit), *WorldPos.ToCompactString(), CurrentCell.X, CurrentCell.Y);
     }
@@ -899,7 +902,7 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
             AActor* Actor = Actors[0];
             ActorToCell.Add(Actor, Cell);
             OccupiedCells.Add(Cell, Actor);
-            UE_LOG(LogTemp, Verbose,
+            UE_LOG(LogGridOccupancy, Verbose,
                 TEXT("[GridOccupancy] RebuildFromWorldPositions: Registered %s at (%d,%d)"),
                 *GetNameSafe(Actor), Cell.X, Cell.Y);
         }
@@ -907,7 +910,7 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
         {
             // ★★★ Physical overlap detected ★★★
             OverlapCount++;
-            UE_LOG(LogTemp, Error,
+            UE_LOG(LogGridOccupancy, Error,
                 TEXT("[GridOccupancy] RebuildFromWorldPositions: PHYSICAL OVERLAP at (%d,%d) with %d actors!"),
                 Cell.X, Cell.Y, Actors.Num());
 
@@ -916,7 +919,7 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
             ActorToCell.Add(Keeper, Cell);
             OccupiedCells.Add(Cell, Keeper);
 
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogGridOccupancy, Warning,
                 TEXT("[GridOccupancy] RebuildFromWorldPositions: Keeper=%s at (%d,%d)"),
                 *GetNameSafe(Keeper), Cell.X, Cell.Y);
 
@@ -937,14 +940,14 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
                     OccupiedCells.Add(FreeCell, Evictee);
                     RelocatedCount++;
 
-                    UE_LOG(LogTemp, Warning,
+                    UE_LOG(LogGridOccupancy, Warning,
                         TEXT("[GridOccupancy] RebuildFromWorldPositions: RELOCATED %s from (%d,%d) -> (%d,%d)"),
                         *GetNameSafe(Evictee), Cell.X, Cell.Y, FreeCell.X, FreeCell.Y);
                 }
                 else
                 {
                     // No free cell: keep overlapped physically but do not register logically.
-                    UE_LOG(LogTemp, Error,
+                    UE_LOG(LogGridOccupancy, Error,
                         TEXT("[GridOccupancy] RebuildFromWorldPositions: NO FREE CELL for %s - remains overlapped at (%d,%d)!"),
                         *GetNameSafe(Evictee), Cell.X, Cell.Y);
                     // Not registering in occupancy map = treated as "not present" logically.
@@ -955,13 +958,13 @@ void UGridOccupancySubsystem::RebuildFromWorldPositions(const TArray<AActor*>& A
 
     if (OverlapCount > 0)
     {
-        UE_LOG(LogTemp, Error,
+        UE_LOG(LogGridOccupancy, Error,
             TEXT("[GridOccupancy] RebuildFromWorldPositions: Fixed %d physical overlaps, relocated %d actors"),
             OverlapCount, RelocatedCount);
     }
     else
     {
-        UE_LOG(LogTemp, Log,
+        UE_LOG(LogGridOccupancy, Log,
             TEXT("[GridOccupancy] RebuildFromWorldPositions: No physical overlaps detected - occupancy map rebuilt successfully"));
     }
 }

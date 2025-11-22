@@ -10,6 +10,9 @@
 #include "AI/Enemy/EnemyThinkerBase.h"
 #include "EnemyUnitBase.generated.h"
 
+// Log category
+DECLARE_LOG_CATEGORY_EXTERN(LogEnemyUnit, Log, All);
+
 // ===== 前方宣言 =====
 class ULyraPawnData;
 class ULyraAbilitySystemComponent;

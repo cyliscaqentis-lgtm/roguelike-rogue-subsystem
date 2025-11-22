@@ -7,6 +7,9 @@
 #include "Net/UnrealNetwork.h"
 #include "TurnFlowCoordinator.generated.h"
 
+// Log category
+DECLARE_LOG_CATEGORY_EXTERN(LogTurnFlow, Log, All);
+
 /**
  * UTurnFlowCoordinator
  *

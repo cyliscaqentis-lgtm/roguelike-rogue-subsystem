@@ -4,6 +4,8 @@
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
 
+DEFINE_LOG_CATEGORY(LogTurnAction);
+
 UGA_TurnActionBase::UGA_TurnActionBase()
 {
     TimeoutTag = RogueGameplayTags::Effect_Turn_AbilityTimeout;
@@ -43,7 +45,7 @@ void UGA_TurnActionBase::ActivateAbility(const FGameplayAbilitySpecHandle Handle
         );
     }
 
-    UE_LOG(LogTemp, Verbose, TEXT("[GA_TurnActionBase] %s activated"), *GetName());
+    UE_LOG(LogTurnAction, Verbose, TEXT("[GA_TurnActionBase] %s activated"), *GetName());
 }
 
 void UGA_TurnActionBase::EndAbility(const FGameplayAbilitySpecHandle Handle,
@@ -65,32 +67,32 @@ void UGA_TurnActionBase::EndAbility(const FGameplayAbilitySpecHandle Handle,
 
     // Defensive: 念のため、EndAbility後も残っている可能性のあるタグを強制削除
     // この時点では、ASCが有効であることを保証できない場合があるため、チェックを強化する。
-    UE_LOG(LogTemp, Warning, TEXT("[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility"));
+    UE_LOG(LogTurnAction, Warning, TEXT("[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility"));
     UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
     if (ASC)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[GA_TurnActionBase] Defensive check: ASC found, checking tags"));
+        UE_LOG(LogTurnAction, Warning, TEXT("[GA_TurnActionBase] Defensive check: ASC found, checking tags"));
         
         bool bHasExecuting = ASC->HasMatchingGameplayTag(RogueGameplayTags::State_Ability_Executing);
         bool bHasInProgress = ASC->HasMatchingGameplayTag(RogueGameplayTags::State_Action_InProgress);
         
-        UE_LOG(LogTemp, Warning, TEXT("[GA_TurnActionBase] Defensive check: State_Ability_Executing=%d, State_Action_InProgress=%d"), 
+        UE_LOG(LogTurnAction, Warning, TEXT("[GA_TurnActionBase] Defensive check: State_Ability_Executing=%d, State_Action_InProgress=%d"), 
             bHasExecuting ? 1 : 0, bHasInProgress ? 1 : 0);
         
         if (bHasExecuting)
         {
             ASC->RemoveLooseGameplayTag(RogueGameplayTags::State_Ability_Executing);
-            UE_LOG(LogTemp, Warning, TEXT("[GA_TurnActionBase] Defensive: Cleared lingering State_Ability_Executing on %s"), *GetNameSafe(GetAvatarActorFromActorInfo()));
+            UE_LOG(LogTurnAction, Warning, TEXT("[GA_TurnActionBase] Defensive: Cleared lingering State_Ability_Executing on %s"), *GetNameSafe(GetAvatarActorFromActorInfo()));
         }
         if (bHasInProgress)
         {
             ASC->RemoveLooseGameplayTag(RogueGameplayTags::State_Action_InProgress);
-            UE_LOG(LogTemp, Warning, TEXT("[GA_TurnActionBase] Defensive: Cleared lingering State_Action_InProgress on %s"), *GetNameSafe(GetAvatarActorFromActorInfo()));
+            UE_LOG(LogTurnAction, Warning, TEXT("[GA_TurnActionBase] Defensive: Cleared lingering State_Action_InProgress on %s"), *GetNameSafe(GetAvatarActorFromActorInfo()));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("[GA_TurnActionBase] Defensive check: ASC is NULL after Super::EndAbility! Cannot clear tags."));
+        UE_LOG(LogTurnAction, Error, TEXT("[GA_TurnActionBase] Defensive check: ASC is NULL after Super::EndAbility! Cannot clear tags."));
     }
 
     if (!bCompletionSent)
@@ -99,12 +101,12 @@ void UGA_TurnActionBase::EndAbility(const FGameplayAbilitySpecHandle Handle,
         bCompletionSent = true;
     }
 
-    UE_LOG(LogTemp, Verbose, TEXT("[GA_TurnActionBase] %s ended (Cancelled: %d)"), *GetName(), bWasCancelled);
+    UE_LOG(LogTurnAction, Verbose, TEXT("[GA_TurnActionBase] %s ended (Cancelled: %d)"), *GetName(), bWasCancelled);
 }
 
 void UGA_TurnActionBase::OnTimeout()
 {
-    UE_LOG(LogTemp, Error, TEXT("[GA_TurnActionBase] %s timed out!"), *GetName());
+    UE_LOG(LogTurnAction, Error, TEXT("[GA_TurnActionBase] %s timed out!"), *GetName());
 
     GetAbilitySystemComponentFromActorInfo()->AddLooseGameplayTag(TimeoutTag);
 
@@ -122,7 +124,7 @@ void UGA_TurnActionBase::SendCompletionEvent(bool bTimedOut)
     // CodeRevision: INC-2025-1142-R1 (Guard completion events so only the correct TurnId is broadcast) (2025-11-20 12:30)
     if (CompletionEventTurnId == INDEX_NONE)
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogTurnAction, Warning,
             TEXT("[GA_TurnActionBase] Completion event skipped: TurnId is unset (TimedOut=%d)"),
             bTimedOut ? 1 : 0);
         return;
@@ -131,13 +133,13 @@ void UGA_TurnActionBase::SendCompletionEvent(bool bTimedOut)
     AActor* InstigatorActor = GetAvatarActorFromActorInfo();
     if (!InstigatorActor)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[GA_TurnActionBase] Cannot send completion event: Avatar actor missing"));
+        UE_LOG(LogTurnAction, Warning, TEXT("[GA_TurnActionBase] Cannot send completion event: Avatar actor missing"));
         return;
     }
 
     if (bTimedOut)
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogTurnAction, Warning,
             TEXT("[GA_TurnActionBase] Sending timed-out completion event for Turn=%d"),
             CompletionEventTurnId);
     }

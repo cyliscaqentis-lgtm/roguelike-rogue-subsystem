@@ -4,6 +4,9 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "TurnAdvanceGuardSubsystem.generated.h"
 
+// Log category
+DECLARE_LOG_CATEGORY_EXTERN(LogTurnAdvanceGuard, Log, All);
+
 class AGameTurnManagerBase;
 
 /**

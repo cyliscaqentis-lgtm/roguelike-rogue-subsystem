@@ -13,6 +13,7 @@
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
 #include "EngineUtils.h"
+#include "Utility/TurnAuthorityUtils.h"
 
 // ============================================================================
 // Log category
@@ -56,8 +57,7 @@ void UTurnActionBarrierSubsystem::Deinitialize()
 
 bool UTurnActionBarrierSubsystem::IsServer() const
 {
-    UWorld* World = GetWorld();
-    return World && World->GetAuthGameMode() != nullptr;
+    return IsAuthorityLike(GetWorld());
 }
 
 // ============================================================================

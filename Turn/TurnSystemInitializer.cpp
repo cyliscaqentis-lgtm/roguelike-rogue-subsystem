@@ -17,6 +17,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
+#include "GameFramework/SpectatorPawn.h"
 
 bool UTurnSystemInitializer::InitializeTurnSystem(AGameTurnManagerBase* TurnManager)
 {

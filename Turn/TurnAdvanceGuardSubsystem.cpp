@@ -7,6 +7,8 @@
 #include "Turn/TurnActionBarrierSubsystem.h"
 #include "Utility/RogueGameplayTags.h"
 
+DEFINE_LOG_CATEGORY(LogTurnAdvanceGuard);
+
 bool UTurnAdvanceGuardSubsystem::CanAdvanceTurn(const AGameTurnManagerBase* TurnManager, int32 TurnId, bool* OutBarrierQuiet, int32* OutInProgressCount) const
 {
     if (!TurnManager)
@@ -31,7 +33,7 @@ bool UTurnAdvanceGuardSubsystem::CanAdvanceTurn(const AGameTurnManagerBase* Turn
 
     if (!bBarrierQuiet)
     {
-        UE_LOG(LogTurnManager, Warning,
+        UE_LOG(LogTurnAdvanceGuard, Warning,
             TEXT("[CanAdvanceTurn] Barrier NOT quiescent: Turn=%d PendingActions=%d"),
             TurnId, PendingCount);
     }
@@ -51,7 +53,7 @@ bool UTurnAdvanceGuardSubsystem::CanAdvanceTurn(const AGameTurnManagerBase* Turn
     const bool bNoInProgressTags = (InProgressCount == 0);
     if (!bNoInProgressTags)
     {
-        UE_LOG(LogTurnManager, Warning,
+        UE_LOG(LogTurnAdvanceGuard, Warning,
             TEXT("[CanAdvanceTurn] InProgress tags still active: Count=%d"),
             InProgressCount);
     }
@@ -64,13 +66,13 @@ bool UTurnAdvanceGuardSubsystem::CanAdvanceTurn(const AGameTurnManagerBase* Turn
     const bool bCanAdvance = bBarrierQuiet && bNoInProgressTags;
     if (bCanAdvance)
     {
-        UE_LOG(LogTurnManager, Log,
+        UE_LOG(LogTurnAdvanceGuard, Log,
             TEXT("[CanAdvanceTurn] OK: Turn=%d (Barrier=Quiet, InProgress=0)"),
             TurnId);
     }
     else
     {
-        UE_LOG(LogTurnManager, Warning,
+        UE_LOG(LogTurnAdvanceGuard, Warning,
             TEXT("[CanAdvanceTurn] ❌BLOCKED: Turn=%d (Barrier=%s, InProgress=%d)"),
             TurnId,
             bBarrierQuiet ? TEXT("Quiet") : TEXT("Busy"),
@@ -84,7 +86,7 @@ void UTurnAdvanceGuardSubsystem::HandleEndEnemyTurn(AGameTurnManagerBase* TurnMa
 {
     if (!TurnManager)
     {
-        UE_LOG(LogTurnManager, Error, TEXT("[EndEnemyTurn] TurnManager is null"));
+        UE_LOG(LogTurnAdvanceGuard, Error, TEXT("[EndEnemyTurn] TurnManager is null"));
         return;
     }
 
@@ -101,7 +103,7 @@ void UTurnAdvanceGuardSubsystem::HandleEndEnemyTurn(AGameTurnManagerBase* TurnMa
         {
             if (CanAdvanceTurn(TurnManager, TurnId))
             {
-                UE_LOG(LogTurnManager, Warning,
+                UE_LOG(LogTurnAdvanceGuard, Warning,
                     TEXT("[EndEnemyTurn] Residual InProgress tags cleared, advancing turn without retry"));
                 TurnManager->AdvanceTurnAndRestart();
                 return;
@@ -122,7 +124,7 @@ bool UTurnAdvanceGuardSubsystem::EvaluateBarrierQuiet(int32 TurnId, bool& OutBar
     UWorld* World = GetWorld();
     if (!World)
     {
-        UE_LOG(LogTurnManager, Error, TEXT("[CanAdvanceTurn] World not available"));
+        UE_LOG(LogTurnAdvanceGuard, Error, TEXT("[CanAdvanceTurn] World not available"));
         OutBarrierQuiet = false;
         return false;
     }
@@ -137,7 +139,7 @@ bool UTurnAdvanceGuardSubsystem::EvaluateBarrierQuiet(int32 TurnId, bool& OutBar
         return true;
     }
 
-    UE_LOG(LogTurnManager, Error,
+    UE_LOG(LogTurnAdvanceGuard, Error,
         TEXT("[CanAdvanceTurn] Barrier subsystem not found"));
     OutBarrierQuiet = false;
     return false;
@@ -157,7 +159,7 @@ int32 UTurnAdvanceGuardSubsystem::CollectInProgressCount(const AGameTurnManagerB
         return ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress);
     }
 
-    UE_LOG(LogTurnManager, Error,
+    UE_LOG(LogTurnAdvanceGuard, Error,
         TEXT("[CanAdvanceTurn] Player ASC not found"));
     return 0;
 }
@@ -201,13 +203,13 @@ void UTurnAdvanceGuardSubsystem::ScheduleRetry(AGameTurnManagerBase* TurnManager
                 0.5f,
                 false);
 
-            UE_LOG(LogTurnManager, Warning,
+            UE_LOG(LogTurnAdvanceGuard, Warning,
                 TEXT("[EndEnemyTurn] Retry scheduled in 0.5s"));
         }
     }
     else
     {
-        UE_LOG(LogTurnManager, Log,
+        UE_LOG(LogTurnAdvanceGuard, Log,
             TEXT("[EndEnemyTurn] Retry suppressed (already posted)"));
     }
 }

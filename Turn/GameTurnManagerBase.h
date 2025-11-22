@@ -45,17 +45,7 @@ class UDungeonConfigAsset;
 struct FTurnContext;
 class ATBSLyraGameMode;
 
-USTRUCT()
-struct FManualMoveBarrierInfo
-{
-    GENERATED_BODY()
-
-    UPROPERTY()
-    int32 TurnId = INDEX_NONE;
-
-    UPROPERTY()
-    FGuid ActionId;
-};
+// NOTE: FManualMoveBarrierInfo moved to MoveReservationSubsystem.h (INC-2025-1122-R2)
 
 // NOTE: Enemy phase patch ID
 static constexpr int32 kEnemyPhasePatchID = 20251030;
@@ -70,6 +60,9 @@ UCLASS(Blueprintable, BlueprintType)
 class LYRAGAME_API AGameTurnManagerBase : public AActor
 {
     GENERATED_BODY()
+
+    // CodeRevision: INC-2025-1122-R2 (Allow MoveReservationSubsystem access to protected members)
+    friend class UMoveReservationSubsystem;
 
 public:
     //==========================================================================
@@ -557,11 +550,16 @@ protected:
 
     void ExecuteSimultaneousPhase();
     void ExecuteSequentialPhase();
+    void ExecuteEnemyPhase();
     void ExecuteMovePhase(bool bSkipAttackCheck = false);
     UFUNCTION()
     void HandleManualMoveFinished(AUnitBase* Unit);
     void RegisterManualMoveDelegate(AUnitBase* Unit, bool bIsPlayerFallback);
     void FinalizePlayerMove(AActor* CompletedActor);
+
+    // CodeRevision: INC-2025-1122-R4 (Add setter for MoveReservationSubsystem callback) (2025-11-22)
+    void SetPlayerMoveState(const FVector& Direction, bool bInProgress);
+
     TSet<TWeakObjectPtr<AUnitBase>> ActiveMoveDelegates;
     TSet<TWeakObjectPtr<AUnitBase>> PendingPlayerFallbackMoves;
     // CodeRevision: INC-2025-1117H-R1 (Generalize attack execution) (2025-11-17 19:10)
@@ -701,9 +699,7 @@ private:
     // CodeRevision: INC-2025-1117G-R1 (Cache resolved actions for sequential enemy processing) (2025-11-17 19:30)
     TArray<FResolvedAction> CachedResolvedActions;
 
-    /** Pending barrier registrations for manual enemy moves */
-    UPROPERTY()
-    TMap<TWeakObjectPtr<AUnitBase>, FManualMoveBarrierInfo> PendingMoveActionRegistrations;
+    // NOTE: PendingMoveActionRegistrations moved to MoveReservationSubsystem (INC-2025-1122-R2)
 
     //==========================================================================
     // Internal Initialization
@@ -723,14 +719,7 @@ private:
     void LogPlayerPositionBeforeAdvance() const;
     void PerformTurnAdvanceAndBeginNextTurn();
 
-    // CodeRevision: INC-2025-1208-R1 (Split DispatchResolvedMove and centralize tag cleanup helpers) (2025-11-22 01:10)
-    bool HandleWaitResolvedAction(AUnitBase* Unit, const FResolvedAction& Action);
-    bool HandlePlayerResolvedMove(AUnitBase* Unit, const FResolvedAction& Action);
-    bool HandleEnemyResolvedMove(AUnitBase* Unit, const FResolvedAction& Action, UGridPathfindingSubsystem* PathFinder);
-
-    void CollectEnemiesViaPawnScan(APawn* PlayerPawn, int32 TurnId, const TCHAR* Label, TArray<AActor*>& OutEnemies);
-    void CollectEnemiesViaActorTag(APawn* PlayerPawn, int32 TurnId, const TCHAR* Label, TArray<AActor*>& InOutEnemies);
-
+    // CodeRevision: INC-2025-1122-R2 (Delegate to TurnTagCleanupUtils) (2025-11-22)
     static int32 RemoveGameplayTagLoose(UAbilitySystemComponent* ASC, const FGameplayTag& TagToRemove);
     static int32 CleanseBlockingTags(UAbilitySystemComponent* ASC, AActor* ActorForLog);
 

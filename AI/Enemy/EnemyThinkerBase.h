@@ -11,6 +11,9 @@
 #include "Turn/TurnSystemTypes.h"
 #include "EnemyThinkerBase.generated.h"
 
+// Log category
+DECLARE_LOG_CATEGORY_EXTERN(LogEnemyThinker, Log, All);
+
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class LYRAGAME_API UEnemyThinkerBase : public UActorComponent
 {

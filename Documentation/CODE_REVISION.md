@@ -2,6 +2,11 @@
 
 ## Overview
 
+- `CodeRevision: INC-2025-1122-R3` - Extracted `EnsureEnemyIntents` fallback logic into `UEnemyTurnDataSubsystem::EnsureIntentsFallback` so `GameTurnManagerBase::EnsureEnemyIntents` is now a thin wrapper that delegates intent generation to the subsystem (`AI/Enemy/EnemyTurnDataSubsystem.h`, `AI/Enemy/EnemyTurnDataSubsystem.cpp`, `Turn/GameTurnManagerBase.cpp`) (2025-11-22)
+- `CodeRevision: INC-2025-1122-R2` - Moved move reservation and dispatch logic into `UMoveReservationSubsystem` including `TriggerPlayerMoveAbility` so `GameTurnManagerBase` delegates movement mechanics to the subsystem (`Turn/MoveReservationSubsystem.h`, `Turn/MoveReservationSubsystem.cpp`, `Turn/GameTurnManagerBase.cpp`) (2025-11-22)
+- `CodeRevision: INC-2025-1122-R1` - Created `TurnTagCleanupUtils` namespace with static helper functions for tag cleanup (`ClearResidualInProgressTags`, `RemoveGameplayTagLoose`, `CleanseBlockingTags`) extracted from `GameTurnManagerBase` (`Utility/TurnTagCleanupUtils.h`, `Utility/TurnTagCleanupUtils.cpp`, `Turn/GameTurnManagerBase.cpp`) (2025-11-22)
+
+**Refactoring Summary (2025-11-22):** GameTurnManagerBase.cpp reduced from 2671 to 2058 lines (-613, -23%) through systematic extraction to utility classes and subsystems.
 
 - `CodeRevision: INC-2025-1208-R1` - Split `AGameTurnManagerBase::DispatchResolvedMove` into focused helpers for wait actions, player moves, and enemy moves, centralized enemy roster fallback collection into dedicated functions, and introduced shared helpers for loose gameplay-tag removal and blocking-tag cleanup before triggering player move abilities (`Turn/GameTurnManagerBase.h`, `Turn/GameTurnManagerBase.cpp`) (2025-11-22 01:10)
 - `CodeRevision: INC-2025-1208-R2` - Refactored `ExecuteMovePhase` and `ExecuteSimultaneousPhase` in `AGameTurnManagerBase` to share dependency resolution and player-intent plumbing via new helpers, reducing duplication while preserving existing logging behavior (`Turn/GameTurnManagerBase.h`, `Turn/GameTurnManagerBase.cpp`) (2025-11-22 01:30)

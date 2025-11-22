@@ -8,6 +8,9 @@
 #include "GenericTeamAgentInterface.h"
 #include "LyraTBSAIController.generated.h"
 
+// Log category
+DECLARE_LOG_CATEGORY_EXTERN(LogAIController, Log, All);
+
 UCLASS()
 class LYRAGAME_API ALyraTBSAIController : public AAIController
 {

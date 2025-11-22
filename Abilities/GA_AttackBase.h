@@ -5,6 +5,9 @@
 #include "GA_TurnActionBase.h"
 #include "GA_AttackBase.generated.h"
 
+// Log category
+DECLARE_LOG_CATEGORY_EXTERN(LogAttackAbility, Log, All);
+
 UCLASS(Abstract, Blueprintable)
 class LYRAGAME_API UGA_AttackBase : public UGA_TurnActionBase
 {

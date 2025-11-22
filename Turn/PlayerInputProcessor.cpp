@@ -7,6 +7,7 @@
 #include "AbilitySystemComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Utility/RogueGameplayTags.h"
+#include "Utility/TurnAuthorityUtils.h"
 
 void UPlayerInputProcessor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
@@ -18,9 +19,9 @@ void UPlayerInputProcessor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 void UPlayerInputProcessor::OpenInputWindow(int32 TurnId, int32 WindowId)
 {
 	UWorld* World = GetWorld();
-	if (!World || !World->GetAuthGameMode())
+	if (!IsAuthorityLike(World))
 	{
-		return; // サーバーのみ実行
+		return;
 	}
 
 	CurrentAcceptedTurnId = TurnId;
@@ -41,9 +42,9 @@ void UPlayerInputProcessor::OpenInputWindow(int32 TurnId, int32 WindowId)
 void UPlayerInputProcessor::CloseInputWindow()
 {
 	UWorld* World = GetWorld();
-	if (!World || !World->GetAuthGameMode())
+	if (!IsAuthorityLike(World))
 	{
-		return; // サーバーのみ実行
+		return;
 	}
 
 	bInputWindowOpen = false;
@@ -58,7 +59,7 @@ void UPlayerInputProcessor::CloseInputWindow()
 bool UPlayerInputProcessor::IsInputOpen_Server() const
 {
 	UWorld* World = GetWorld();
-	if (!World || !World->GetAuthGameMode())
+	if (!IsAuthorityLike(World))
 	{
 		return false;
 	}
@@ -98,9 +99,9 @@ bool UPlayerInputProcessor::ValidateCommand(const FPlayerCommand& Command)
 void UPlayerInputProcessor::ProcessPlayerCommand(const FPlayerCommand& Command)
 {
 	UWorld* World = GetWorld();
-	if (!World || !World->GetAuthGameMode())
+	if (!IsAuthorityLike(World))
 	{
-		return; // サーバーのみ実行
+		return;
 	}
 
 	// コマンドをキャッシュ
@@ -194,9 +195,9 @@ void UPlayerInputProcessor::ApplyWaitInputGate(bool bOpen)
 void UPlayerInputProcessor::SetWaitingForPlayerInput_ServerLike(bool bNew)
 {
 	UWorld* World = GetWorld();
-	if (!World || !World->GetAuthGameMode())
+	if (!IsAuthorityLike(World))
 	{
-		return; // サーバーのみ実行
+		return;
 	}
 
 	bWaitingForPlayerInput = bNew;

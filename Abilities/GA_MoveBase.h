@@ -6,6 +6,9 @@
 #include "GameplayTagContainer.h"
 #include "GA_MoveBase.generated.h"
 
+// Log category
+DECLARE_LOG_CATEGORY_EXTERN(LogMoveAbility, Log, All);
+
 class UGridPathfindingSubsystem;
 class AUnitBase;
 class UGridOccupancySubsystem;

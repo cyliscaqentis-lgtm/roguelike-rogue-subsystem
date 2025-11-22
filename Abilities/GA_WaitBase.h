@@ -5,6 +5,9 @@
 #include "GA_TurnActionBase.h"
 #include "GA_WaitBase.generated.h"
 
+// Log category
+DECLARE_LOG_CATEGORY_EXTERN(LogWaitAbility, Log, All);
+
 /**
  * UGA_WaitBase
  * 待機アビリティの基底クラス（抽象）

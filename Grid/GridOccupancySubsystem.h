@@ -6,6 +6,9 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "GridOccupancySubsystem.generated.h"
 
+// Log category
+DECLARE_LOG_CATEGORY_EXTERN(LogGridOccupancy, Log, All);
+
 /**
  * ★★★ CRITICAL FIX (2025-11-11): Reservation info struct (TurnId + bCommitted + bIsOriginHold) ★★★
  * - TurnId: Turn number when the reservation was created (for detecting stale reservations)

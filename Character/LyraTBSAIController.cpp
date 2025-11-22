@@ -7,6 +7,8 @@
 #include "AbilitySystemInterface.h"
 #include "AbilitySystemComponent.h"
 
+DEFINE_LOG_CATEGORY(LogAIController);
+
 ALyraTBSAIController::ALyraTBSAIController()
 {
     // ★★★ AIもPlayerStateを持つ設計（GAS統合のため） ★★★
@@ -15,14 +17,14 @@ ALyraTBSAIController::ALyraTBSAIController()
     // デフォルトはNoTeam（後でOnPossessで敵チームに設定）
     TeamId = FGenericTeamId::NoTeam;
 
-    UE_LOG(LogTemp, Log, TEXT("[LyraTBSAIController] Constructor: bWantsPlayerState=true, TeamId=NoTeam"));
+    UE_LOG(LogAIController, Log, TEXT("[LyraTBSAIController] Constructor: bWantsPlayerState=true, TeamId=NoTeam"));
 }
 
 void ALyraTBSAIController::BeginPlay()
 {
     Super::BeginPlay();
 
-    UE_LOG(LogTemp, Verbose, TEXT("[LyraTBSAIController] %s BeginPlay: PlayerState=%s, TeamId=%d"),
+    UE_LOG(LogAIController, Verbose, TEXT("[LyraTBSAIController] %s BeginPlay: PlayerState=%s, TeamId=%d"),
         *GetName(),
         PlayerState ? *PlayerState->GetName() : TEXT("NULL"),
         GetGenericTeamId().GetId());
@@ -42,11 +44,11 @@ void ALyraTBSAIController::OnPossess(APawn* InPawn)
 
     if (!InPawn)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[LyraTBSAIController] OnPossess called with null pawn"));
+        UE_LOG(LogAIController, Warning, TEXT("[LyraTBSAIController] OnPossess called with null pawn"));
         return;
     }
 
-    UE_LOG(LogTemp, Log, TEXT("[LyraTBSAIController] OnPossess: Pawn=%s, PlayerState=%s"),
+    UE_LOG(LogAIController, Log, TEXT("[LyraTBSAIController] OnPossess: Pawn=%s, PlayerState=%s"),
         *InPawn->GetName(),
         PlayerState ? *PlayerState->GetName() : TEXT("NULL"));
 
@@ -58,12 +60,12 @@ void ALyraTBSAIController::OnPossess(APawn* InPawn)
     if (BeforeTeam == FGenericTeamId::NoTeam.GetId())
     {
         SetGenericTeamId(FGenericTeamId(2)); // 敵チーム
-        UE_LOG(LogTemp, Log, TEXT("[LyraTBSAIController] OnPossess: TeamId set from NoTeam(%d) to Enemy(2)"),
+        UE_LOG(LogAIController, Log, TEXT("[LyraTBSAIController] OnPossess: TeamId set from NoTeam(%d) to Enemy(2)"),
             BeforeTeam);
     }
     else
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[LyraTBSAIController] OnPossess: TeamId already set to %d"),
+        UE_LOG(LogAIController, Verbose, TEXT("[LyraTBSAIController] OnPossess: TeamId already set to %d"),
             BeforeTeam);
     }
 
@@ -91,7 +93,7 @@ void ALyraTBSAIController::SetGenericTeamId(const FGenericTeamId& NewTeamID)
     const uint8 OldId = TeamId.GetId();
     TeamId = NewTeamID;
 
-    UE_LOG(LogTemp, Log, TEXT("[LyraTBSAIController] %s SetGenericTeamId: %d -> %d"),
+    UE_LOG(LogAIController, Log, TEXT("[LyraTBSAIController] %s SetGenericTeamId: %d -> %d"),
         *GetName(), OldId, TeamId.GetId());
 }
 
@@ -106,7 +108,7 @@ void ALyraTBSAIController::InitializeAbilitySystemComponent()
 
     if (!P || !PS)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[LyraTBSAIController] InitializeASC: Pawn=%s, PlayerState=%s - skipping"),
+        UE_LOG(LogAIController, Warning, TEXT("[LyraTBSAIController] InitializeASC: Pawn=%s, PlayerState=%s - skipping"),
             P ? TEXT("Valid") : TEXT("NULL"),
             PS ? TEXT("Valid") : TEXT("NULL"));
         return;
@@ -129,7 +131,7 @@ void ALyraTBSAIController::InitializeAbilitySystemComponent()
 
     if (!ASC)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[LyraTBSAIController] InitializeASC: No ASC found on PlayerState %s"),
+        UE_LOG(LogAIController, Warning, TEXT("[LyraTBSAIController] InitializeASC: No ASC found on PlayerState %s"),
             *PS->GetName());
         return;
     }
@@ -138,6 +140,6 @@ void ALyraTBSAIController::InitializeAbilitySystemComponent()
     ASC->InitAbilityActorInfo(PS, P);
 
     const TCHAR* SideStr = HasAuthority() ? TEXT("Server") : TEXT("Client");
-    UE_LOG(LogTemp, Log, TEXT("[LyraTBSAIController] InitializeASC: %s-side ASC initialized for Pawn=%s, PlayerState=%s"),
+    UE_LOG(LogAIController, Log, TEXT("[LyraTBSAIController] InitializeASC: %s-side ASC initialized for Pawn=%s, PlayerState=%s"),
         SideStr, *P->GetName(), *PS->GetName());
 }

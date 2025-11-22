@@ -7,6 +7,9 @@
 #include "AbilitySystemComponent.h"
 #include "GA_TurnActionBase.generated.h"
 
+// Log category
+DECLARE_LOG_CATEGORY_EXTERN(LogTurnAction, Log, All);
+
 UCLASS(Abstract)
 class LYRAGAME_API UGA_TurnActionBase : public ULyraGameplayAbility
 {

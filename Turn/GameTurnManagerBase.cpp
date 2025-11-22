@@ -1,5 +1,3 @@
-// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
-// CodeRevision: INC-2025-1135-R1 (Fix encoding issues: translate Japanese comments to English) (2025-11-19 17:25)
 #include "Turn/GameTurnManagerBase.h"
 #include "TBSLyraGameMode.h"
 #include "Grid/GridPathfindingSubsystem.h"
@@ -7,17 +5,19 @@
 #include "Grid/URogueDungeonSubsystem.h"
 #include "Grid/DungeonFloorGenerator.h"
 #include "Grid/GridOccupancySubsystem.h"
-#include "Grid/AABB.h"  
+#include "Grid/AABB.h"
 #include "AI/Enemy/EnemyTurnDataSubsystem.h"
 #include "Turn/TurnSystemTypes.h"
 #include "Turn/TurnCommandHandler.h"
 #include "Turn/TurnDebugSubsystem.h"
 #include "Turn/TurnFlowCoordinator.h"
 #include "Turn/PlayerInputProcessor.h"
-#include "Player/PlayerControllerBase.h"  
+#include "Player/PlayerControllerBase.h"
 #include "Utility/GridUtils.h"
 #include "Utility/RogueActorUtils.h"
 #include "Utility/RogueGameplayTags.h"
+#include "Utility/TurnTagCleanupUtils.h"
+#include "Turn/MoveReservationSubsystem.h"
 #include "Debug/TurnSystemInterfaces.h"
 #include "AbilitySystemGlobals.h"
 #include "AbilitySystemComponent.h"
@@ -33,7 +33,6 @@
 #include "AI/Ally/AllyTurnDataSubsystem.h"
 #include "Character/EnemyUnitBase.h"
 #include "Character/UnitBase.h"
-// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 #include "AI/Enemy/EnemyThinkerBase.h"
 #include "AI/Enemy/EnemyAISubsystem.h"
 #include "Debug/DebugObserverCSV.h"
@@ -70,7 +69,6 @@ TAutoConsoleVariable<int32> CVarTurnLog(
     ECVF_Default
      );
 
-// CodeRevision: INC-2025-1204-R1 (Gate on-move intent regeneration behind console variable) (2025-11-21 16:30)
 // 0: Do not regenerate DistanceField / enemy intents when a MOVE command is accepted (use preliminary intents from turn start)
 // 1: Regenerate DistanceField / enemy intents on MOVE accept using predicted player destination (heavier but more predictive)
 TAutoConsoleVariable<int32> CVarRegenIntentsOnMove(
@@ -134,7 +132,6 @@ void AGameTurnManagerBase::Tick(float DeltaTime)
 
 }
 
-// CodeRevision: INC-2025-1120-R2 (Fix CSV log generation by registering the UDebugObserverCSV component at BeginPlay) (2025-11-20 23:45)
 void AGameTurnManagerBase::BeginPlay()
 {
     Super::BeginPlay();
@@ -158,7 +155,7 @@ void AGameTurnManagerBase::BeginPlay()
 		UE_LOG(LogTurnManager, Warning, TEXT("GameTurnManager::BeginPlay: UDebugObserverCSV component not found on this actor. CSV logging will be disabled."));
 	}
 
-if (!HasAuthority())
+if (!IsAuthorityLike(GetWorld(), this))
     {
         UE_LOG(LogTurnManager, Warning, TEXT("GameTurnManager: Not authoritative, skipping"));
         return;
@@ -201,8 +198,6 @@ UE_LOG(LogTurnManager, Log, TEXT("TurnManager: Triggering dungeon generation..."
     UE_LOG(LogTurnManager, Log, TEXT("TurnManager: Ready for HandleDungeonReady"));
 }
 
-// CodeRevision: INC-2025-00027-R1 (Migrate to UGridPathfindingSubsystem - Phase 2.3) (2025-11-16 00:00)
-// HandleDungeonReady now initializes UGridPathfindingSubsystem instead of AGridPathfindingLibrary Actor
 void AGameTurnManagerBase::HandleDungeonReady(URogueDungeonSubsystem* InDungeonSys)
 {
     
@@ -350,8 +345,6 @@ if (!Tag_AbilityMove.IsValid() || !Tag_TurnAbilityCompleted.IsValid())
     }
 }
 
-// CodeRevision: INC-2025-00032-R1 (Removed GetCachedPathFinder() - use GetGridPathfindingSubsystem() instead) (2025-01-XX XX:XX)
-
 int32 AGameTurnManagerBase::GetCurrentTurnIndex() const
 {
     return TurnFlowCoordinator ? TurnFlowCoordinator->GetCurrentTurnIndex() : CurrentTurnId;
@@ -374,17 +367,6 @@ UGridPathfindingSubsystem* AGameTurnManagerBase::GetGridPathfindingSubsystem() c
     }
     return nullptr;
 }
-
-// CodeRevision: INC-2025-00017-R1 (Remove unused wrapper functions - Phase 1) (2025-11-16 15:00)
-// Removed: BuildAllObservations() - unused wrapper function
-
-// CodeRevision: INC-2025-00017-R1 (Remove unused wrapper functions - Phase 1 & 3) (2025-11-16 15:00)
-// Removed: SendGameplayEventWithResult() - unused wrapper function
-// Removed: GetPlayerController_TBS() - unused wrapper function
-// Removed: GetPlayerPawnCachedOrFetch() - unused wrapper function
-// Removed: GetPlayerPawn() - replaced with direct UGameplayStatics call
-// Removed: GetPlayerActor() - unused wrapper function
-
 
 void AGameTurnManagerBase::StartTurn()
 {
@@ -485,7 +467,10 @@ void AGameTurnManagerBase::BuildAllyIntents_Implementation(FTurnContext& Context
     if (AllyData && AllyData->HasAllies())
     {
         AllyData->BuildAllAllyIntents(Context);
-        UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] BuildAllyIntents: %d allies"), CurrentTurnId, AllyData->GetAllyCount());
+        if (CVarTurnLog.GetValueOnGameThread() >= 2)
+        {
+            UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] BuildAllyIntents: %d allies"), CurrentTurnId, AllyData->GetAllyCount());
+        }
     }
 }
 
@@ -497,61 +482,90 @@ void AGameTurnManagerBase::ExecuteAllyActions_Implementation(FTurnContext& Conte
         return;
     }
 
-    UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] ExecuteAllyActions: %d allies"), CurrentTurnId, AllyData->GetAllyCount());
+    if (CVarTurnLog.GetValueOnGameThread() >= 2)
+    {
+        UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] ExecuteAllyActions: %d allies"), CurrentTurnId, AllyData->GetAllyCount());
+    }
 }
 
 void AGameTurnManagerBase::BuildSimulBatch_Implementation()
 {
-    UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] BuildSimulBatch called (Blueprint)"), CurrentTurnId);
+    if (CVarTurnLog.GetValueOnGameThread() >= 2)
+    {
+        UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] BuildSimulBatch called (Blueprint)"), CurrentTurnId);
+    }
 }
 
 void AGameTurnManagerBase::CommitSimulStep_Implementation(const FSimulBatch& Batch)
 {
-    UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] CommitSimulStep called (Blueprint)"), CurrentTurnId);
+    if (CVarTurnLog.GetValueOnGameThread() >= 2)
+    {
+        UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] CommitSimulStep called (Blueprint)"), CurrentTurnId);
+    }
 }
 
 void AGameTurnManagerBase::ResolveConflicts_Implementation(TArray<FPendingMove>& Moves)
 {
-    UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] ResolveConflicts called (Blueprint)"), CurrentTurnId);
+    if (CVarTurnLog.GetValueOnGameThread() >= 2)
+    {
+        UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] ResolveConflicts called (Blueprint)"), CurrentTurnId);
+    }
 }
 
 void AGameTurnManagerBase::CheckInterruptWindow_Implementation(const FPendingMove& PlayerMove)
 {
-    UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] CheckInterruptWindow called (Blueprint)"), CurrentTurnId);
+    if (CVarTurnLog.GetValueOnGameThread() >= 2)
+    {
+        UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] CheckInterruptWindow called (Blueprint)"), CurrentTurnId);
+    }
 }
-
-
-// CodeRevision: INC-2025-00017-R1 (Remove unused wrapper functions - Phase 1) (2025-11-16 15:00)
-// Removed: SendGameplayEvent() - unused wrapper function
 
 void AGameTurnManagerBase::OnCombineSystemUpdate_Implementation(const FTurnContext& Context)
 {
-    UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] OnCombineSystemUpdate called (Blueprint)"), CurrentTurnId);
+    if (CVarTurnLog.GetValueOnGameThread() >= 2)
+    {
+        UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] OnCombineSystemUpdate called (Blueprint)"), CurrentTurnId);
+    }
 }
 
 void AGameTurnManagerBase::OnBreedingSystemUpdate_Implementation(const FTurnContext& Context)
 {
-    UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] OnBreedingSystemUpdate called (Blueprint)"), CurrentTurnId);
+    if (CVarTurnLog.GetValueOnGameThread() >= 2)
+    {
+        UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] OnBreedingSystemUpdate called (Blueprint)"), CurrentTurnId);
+    }
 }
 
 void AGameTurnManagerBase::OnPotSystemUpdate_Implementation(const FTurnContext& Context)
 {
-    UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] OnPotSystemUpdate called (Blueprint)"), CurrentTurnId);
+    if (CVarTurnLog.GetValueOnGameThread() >= 2)
+    {
+        UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] OnPotSystemUpdate called (Blueprint)"), CurrentTurnId);
+    }
 }
 
 void AGameTurnManagerBase::OnTrapSystemUpdate_Implementation(const FTurnContext& Context)
 {
-    UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] OnTrapSystemUpdate called (Blueprint)"), CurrentTurnId);
+    if (CVarTurnLog.GetValueOnGameThread() >= 2)
+    {
+        UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] OnTrapSystemUpdate called (Blueprint)"), CurrentTurnId);
+    }
 }
 
 void AGameTurnManagerBase::OnStatusEffectSystemUpdate_Implementation(const FTurnContext& Context)
 {
-    UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] OnStatusEffectSystemUpdate called (Blueprint)"), CurrentTurnId);
+    if (CVarTurnLog.GetValueOnGameThread() >= 2)
+    {
+        UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] OnStatusEffectSystemUpdate called (Blueprint)"), CurrentTurnId);
+    }
 }
 
 void AGameTurnManagerBase::OnItemSystemUpdate_Implementation(const FTurnContext& Context)
 {
-    UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] OnItemSystemUpdate called (Blueprint)"), CurrentTurnId);
+    if (CVarTurnLog.GetValueOnGameThread() >= 2)
+    {
+        UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] OnItemSystemUpdate called (Blueprint)"), CurrentTurnId);
+    }
 }
 
 void AGameTurnManagerBase::GetCachedEnemies(TArray<AActor*>& OutEnemies) const
@@ -565,10 +579,6 @@ void AGameTurnManagerBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 
     DOREPLIFETIME(AGameTurnManagerBase, WaitingForPlayerInput);
     DOREPLIFETIME(AGameTurnManagerBase, CurrentTurnId);
-    // CodeRevision: INC-2025-00030-R1 (Removed CurrentTurnIndex replication - use TurnFlowCoordinator instead) (2025-11-16 00:00)
-    // Removed: DOREPLIFETIME(AGameTurnManagerBase, CurrentTurnIndex);
-    // CodeRevision: INC-2025-00030-R1 (Removed InputWindowId replication - use TurnFlowCoordinator instead) (2025-11-16 00:00)
-    // Removed: DOREPLIFETIME(AGameTurnManagerBase, InputWindowId);
     DOREPLIFETIME(AGameTurnManagerBase, bPlayerMoveInProgress);
 }
 
@@ -580,7 +590,6 @@ void AGameTurnManagerBase::OnEnemyAttacksCompleted()
 
 void AGameTurnManagerBase::AdvanceTurnAndRestart()
 {
-// CodeRevision: INC-2025-00028-R1 (Replace CurrentTurnIndex with CurrentTurnId - Phase 3.1) (2025-11-16 00:00)
     UE_LOG(LogTurnManager, Log,
         TEXT("[AdvanceTurnAndRestart] Current Turn: %d"), CurrentTurnId);
 
@@ -611,15 +620,11 @@ void AGameTurnManagerBase::StartFirstTurn()
     UE_LOG(LogTurnManager, Log, TEXT("StartFirstTurn: Starting first turn (Turn %d)"), CurrentTurnId);
 
     bTurnStarted = true;
-
-// CodeRevision: INC-2025-00028-R1 (Replace CurrentTurnIndex with CurrentTurnId - Phase 3.1) (2025-11-16 00:00)
     UE_LOG(LogTurnManager, Log, TEXT("StartFirstTurn: OnTurnStarted broadcasted for turn %d"), CurrentTurnId);
 
 OnTurnStartedHandler(CurrentTurnId);
 }
 
-// CodeRevision: INC-2025-1120-R9 (Switched to timestamp-based session filenames) (2025-11-20 00:00)
-// CodeRevision: INC-2025-1120-R6 (Rearchitected logger for one file per session and TurnID stamping) (2025-11-20 00:00)
 void AGameTurnManagerBase::EndPlay(const EEndPlayReason::Type Reason)
 {
     if (CachedCsvObserver.IsValid())
@@ -683,7 +688,6 @@ if (IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(PS))
     return nullptr;
 }
 
-// CodeRevision: INC-2025-1205-R1 (Add helper to copy cached enemies from UnitTurnStateSubsystem) (2025-11-21 23:08)
 void AGameTurnManagerBase::CopyEnemyActors(TArray<AActor*>& OutEnemies) const
 {
     if (UnitTurnStateSubsystem)
@@ -696,130 +700,42 @@ void AGameTurnManagerBase::CopyEnemyActors(TArray<AActor*>& OutEnemies) const
     }
 }
 
-// CodeRevision: INC-2025-1205-R1 (Route enemy roster updates through UnitTurnStateSubsystem) (2025-11-21 23:08)
+// CodeRevision: INC-2025-1122-R3 (Simplify to use EnemyAISubsystem and UnitTurnStateSubsystem) (2025-11-22)
 void AGameTurnManagerBase::RefreshEnemyRoster(APawn* PlayerPawn, int32 TurnId, const TCHAR* ContextLabel)
 {
     const TCHAR* Label = ContextLabel ? ContextLabel : TEXT("CollectEnemies");
     if (!UnitTurnStateSubsystem)
     {
-        UE_LOG(LogTurnManager, Error, TEXT("[%s] Turn %d: UnitTurnStateSubsystem missing; enemy cache not updated"), Label, TurnId);
+        UE_LOG(LogTurnManager, Error, TEXT("[%s] Turn %d: UnitTurnStateSubsystem missing"), Label, TurnId);
         return;
     }
 
     const int32 BeforeCount = UnitTurnStateSubsystem->GetCachedEnemyRefs().Num();
-    UE_LOG(LogTurnManager, Warning,
-        TEXT("[%s] Turn %d: Cached enemies BEFORE collect = %d"),
-        Label, TurnId, BeforeCount);
-
     TArray<AActor*> CollectedEnemies;
+
     if (EnemyAISubsystem)
     {
         EnemyAISubsystem->CollectAllEnemies(PlayerPawn, CollectedEnemies);
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[%s] Turn %d: EnemyAISubsystem collected %d enemies"),
-            Label, TurnId, CollectedEnemies.Num());
     }
     else
     {
-        CollectEnemiesViaPawnScan(PlayerPawn, TurnId, Label, CollectedEnemies);
-    }
-
-    if (CollectedEnemies.Num() == 0)
-    {
-        CollectEnemiesViaActorTag(PlayerPawn, TurnId, Label, CollectedEnemies);
+        UE_LOG(LogTurnManager, Warning, TEXT("[%s] Turn %d: EnemyAISubsystem not available"), Label, TurnId);
     }
 
     UnitTurnStateSubsystem->UpdateEnemies(CollectedEnemies);
     const int32 AfterCount = UnitTurnStateSubsystem->GetCachedEnemyRefs().Num();
-    UE_LOG(LogTurnManager, Warning,
-        TEXT("[%s] Turn %d: Cached enemies AFTER collect = %d"),
-        Label, TurnId, AfterCount);
-}
 
-// CodeRevision: INC-2025-1208-R1 (Split enemy roster fallback collection into helpers) (2025-11-22 01:10)
-void AGameTurnManagerBase::CollectEnemiesViaPawnScan(APawn* PlayerPawn, int32 TurnId, const TCHAR* Label, TArray<AActor*>& OutEnemies)
-{
-    if (UWorld* World = GetWorld())
+    if (CVarTurnLog.GetValueOnGameThread() >= 1)
     {
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[%s] Turn %d: EnemyAISubsystem unavailable, fallback scan initiated"),
-            Label, TurnId);
-
-        TArray<AActor*> Found;
-        UGameplayStatics::GetAllActorsOfClass(World, APawn::StaticClass(), Found);
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[%s] Turn %d: Fallback pawn scan found %d actors"),
-            Label, TurnId, Found.Num());
-
-        static const FName ActorTagEnemy(TEXT("Enemy"));
-        static const FGameplayTag GT_Enemy = RogueGameplayTags::Faction_Enemy;
-
-        int32 NumByTag = 0;
-        int32 NumByTeam = 0;
-        int32 NumByActorTag = 0;
-        OutEnemies.Reserve(Found.Num());
-
-        for (AActor* Candidate : Found)
-        {
-            if (!IsValid(Candidate) || Candidate == PlayerPawn)
-            {
-                if (Candidate == PlayerPawn)
-                {
-                    UE_LOG(LogTurnManager, Log, TEXT("[%s] Turn %d: Skipping PlayerPawn fallback (Actor=%s)"),
-                        Label, TurnId, *Candidate->GetName());
-                }
-                continue;
-            }
-
-            const int32 TeamId = GetTeamIdOf(Candidate);
-            const bool bByTeam = (TeamId == 2 || TeamId == 255);
-            const UAbilitySystemComponent* ASC = TryGetASC(Candidate);
-            const bool bByGTag = (ASC && ASC->HasMatchingGameplayTag(GT_Enemy));
-            const bool bByActorTag = Candidate->Tags.Contains(ActorTagEnemy);
-
-            if (bByGTag || bByTeam || bByActorTag)
-            {
-                OutEnemies.Add(Candidate);
-                if (bByGTag) ++NumByTag;
-                if (bByTeam) ++NumByTeam;
-                if (bByActorTag) ++NumByActorTag;
-            }
-        }
-
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[%s] Turn %d: Fallback summary found=%d collected=%d byGTag=%d byTeam=%d byActorTag=%d"),
-            Label, TurnId, Found.Num(), OutEnemies.Num(), NumByTag, NumByTeam, NumByActorTag);
+        UE_LOG(LogTurnManager, Log,
+            TEXT("[%s] Turn %d: Enemy roster updated: %d -> %d"),
+            Label, TurnId, BeforeCount, AfterCount);
     }
 }
 
-void AGameTurnManagerBase::CollectEnemiesViaActorTag(APawn* PlayerPawn, int32 TurnId, const TCHAR* Label, TArray<AActor*>& InOutEnemies)
-{
-    if (UWorld* World = GetWorld())
-    {
-        TArray<AActor*> TaggedEnemies;
-        UGameplayStatics::GetAllActorsWithTag(World, FName("Enemy"), TaggedEnemies);
-        for (AActor* Tagged : TaggedEnemies)
-        {
-            if (IsValid(Tagged) && Tagged != PlayerPawn)
-            {
-                InOutEnemies.AddUnique(Tagged);
-            }
-        }
-
-        if (TaggedEnemies.Num() > 0)
-        {
-            UE_LOG(LogTurnManager, Warning,
-                TEXT("[%s] Turn %d: ActorTag fallback added %d enemies"), Label, TurnId, InOutEnemies.Num());
-        }
-    }
-}
-
-// CodeRevision: INC-2025-00028-R1 (Replace CurrentTurnIndex with CurrentTurnId - Phase 3.1) (2025-11-16 00:00)
-// CodeRevision: INC-2025-00029-R1 (Replace CachedPlayerPawn with GetPlayerPawn() - Phase 3.2) (2025-11-16 00:00)
-// CodeRevision: INC-2025-1206-R1 (Delegate turn initialization to TurnInitializationSubsystem) (2025-11-22 00:11)
 void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnId)
 {
-	if (!HasAuthority()) return;
+	if (!IsAuthorityLike(GetWorld(), this)) return;
 
 	// Use TurnId directly (should match CurrentTurnId from TurnFlowCoordinator)
 	CurrentTurnId = TurnId;
@@ -879,7 +795,7 @@ void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnId)
 
 void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerCommand& Command)
 {
-    if (!HasAuthority())
+    if (!IsAuthorityLike(GetWorld(), this))
     {
         return;
     }
@@ -980,7 +896,6 @@ UE_LOG(LogTurnManager, Log, TEXT("ResolveOrSpawnUnitManager: Spawning UnitManage
     }
 }
 
-// CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 UGridPathfindingSubsystem* AGameTurnManagerBase::FindPathFinder(UWorld* World) const
 {
     if (!World)
@@ -991,8 +906,6 @@ UGridPathfindingSubsystem* AGameTurnManagerBase::FindPathFinder(UWorld* World) c
     return World->GetSubsystem<UGridPathfindingSubsystem>();
 }
 
-// CodeRevision: INC-2025-00029-R1 (Replace CachedPlayerPawn with GetPlayerPawn() - Phase 3.2) (2025-11-16 00:00)
-// CodeRevision: INC-2025-00029-R1 (Replace CachedPlayerPawn with GetPlayerPawn() - Phase 3.2) (2025-11-16 00:00)
 void AGameTurnManagerBase::ContinueTurnAfterInput()
 {
     UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] ContinueTurnAfterInput is DEPRECATED. Logic moved to OnPlayerMoveCompleted."), CurrentTurnId);
@@ -1085,15 +998,13 @@ void AGameTurnManagerBase::AppendPlayerIntentIfPending(APawn* PlayerPawn, TArray
 
 void AGameTurnManagerBase::ExecuteSimultaneousPhase()
 {
-    if (!HasAuthority())
+    if (!IsAuthorityLike(GetWorld(), this))
     {
         return;
     }
 
     UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] ==== Simultaneous Move Phase (No Attacks) ===="), CurrentTurnId);
 
-    // CodeRevision: INC-2025-1117K (Fix Turn 0 simultaneous movement bug) (2025-11-17 20:45)
-    // Call CoreResolvePhase and directly execute DispatchResolvedMove
     UTurnCorePhaseManager* PhaseManager = nullptr;
     UEnemyTurnDataSubsystem* EnemyData = nullptr;
     if (!ResolveMovePhaseDependencies(TEXT("ExecuteSimultaneousPhase"), /*bLogSubsystemPresence*/ false, PhaseManager, EnemyData))
@@ -1136,7 +1047,7 @@ void AGameTurnManagerBase::ExecuteSimultaneousPhase()
 
 void AGameTurnManagerBase::OnSimultaneousPhaseCompleted()
 {
-    if (!HasAuthority())
+    if (!IsAuthorityLike(GetWorld(), this))
     {
         return;
     }
@@ -1151,7 +1062,7 @@ void AGameTurnManagerBase::OnSimultaneousPhaseCompleted()
 
 void AGameTurnManagerBase::ExecuteSequentialPhase()
 {
-	if (!HasAuthority())
+	if (!IsAuthorityLike(GetWorld(), this))
 	{
 		return;
 	}
@@ -1167,81 +1078,61 @@ void AGameTurnManagerBase::ExecuteSequentialPhase()
 }
 
 
-// CodeRevision: INC-2025-1206-R2 (Delegate player move completion to PlayerMoveHandlerSubsystem) (2025-11-22 00:22)
+// CodeRevision: INC-2025-1122-R5 (Simplify OnPlayerMoveCompleted with extracted helper) (2025-11-22)
 void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Payload)
 {
-	if (!HasAuthority())
-	{
-		return;
-	}
+	if (!IsAuthorityLike(GetWorld(), this)) return;
 
-	UE_LOG(LogTurnManager, Log,
-		TEXT("Turn %d: OnPlayerMoveCompleted Tag=%s"),
+	UE_LOG(LogTurnManager, Log, TEXT("Turn %d: OnPlayerMoveCompleted Tag=%s"),
 		CurrentTurnId, Payload ? *Payload->EventTag.ToString() : TEXT("NULL"));
 
-	// Finalize player move
 	AActor* CompletedActor = Payload ? const_cast<AActor*>(Cast<AActor>(Payload->Instigator)) : nullptr;
 	FinalizePlayerMove(CompletedActor);
 
-	// CodeRevision: INC-2025-1206-R6 (Unified Enemy Phase Entry)
-	// This is now the SINGLE entry point for the enemy turn, regardless of player action type.
-
 	UWorld* World = GetWorld();
-	if (!World)
-	{
-		UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] World not available"), CurrentTurnId);
-		return;
-	}
+	if (!World) { EndEnemyTurn(); return; }
 
-	// Get required subsystems
 	UPlayerMoveHandlerSubsystem* MoveHandler = World->GetSubsystem<UPlayerMoveHandlerSubsystem>();
-	UTurnCorePhaseManager* PhaseManager = World->GetSubsystem<UTurnCorePhaseManager>();
-	UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>();
+	if (!MoveHandler) { EndEnemyTurn(); return; }
 
-	if (!MoveHandler || !PhaseManager || !EnemyData)
-	{
-		UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] Critical Subsystem Missing! Aborting Enemy Turn."), CurrentTurnId);
-		EndEnemyTurn();
-		return;
-	}
-
-	// 1. Refresh Enemy List (Handle spawns/deaths during player action)
 	APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(World, 0);
 	RefreshEnemyRoster(PlayerPawn, CurrentTurnId, TEXT("EnemyPhaseStart"));
+
 	TArray<AActor*> EnemyActors;
 	CopyEnemyActors(EnemyActors);
 
-	UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Enemy Phase Start: Collected %d enemies"), CurrentTurnId, EnemyActors.Num());
-
-	// 2. Handle move completion and update AI knowledge
 	TArray<FEnemyIntent> FinalIntents;
 	if (!MoveHandler->HandlePlayerMoveCompletion(Payload, CurrentTurnId, EnemyActors, FinalIntents))
 	{
-		UE_LOG(LogTurnManager, Error, TEXT("[Turn %d] Failed to handle player move completion"), CurrentTurnId);
 		EndEnemyTurn();
 		return;
 	}
 
-	// Cache intents
 	CachedEnemyIntents = FinalIntents;
+	ExecuteEnemyPhase();
+}
 
-	// 3. Determine & Execute Phase
+void AGameTurnManagerBase::ExecuteEnemyPhase()
+{
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	UTurnCorePhaseManager* PhaseManager = World->GetSubsystem<UTurnCorePhaseManager>();
+	UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>();
+	if (!PhaseManager || !EnemyData) { EndEnemyTurn(); return; }
+
 	const bool bHasAttack = DoesAnyIntentHaveAttack();
 
 	if (bHasAttack)
 	{
-		// --- Sequential Mode (Pattern A) ---
-		UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Mode: SEQUENTIAL (Attacks detected)"), CurrentTurnId);
-
+		UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Mode: SEQUENTIAL"), CurrentTurnId);
 		bSequentialModeActive = true;
 		bSequentialMovePhaseStarted = false;
 		bIsInMoveOnlyPhase = false;
 
-		// Resolve conflicts to determine order & winners
 		CachedResolvedActions.Reset();
 		CachedResolvedActions = PhaseManager->CoreResolvePhase(EnemyData->Intents);
 
-		// Extract Attacks
 		TArray<FResolvedAction> AttackActions;
 		const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
 		for (const FResolvedAction& Action : CachedResolvedActions)
@@ -1254,8 +1145,6 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
 
 		if (AttackActions.IsEmpty())
 		{
-			// Should rarely happen if bHasAttack is true, but possible if resolution failed/blocked all attacks
-			UE_LOG(LogTurnManager, Warning, TEXT("[Turn %d] Sequential Mode: No resolved attacks found despite intents. Skipping to moves."), CurrentTurnId);
 			ExecuteEnemyMoves_Sequential();
 		}
 		else
@@ -1265,9 +1154,7 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
 	}
 	else
 	{
-		// --- Simultaneous Mode ---
-		UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Mode: SIMULTANEOUS (No attacks)"), CurrentTurnId);
-
+		UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] Mode: SIMULTANEOUS"), CurrentTurnId);
 		bSequentialModeActive = false;
 		ExecuteSimultaneousPhase();
 	}
@@ -1275,7 +1162,7 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
 
 void AGameTurnManagerBase::ExecuteEnemyMoves_Sequential()
 {
-    if (!HasAuthority())
+    if (!IsAuthorityLike(GetWorld(), this))
     {
         return;
     }
@@ -1335,11 +1222,9 @@ void AGameTurnManagerBase::ExecuteEnemyMoves_Sequential()
 }
 
 
-// CodeRevision: INC-2025-1117H-R1 (Centralized move dispatch) (2025-11-17 19:10)
-// CodeRevision: INC-2025-1117H-R1 (Centralized move dispatch) (2025-11-17 19:10)
 void AGameTurnManagerBase::DispatchMoveActions(const TArray<FResolvedAction>& ActionsToDispatch)
 {
-    if (!HasAuthority() || ActionsToDispatch.IsEmpty())
+    if (!IsAuthorityLike(GetWorld(), this) || ActionsToDispatch.IsEmpty())
     {
         return;
     }
@@ -1351,8 +1236,6 @@ void AGameTurnManagerBase::DispatchMoveActions(const TArray<FResolvedAction>& Ac
 }
 
 
-// CodeRevision: INC-2025-1125-R1 (Expose sequential flag for resolver checks) (2025-11-25 12:00)
-// CodeRevision: INC-2025-1125-R1 (Expose sequential flag for resolver checks) (2025-11-25 12:00)
 bool AGameTurnManagerBase::IsSequentialModeActive() const
 {
     return bSequentialModeActive;
@@ -1363,62 +1246,32 @@ bool AGameTurnManagerBase::DoesAnyIntentHaveAttack() const
 {
     const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
 
-    // INC-2025-0002: Enhanced logging - detailed output of Intents array contents used for bHasAttack determination
-    UE_LOG(LogTurnManager, Warning,
-        TEXT("[AttackScan] Turn=%d, Scanning CachedEnemyIntents (Count=%d)"),
-        CurrentTurnId, CachedEnemyIntents.Num());
-
-    int32 AttackCount = 0;
-    int32 MoveCount = 0;
-    int32 WaitCount = 0;
-    const FGameplayTag MoveTag = RogueGameplayTags::AI_Intent_Move;
-    const FGameplayTag WaitTag = RogueGameplayTags::AI_Intent_Wait;
-
-    for (int32 i = 0; i < CachedEnemyIntents.Num(); ++i)
+    for (const FEnemyIntent& Intent : CachedEnemyIntents)
     {
-        const FEnemyIntent& Intent = CachedEnemyIntents[i];
-
-        // Count
         if (Intent.AbilityTag.MatchesTag(AttackTag))
         {
-            ++AttackCount;
+            if (CVarTurnLog.GetValueOnGameThread() >= 2)
+            {
+                UE_LOG(LogTurnManager, Verbose,
+                    TEXT("[AttackScan] Turn %d: Attack intent found in %d intents"),
+                    CurrentTurnId, CachedEnemyIntents.Num());
+            }
+            return true;
         }
-        else if (Intent.AbilityTag.MatchesTag(MoveTag))
-        {
-            ++MoveCount;
-        }
-        else if (Intent.AbilityTag.MatchesTag(WaitTag))
-        {
-            ++WaitCount;
-        }
-
-        // Log details of each Intent
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[AttackScan] Turn=%d, Intent[%d]: Actor=%s, Ability=%s, From=(%d,%d), To=(%d,%d)"),
-            CurrentTurnId,
-            i,
-            *GetNameSafe(Intent.Actor.Get()),
-            *Intent.AbilityTag.ToString(),
-            Intent.CurrentCell.X, Intent.CurrentCell.Y,
-            Intent.NextCell.X, Intent.NextCell.Y);
     }
 
-    UE_LOG(LogTurnManager, Warning,
-        TEXT("[AttackScan] Turn=%d, Summary: Attack=%d, Move=%d, Wait=%d, Total=%d"),
-        CurrentTurnId, AttackCount, MoveCount, WaitCount, CachedEnemyIntents.Num());
-
-    const bool bHasAttack = (AttackCount > 0);
-
-    UE_LOG(LogTurnManager, Warning,
-        TEXT("[AttackScan] Turn=%d, bHasAttack=%s"),
-        CurrentTurnId, bHasAttack ? TEXT("TRUE") : TEXT("FALSE"));
-
-    return bHasAttack;
+    if (CVarTurnLog.GetValueOnGameThread() >= 2)
+    {
+        UE_LOG(LogTurnManager, Verbose,
+            TEXT("[AttackScan] Turn %d: No attack intents in %d intents"),
+            CurrentTurnId, CachedEnemyIntents.Num());
+    }
+    return false;
 }
 
 void AGameTurnManagerBase::ExecuteAttacks(const TArray<FResolvedAction>& PreResolvedAttacks)
 {
-    if (!HasAuthority())
+    if (!IsAuthorityLike(GetWorld(), this))
     {
         return;
     }
@@ -1479,8 +1332,7 @@ void AGameTurnManagerBase::ExecuteAttacks(const TArray<FResolvedAction>& PreReso
 }
 
 
-// CodeRevision: INC-2025-00029-R1 (Replace CachedPlayerPawn with GetPlayerPawn() - Phase 3.2) (2025-11-16 00:00)
-// CodeRevision: INC-2025-00029-R1 (Replace CachedPlayerPawn with GetPlayerPawn() - Phase 3.2) (2025-11-16 00:00)
+// CodeRevision: INC-2025-1122-R3 (Delegate to EnemyTurnDataSubsystem) (2025-11-22)
 void AGameTurnManagerBase::EnsureEnemyIntents(APawn* PlayerPawn)
 {
     UWorld* World = GetWorld();
@@ -1489,69 +1341,22 @@ void AGameTurnManagerBase::EnsureEnemyIntents(APawn* PlayerPawn)
     UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>();
     if (!EnemyData) return;
 
-    if (EnemyData->Intents.Num() > 0) return;
-
-    UE_LOG(LogTurnManager, Warning,
-        TEXT("[Turn %d] EnsureEnemyIntents: No enemy intents detected, attempting fallback generation..."),
-        CurrentTurnId);
-
-    UEnemyAISubsystem* EnemyAISys = World->GetSubsystem<UEnemyAISubsystem>();
+    // Prepare enemy actors for fallback
     TArray<AActor*> EnemyActors;
-
-    if (EnemyAISys && IsValid(PathFinder) && PlayerPawn)
+    if (IsValid(PathFinder) && PlayerPawn)
     {
         RefreshEnemyRoster(PlayerPawn, CurrentTurnId, TEXT("MovePhaseFallback"));
         CopyEnemyActors(EnemyActors);
     }
 
-    if (EnemyActors.Num() > 0)
+    // Delegate to subsystem
+    TArray<FEnemyIntent> GeneratedIntents;
+    if (EnemyData->EnsureIntentsFallback(CurrentTurnId, PlayerPawn, PathFinder.Get(), EnemyActors, GeneratedIntents))
     {
-        // Get reliable player grid coordinates from GridOccupancySubsystem
-        FIntPoint PlayerGrid = FIntPoint(-1, -1);
-        if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
-        {
-            PlayerGrid = Occupancy->GetCellOfActor(PlayerPawn);
-        }
-
-        if (UDistanceFieldSubsystem* DistanceField = World->GetSubsystem<UDistanceFieldSubsystem>())
-        {
-            DistanceField->UpdateDistanceField(PlayerGrid);
-            UE_LOG(LogTurnManager, Log,
-                TEXT("[Turn %d] Fallback: DistanceField updated for PlayerGrid=(%d,%d)"),
-                CurrentTurnId, PlayerGrid.X, PlayerGrid.Y);
-        }
-
-        TArray<FEnemyObservation> Observations;
-        EnemyAISys->BuildObservations(EnemyActors, PlayerGrid, PathFinder.Get(), Observations);
-        EnemyData->Observations = Observations;
-
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[Turn %d] Fallback: Generated %d observations"),
-            CurrentTurnId, Observations.Num());
-
-        TArray<FEnemyIntent> Intents;
-        EnemyAISys->CollectIntents(Observations, EnemyActors, Intents);
-        EnemyData->Intents = Intents;
-        CachedEnemyIntents = Intents;
-
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[Turn %d] Fallback: Generated %d intents"),
-            CurrentTurnId, Intents.Num());
-    }
-    else
-    {
-        UE_LOG(LogTurnManager, Error,
-            TEXT("[Turn %d] Fallback failed: EnemyAISys=%d, PathFinder=%d, PlayerPawn=%d, Enemies=%d"),
-            CurrentTurnId,
-            EnemyAISys != nullptr,
-            IsValid(PathFinder),
-            PlayerPawn != nullptr,
-            EnemyActors.Num());
+        CachedEnemyIntents = GeneratedIntents;
     }
 }
 
-// CodeRevision: INC-2025-00029-R1 (Replace CachedPlayerPawn with GetPlayerPawn() - Phase 3.2) (2025-11-16 00:00)
-// CodeRevision: INC-2025-00029-R1 (Replace CachedPlayerPawn with GetPlayerPawn() - Phase 3.2) (2025-11-16 00:00)
 void AGameTurnManagerBase::ExecuteMovePhase(bool bSkipAttackCheck)
 {
     // Get PlayerPawn locally instead of using cached member
@@ -1680,20 +1485,15 @@ void AGameTurnManagerBase::ExecuteMovePhase(bool bSkipAttackCheck)
 
 
 
-// CodeRevision: INC-2025-00030-R5 (Split attack/move phase completion handlers) (2025-11-17 02:00)
-// CodeRevision: INC-2025-00030-R5 (Split attack/move phase completion handlers) (2025-11-17 02:00)
 void AGameTurnManagerBase::HandleMovePhaseCompleted(int32 FinishedTurnId)
 {
-    // ★★★ START: New guard processing ★★★
-    // CodeRevision: INC-2025-1117F (Prevent move phase from triggering during sequential attack phase)
     if (bSequentialModeActive && !bSequentialMovePhaseStarted)
     {
         UE_LOG(LogTurnManager, Log, TEXT("[Turn %d] HandleMovePhaseCompleted: Ignoring barrier completion during sequential attack phase. Waiting for HandleAttackPhaseCompleted to start the move phase."), FinishedTurnId);
         return;
     }
-    // ★★★ END: New guard processing ★★★
 
-    if (!HasAuthority())
+    if (!IsAuthorityLike(GetWorld(), this))
     {
         UE_LOG(LogTurnManager, Warning, TEXT("GameTurnManager::HandleMovePhaseCompleted: Not authority"));
         return;
@@ -1731,11 +1531,9 @@ void AGameTurnManagerBase::HandleMovePhaseCompleted(int32 FinishedTurnId)
 }
 
 
-// CodeRevision: INC-2025-00030-R5 (Split attack/move phase completion handlers) (2025-11-17 02:00)
-// CodeRevision: INC-2025-00030-R5 (Split attack/move phase completion handlers) (2025-11-17 02:00)
 void AGameTurnManagerBase::HandleAttackPhaseCompleted(int32 FinishedTurnId)
 {
-    if (!HasAuthority())
+    if (!IsAuthorityLike(GetWorld(), this))
     {
         return;
     }
@@ -1790,143 +1588,21 @@ void AGameTurnManagerBase::EndEnemyTurn()
 
 void AGameTurnManagerBase::ClearResidualInProgressTags()
 {
-static const FGameplayTag InProgressTag = FGameplayTag::RequestGameplayTag(FName("State.Action.InProgress"));
-    static const FGameplayTag ExecutingTag = FGameplayTag::RequestGameplayTag(FName("State.Ability.Executing"));
-    static const FGameplayTag MovingTag = FGameplayTag::RequestGameplayTag(FName("State.Moving"));
-    static const FGameplayTag FallingTag = FGameplayTag::RequestGameplayTag(FName("Movement.Mode.Falling"));
-
-    if (!InProgressTag.IsValid() || !ExecutingTag.IsValid() || !MovingTag.IsValid())
-    {
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[TagCleanup] One or more state tags not found"));
-        return;
-    }
-
-    TArray<AActor*> AllUnits;
-
-// CodeRevision: INC-2025-00017-R1 (Replace GetPlayerPawn() wrapper - Phase 2) (2025-11-16 15:05)
-if (APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0))
-    {
-        AllUnits.Add(PlayerPawn);
-    }
-
-TArray<AActor*> Enemies;
+    APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+    TArray<AActor*> Enemies;
     GetCachedEnemies(Enemies);
-    AllUnits.Append(Enemies);
-
-    int32 TotalInProgress = 0;
-    int32 TotalExecuting = 0;
-    int32 TotalMoving = 0;
-    int32 TotalFalling = 0;
-
-    for (AActor* Actor : AllUnits)
-    {
-        if (!Actor)
-        {
-            continue;
-        }
-
-        UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Actor);
-        if (!ASC)
-        {
-            continue;
-        }
-
-        const int32 InProgressCount = RemoveGameplayTagLoose(ASC, InProgressTag);
-        TotalInProgress += InProgressCount;
-
-        const int32 ExecutingCount = RemoveGameplayTagLoose(ASC, ExecutingTag);
-        TotalExecuting += ExecutingCount;
-
-        const int32 MovingCount = RemoveGameplayTagLoose(ASC, MovingTag);
-        TotalMoving += MovingCount;
-
-        int32 FallingCount = 0;
-        if (FallingTag.IsValid())
-        {
-            FallingCount = RemoveGameplayTagLoose(ASC, FallingTag);
-            TotalFalling += FallingCount;
-        }
-
-        if (InProgressCount > 0 || ExecutingCount > 0 || MovingCount > 0 || FallingCount > 0)
-        {
-            UE_LOG(LogTurnManager, Warning,
-                TEXT("[TagCleanup] %s cleared: InProgress=%d, Executing=%d, Moving=%d, Falling=%d"),
-                *GetNameSafe(Actor), InProgressCount, ExecutingCount, MovingCount, FallingCount);
-        }
-    }
-
-    if (TotalInProgress > 0 || TotalExecuting > 0 || TotalMoving > 0 || TotalFalling > 0)
-    {
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[TagCleanup] Total residual tags cleared: InProgress=%d, Executing=%d, Moving=%d, Falling=%d"),
-            TotalInProgress, TotalExecuting, TotalMoving, TotalFalling);
-    }
+    TurnTagCleanupUtils::ClearResidualInProgressTags(GetWorld(), PlayerPawn, Enemies);
 }
 
-// CodeRevision: INC-2025-1208-R1 (Centralize loose tag removal and player move blocking-tag cleanup) (2025-11-22 01:10)
+// CodeRevision: INC-2025-1122-R1 (Delegate to TurnTagCleanupUtils) (2025-11-22)
 int32 AGameTurnManagerBase::RemoveGameplayTagLoose(UAbilitySystemComponent* ASC, const FGameplayTag& TagToRemove)
 {
-    if (!ASC || !TagToRemove.IsValid())
-    {
-        return 0;
-    }
-
-    const int32 Count = ASC->GetTagCount(TagToRemove);
-    for (int32 i = 0; i < Count; ++i)
-    {
-        ASC->RemoveLooseGameplayTag(TagToRemove);
-    }
-    return Count;
+    return TurnTagCleanupUtils::RemoveGameplayTagLoose(ASC, TagToRemove);
 }
 
 int32 AGameTurnManagerBase::CleanseBlockingTags(UAbilitySystemComponent* ASC, AActor* ActorForLog)
 {
-    if (!ASC)
-    {
-        return 0;
-    }
-
-    int32 ClearedCount = 0;
-
-    if (ASC->HasMatchingGameplayTag(RogueGameplayTags::State_Ability_Executing))
-    {
-        ASC->RemoveLooseGameplayTag(RogueGameplayTags::State_Ability_Executing);
-        ++ClearedCount;
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[TriggerPlayerMove] ⚠�E�E�E�ECleared blocking State.Ability.Executing tag from %s"),
-            *GetNameSafe(ActorForLog));
-    }
-
-    if (ASC->HasMatchingGameplayTag(RogueGameplayTags::State_Action_InProgress))
-    {
-        ASC->RemoveLooseGameplayTag(RogueGameplayTags::State_Action_InProgress);
-        ++ClearedCount;
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[TriggerPlayerMove] ⚠�E�E�E�ECleared blocking State.Action.InProgress tag from %s"),
-            *GetNameSafe(ActorForLog));
-    }
-
-    if (ASC->HasMatchingGameplayTag(RogueGameplayTags::State_Moving))
-    {
-        ASC->RemoveLooseGameplayTag(RogueGameplayTags::State_Moving);
-        ++ClearedCount;
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[TriggerPlayerMove] Cleared residual State.Moving tag from %s (Gemini fix)"),
-            *GetNameSafe(ActorForLog));
-    }
-
-    static const FGameplayTag FallingTag = FGameplayTag::RequestGameplayTag(FName("Movement.Mode.Falling"));
-    if (FallingTag.IsValid() && ASC->HasMatchingGameplayTag(FallingTag))
-    {
-        ASC->RemoveLooseGameplayTag(FallingTag);
-        ++ClearedCount;
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[TriggerPlayerMove] Cleared residual Movement.Mode.Falling tag from %s (Gemini fix)"),
-            *GetNameSafe(ActorForLog));
-    }
-
-    return ClearedCount;
+    return TurnTagCleanupUtils::CleanseBlockingTags(ASC, ActorForLog);
 }
 
 // CodeRevision: INC-2025-1208-R3 (Extract advance-turn logging and core phase transition into helpers) (2025-11-22 01:45)
@@ -2072,7 +1748,7 @@ void AGameTurnManagerBase::ApplyWaitInputGate(bool bOpen)
 void AGameTurnManagerBase::OpenInputWindow()
 {
 
-    if (!HasAuthority())
+    if (!IsAuthorityLike(GetWorld(), this))
     {
         return;
     }
@@ -2115,10 +1791,9 @@ void AGameTurnManagerBase::OpenInputWindow()
     // CodeRevision: INC-2025-00030-R1 (Removed OnRep_InputWindowId call - use TurnFlowCoordinator instead) (2025-11-16 00:00)
 }
 
-// CodeRevision: INC-2025-00029-R1 (Replace CachedPlayerPawn with GetPlayerPawn() - Phase 3.2) (2025-11-16 00:00)
 void AGameTurnManagerBase::NotifyPlayerPossessed(APawn* NewPawn)
 {
-    if (!HasAuthority()) return;
+    if (!IsAuthorityLike(GetWorld(), this)) return;
 
     // No longer caching PlayerPawn - use UGameplayStatics::GetPlayerPawn() instead
     UE_LOG(LogTurnManager, Log, TEXT("[Turn] NotifyPlayerPossessed: %s"), *GetNameSafe(NewPawn));
@@ -2147,7 +1822,7 @@ if (bTurnStarted && !WaitingForPlayerInput)
 
 void AGameTurnManagerBase::TryStartFirstTurn()
 {
-    if (!HasAuthority()) return;
+    if (!IsAuthorityLike(GetWorld(), this)) return;
 
 if (bPathReady && bUnitsSpawned && bPlayerPossessed && !bTurnStarted)
     {
@@ -2216,13 +1891,6 @@ bool AGameTurnManagerBase::CanAdvanceTurn(int32 TurnId, bool* OutBarrierQuiet, i
     return false;
 }
 
-// CodeRevision: INC-2025-00017-R1 (Remove wrapper functions - Phase 4) (2025-11-16 15:25)
-// Removed: GetFloorGenerator() - use DungeonSystem->GetFloorGenerator() directly
-
-// CodeRevision: INC-2025-00017-R1 (Remove unused wrapper functions - Phase 1) (2025-11-16 15:00)
-// Removed: EnsureFloorGenerated() - unused wrapper function
-// Removed: NextFloor() - unused wrapper function
-// Removed: WarpPlayerToStairUp() - unimplemented wrapper function
 
 
 void AGameTurnManagerBase::MarkMoveInProgress(bool bInProgress)
@@ -2272,479 +1940,119 @@ void AGameTurnManagerBase::FinalizePlayerMove(AActor* CompletedActor)
     }
 }
 
+// CodeRevision: INC-2025-1122-R2 (Delegate to MoveReservationSubsystem) (2025-11-22)
 void AGameTurnManagerBase::RegisterManualMoveDelegate(AUnitBase* Unit, bool bIsPlayerFallback)
 {
-    if (!Unit)
+    if (UWorld* World = GetWorld())
     {
-        return;
-    }
-
-    if (bIsPlayerFallback)
-    {
-        PendingPlayerFallbackMoves.Add(Unit);
-    }
-
-    if (ActiveMoveDelegates.Contains(Unit))
-    {
-        return;
-    }
-
-        if (UUnitMovementComponent* MovementComp = Unit->MovementComp.Get())
+        if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
         {
-        MovementComp->OnMoveFinished.AddDynamic(this, &AGameTurnManagerBase::HandleManualMoveFinished);
-        ActiveMoveDelegates.Add(Unit);
-
-        UE_LOG(LogTurnManager, Verbose,
-            TEXT("[Turn %d] Bound move-finished delegate for %s (via MovementComp)"),
-            CurrentTurnId, *GetNameSafe(Unit));
-        return;
+            MoveRes->RegisterManualMoveDelegate(Unit, bIsPlayerFallback);
+        }
     }
-
-    UE_LOG(LogTurnManager, Error,
-        TEXT("[Turn %d] Failed to bind move-finished delegate for %s: MovementComp missing!"),
-        CurrentTurnId, *GetNameSafe(Unit));
 }
 
 void AGameTurnManagerBase::HandleManualMoveFinished(AUnitBase* Unit)
 {
-    if (!HasAuthority() || !Unit)
+    // Delegate handling is now in MoveReservationSubsystem
+    // This function is kept for legacy compatibility but should not be called directly
+    if (UWorld* World = GetWorld())
     {
-        return;
-    }
-
-    if (ActiveMoveDelegates.Contains(Unit))
-    {
-        if (UUnitMovementComponent* MovementComp = Unit->MovementComp.Get())
+        if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
         {
-            MovementComp->OnMoveFinished.RemoveDynamic(this, &AGameTurnManagerBase::HandleManualMoveFinished);
+            MoveRes->HandleManualMoveFinished(Unit);
         }
-        ActiveMoveDelegates.Remove(Unit);
-    }
-
-    if (FManualMoveBarrierInfo* BarrierInfo = PendingMoveActionRegistrations.Find(Unit))
-    {
-        if (BarrierInfo->ActionId.IsValid() && BarrierInfo->TurnId != INDEX_NONE)
-        {
-            if (UWorld* World = GetWorld())
-            {
-                if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
-                {
-                    Barrier->CompleteAction(Unit, BarrierInfo->TurnId, BarrierInfo->ActionId);
-                    UE_LOG(LogTurnManager, Log,
-                        TEXT("[HandleManualMoveFinished] Completed barrier action for %s TurnId=%d ActionId=%s"),
-                        *GetNameSafe(Unit), BarrierInfo->TurnId, *BarrierInfo->ActionId.ToString());
-                }
-            }
-        }
-
-        PendingMoveActionRegistrations.Remove(Unit);
-    }
-
-    const bool bPlayerFallback = PendingPlayerFallbackMoves.Remove(Unit) > 0;
-    if (bPlayerFallback)
-    {
-        FinalizePlayerMove(Unit);
-    }
-    else
-    {
-        ReleaseMoveReservation(Unit);
     }
 }
 
+// CodeRevision: INC-2025-1122-R2 (Delegate to MoveReservationSubsystem) (2025-11-22)
 void AGameTurnManagerBase::ClearResolvedMoves()
 {
-    PendingMoveReservations.Reset();
-    PendingPlayerFallbackMoves.Reset();
-    PendingMoveActionRegistrations.Reset();
-
-    for (const TWeakObjectPtr<AUnitBase>& UnitPtr : ActiveMoveDelegates)
-    {
-        if (AUnitBase* Unit = UnitPtr.Get())
-        {
-            if (UUnitMovementComponent* MovementComp = Unit->MovementComp.Get())
-            {
-                MovementComp->OnMoveFinished.RemoveDynamic(this, &AGameTurnManagerBase::HandleManualMoveFinished);
-            }
-        }
-    }
-    ActiveMoveDelegates.Reset();
-
     if (UWorld* World = GetWorld())
     {
-        if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
+        if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
         {
-            Occupancy->ClearAllReservations();
+            MoveRes->ClearResolvedMoves();
         }
     }
 }
 
 bool AGameTurnManagerBase::RegisterResolvedMove(AActor* Actor, const FIntPoint& Cell)
 {
-    if (!Actor)
+    if (UWorld* World = GetWorld())
     {
-        UE_LOG(LogTurnManager, Error,
-            TEXT("[RegisterResolvedMove] FAILED: Actor is null"));
-        return false;
-    }
-
-    TWeakObjectPtr<AActor> ActorKey(Actor);
-    PendingMoveReservations.FindOrAdd(ActorKey) = Cell;
-
-if (UWorld* World = GetWorld())
-    {
-        if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
+        if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
         {
-            const bool bReserved = Occupancy->ReserveCellForActor(Actor, Cell);
-            if (!bReserved)
-            {
-                UE_LOG(LogTurnManager, Error,
-                    TEXT("[RegisterResolvedMove] FAILED: %s cannot reserve (%d,%d) - already reserved by another actor"),
-                    *GetNameSafe(Actor), Cell.X, Cell.Y);
-                return false;  
-            }
-
-            UE_LOG(LogTurnManager, Verbose,
-                TEXT("[RegisterResolvedMove] SUCCESS: %s reserved (%d,%d)"),
-                *GetNameSafe(Actor), Cell.X, Cell.Y);
-            return true;  
+            return MoveRes->RegisterResolvedMove(Actor, Cell);
         }
     }
-
-    UE_LOG(LogTurnManager, Error,
-        TEXT("[RegisterResolvedMove] FAILED: GridOccupancySubsystem not available"));
     return false;
 }
 
 bool AGameTurnManagerBase::IsMoveAuthorized(AActor* Actor, const FIntPoint& Cell) const
 {
-    if (!Actor || PendingMoveReservations.Num() == 0)
+    if (UWorld* World = GetWorld())
     {
-        return true;
+        if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
+        {
+            return MoveRes->IsMoveAuthorized(Actor, Cell);
+        }
     }
-
-    TWeakObjectPtr<AActor> ActorKey(Actor);
-    if (const FIntPoint* ReservedCell = PendingMoveReservations.Find(ActorKey))
-    {
-        return *ReservedCell == Cell;
-    }
-
     return true;
 }
 
 bool AGameTurnManagerBase::HasReservationFor(AActor* Actor, const FIntPoint& Cell) const
 {
-    if (!Actor)
+    if (UWorld* World = GetWorld())
     {
-        return false;
+        if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
+        {
+            return MoveRes->HasReservationFor(Actor, Cell);
+        }
     }
-
-    TWeakObjectPtr<AActor> ActorKey(Actor);
-    if (const FIntPoint* ReservedCell = PendingMoveReservations.Find(ActorKey))
-    {
-        return *ReservedCell == Cell;
-    }
-
     return false;
 }
 
 void AGameTurnManagerBase::ReleaseMoveReservation(AActor* Actor)
 {
-    if (!Actor)
-    {
-        return;
-    }
-
-    TWeakObjectPtr<AActor> ActorKey(Actor);
-    PendingMoveReservations.Remove(ActorKey);
-
-    if (AUnitBase* Unit = Cast<AUnitBase>(Actor))
-    {
-        PendingPlayerFallbackMoves.Remove(Unit);
-    }
-
     if (UWorld* World = GetWorld())
     {
-        if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
+        if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
         {
-            Occupancy->ReleaseReservationForActor(Actor);
+            MoveRes->ReleaseMoveReservation(Actor);
         }
     }
 }
 
+// CodeRevision: INC-2025-1122-R2 (Delegate to MoveReservationSubsystem) (2025-11-22)
 bool AGameTurnManagerBase::DispatchResolvedMove(const FResolvedAction& Action)
 {
-    if (!HasAuthority())
-    {
-        return false;
-    }
-
-    AActor* SourceActor = Action.SourceActor ? Action.SourceActor.Get() : nullptr;
-    if (!SourceActor && Action.Actor.IsValid())
-    {
-        SourceActor = Action.Actor.Get();
-    }
-
-    if (!SourceActor)
-    {
-        UE_LOG(LogTurnManager, Warning, TEXT("[ResolvedMove] Missing source actor"));
-        return false;
-    }
-
-    AUnitBase* Unit = Cast<AUnitBase>(SourceActor);
-    if (!Unit)
-    {
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[ResolvedMove] %s is not a UnitBase"), *GetNameSafe(SourceActor));
-        ReleaseMoveReservation(SourceActor);
-        return false;
-    }
-
-    // CodeRevision: INC-2025-00030-R4 (Fix Barrier desync for Wait actions) (2025-11-17 01:00)
-    // CodeRevision: INC-2025-1208-R1 (Split wait handling into dedicated helper) (2025-11-22 01:10)
-    if (HandleWaitResolvedAction(Unit, Action))
-    {
-        return false;
-    }
-
-    if (!IsMoveAuthorized(Unit, Action.NextCell))
-    {
-        UE_LOG(LogTurnManager, Error,
-            TEXT("[ResolvedMove] AUTHORIZATION FAILED: %s tried to move to (%d,%d) but reservation is for a different cell!"),
-            *GetNameSafe(Unit), Action.NextCell.X, Action.NextCell.Y);
-
-        TWeakObjectPtr<AActor> ActorKey(Unit);
-        if (const FIntPoint* ReservedCell = PendingMoveReservations.Find(ActorKey))
-        {
-            UE_LOG(LogTurnManager, Error,
-                TEXT("[ResolvedMove] Reserved cell for %s is (%d,%d), but Action.NextCell is (%d,%d) - MISMATCH!"),
-                *GetNameSafe(Unit), ReservedCell->X, ReservedCell->Y, Action.NextCell.X, Action.NextCell.Y);
-        }
-
-        ReleaseMoveReservation(Unit);
-        return false;
-    }
-
-    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
-    // CodeRevision: INC-2025-00032-R1 (Remove GetCachedPathFinder() - use GetGridPathfindingSubsystem() instead) (2025-01-XX XX:XX)
-    UGridPathfindingSubsystem* LocalPathFinder = GetGridPathfindingSubsystem();
-    if (!LocalPathFinder)
-    {
-        UE_LOG(LogTurnManager, Error, TEXT("[ResolvedMove] PathFinder missing"));
-        ReleaseMoveReservation(Unit);
-        return false;
-    }
-
-    const bool bIsPlayerUnit = (Unit->Team == 0);
-    if (bIsPlayerUnit)
-    {
-        return HandlePlayerResolvedMove(Unit, Action);
-    }
-
-    return HandleEnemyResolvedMove(Unit, Action, LocalPathFinder);
-}
-
-// CodeRevision: INC-2025-1208-R1 (Split DispatchResolvedMove responsibilities into helpers) (2025-11-22 01:10)
-bool AGameTurnManagerBase::HandleWaitResolvedAction(AUnitBase* Unit, const FResolvedAction& Action)
-{
-    if (!Unit)
-    {
-        return false;
-    }
-
-    // Wait or "no-op" move: register with barrier and complete immediately.
-    if (Action.NextCell != FIntPoint(-1, -1) && Action.NextCell != Action.CurrentCell)
-    {
-        return false;
-    }
-
-    ReleaseMoveReservation(Unit);
-
     if (UWorld* World = GetWorld())
     {
-        if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
+        if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
         {
-            const int32 RegisteredTurnId = Barrier->GetCurrentTurnId();
-            const FGuid ActionId = Barrier->RegisterAction(Unit, RegisteredTurnId);
-            if (ActionId.IsValid())
-            {
-                Barrier->CompleteAction(Unit, RegisteredTurnId, ActionId);
-                UE_LOG(LogTurnManager, Verbose,
-                    TEXT("[DispatchResolvedMove] Registered+Completed WAIT action: Actor=%s TurnId=%d ActionId=%s"),
-                    *GetNameSafe(Unit), RegisteredTurnId, *ActionId.ToString());
-            }
-            else
-            {
-                UE_LOG(LogTurnManager, Warning,
-                    TEXT("[DispatchResolvedMove] Failed to register WAIT action for %s"), *GetNameSafe(Unit));
-            }
+            return MoveRes->DispatchResolvedMove(Action, this);
         }
     }
-
-    return true;
-}
-
-bool AGameTurnManagerBase::HandlePlayerResolvedMove(AUnitBase* Unit, const FResolvedAction& Action)
-{
-    if (!Unit)
-    {
-        return false;
-    }
-
-    if (bPlayerMoveInProgress)
-    {
-        UE_LOG(LogTurnManager, Log,
-            TEXT("[DispatchResolvedMove] Player move already in progress, skipping duplicate GA trigger for %s"),
-            *GetNameSafe(Unit));
-        return true;
-    }
-
-    if (TriggerPlayerMoveAbility(Action, Unit))
-    {
-        return true;
-    }
-
-    UE_LOG(LogTurnManager, Error,
-        TEXT("[ResolvedMove] ❁EPlayer GA trigger failed - Move BLOCKED (GAS-only path enforced)"));
-    ReleaseMoveReservation(Unit);
     return false;
 }
 
-bool AGameTurnManagerBase::HandleEnemyResolvedMove(AUnitBase* Unit, const FResolvedAction& Action, UGridPathfindingSubsystem* InPathFinder)
-{
-    if (!Unit || !InPathFinder)
-    {
-        if (!Unit)
-        {
-            UE_LOG(LogTurnManager, Error, TEXT("[HandleEnemyResolvedMove] Unit is null"));
-        }
-        if (!InPathFinder)
-        {
-            UE_LOG(LogTurnManager, Error, TEXT("[HandleEnemyResolvedMove] PathFinder missing"));
-        }
-        if (Unit)
-        {
-            ReleaseMoveReservation(Unit);
-        }
-        return false;
-    }
-
-    const FVector StartWorld = Unit->GetActorLocation();
-    const FVector EndWorld = InPathFinder->GridToWorld(Action.NextCell, StartWorld.Z);
-
-    TArray<FVector> PathPoints;
-    PathPoints.Add(EndWorld);
-
-    Unit->MoveUnit(PathPoints);
-
-    RegisterManualMoveDelegate(Unit, /*bIsPlayerFallback*/ false);
-
-    if (UWorld* World = GetWorld())
-    {
-        if (UTurnActionBarrierSubsystem* Barrier = World->GetSubsystem<UTurnActionBarrierSubsystem>())
-        {
-            const int32 RegisteredTurnId = Barrier->GetCurrentTurnId();
-            const FGuid ActionId = Barrier->RegisterAction(Unit, RegisteredTurnId);
-            if (ActionId.IsValid())
-            {
-                FManualMoveBarrierInfo Info;
-                Info.TurnId = RegisteredTurnId;
-                Info.ActionId = ActionId;
-                PendingMoveActionRegistrations.Add(Unit, Info);
-                UE_LOG(LogTurnManager, Log,
-                    TEXT("[DispatchResolvedMove] Registered enemy move with barrier: Actor=%s, TurnId=%d, ActionId=%s"),
-                    *GetNameSafe(Unit), RegisteredTurnId, *ActionId.ToString());
-            }
-            else
-            {
-                UE_LOG(LogTurnManager, Warning,
-                    TEXT("[DispatchResolvedMove] Failed to register barrier action for %s"), *GetNameSafe(Unit));
-            }
-        }
-    }
-
-    return true;
-}
-
+// CodeRevision: INC-2025-1122-R4 (Delegate to MoveReservationSubsystem) (2025-11-22)
 bool AGameTurnManagerBase::TriggerPlayerMoveAbility(const FResolvedAction& Action, AUnitBase* Unit)
 {
-    if (!Unit)
+    if (UWorld* World = GetWorld())
     {
-        return false;
-    }
-
-    UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Unit);
-    if (!ASC)
-    {
-        UE_LOG(LogTurnManager, Warning, TEXT("[TriggerPlayerMove] Player ASC missing"));
-        return false;
-    }
-
-    const int32 ClearedCount = CleanseBlockingTags(ASC, Unit);
-
-    const int32 AbilityCount = ASC->GetActivatableAbilities().Num();
-    if (AbilityCount == 0)
-    {
-        UE_LOG(LogTurnManager, Warning,
-            TEXT("[TriggerPlayerMove] ⚠�E�E�E�ENo abilities granted to %s - ASC may not be initialized"),
-            *GetNameSafe(Unit));
-    }
-    else
-    {
-        UE_LOG(LogTurnManager, Log,
-            TEXT("[TriggerPlayerMove] %s has %d abilities in ASC (cleared %d blocking tags)"),
-            *GetNameSafe(Unit), AbilityCount, ClearedCount);
-
-        const TArray<FGameplayAbilitySpec>& Specs = ASC->GetActivatableAbilities();
-        for (int32 i = 0; i < Specs.Num(); ++i)
+        if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
         {
-            const FGameplayAbilitySpec& Spec = Specs[i];
-            if (Spec.Ability)
-            {
-                UE_LOG(LogTurnManager, Verbose,
-                    TEXT("[TriggerPlayerMove]   Ability[%d]: %s (Level=%d, InputID=%d)"),
-                    i, *Spec.Ability->GetName(), Spec.Level, Spec.InputID);
-            }
+            return MoveRes->TriggerPlayerMoveAbility(Action, Unit, this);
         }
     }
-
-    const FIntPoint Delta = Action.NextCell - Action.CurrentCell;
-    const int32 DirX = FMath::Clamp(Delta.X, -1, 1);
-    const int32 DirY = FMath::Clamp(Delta.Y, -1, 1);
-
-    if (DirX == 0 && DirY == 0)
-    {
-        UE_LOG(LogTurnManager, Warning, TEXT("[TriggerPlayerMove] Invalid delta (0,0)"));
-        return false;
-    }
-
-    FGameplayEventData EventData;
-    EventData.EventTag = RogueGameplayTags::GameplayEvent_Intent_Move;
-    EventData.Instigator = Unit;
-    EventData.Target = Unit;
-    // CodeRevision: INC-2025-00030-R6 (Refactor GA_MoveBase SSOT) (2025-11-17 01:50)
-    EventData.EventMagnitude = static_cast<float>(TurnCommandEncoding::PackCell(Action.NextCell.X, Action.NextCell.Y));
-    EventData.OptionalObject = this;
-
-    const int32 TriggeredCount = ASC->HandleGameplayEvent(EventData.EventTag, &EventData);
-    if (TriggeredCount > 0)
-    {
-        CachedPlayerCommand.Direction = FVector(static_cast<double>(DirX), static_cast<double>(DirY), 0.0);
-        bPlayerMoveInProgress = true;
-        UE_LOG(LogTurnManager, Log,
-            TEXT("[TriggerPlayerMove] Player move ability triggered toward (%d,%d)"),
-            Action.NextCell.X, Action.NextCell.Y);
-
-        return true;
-    }
-
-    FGameplayTagContainer CurrentTags;
-    ASC->GetOwnedGameplayTags(CurrentTags);
-    UE_LOG(LogTurnManager, Error,
-        TEXT("[TriggerPlayerMove] ❁EHandleGameplayEvent returned 0 for %s (AbilityCount=%d, OwnedTags=%s)"),
-        *GetNameSafe(Unit),
-        AbilityCount,
-        *CurrentTags.ToStringSimple());
-
     return false;
+}
+
+void AGameTurnManagerBase::SetPlayerMoveState(const FVector& Direction, bool bInProgress)
+{
+    CachedPlayerCommand.Direction = Direction;
+    bPlayerMoveInProgress = bInProgress;
 }
 

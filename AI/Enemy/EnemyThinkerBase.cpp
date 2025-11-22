@@ -11,6 +11,8 @@
 #include "../../Turn/GameTurnManagerBase.h"
 #include "EngineUtils.h"
 
+DEFINE_LOG_CATEGORY(LogEnemyThinker);
+
 UEnemyThinkerBase::UEnemyThinkerBase()
 {
     PrimaryComponentTick.bCanEverTick = false;
@@ -27,7 +29,7 @@ void UEnemyThinkerBase::BeginPlay()
         CachedPathFinder = World->GetSubsystem<UGridPathfindingSubsystem>();
         if (CachedPathFinder.IsValid())
         {
-            UE_LOG(LogTemp, Log, TEXT("[EnemyThinker] UGridPathfindingSubsystem cached"));
+            UE_LOG(LogEnemyThinker, Log, TEXT("[EnemyThinker] UGridPathfindingSubsystem cached"));
         }
     }
 }
@@ -42,18 +44,18 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
     UWorld* World = GetWorld();
     if (!World)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DecideIntent] %s: World is NULL"), *GetNameSafe(GetOwner()));
+        UE_LOG(LogEnemyThinker, Warning, TEXT("[DecideIntent] %s: World is NULL"), *GetNameSafe(GetOwner()));
         return Intent;
     }
 
     UDistanceFieldSubsystem* DistanceField = World->GetSubsystem<UDistanceFieldSubsystem>();
     if (!DistanceField)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DecideIntent] %s: DistanceField is NULL"), *GetNameSafe(GetOwner()));
+        UE_LOG(LogEnemyThinker, Warning, TEXT("[DecideIntent] %s: DistanceField is NULL"), *GetNameSafe(GetOwner()));
         return Intent;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[GetNextStep] ENTRY: EnemyCell=(%d,%d)"),
+    UE_LOG(LogEnemyThinker, Warning, TEXT("[GetNextStep] ENTRY: EnemyCell=(%d,%d)"),
         Intent.CurrentCell.X, Intent.CurrentCell.Y);
 
     // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
@@ -62,7 +64,7 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
     if (GridPathfinding)
     {
         bool bCurrentWalkable = GridPathfinding->IsCellWalkableIgnoringActor(Intent.CurrentCell, Intent.Actor.Get());
-        UE_LOG(LogTemp, Warning, TEXT("[PathFinder] Enemy at (%d,%d): Walkable=%d"), 
+        UE_LOG(LogEnemyThinker, Warning, TEXT("[PathFinder] Enemy at (%d,%d): Walkable=%d"), 
             Intent.CurrentCell.X, Intent.CurrentCell.Y, bCurrentWalkable ? 1 : 0);
         
         FIntPoint Neighbors[4] = {
@@ -79,18 +81,18 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
             // Debug code: only terrain check needed
             bool bNeighborWalkable = GridPathfinding->IsCellWalkableIgnoringActor(Neighbors[i], Intent.Actor.Get());
             if (!bNeighborWalkable) BlockedCount++;
-            UE_LOG(LogTemp, Warning, TEXT("[PathFinder] Neighbor[%d]=(%d,%d): Walkable=%d"), 
+            UE_LOG(LogEnemyThinker, Warning, TEXT("[PathFinder] Neighbor[%d]=(%d,%d): Walkable=%d"), 
                 i, Neighbors[i].X, Neighbors[i].Y, bNeighborWalkable ? 1 : 0);
         }
         
-        UE_LOG(LogTemp, Warning, TEXT("[PathFinder] SUMMARY: %d/4 neighbors are blocked"), BlockedCount);
+        UE_LOG(LogEnemyThinker, Warning, TEXT("[PathFinder] SUMMARY: %d/4 neighbors are blocked"), BlockedCount);
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("[PathFinder] GridPathfindingLibrary not found in cache"));
+        UE_LOG(LogEnemyThinker, Error, TEXT("[PathFinder] GridPathfindingLibrary not found in cache"));
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[Grid] Enemy at (%d, %d): checking surroundings"), 
+    UE_LOG(LogEnemyThinker, Warning, TEXT("[Grid] Enemy at (%d, %d): checking surroundings"), 
         Intent.CurrentCell.X, Intent.CurrentCell.Y);
 
     const FIntPoint BeforeNextCell = Intent.NextCell;
@@ -104,7 +106,7 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
         { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }
     };
 
-    UE_LOG(LogTemp, Verbose,
+    UE_LOG(LogEnemyThinker, Verbose,
         TEXT("[Thinker] %s DF(Current=%d) TargetCandidate=(%d,%d) Distance=%d"),
         *GetNameSafe(GetOwner()), CurrentDF, Intent.NextCell.X, Intent.NextCell.Y, Distance);
 
@@ -115,7 +117,7 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
     {
         const FIntPoint TestCell = Intent.CurrentCell + NeighborOffsets[idx];
         const int32 NeighborDist = DistanceField->GetDistance(TestCell);
-        UE_LOG(LogTemp, Verbose,
+        UE_LOG(LogEnemyThinker, Verbose,
             TEXT("[Thinker] %s Neighbor[%d] Cell=(%d,%d) DF=%d"),
             *GetNameSafe(GetOwner()), idx, TestCell.X, TestCell.Y, NeighborDist);
 
@@ -128,7 +130,7 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
 
     if (BestDF >= 0 && (Distance < 0 || Intent.NextCell == Intent.CurrentCell || BestDF < Distance))
     {
-        UE_LOG(LogTemp, Verbose,
+        UE_LOG(LogEnemyThinker, Verbose,
             TEXT("[Thinker] %s Fallback target override: (%d,%d) DF=%d"),
             *GetNameSafe(GetOwner()), BestCell.X, BestCell.Y, BestDF);
         Intent.NextCell = BestCell;
@@ -142,29 +144,29 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
         TArray<FVector> DebugPath;
         const FVector StartWorld = GridPathfinding->GridToWorld(Intent.CurrentCell, GetOwner()->GetActorLocation().Z);
         const FVector EndWorld = GridPathfinding->GridToWorld(Intent.NextCell, GetOwner()->GetActorLocation().Z);
-        UE_LOG(LogTemp, Verbose,
+        UE_LOG(LogEnemyThinker, Verbose,
             TEXT("[Thinker] %s FindPath CALL Start=(%d,%d) End=(%d,%d)"),
             *GetNameSafe(GetOwner()), Intent.CurrentCell.X, Intent.CurrentCell.Y, Intent.NextCell.X, Intent.NextCell.Y);
         // CodeRevision: INC-2025-00030-R2 (Fix MaxDXDY -> Chebyshev heuristic) (2025-11-17 00:40)
         bPathFound = GridPathfinding->FindPathIgnoreEndpoints(StartWorld, EndWorld, DebugPath, true, EGridHeuristic::Chebyshev, 200000, true);
         PathLen = DebugPath.Num();
-        UE_LOG(LogTemp, Verbose,
+        UE_LOG(LogEnemyThinker, Verbose,
             TEXT("[Thinker] %s FindPath RESULT Success=%d PathLen=%d"),
             *GetNameSafe(GetOwner()), bPathFound ? 1 : 0, PathLen);
     }
     
     if (Intent.NextCell.X < -100 || Intent.NextCell.X > 100 || Intent.NextCell.Y < -100 || Intent.NextCell.Y > 100)
     {
-        UE_LOG(LogTemp, Error,
+        UE_LOG(LogEnemyThinker, Error,
             TEXT("[DecideIntent] CRITICAL: DistanceField returned ABNORMAL NextCell=(%d,%d) for CurrentCell=(%d,%d)"),
             Intent.NextCell.X, Intent.NextCell.Y, Intent.CurrentCell.X, Intent.CurrentCell.Y);
-        UE_LOG(LogTemp, Error,
+        UE_LOG(LogEnemyThinker, Error,
             TEXT("[DecideIntent] Distance=%d, This indicates DistanceField data corruption or uninitialized state!"),
             Distance);
     }
     else
     {
-        UE_LOG(LogTemp, Verbose,
+        UE_LOG(LogEnemyThinker, Verbose,
             TEXT("[DecideIntent] %s: CurrentCell=(%d,%d) NextCell=(%d,%d), Distance=%d"),
             *GetNameSafe(GetOwner()), Intent.CurrentCell.X, Intent.CurrentCell.Y,
             Intent.NextCell.X, Intent.NextCell.Y, Distance);
@@ -172,16 +174,16 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
 
     if (Intent.NextCell == Intent.CurrentCell)
     {
-        UE_LOG(LogTurnManager, Verbose, TEXT("[GetNextStep] Distance=-1 (intended: far enemy skipped)"));
-        UE_LOG(LogTurnManager, Verbose, TEXT("[GetNextStep] Distance=%d (should be -1 if unreachable)"), Distance);
+        UE_LOG(LogEnemyThinker, Verbose, TEXT("[GetNextStep] Distance=-1 (intended: far enemy skipped)"));
+        UE_LOG(LogEnemyThinker, Verbose, TEXT("[GetNextStep] Distance=%d (should be -1 if unreachable)"), Distance);
     }
     else
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[GetNextStep] NextStep=(%d,%d) from (%d,%d)"),
+        UE_LOG(LogEnemyThinker, Verbose, TEXT("[GetNextStep] NextStep=(%d,%d) from (%d,%d)"),
             Intent.NextCell.X, Intent.NextCell.Y, Intent.CurrentCell.X, Intent.CurrentCell.Y);
     }
 
-    UE_LOG(LogTurnManager, Verbose, 
+    UE_LOG(LogEnemyThinker, Verbose, 
         TEXT("[DecideIntent] %s: CurrentCell=(%d,%d), NextCell=(%d,%d), DF_Cost=%d, Tiles=%d, AttackRange=%d"),
         *GetNameSafe(GetOwner()), 
         Intent.CurrentCell.X, Intent.CurrentCell.Y,
@@ -223,7 +225,7 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
                     if (!bShoulder1Walkable || !bShoulder2Walkable)
                     {
                         bHasLineOfSight = false;
-                        UE_LOG(LogTemp, Log,
+                        UE_LOG(LogEnemyThinker, Log,
                             TEXT("[DecideIntent] %s: Diagonal attack blocked by corner (Enemy=%d,%d Player=%d,%d Shoulder1=%d Shoulder2=%d)"),
                             *GetNameSafe(GetOwner()),
                             Intent.CurrentCell.X, Intent.CurrentCell.Y,
@@ -235,7 +237,7 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
 
             if (!bHasLineOfSight)
             {
-                UE_LOG(LogTemp, Verbose,
+                UE_LOG(LogEnemyThinker, Verbose,
                     TEXT("[DecideIntent] %s: No line of sight to player (Distance=%d) - switching to MOVE"),
                     *GetNameSafe(GetOwner()), DistanceToPlayer);
             }
@@ -258,12 +260,12 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
             Intent.Target = PlayerActor;
             Intent.TargetActor = PlayerActor;
 
-            UE_LOG(LogTemp, Log, TEXT("[DecideIntent] %s: ATTACK intent (Distance=%d, Range=%d, Target=%s)"),
+            UE_LOG(LogEnemyThinker, Log, TEXT("[DecideIntent] %s: ATTACK intent (Distance=%d, Range=%d, Target=%s)"),
                 *GetNameSafe(GetOwner()), DistanceToPlayer, AttackRangeInTiles, *GetNameSafe(PlayerActor));
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("[DecideIntent] %s: ATTACK intent (Distance=%d, Range=%d) but Player not found!"),
+            UE_LOG(LogEnemyThinker, Warning, TEXT("[DecideIntent] %s: ATTACK intent (Distance=%d, Range=%d) but Player not found!"),
                 *GetNameSafe(GetOwner()), DistanceToPlayer, AttackRangeInTiles);
         }
     }
@@ -276,12 +278,12 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
         {
         // INC-2025-0002: RogueGameplayTags経由でタグを取得（文字列ベースのRequestを廃止）
         Intent.AbilityTag = RogueGameplayTags::AI_Intent_Wait;
-        UE_LOG(LogTurnManager, Log, TEXT("[Thinker] %s WAIT - NextCell identical to current"),
+        UE_LOG(LogEnemyThinker, Log, TEXT("[Thinker] %s WAIT - NextCell identical to current"),
             *GetNameSafe(GetOwner()));
         }
         else
         {
-            UE_LOG(LogTemp, Log, TEXT("[DecideIntent] %s: MOVE intent (Distance=%d > Range=%d)"),
+            UE_LOG(LogEnemyThinker, Log, TEXT("[DecideIntent] %s: MOVE intent (Distance=%d > Range=%d)"),
                 *GetNameSafe(GetOwner()), DistanceToPlayer, AttackRangeInTiles);
         }
     }
@@ -299,7 +301,7 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
     UWorld* World = GetWorld();
     if (!World)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[ComputeIntent] %s: World is NULL"), *GetNameSafe(GetOwner()));
+        UE_LOG(LogEnemyThinker, Warning, TEXT("[ComputeIntent] %s: World is NULL"), *GetNameSafe(GetOwner()));
         return Intent;
     }
 
@@ -312,7 +314,7 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
     const int32 ChebyshevDistance = FGridUtils::ChebyshevDistance(CurrentEnemyCell, PlayerGridCell);
     if (DistanceToPlayer != ChebyshevDistance)
     {
-        UE_LOG(LogTurnManager, Log,
+        UE_LOG(LogEnemyThinker, Log,
             TEXT("[ComputeIntent] %s: Chebyshev distance (%d) differs from observation (%d)"),
             *GetNameSafe(GetOwner()), ChebyshevDistance, DistanceToPlayer);
     }
@@ -355,7 +357,7 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
                     if (!bShoulder1Walkable || !bShoulder2Walkable)
                     {
                         bHasLineOfSight = false;
-                        UE_LOG(LogTemp, Log,
+                        UE_LOG(LogEnemyThinker, Log,
                             TEXT("[ComputeIntent] %s: Diagonal attack blocked by corner (Enemy=%d,%d Player=%d,%d Shoulder1=%d Shoulder2=%d)"),
                             *GetNameSafe(GetOwner()),
                             Intent.CurrentCell.X, Intent.CurrentCell.Y,
@@ -367,7 +369,7 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
 
             if (!bHasLineOfSight)
             {
-                UE_LOG(LogTemp, Verbose,
+                UE_LOG(LogEnemyThinker, Verbose,
                     TEXT("[ComputeIntent] %s: No line of sight to player (TileDistance=%d) - switching to MOVE"),
                     *GetNameSafe(GetOwner()), DistanceToPlayer);
             }
@@ -389,13 +391,13 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
         {
             Intent.Target = PlayerActor;
             Intent.TargetActor = PlayerActor;
-            UE_LOG(LogTemp, Log,
+            UE_LOG(LogEnemyThinker, Log,
                 TEXT("[ComputeIntent] %s: ATTACK intent (TileDistance=%d, Range=%d, Target=%s)"),
                 *GetNameSafe(GetOwner()), DistanceToPlayer, AttackRangeInTiles, *GetNameSafe(PlayerActor));
         }
         else
         {
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogEnemyThinker, Warning,
                 TEXT("[ComputeIntent] %s: ATTACK intent (TileDistance=%d, Range=%d) but Player not found!"),
                 *GetNameSafe(GetOwner()), DistanceToPlayer, AttackRangeInTiles);
         }
@@ -413,7 +415,7 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
         else
         {
             Intent.NextCell = Intent.CurrentCell;
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogEnemyThinker, Warning,
                 TEXT("[ComputeIntent] %s: DistanceField not available, staying put"),
                 *GetNameSafe(GetOwner()));
         }
@@ -422,13 +424,13 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
         {
             // INC-2025-0002: RogueGameplayTags経由でタグを取得（文字列ベースのRequestを廃止）
             Intent.AbilityTag = RogueGameplayTags::AI_Intent_Wait;
-            UE_LOG(LogTurnManager, Log,
+            UE_LOG(LogEnemyThinker, Log,
                 TEXT("[ComputeIntent] %s WAIT - NextCell identical to current (TileDistance=%d)"),
                 *GetNameSafe(GetOwner()), DistanceToPlayer);
         }
         else
         {
-            UE_LOG(LogTemp, Log,
+            UE_LOG(LogEnemyThinker, Log,
                 TEXT("[ComputeIntent] %s: MOVE intent (TileDistance=%d > Range=%d)"),
                 *GetNameSafe(GetOwner()), DistanceToPlayer, AttackRangeInTiles);
         }
@@ -486,7 +488,7 @@ FIntPoint UEnemyThinkerBase::GetCurrentGridPosition() const
         int32 GridX = FMath::RoundToInt(WorldLocation.X / TileSize);
         int32 GridY = FMath::RoundToInt(WorldLocation.Y / TileSize);
 
-        UE_LOG(LogTemp, Warning, TEXT("[GetCurrentGridPosition] %s: Using fallback calculation (%d,%d)"),
+        UE_LOG(LogEnemyThinker, Warning, TEXT("[GetCurrentGridPosition] %s: Using fallback calculation (%d,%d)"),
             *GetNameSafe(Owner), GridX, GridY);
 
         return FIntPoint(GridX, GridY);

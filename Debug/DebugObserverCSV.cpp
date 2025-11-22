@@ -15,7 +15,8 @@
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/OutputDeviceRedirector.h"
 #include "Misc/DateTime.h"
-#include "../Utility/ProjectDiagnostics.h"
+
+DEFINE_LOG_CATEGORY(LogDebugObserver);
 
 // ★★★ セッションIDの静的カウンター ★★★
 
@@ -115,7 +116,7 @@ bool UDebugObserverCSV::SaveToFile(const FString& Filename)
 
     const FString FilePath = Directory / Filename;
     
-    UE_LOG(LogTemp, Log, TEXT("[DebugObserverCSV] Saving CSV to: %s"), *FilePath);
+    UE_LOG(LogDebugObserver, Log, TEXT("[DebugObserverCSV] Saving CSV to: %s"), *FilePath);
     
     TArray<FString> LinesWithHeader;
     LinesWithHeader.Add(TEXT("Type,TurnID,Category,Timestamp,Message"));
@@ -127,11 +128,11 @@ bool UDebugObserverCSV::SaveToFile(const FString& Filename)
     
     if (!FFileHelper::SaveStringArrayToFile(LinesWithHeader, *FilePath))
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DebugObserverCSV] Failed to save log: %s"), *FilePath);
+        UE_LOG(LogDebugObserver, Warning, TEXT("[DebugObserverCSV] Failed to save log: %s"), *FilePath);
         return false;
     }
 
-    UE_LOG(LogTemp, Log, TEXT("[DebugObserverCSV] Successfully saved CSV: %s"), *FilePath);
+    UE_LOG(LogDebugObserver, Log, TEXT("[DebugObserverCSV] Successfully saved CSV: %s"), *FilePath);
     return true;
 }
 
@@ -195,14 +196,14 @@ void UDebugObserverCSV::MarkSessionStart()
         Timestamp,
         *SessionTimestamp));
 
-    UE_LOG(LogTemp, Log, TEXT("[CSV] Session %s started at %.6f (logs cleared)"), *SessionTimestamp, Timestamp);
+    UE_LOG(LogDebugObserver, Log, TEXT("[CSV] Session %s started at %.6f (logs cleared)"), *SessionTimestamp, Timestamp);
 }
 
 void UDebugObserverCSV::MarkSessionEnd()
 {
     if (SessionTimestamp.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[CSV] MarkSessionEnd called but no session was started"));
+        UE_LOG(LogDebugObserver, Warning, TEXT("[CSV] MarkSessionEnd called but no session was started"));
         return;
     }
     
@@ -214,6 +215,6 @@ void UDebugObserverCSV::MarkSessionEnd()
         Timestamp,
         *SessionTimestamp));
     
-    UE_LOG(LogTemp, Log, TEXT("[CSV] Session %s ended at %.6f"), *SessionTimestamp, Timestamp);
+    UE_LOG(LogDebugObserver, Log, TEXT("[CSV] Session %s ended at %.6f"), *SessionTimestamp, Timestamp);
 }
 

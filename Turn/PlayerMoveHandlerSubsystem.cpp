@@ -11,7 +11,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "AbilitySystemGlobals.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogPlayerMove, Log, All);
+DEFINE_LOG_CATEGORY(LogPlayerMove);
 
 void UPlayerMoveHandlerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {

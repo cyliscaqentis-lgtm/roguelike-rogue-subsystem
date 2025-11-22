@@ -90,24 +90,24 @@ void UGA_MeleeAttack::ActivateAbility(
     const FGameplayAbilityActivationInfo ActivationInfo,
     const FGameplayEventData* TriggerEventData)
 {
-    UE_LOG(LogTemp, Error,
+    UE_LOG(LogAttackAbility, Error,
         TEXT("[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=%s"),
         *GetNameSafe(GetAvatarActorFromActorInfo()));
 
     Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
-    UE_LOG(LogTemp, Error,
+    UE_LOG(LogAttackAbility, Error,
         TEXT("[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"));
 
     if (!CommitAbility(Handle, ActorInfo, ActivationInfo))
     {
-        UE_LOG(LogTemp, Error,
+        UE_LOG(LogAttackAbility, Error,
             TEXT("[GA_MeleeAttack] CommitAbility FAILED - Ending ability"));
         EndAbility(Handle, ActorInfo, ActivationInfo, /*bReplicateEndAbility=*/true, /*bWasCancelled=*/true);
         return;
     }
 
-    UE_LOG(LogTemp, Error,
+    UE_LOG(LogAttackAbility, Error,
         TEXT("[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic"));
 
     if (TriggerEventData && TriggerEventData->TargetData.IsValid(0))
@@ -119,7 +119,7 @@ void UGA_MeleeAttack::ActivateAbility(
             if (AActor* Target = SingleTarget->HitResult.GetActor())
             {
                 TargetUnit = Target;
-                UE_LOG(LogTemp, Log, TEXT("[GA_MeleeAttack] %s: Target from EventData: %s"),
+                UE_LOG(LogAttackAbility, Log, TEXT("[GA_MeleeAttack] %s: Target from EventData: %s"),
                     *GetNameSafe(GetAvatarActorFromActorInfo()), *GetNameSafe(Target));
             }
         }
@@ -130,12 +130,12 @@ void UGA_MeleeAttack::ActivateAbility(
         TargetUnit = FindAdjacentTarget();
         if (TargetUnit)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] %s: Using fallback adjacent search, found: %s"),
+            UE_LOG(LogAttackAbility, Warning, TEXT("[GA_MeleeAttack] %s: Using fallback adjacent search, found: %s"),
                 *GetNameSafe(GetAvatarActorFromActorInfo()), *GetNameSafe(TargetUnit));
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] %s: No target found (neither EventData nor adjacent)"),
+            UE_LOG(LogAttackAbility, Warning, TEXT("[GA_MeleeAttack] %s: No target found (neither EventData nor adjacent)"),
                 *GetNameSafe(GetAvatarActorFromActorInfo()));
         }
     }
@@ -176,28 +176,28 @@ void UGA_MeleeAttack::ActivateAbility(
         }
     }
 
-    UE_LOG(LogTemp, Error,
+    UE_LOG(LogAttackAbility, Error,
         TEXT("[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=%s"),
         MeleeAttackMontage ? *MeleeAttackMontage->GetName() : TEXT("NULL"));
     PlayAttackMontage();
-    UE_LOG(LogTemp, Error,
+    UE_LOG(LogAttackAbility, Error,
         TEXT("[GA_MeleeAttack] ActivateAbility COMPLETED"));
 }
 
 void UGA_MeleeAttack::PlayAttackMontage_Implementation()
 {
-    UE_LOG(LogTemp, Error,
+    UE_LOG(LogAttackAbility, Error,
         TEXT("[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=%s"),
         MeleeAttackMontage ? *MeleeAttackMontage->GetName() : TEXT("NULL"));
 
     if (!MeleeAttackMontage)
     {
-        UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] MeleeAttackMontage is NULL - calling OnMontageCompleted immediately"));
+        UE_LOG(LogAttackAbility, Error, TEXT("[GA_MeleeAttack] MeleeAttackMontage is NULL - calling OnMontageCompleted immediately"));
         OnMontageCompleted();
         return;
     }
 
-    UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] Creating PlayMontageAndWait task..."));
+    UE_LOG(LogAttackAbility, Error, TEXT("[GA_MeleeAttack] Creating PlayMontageAndWait task..."));
 
     UAbilityTask_PlayMontageAndWait* Task =
         UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(
@@ -211,19 +211,19 @@ void UGA_MeleeAttack::PlayAttackMontage_Implementation()
 
 void UGA_MeleeAttack::OnMontageCompleted()
 {
-    UE_LOG(LogTemp, Error,
+    UE_LOG(LogAttackAbility, Error,
         TEXT("[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=%s"),
         *GetNameSafe(GetAvatarActorFromActorInfo()));
 
     if (TargetUnit && IsValid(TargetUnit))
     {
-        UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] %s: Attacking stored target: %s"),
+        UE_LOG(LogAttackAbility, Error, TEXT("[GA_MeleeAttack] %s: Attacking stored target: %s"),
             *GetNameSafe(GetAvatarActorFromActorInfo()), *GetNameSafe(TargetUnit));
         ApplyDamageToTarget(TargetUnit);
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("[GA_MeleeAttack] %s: No valid target to attack (TargetUnit is null or invalid)"),
+        UE_LOG(LogAttackAbility, Error, TEXT("[GA_MeleeAttack] %s: No valid target to attack (TargetUnit is null or invalid)"),
             *GetNameSafe(GetAvatarActorFromActorInfo()));
     }
 
@@ -231,26 +231,26 @@ void UGA_MeleeAttack::OnMontageCompleted()
     // ここから先の「完了通知＋EndAbility」は GA_AttackBase / GA_TurnActionBase に一元化する。
     // OnAttackCompleted() はサーバー権限チェックを内包しており、サーバー側のみで
     // SendCompletionEvent + EndAbility を行う。
-    UE_LOG(LogTemp, Error,
+    UE_LOG(LogAttackAbility, Error,
         TEXT("[GA_MeleeAttack] %s: Montage completed, calling OnAttackCompleted()"),
         *GetNameSafe(GetAvatarActorFromActorInfo()));
 
     OnAttackCompleted();
 
-    UE_LOG(LogTemp, Error,
+    UE_LOG(LogAttackAbility, Error,
         TEXT("[GA_MeleeAttack] %s: OnAttackCompleted RETURNED"),
         *GetNameSafe(GetAvatarActorFromActorInfo()));
 }
 
 void UGA_MeleeAttack::OnMontageBlendOut()
 {
-    UE_LOG(LogTemp, Verbose, TEXT("[GA_MeleeAttack] %s: Montage blend out"),
+    UE_LOG(LogAttackAbility, Verbose, TEXT("[GA_MeleeAttack] %s: Montage blend out"),
         *GetNameSafe(GetAvatarActorFromActorInfo()));
 }
 
 void UGA_MeleeAttack::OnMontageCancelled()
 {
-    UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] Montage cancelled"));
+    UE_LOG(LogAttackAbility, Warning, TEXT("[GA_MeleeAttack] Montage cancelled"));
     EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
 }
 
@@ -283,26 +283,26 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
     // サーバー権限チェック - クライアントでは実行しない
     if (!HasAuthority(&CurrentActivationInfo))
     {
-        UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] ApplyDamageToTarget called on client - skipping"));
+        UE_LOG(LogAttackAbility, Warning, TEXT("[GA_MeleeAttack] ApplyDamageToTarget called on client - skipping"));
         return;
     }
 
     if (!Target || !MeleeAttackEffect)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] Invalid Target or Effect"));
+        UE_LOG(LogAttackAbility, Warning, TEXT("[GA_MeleeAttack] Invalid Target or Effect"));
         return;
     }
 
     AActor* Avatar = GetAvatarActorFromActorInfo();
     if (!Avatar)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[GA_MeleeAttack] Avatar is null"));
+        UE_LOG(LogAttackAbility, Warning, TEXT("[GA_MeleeAttack] Avatar is null"));
         return;
     }
 
-    UE_LOG(LogTemp, Warning,
+    UE_LOG(LogAttackAbility, Warning,
         TEXT("[GA_MeleeAttack] ==== DAMAGE DIAGNOSTIC START ===="));
-    UE_LOG(LogTemp, Warning,
+    UE_LOG(LogAttackAbility, Warning,
         TEXT("[GA_MeleeAttack] Attacker=%s, Target=%s, Damage=%.2f"),
         *Avatar->GetName(), *Target->GetName(), Damage);
 
@@ -311,7 +311,7 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
     {
         if (AUnitBase* TargetUnitRef = Cast<AUnitBase>(Target))
         {
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogAttackAbility, Warning,
                 TEXT("[GA_MeleeAttack] AttackerTeam=%d, TargetTeam=%d (SameTeam=%s)"),
                 AttackerUnit->Team, TargetUnitRef->Team,
                 AttackerUnit->Team == TargetUnitRef->Team ? TEXT("YES - DAMAGE BLOCKED") : TEXT("NO - OK"));
@@ -335,7 +335,7 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
             FMath::Abs(AttackerGrid.X - TargetGrid.X),
             FMath::Abs(AttackerGrid.Y - TargetGrid.Y));
 
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogAttackAbility, Warning,
             TEXT("[GA_MeleeAttack] Attacker=(%d,%d), Target=(%d,%d), ChebyshevDistance=%d, RangeInTiles=%d (InRange=%s)"),
             AttackerGrid.X, AttackerGrid.Y, TargetGrid.X, TargetGrid.Y,
             DistanceInTiles, RangeInTiles,
@@ -345,17 +345,17 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
         // タイル距離が射程を超えている場合はダメージをスキップし、「攻撃モーションだけ発生したミス」として扱う。
         if (DistanceInTiles > RangeInTiles)
         {
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogAttackAbility, Warning,
                 TEXT("[GA_MeleeAttack] Target is OUT OF RANGE (DistanceInTiles=%d, RangeInTiles=%d) - skipping damage"),
                 DistanceInTiles, RangeInTiles);
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogAttackAbility, Warning,
                 TEXT("[GA_MeleeAttack] ==== DAMAGE DIAGNOSTIC END (OUT OF RANGE) ===="));
             return;
         }
     }
     else
     {
-        UE_LOG(LogTemp, Error,
+        UE_LOG(LogAttackAbility, Error,
             TEXT("[GA_MeleeAttack] GridPathfindingLibrary not found - cannot calculate tile distance! (Damage will still be applied as fallback)"));
     }
 
@@ -364,17 +364,17 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
     {
         FGameplayTagContainer TargetTags;
         TargetASC->GetOwnedGameplayTags(TargetTags);
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogAttackAbility, Warning,
             TEXT("[GA_MeleeAttack] TargetTags=%s"),
             *TargetTags.ToStringSimple());
     }
     else
     {
-        UE_LOG(LogTemp, Error,
+        UE_LOG(LogAttackAbility, Error,
             TEXT("[GA_MeleeAttack] Target has NO AbilitySystemComponent - cannot apply damage!"));
     }
 
-    UE_LOG(LogTemp, Warning,
+    UE_LOG(LogAttackAbility, Warning,
         TEXT("[GA_MeleeAttack] ==== DAMAGE DIAGNOSTIC END ===="));
 
     if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
@@ -383,7 +383,7 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
 
         if (Damage <= 0.0f)
         {
-            UE_LOG(LogTemp, Error,
+            UE_LOG(LogAttackAbility, Error,
                 TEXT("[GA_MeleeAttack] WARNING: Damage=%.2f is invalid! Using fallback damage=%.2f"),
                 Damage, FinalDamage);
         }
@@ -396,13 +396,13 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
         {
             OldBaseDamage = CombatSet->GetBaseDamage();
             ASC->SetNumericAttributeBase(ULyraCombatSet::GetBaseDamageAttribute(), FinalDamage);
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogAttackAbility, Warning,
                 TEXT("[GA_MeleeAttack] Set attacker CombatSet.BaseDamage = %.2f (was %.2f)"),
                 FinalDamage, OldBaseDamage);
         }
         else
         {
-            UE_LOG(LogTemp, Error,
+            UE_LOG(LogAttackAbility, Error,
                 TEXT("[GA_MeleeAttack] WARNING: Attacker has no CombatSet! Damage may fail."));
         }
 
@@ -412,7 +412,7 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
         FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(MeleeAttackEffect, 1.0f, ContextHandle);
         if (SpecHandle.IsValid())
         {
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogAttackAbility, Warning,
                 TEXT("[GA_MeleeAttack] Applying GameplayEffect: %s (LyraDamageExecution will capture BaseDamage=%.2f)"),
                 *MeleeAttackEffect->GetName(), FinalDamage);
 
@@ -422,19 +422,19 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
                 // Instant エフェクトの場合、ハンドルは無効だが正常に適用される
                 if (EffectHandle.IsValid())
                 {
-                    UE_LOG(LogTemp, Log,
+                    UE_LOG(LogAttackAbility, Log,
                         TEXT("[GA_MeleeAttack] GameplayEffect applied successfully (Duration effect, handle is valid)"));
                 }
                 else
                 {
-                    UE_LOG(LogTemp, Log,
+                    UE_LOG(LogAttackAbility, Log,
                         TEXT("[GA_MeleeAttack] GameplayEffect applied (Instant effect, handle is invalid but this is normal)"));
                 }
             }
         }
         else
         {
-            UE_LOG(LogTemp, Error,
+            UE_LOG(LogAttackAbility, Error,
                 TEXT("[GA_MeleeAttack] Failed to create GameplayEffectSpec"));
         }
 
@@ -442,7 +442,7 @@ void UGA_MeleeAttack::ApplyDamageToTarget(AActor* Target)
         if (CombatSet)
         {
             ASC->SetNumericAttributeBase(ULyraCombatSet::GetBaseDamageAttribute(), OldBaseDamage);
-            UE_LOG(LogTemp, Verbose,
+            UE_LOG(LogAttackAbility, Verbose,
                 TEXT("[GA_MeleeAttack] Reset attacker CombatSet.BaseDamage to %.2f"),
                 OldBaseDamage);
         }

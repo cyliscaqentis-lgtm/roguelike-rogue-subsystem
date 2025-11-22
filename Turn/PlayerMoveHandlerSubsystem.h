@@ -4,6 +4,9 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "PlayerMoveHandlerSubsystem.generated.h"
 
+// Log category
+DECLARE_LOG_CATEGORY_EXTERN(LogPlayerMove, Log, All);
+
 class APawn;
 class AActor;
 struct FEnemyIntent;

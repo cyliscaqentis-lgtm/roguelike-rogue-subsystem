@@ -15,7 +15,7 @@
 #include "Utility/RogueGameplayTags.h"  // Ability/Phase/Gate等の集中定義
 #include "Net/UnrealNetwork.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogEnemyUnit, Log, All);
+DEFINE_LOG_CATEGORY(LogEnemyUnit);
 
 // 取得コストを避けるため、静的リクエストでキャッシュ
 static const FGameplayTag TAG_Faction_Enemy = FGameplayTag::RequestGameplayTag(TEXT("Faction.Enemy"));
@@ -257,7 +257,7 @@ void AEnemyUnitBase::ApplyEnemyGameplayTags()
     ASC->AddLooseGameplayTags(EnemyTags); // ★ サーバで付与 → ASCがレプリケート
 
     bEnemyTagsApplied = true;
-    UE_LOG(LogTemp, Log, TEXT("[EnemyUnitBase] Added %s to %s"),
+    UE_LOG(LogEnemyUnit, Log, TEXT("[EnemyUnitBase] Added %s to %s"),
         *TAG_Faction_Enemy.ToString(), *GetName());
 }
 

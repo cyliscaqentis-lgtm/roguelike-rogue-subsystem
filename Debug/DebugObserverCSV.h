@@ -11,6 +11,9 @@
 #include "Misc/DateTime.h"
 #include "DebugObserverCSV.generated.h"
 
+// Log category
+DECLARE_LOG_CATEGORY_EXTERN(LogDebugObserver, Log, All);
+
 // CodeRevision: INC-2025-1120-R9 (Switched to timestamp-based session filenames) (2025-11-20 00:00)
 // CodeRevision: INC-2025-1120-R8 (Fix const-correctness compiler error in GetLogCount) (2025-11-20 00:00)
 // CodeRevision: INC-2025-1120-R7 (Add thread-safety locks to prevent crash in logging) (2025-11-20 00:00)

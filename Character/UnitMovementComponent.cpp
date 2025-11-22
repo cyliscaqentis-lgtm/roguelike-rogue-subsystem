@@ -13,7 +13,8 @@
 #include "Utility/PathFinderUtils.h"
 #include "GameFramework/Actor.h"
 #include "TimerManager.h"
-#include "../Utility/ProjectDiagnostics.h"
+
+DEFINE_LOG_CATEGORY(LogUnitMovement);
 
 //------------------------------------------------------------------------------
 // Component Lifecycle
@@ -49,7 +50,7 @@ void UUnitMovementComponent::MoveUnit(const TArray<FVector>& Path)
 {
 	if (Path.Num() == 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[UnitMovementComponent] MoveUnit called with empty path"));
+		UE_LOG(LogUnitMovement, Warning, TEXT("[UnitMovementComponent] MoveUnit called with empty path"));
 		return;
 	}
 
@@ -65,7 +66,7 @@ void UUnitMovementComponent::MoveUnit(const TArray<FVector>& Path)
 	AUnitBase* OwnerUnit = GetOwnerUnit();
 	OnMoveStarted.Broadcast(OwnerUnit);
 
-	UE_LOG(LogTemp, Log, TEXT("[UnitMovementComponent] Movement started with %d waypoints"), Path.Num());
+	UE_LOG(LogUnitMovement, Log, TEXT("[UnitMovementComponent] Movement started with %d waypoints"), Path.Num());
 }
 
 // CodeRevision: INC-2025-00030-R1 (Migrate to UGridPathfindingSubsystem) (2025-11-16 23:55)
@@ -74,20 +75,20 @@ void UUnitMovementComponent::MoveUnitAlongGridPath(const TArray<FIntPoint>& Grid
 	UWorld* World = GetWorld();
 	if (!World)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[UnitMovementComponent] World not available"));
+		UE_LOG(LogUnitMovement, Error, TEXT("[UnitMovementComponent] World not available"));
 		return;
 	}
 
 	UGridPathfindingSubsystem* PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>();
 	if (!PathFinder)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[UnitMovementComponent] UGridPathfindingSubsystem not available"));
+		UE_LOG(LogUnitMovement, Error, TEXT("[UnitMovementComponent] UGridPathfindingSubsystem not available"));
 		return;
 	}
 
 	if (GridPath.Num() == 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[UnitMovementComponent] MoveUnitAlongGridPath called with empty path"));
+		UE_LOG(LogUnitMovement, Warning, TEXT("[UnitMovementComponent] MoveUnitAlongGridPath called with empty path"));
 		return;
 	}
 
@@ -124,7 +125,7 @@ void UUnitMovementComponent::CancelMovement()
 	AUnitBase* OwnerUnit = GetOwnerUnit();
 	OnMoveCancelled.Broadcast(OwnerUnit, LastPosition);
 
-	UE_LOG(LogTemp, Log, TEXT("[UnitMovementComponent] Movement cancelled at %.2f, %.2f, %.2f"),
+	UE_LOG(LogUnitMovement, Log, TEXT("[UnitMovementComponent] Movement cancelled at %.2f, %.2f, %.2f"),
 		LastPosition.X, LastPosition.Y, LastPosition.Z);
 }
 
@@ -132,7 +133,7 @@ void UUnitMovementComponent::SetMoveSpeed(float NewSpeed)
 {
 	MoveSpeed = FMath::Max(0.0f, NewSpeed);
 	PixelsPerSec = MoveSpeed;
-	UE_LOG(LogTemp, Log, TEXT("[UnitMovementComponent] Move speed set to %.2f"), MoveSpeed);
+	UE_LOG(LogUnitMovement, Log, TEXT("[UnitMovementComponent] Move speed set to %.2f"), MoveSpeed);
 }
 
 void UUnitMovementComponent::UpdateSpeedFromStats(const FUnitStatBlock& StatBlock)
@@ -144,7 +145,7 @@ void UUnitMovementComponent::UpdateSpeedFromStats(const FUnitStatBlock& StatBloc
 	const float TargetSpeed = FMath::Clamp(StatSpeed, MinPixelsPerSec, MaxPixelsPerSec);
 	if (!FMath::IsNearlyEqual(TargetSpeed, PixelsPerSec))
 	{
-		UE_LOG(LogTemp, Display,
+		UE_LOG(LogUnitMovement, Display,
 			TEXT("[UnitMovementComponent] UpdateSpeedFromStats: PixelsPerSec %.1f -> %.1f (Stat=%.1f)"),
 			PixelsPerSec, TargetSpeed, StatSpeed);
 	}
@@ -264,7 +265,7 @@ void UUnitMovementComponent::FinishMovement()
 
 						if (GridUpdateRetryCount <= MaxGridUpdateRetries)
 						{
-							UE_LOG(LogTemp, Warning,
+							UE_LOG(LogUnitMovement, Warning,
 								TEXT("[UnitMovementComponent] UpdateActorCell FAILED (Retry=%d/%d) for %s at (%d,%d) - scheduling retry"),
 								GridUpdateRetryCount, MaxGridUpdateRetries,
 								*GetNameSafe(OwnerUnit), FinalCell.X, FinalCell.Y);
@@ -280,7 +281,7 @@ void UUnitMovementComponent::FinishMovement()
 						}
 						else
 						{
-						UE_LOG(LogTemp, Error,
+						UE_LOG(LogUnitMovement, Error,
 							TEXT("[UnitMovementComponent] UpdateActorCell FAILED after %d retries. Forcing movement completion to avoid game hang. Actor=%s FinalCell=(%d,%d)"),
 							GridUpdateRetryCount,
 							*GetNameSafe(OwnerUnit),
@@ -293,7 +294,7 @@ void UUnitMovementComponent::FinishMovement()
 						GridUpdateRetryCount = 0;
 						World->GetTimerManager().ClearTimer(GridUpdateRetryHandle);
 
-						UE_LOG(LogTemp, Verbose,
+						UE_LOG(LogUnitMovement, Verbose,
 							TEXT("[UnitMovementComponent] GridOccupancy updated: Actor=%s Cell=(%d,%d)"),
 							*GetNameSafe(OwnerUnit), FinalCell.X, FinalCell.Y);
 					}
@@ -307,7 +308,7 @@ void UUnitMovementComponent::FinishMovement()
 
 	OnMoveFinished.Broadcast(OwnerUnit);
 
-	UE_LOG(LogTemp, Log,
+	UE_LOG(LogUnitMovement, Log,
 		TEXT("[UnitMovementComponent] Movement finished and snapped. (RetryCount=%d)"),
 		GridUpdateRetryCount);
 }

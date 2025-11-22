@@ -6,6 +6,9 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "DistanceFieldSubsystem.generated.h"
 
+// Log category
+DECLARE_LOG_CATEGORY_EXTERN(LogDistanceField, Log, All);
+
 UCLASS()
 class LYRAGAME_API UDistanceFieldSubsystem : public UWorldSubsystem
 {

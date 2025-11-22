@@ -7,8 +7,7 @@
 // CodeRevision: INC-2025-1148-R1 (Allow rerouting moves off blocked attack tiles instead of forced WAIT when a closer tile exists) (2025-11-20 15:30)
 #include "Turn/DistanceFieldSubsystem.h"
 
-// Local log category (avoid circular dependencies)
-DEFINE_LOG_CATEGORY_STATIC(LogConflictResolver, Log, All);
+DEFINE_LOG_CATEGORY(LogConflictResolver);
 
 void UConflictResolverSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {

@@ -94,7 +94,7 @@ void UTurnCorePhaseManager::Initialize(FSubsystemCollectionBase& Collection)
         const FGameplayTag Tag = FGameplayTag::RequestGameplayTag(TagName, false);
         if (!ensureMsgf(Tag.IsValid(), TEXT("[TurnCore] Missing required GameplayTag: %s"), *TagName.ToString()))
         {
-            UE_LOG(LogTemp, Error, TEXT("[TurnCore] Please add tag '%s' to DefaultGameplayTags.ini"), *TagName.ToString());
+            UE_LOG(LogTurnCore, Error, TEXT("[TurnCore] Please add tag '%s' to DefaultGameplayTags.ini"), *TagName.ToString());
         }
     }
 
@@ -102,12 +102,12 @@ void UTurnCorePhaseManager::Initialize(FSubsystemCollectionBase& Collection)
     DistanceField    = GetWorld()->GetSubsystem<UDistanceFieldSubsystem>();
     ActorRegistry    = GetWorld()->GetSubsystem<UStableActorRegistry>();
 
-    UE_LOG(LogTemp, Log, TEXT("[TurnCore] Initialized"));
+    UE_LOG(LogTurnCore, Log, TEXT("[TurnCore] Initialized"));
 }
 
 void UTurnCorePhaseManager::Deinitialize()
 {
-    UE_LOG(LogTemp, Log, TEXT("[TurnCore] Deinitialized"));
+    UE_LOG(LogTurnCore, Log, TEXT("[TurnCore] Deinitialized"));
     Super::Deinitialize();
 }
 
@@ -123,7 +123,7 @@ void UTurnCorePhaseManager::CoreObservationPhase(const FIntPoint& PlayerCell)
 
     if (!DistanceField)
     {
-        UE_LOG(LogTemp, Error, TEXT("[TurnCore] DistanceField is null"));
+        UE_LOG(LogTurnCore, Error, TEXT("[TurnCore] DistanceField is null"));
         return;
     }
 
@@ -138,7 +138,7 @@ void UTurnCorePhaseManager::CoreObservationPhase(const FIntPoint& PlayerCell)
                 GridOccupancy->SetCurrentTurnId(CurrentTurnId);
                 GridOccupancy->PurgeOutdatedReservations(CurrentTurnId);
 
-                UE_LOG(LogTemp, Log,
+                UE_LOG(LogTurnCore, Log,
                     TEXT("[TurnCore] ObservationPhase: Purged outdated reservations for turn %d"),
                     CurrentTurnId);
             }
@@ -149,7 +149,7 @@ void UTurnCorePhaseManager::CoreObservationPhase(const FIntPoint& PlayerCell)
     }
 
     DistanceField->UpdateDistanceField(PlayerCell);
-    UE_LOG(LogTemp, Log, TEXT("[TurnCore] ObservationPhase: Complete"));
+    UE_LOG(LogTurnCore, Log, TEXT("[TurnCore] ObservationPhase: Complete"));
 }
 
 TArray<FEnemyIntent> UTurnCorePhaseManager::CoreThinkPhase(const TArray<AActor*>& Enemies)
@@ -167,7 +167,7 @@ TArray<FEnemyIntent> UTurnCorePhaseManager::CoreThinkPhase(const TArray<AActor*>
         UEnemyThinkerBase* Thinker = Enemy->FindComponentByClass<UEnemyThinkerBase>();
         if (!Thinker)
         {
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogTurnCore, Warning,
                 TEXT("[TurnCore] Enemy %s has no EnemyThinkerBase component"),
                 *GetNameSafe(Enemy));
             continue;
@@ -177,7 +177,7 @@ TArray<FEnemyIntent> UTurnCorePhaseManager::CoreThinkPhase(const TArray<AActor*>
         Intents.Add(Intent);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("[TurnCore] ThinkPhase: Collected %d intents"), Intents.Num());
+    UE_LOG(LogTurnCore, Log, TEXT("[TurnCore] ThinkPhase: Collected %d intents"), Intents.Num());
     return Intents;
 }
 
@@ -189,7 +189,7 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
 
     if (!ConflictResolverPtr || !ActorRegistryPtr || !DistanceFieldPtr)
     {
-        UE_LOG(LogTemp, Error,
+        UE_LOG(LogTurnCore, Error,
             TEXT("[TurnCore] CoreResolvePhase: Required subsystems are null (ConflictResolver=%p, ActorRegistry=%p, DistanceField=%p)"),
             ConflictResolverPtr, ActorRegistryPtr, DistanceFieldPtr);
         return TArray<FResolvedAction>();
@@ -248,7 +248,7 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
         AActor* Actor = Intent.Actor.Get();
         if (!IsValid(Actor) || Actor->IsActorBeingDestroyed())
         {
-            UE_LOG(LogTemp, Log,
+            UE_LOG(LogTurnCore, Log,
                 TEXT("[TurnCore] CoreResolvePhase: Actor %s is dead/destroyed, skipping"),
                 *GetNameSafe(Actor));
             continue;
@@ -282,7 +282,7 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
         if (Intent.AbilityTag.MatchesTag(AttackTag))
         {
             ResolvedNextCell = LiveCurrentCell;
-            UE_LOG(LogTemp, Verbose,
+            UE_LOG(LogTurnCore, Verbose,
                 TEXT("[TurnCore] Attack intent: %s stays at (%d,%d) (original NextCell=(%d,%d))"),
                 *GetNameSafe(Actor),
                 LiveCurrentCell.X, LiveCurrentCell.Y,
@@ -349,7 +349,7 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
         Mix(static_cast<uint32>(Action.TimeSlot));
     }
 
-    UE_LOG(LogTemp, Log,
+    UE_LOG(LogTurnCore, Log,
         TEXT("[TurnCore] ResolvePhase: Resolved %d actions, Hash=0x%08X"),
         Resolved.Num(), TurnHash);
 
@@ -366,7 +366,7 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
                 const bool bReserved = TurnManager->RegisterResolvedMove(Action.SourceActor.Get(), Action.NextCell);
                 if (!bReserved)
                 {
-                    UE_LOG(LogTemp, Error,
+                    UE_LOG(LogTurnCore, Error,
                         TEXT("[TurnCore] RegisterResolvedMove FAILED for %s -> (%d,%d) - marking as WAIT (no movement)"),
                         *GetNameSafe(Action.SourceActor.Get()), Action.NextCell.X, Action.NextCell.Y);
 
@@ -376,7 +376,7 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
             }
             else
             {
-                UE_LOG(LogTemp, Verbose,
+                UE_LOG(LogTurnCore, Verbose,
                     TEXT("[TurnCore] Skip RegisterResolvedMove for %s (bIsWait=%d, FinalTag=%s)"),
                     *GetNameSafe(Action.SourceActor.Get()),
                     Action.bIsWait ? 1 : 0,
@@ -489,7 +489,7 @@ void UTurnCorePhaseManager::CoreCleanupPhase()
         ConflictResolver->ClearReservations();
     }
 
-    UE_LOG(LogTemp, Log, TEXT("[TurnCore] CleanupPhase: Complete"));
+    UE_LOG(LogTurnCore, Log, TEXT("[TurnCore] CleanupPhase: Complete"));
 }
 
 // ============================================================================
@@ -580,7 +580,7 @@ int32 UTurnCorePhaseManager::ExecuteMovePhaseWithSlots(
 
     if (AllIntents.Num() == 0)
     {
-        UE_LOG(LogTemp, Log, TEXT("[ExecuteMovePhaseWithSlots] No intents to process"));
+        UE_LOG(LogTurnCore, Log, TEXT("[ExecuteMovePhaseWithSlots] No intents to process"));
         return 0;
     }
 
@@ -588,7 +588,7 @@ int32 UTurnCorePhaseManager::ExecuteMovePhaseWithSlots(
     int32 MaxSlot = 0;
     BucketizeIntentsBySlot(AllIntents, Buckets, MaxSlot);
 
-    UE_LOG(LogTemp, Log,
+    UE_LOG(LogTurnCore, Log,
         TEXT("[ExecuteMovePhaseWithSlots] MaxTimeSlot = %d, Total Intents = %d"),
         MaxSlot, AllIntents.Num());
 
@@ -598,12 +598,12 @@ int32 UTurnCorePhaseManager::ExecuteMovePhaseWithSlots(
 
         if (SlotIntents.Num() == 0)
         {
-            UE_LOG(LogTemp, Log,
+            UE_LOG(LogTurnCore, Log,
                 TEXT("[Move Slot %d] No intents, skipping"), Slot);
             continue;
         }
 
-        UE_LOG(LogTemp, Log,
+        UE_LOG(LogTurnCore, Log,
             TEXT("[Move Slot %d] Processing %d intents"),
             Slot, SlotIntents.Num());
 
@@ -619,7 +619,7 @@ int32 UTurnCorePhaseManager::ExecuteMovePhaseWithSlots(
         OutActions.Append(SlotActions);
     }
 
-    UE_LOG(LogTemp, Log,
+    UE_LOG(LogTurnCore, Log,
         TEXT("[ExecuteMovePhaseWithSlots] Complete. Total Actions = %d"),
         OutActions.Num());
 
@@ -640,7 +640,7 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
 
     if (AllIntents.Num() == 0)
     {
-        UE_LOG(LogTemp, Log,
+        UE_LOG(LogTurnCore, Log,
             TEXT("[ExecuteAttackPhaseWithSlots] No intents"));
         return 0;
     }
@@ -653,7 +653,7 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
     int32 MaxSlot = 0;
     BucketizeIntentsBySlot(AllIntents, Buckets, MaxSlot);
 
-    UE_LOG(LogTemp, Log,
+    UE_LOG(LogTurnCore, Log,
         TEXT("[ExecuteAttackPhaseWithSlots] MaxTimeSlot = %d"), MaxSlot);
 
     for (int32 Slot = 0; Slot <= MaxSlot; ++Slot)
@@ -677,12 +677,12 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
 
         if (Attacks.Num() == 0)
         {
-            UE_LOG(LogTemp, Log,
+            UE_LOG(LogTurnCore, Log,
                 TEXT("[Attack Slot %d] No attacks"), Slot);
             continue;
         }
 
-        UE_LOG(LogTemp, Log,
+        UE_LOG(LogTurnCore, Log,
             TEXT("[Attack Slot %d] Processing %d attacks"),
             Slot, Attacks.Num());
 
@@ -694,7 +694,7 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
             AActor* IntentActor = Intent.Actor.Get();
             if (!IntentActor || !IsValid(IntentActor))
             {
-                UE_LOG(LogTemp, Warning,
+                UE_LOG(LogTurnCore, Warning,
                     TEXT("[Attack Slot %d] Skipping invalid Intent.Actor (nullptr or destroyed)"),
                     Slot);
                 continue;
@@ -724,7 +724,7 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
 
                 Action.TargetData.Add(TargetData);
 
-                UE_LOG(LogTemp, Log,
+                UE_LOG(LogTurnCore, Log,
                     TEXT("[Attack Slot %d] %s -> Target: %s"),
                     Slot, *GetNameSafe(IntentActor), *GetNameSafe(TargetActor));
             }
@@ -740,13 +740,13 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
 
                 Action.TargetData.Add(TargetData);
 
-                UE_LOG(LogTemp, Log,
+                UE_LOG(LogTurnCore, Log,
                     TEXT("[Attack Slot %d] %s -> Target (Alt): %s"),
                     Slot, *GetNameSafe(IntentActor), *GetNameSafe(TargetActorAlt));
             }
             else
             {
-                UE_LOG(LogTemp, Warning,
+                UE_LOG(LogTurnCore, Warning,
                     TEXT("[Attack Slot %d] %s has no target!"),
                     Slot, *GetNameSafe(IntentActor));
             }
@@ -767,7 +767,7 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
             }
             else
             {
-                UE_LOG(LogTemp, Warning,
+                UE_LOG(LogTurnCore, Warning,
                     TEXT("[Attack Slot %d] Filtered out invalid action: Actor=%s"),
                     Slot, *GetNameSafe(Action.SourceActor));
             }
@@ -776,7 +776,7 @@ int32 UTurnCorePhaseManager::ExecuteAttackPhaseWithSlots(
         OutActions.Append(ValidActions);
     }
 
-    UE_LOG(LogTemp, Log,
+    UE_LOG(LogTurnCore, Log,
         TEXT("[ExecuteAttackPhaseWithSlots] Complete. Total = %d"),
         OutActions.Num());
 
@@ -825,7 +825,7 @@ void UTurnCorePhaseManager::CoreThinkPhaseWithTimeSlots(
         }
     }
 
-    UE_LOG(LogTemp, Log,
+    UE_LOG(LogTurnCore, Log,
         TEXT("[CoreThinkPhaseWithTimeSlots] Generated %d intents for %d enemies"),
         OutIntents.Num(), Enemies.Num());
 }
@@ -899,7 +899,7 @@ UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
         }
         else
         {
-            UE_LOG(LogTemp, Verbose,
+            UE_LOG(LogTurnCore, Verbose,
                 TEXT("[TurnCore] ResolveASC: %s has no PlayerState"),
                 *GetNameSafe(Pawn));
         }
@@ -932,14 +932,14 @@ UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
             }
             else
             {
-                UE_LOG(LogTemp, Verbose,
+                UE_LOG(LogTurnCore, Verbose,
                     TEXT("[TurnCore] ResolveASC: %s's Controller has no PlayerState"),
                     *GetNameSafe(C));
             }
         }
         else
         {
-            UE_LOG(LogTemp, Verbose,
+            UE_LOG(LogTurnCore, Verbose,
                 TEXT("[TurnCore] ResolveASC: %s has no Controller"),
                 *GetNameSafe(Pawn));
         }
@@ -966,7 +966,7 @@ UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
         }
         else
         {
-            UE_LOG(LogTemp, Verbose,
+            UE_LOG(LogTurnCore, Verbose,
                 TEXT("[TurnCore] ResolveASC: Controller %s has no PlayerState"),
                 *GetNameSafe(C));
         }
@@ -1007,7 +1007,7 @@ bool UTurnCorePhaseManager::IsGASReady(AActor* Actor)
     const FGameplayAbilityActorInfo* Info = ASC->AbilityActorInfo.Get();
     if (!Info || !Info->AvatarActor.IsValid())
     {
-        UE_LOG(LogTemp, Verbose,
+        UE_LOG(LogTurnCore, Verbose,
             TEXT("[TurnCore] IsGASReady: %s has invalid ActorInfo"),
             *GetNameSafe(Actor));
         return false;
@@ -1018,13 +1018,13 @@ bool UTurnCorePhaseManager::IsGASReady(AActor* Actor)
 
     if (Abilities.Num() == 0)
     {
-        UE_LOG(LogTemp, Verbose,
+        UE_LOG(LogTurnCore, Verbose,
             TEXT("[TurnCore] IsGASReady: %s has ASC but no abilities yet"),
             *GetNameSafe(Actor));
         return false;
     }
 
-    UE_LOG(LogTemp, Verbose,
+    UE_LOG(LogTurnCore, Verbose,
         TEXT("[TurnCore] IsGASReady: %s has %d abilities - READY"),
         *GetNameSafe(Actor), Abilities.Num());
     return true;
@@ -1046,7 +1046,7 @@ bool UTurnCorePhaseManager::AllEnemiesReady(const TArray<AActor*>& Enemies) cons
             NotReadyCount++;
             if (NotReadyCount <= 3)
             {
-                UE_LOG(LogTemp, Verbose,
+                UE_LOG(LogTurnCore, Verbose,
                     TEXT("[TurnCore] AllEnemiesReady: %s not ready yet"),
                     *GetNameSafe(Enemy));
             }
@@ -1055,13 +1055,13 @@ bool UTurnCorePhaseManager::AllEnemiesReady(const TArray<AActor*>& Enemies) cons
 
     if (ReadyCount < Enemies.Num())
     {
-        UE_LOG(LogTemp, Log,
+        UE_LOG(LogTurnCore, Log,
             TEXT("[TurnCore] AllEnemiesReady: %d/%d enemies ready (waiting for %d)"),
             ReadyCount, Enemies.Num(), NotReadyCount);
         return false;
     }
 
-    UE_LOG(LogTemp, Log,
+    UE_LOG(LogTurnCore, Log,
         TEXT("[TurnCore] AllEnemiesReady: All %d enemies ready"),
         Enemies.Num());
     return true;

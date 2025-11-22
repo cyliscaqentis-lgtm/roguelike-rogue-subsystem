@@ -8,7 +8,7 @@
 #include "Turn/TurnActionBarrierSubsystem.h"
 #include "Turn/AttackPhaseExecutorSubsystem.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogAttackAbility, Log, All);
+DEFINE_LOG_CATEGORY(LogAttackAbility);
 
 // CodeRevision: INC-2025-00033-R2
 // (Reset Barrier state in EndAbility to avoid stale ActionId/TurnId reuse) (2025-11-18 11:00)
@@ -44,7 +44,7 @@ UGA_AttackBase::UGA_AttackBase(const FObjectInitializer& ObjectInitializer)
     Trigger.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
     AbilityTriggers.Add(Trigger);
 
-    UE_LOG(LogTemp, Log,
+    UE_LOG(LogAttackAbility, Log,
         TEXT("[GA_AttackBase] Constructor: Registered trigger %s, ActivationBlocked=%d, ActivationOwned=%d"),
         *Trigger.TriggerTag.ToString(),
         ActivationBlockedTags.Num(),
@@ -85,7 +85,7 @@ void UGA_AttackBase::PostInitProperties()
         Trigger.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
         AbilityTriggers.Add(Trigger);
 
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogAttackAbility, Warning,
             TEXT("[GA_AttackBase::PostInitProperties] ★ FIXED: Re-registered trigger %s (was missing or cleared by BP)"),
             *Trigger.TriggerTag.ToString());
     }
@@ -93,7 +93,7 @@ void UGA_AttackBase::PostInitProperties()
     {
         // This log is redundant because the trigger being registered is normal.
         // const FGameplayTag AttackEventTag = RogueGameplayTags::GameplayEvent_Intent_Attack;
-        // UE_LOG(LogTemp, Log,
+        // UE_LOG(LogAttackAbility, Log,
         //     TEXT("[GA_AttackBase::PostInitProperties] Trigger already registered: %s"),
         //     *AttackEventTag.ToString());
     }
@@ -103,7 +103,7 @@ void UGA_AttackBase::ExecuteAttack_Implementation(AActor* Target)
 {
     if (!Target)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[GA_AttackBase] Target is null"));
+        UE_LOG(LogAttackAbility, Warning, TEXT("[GA_AttackBase] Target is null"));
         OnAttackCompleted();
         return;
     }
@@ -111,7 +111,7 @@ void UGA_AttackBase::ExecuteAttack_Implementation(AActor* Target)
     AActor* Avatar = GetAvatarActorFromActorInfo();
     if (!Avatar)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[GA_AttackBase] Avatar is null"));
+        UE_LOG(LogAttackAbility, Warning, TEXT("[GA_AttackBase] Avatar is null"));
         OnAttackCompleted();
         return;
     }
@@ -123,12 +123,12 @@ void UGA_AttackBase::ExecuteAttack_Implementation(AActor* Target)
 
     if (Damage > 0.0f)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[GA_AttackBase] Attack hit: %.2f damage to %s"), Damage, *Target->GetName());
+        UE_LOG(LogAttackAbility, Verbose, TEXT("[GA_AttackBase] Attack hit: %.2f damage to %s"), Damage, *Target->GetName());
         OnAttackHit(Target, Damage);
     }
     else
     {
-        UE_LOG(LogTemp, Verbose, TEXT("[GA_AttackBase] Attack missed: %s"), *Target->GetName());
+        UE_LOG(LogAttackAbility, Verbose, TEXT("[GA_AttackBase] Attack missed: %s"), *Target->GetName());
         OnAttackMiss(Target);
     }
 }
@@ -141,23 +141,23 @@ float UGA_AttackBase::CalculateDamage_Implementation(AActor* Target) const
 
 void UGA_AttackBase::OnAttackHit_Implementation(AActor* Target, float DamageDealt)
 {
-    UE_LOG(LogTemp, Verbose, TEXT("[GA_AttackBase] OnAttackHit: %s (%.2f damage)"), *Target->GetName(), DamageDealt);
+    UE_LOG(LogAttackAbility, Verbose, TEXT("[GA_AttackBase] OnAttackHit: %s (%.2f damage)"), *Target->GetName(), DamageDealt);
 }
 
 void UGA_AttackBase::OnAttackMiss_Implementation(AActor* Target)
 {
-    UE_LOG(LogTemp, Verbose, TEXT("[GA_AttackBase] OnAttackMiss: %s"), *Target->GetName());
+    UE_LOG(LogAttackAbility, Verbose, TEXT("[GA_AttackBase] OnAttackMiss: %s"), *Target->GetName());
 }
 
 void UGA_AttackBase::OnAttackCompleted()
 {
     if (!HasAuthority(&CurrentActivationInfo))
     {
-        UE_LOG(LogTemp, Warning, TEXT("[GA_AttackBase] OnAttackCompleted called on client (ignored)"));
+        UE_LOG(LogAttackAbility, Warning, TEXT("[GA_AttackBase] OnAttackCompleted called on client (ignored)"));
         return;
     }
 
-    UE_LOG(LogTemp, Verbose, TEXT("[GA_AttackBase] Attack completed"));
+    UE_LOG(LogAttackAbility, Verbose, TEXT("[GA_AttackBase] Attack completed"));
 
     // EndAbility will handle tag cleanup, barrier completion, and sending the completion event via its parent class.
     // The previous call to SendCompletionEvent(false) here was causing a race condition.
@@ -196,7 +196,7 @@ TArray<AActor*> UGA_AttackBase::FindTargetsInRange(float SearchRange) const
         }
     }
 
-    UE_LOG(LogTemp, Verbose, TEXT("[GA_AttackBase] Found %d targets in range %.2f"), FoundTargets.Num(), ActualRange);
+    UE_LOG(LogAttackAbility, Verbose, TEXT("[GA_AttackBase] Found %d targets in range %.2f"), FoundTargets.Num(), ActualRange);
     return FoundTargets;
 }
 

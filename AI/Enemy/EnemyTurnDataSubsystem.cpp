@@ -4,6 +4,11 @@
 #include "UObject/UnrealType.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameplayTagsManager.h"
+#include "EnemyAISubsystem.h"
+#include "Grid/GridPathfindingSubsystem.h"
+#include "Grid/GridOccupancySubsystem.h"
+#include "Turn/DistanceFieldSubsystem.h"
+#include "GameFramework/Pawn.h"
 
 // ログカテゴリ定義
 DEFINE_LOG_CATEGORY(LogEnemyTurnDataSys);
@@ -450,4 +455,92 @@ void UEnemyTurnDataSubsystem::SetEnemiesSorted(const TArray<AActor*>& NewEnemies
             TEXT("[EnemyTurnData] SetEnemiesSorted: %d enemies (Revision=%d)"),
             EnemiesSorted.Num(), DataRevision);
     }
+}
+
+//--------------------------------------------------------------------------
+// Intent Fallback Generation
+// CodeRevision: INC-2025-1122-R3 (Extract from GameTurnManagerBase) (2025-11-22)
+//--------------------------------------------------------------------------
+
+bool UEnemyTurnDataSubsystem::EnsureIntentsFallback(
+    int32 TurnId,
+    APawn* PlayerPawn,
+    UGridPathfindingSubsystem* PathFinder,
+    const TArray<AActor*>& InEnemyActors,
+    TArray<FEnemyIntent>& OutIntents)
+{
+    // Already have intents - no fallback needed
+    if (Intents.Num() > 0)
+    {
+        OutIntents = Intents;
+        return true;
+    }
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        UE_LOG(LogEnemyTurnDataSys, Error,
+            TEXT("[Turn %d] EnsureIntentsFallback: World is null"), TurnId);
+        return false;
+    }
+
+    UE_LOG(LogEnemyTurnDataSys, Warning,
+        TEXT("[Turn %d] EnsureIntentsFallback: No enemy intents detected, attempting fallback generation..."),
+        TurnId);
+
+    UEnemyAISubsystem* EnemyAISys = World->GetSubsystem<UEnemyAISubsystem>();
+    if (!EnemyAISys || !IsValid(PathFinder) || !PlayerPawn)
+    {
+        UE_LOG(LogEnemyTurnDataSys, Error,
+            TEXT("[Turn %d] Fallback failed: EnemyAISys=%d, PathFinder=%d, PlayerPawn=%d"),
+            TurnId,
+            EnemyAISys != nullptr,
+            IsValid(PathFinder),
+            PlayerPawn != nullptr);
+        return false;
+    }
+
+    if (InEnemyActors.Num() == 0)
+    {
+        UE_LOG(LogEnemyTurnDataSys, Warning,
+            TEXT("[Turn %d] Fallback: No enemy actors provided"), TurnId);
+        return false;
+    }
+
+    // Get reliable player grid coordinates from GridOccupancySubsystem
+    FIntPoint PlayerGrid = FIntPoint(-1, -1);
+    if (UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>())
+    {
+        PlayerGrid = Occupancy->GetCellOfActor(PlayerPawn);
+    }
+
+    // Update DistanceField for fallback
+    if (UDistanceFieldSubsystem* DistanceField = World->GetSubsystem<UDistanceFieldSubsystem>())
+    {
+        DistanceField->UpdateDistanceField(PlayerGrid);
+        UE_LOG(LogEnemyTurnDataSys, Log,
+            TEXT("[Turn %d] Fallback: DistanceField updated for PlayerGrid=(%d,%d)"),
+            TurnId, PlayerGrid.X, PlayerGrid.Y);
+    }
+
+    // Build observations
+    TArray<FEnemyObservation> FallbackObservations;
+    EnemyAISys->BuildObservations(InEnemyActors, PlayerGrid, PathFinder, FallbackObservations);
+    Observations = FallbackObservations;
+
+    UE_LOG(LogEnemyTurnDataSys, Warning,
+        TEXT("[Turn %d] Fallback: Generated %d observations"),
+        TurnId, FallbackObservations.Num());
+
+    // Collect intents
+    TArray<FEnemyIntent> FallbackIntents;
+    EnemyAISys->CollectIntents(FallbackObservations, InEnemyActors, FallbackIntents);
+    Intents = FallbackIntents;
+    OutIntents = FallbackIntents;
+
+    UE_LOG(LogEnemyTurnDataSys, Warning,
+        TEXT("[Turn %d] Fallback: Generated %d intents"),
+        TurnId, FallbackIntents.Num());
+
+    return FallbackIntents.Num() > 0;
 }
