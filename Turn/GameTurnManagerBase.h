@@ -388,6 +388,14 @@ public:
     UPROPERTY(BlueprintReadOnly, Replicated, Category = "Turn|State")
     bool bPlayerMoveInProgress = false;
 
+    /** Flag indicating if enemy phase is currently in progress */
+    UPROPERTY(BlueprintReadOnly, Category = "Turn|State")
+    bool bEnemyPhaseInProgress = false;
+
+    /** Guard flag to prevent ExecuteEnemyPhase from being called twice in the same turn */
+    UPROPERTY(BlueprintReadOnly, Category = "Turn|State")
+    bool bEnemyPhaseExecutedThisTurn = false;
+
     /** Flag indicating if the turn has started */
     UPROPERTY()
     bool bTurnStarted = false;

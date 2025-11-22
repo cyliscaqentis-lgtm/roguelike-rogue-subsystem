@@ -13,6 +13,7 @@
 #include "../Utility/ProjectDiagnostics.h"
 #include "Engine/ActorInstanceHandle.h"
 #include "Turn/TurnFlowCoordinator.h"
+#include "Turn/GameTurnManagerBase.h"
 #include "AI/Enemy/EnemyTurnDataSubsystem.h"
 
 //------------------------------------------------------------------------------
@@ -320,12 +321,29 @@ bool UTurnCommandHandler::TryExecuteMoveCommand(const FPlayerCommand& Command)
 	}
 
 	// Trigger Gameplay Event for Move
+	// Get TurnManager to pass in OptionalObject so GA_MoveBase can retrieve TurnId
+	AGameTurnManagerBase* TurnManager = nullptr;
+	{
+		TArray<AActor*> FoundActors;
+		UGameplayStatics::GetAllActorsOfClass(World, AGameTurnManagerBase::StaticClass(), FoundActors);
+		if (FoundActors.Num() > 0)
+		{
+			TurnManager = Cast<AGameTurnManagerBase>(FoundActors[0]);
+		}
+	}
+
 	FGameplayEventData EventData;
 	EventData.EventTag = RogueGameplayTags::GameplayEvent_Intent_Move;
 	EventData.Instigator = PlayerPawn;
 	EventData.Target = PlayerPawn;
-	EventData.OptionalObject = this;
+	EventData.OptionalObject = TurnManager; // Must be TurnManager, not 'this'!
 	EventData.EventMagnitude = static_cast<float>(TurnCommandEncoding::PackCell(TargetCell.X, TargetCell.Y));
+
+	if (!TurnManager)
+	{
+		UE_LOG(LogTurnManager, Warning,
+			TEXT("[TurnCommandHandler] TurnManager not found - GA_MoveBase may not send completion event"));
+	}
 
 	UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(PlayerPawn);
 	if (ASC)

@@ -23,6 +23,7 @@
 #include "AI/Ally/AllyTurnDataSubsystem.h"
 #include "Debug/DebugObserverCSV.h"
 #include "Utility/TurnSystemUtils.h"
+#include "Utility/TurnTagCleanupUtils.h"
 #include "GameModes/LyraExperienceManagerComponent.h"
 #include "GameFramework/GameStateBase.h"
 
@@ -98,7 +99,25 @@ void AGameTurnManagerBase::HandleDungeonReady(URogueDungeonSubsystem* InDungeonS
 void AGameTurnManagerBase::OnExperienceLoaded(const ULyraExperienceDefinition* Experience)
 {
     LOG_TURN(Log, TEXT("[TurnManager] OnExperienceLoaded"));
-    InitializeTurnSystem();
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        LOG_TURN(Error, TEXT("OnExperienceLoaded: World is null"));
+        return;
+    }
+
+    // Trigger dungeon generation pipeline: InitializeGameTurnManager -> StartGenerateFromLevel -> OnGridReady -> HandleDungeonReady -> BuildUnits
+    if (UTurnInitializationSubsystem* InitSys = World->GetSubsystem<UTurnInitializationSubsystem>())
+    {
+        InitSys->InitializeGameTurnManager(this);
+    }
+    else
+    {
+        // Fallback for non-Rogue maps
+        LOG_TURN(Warning, TEXT("OnExperienceLoaded: TurnInitializationSubsystem not found. Calling InitializeTurnSystem directly."));
+        InitializeTurnSystem();
+    }
 }
 
 void AGameTurnManagerBase::InitializeTurnSystem()
@@ -408,6 +427,10 @@ void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnId)
 	// Use TurnId directly (should match CurrentTurnId from TurnFlowCoordinator)
 	CurrentTurnId = TurnId;
 
+	// Reset phase flags for new turn
+	bEnemyPhaseInProgress = false;
+	bEnemyPhaseExecutedThisTurn = false;
+
 	if (CachedCsvObserver.IsValid())
 	{
 		CachedCsvObserver->SetCurrentTurnForLogging(TurnId);
@@ -421,6 +444,10 @@ void AGameTurnManagerBase::OnTurnStartedHandler(int32 TurnId)
 	{
 		LOG_TURN(Error, TEXT("[Turn %d] TurnInitializationSubsystem not available!"), TurnId);
 	}
+
+	// Open player input window after turn initialization is complete
+	OpenInputWindow();
+	LOG_TURN(Log, TEXT("[Turn %d] OnTurnStartedHandler: Player input window opened"), TurnId);
 }
 
 void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerCommand& Command)
@@ -521,7 +548,84 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
 
 void AGameTurnManagerBase::ExecuteEnemyPhase()
 {
-    if (UTurnEnemyPhaseSubsystem* EnemyPhase = GetWorld()->GetSubsystem<UTurnEnemyPhaseSubsystem>())
+    // Guard against double execution in the same turn
+    if (bEnemyPhaseExecutedThisTurn)
+    {
+        LOG_TURN(Warning, TEXT("[Turn %d] ExecuteEnemyPhase SKIPPED - already executed this turn"), CurrentTurnId);
+        return;
+    }
+    bEnemyPhaseExecutedThisTurn = true;
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        LOG_TURN(Error, TEXT("ExecuteEnemyPhase: World is null!"));
+        EndEnemyTurn();
+        return;
+    }
+
+    // Regenerate enemy intents based on player's FINAL position (after player move)
+    // This ensures enemies react to where the player actually ended up, not where they started
+    UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>();
+    UEnemyAISubsystem* EnemyAI = World->GetSubsystem<UEnemyAISubsystem>();
+    UGridPathfindingSubsystem* LocalPathFinder = World->GetSubsystem<UGridPathfindingSubsystem>();
+    APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(World, 0);
+
+    if (EnemyData && EnemyAI && LocalPathFinder && PlayerPawn)
+    {
+        const FIntPoint PlayerFinalCell = LocalPathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
+        LOG_TURN(Log, TEXT("[Turn %d] ExecuteEnemyPhase: Regenerating intents for PlayerFinalCell=(%d,%d)"),
+            CurrentTurnId, PlayerFinalCell.X, PlayerFinalCell.Y);
+
+        // Ensure enemy list is up-to-date before regenerating intents
+        EnemyData->RebuildEnemyList(FName("Enemy"));
+
+        // Get enemy actors
+        TArray<AActor*> EnemyActors = EnemyData->GetEnemiesSortedCopy();
+        LOG_TURN(Log, TEXT("[Turn %d] ExecuteEnemyPhase: Found %d enemies after RebuildEnemyList"), CurrentTurnId, EnemyActors.Num());
+
+        if (EnemyActors.Num() > 0)
+        {
+            // Rebuild observations based on player's final position
+            TArray<FEnemyObservation> FinalObservations;
+            EnemyAI->BuildObservations(EnemyActors, PlayerFinalCell, LocalPathFinder, FinalObservations);
+
+            // Regenerate intents based on new observations
+            TArray<FEnemyIntent> FinalIntents;
+            EnemyAI->CollectIntents(FinalObservations, EnemyActors, FinalIntents);
+
+            // Count attack intents for logging
+            int32 AttackCount = 0;
+            int32 MoveCount = 0;
+            int32 WaitCount = 0;
+            static const FGameplayTag AttackTag = FGameplayTag::RequestGameplayTag(FName("AI.Intent.Attack"));
+            static const FGameplayTag MoveTag = FGameplayTag::RequestGameplayTag(FName("AI.Intent.Move"));
+            for (const FEnemyIntent& Intent : FinalIntents)
+            {
+                if (Intent.AbilityTag.MatchesTag(AttackTag)) AttackCount++;
+                else if (Intent.AbilityTag.MatchesTag(MoveTag)) MoveCount++;
+                else WaitCount++;
+            }
+
+            LOG_TURN(Warning, TEXT("[Turn %d] ExecuteEnemyPhase: Regenerated %d intents (Attack=%d, Move=%d, Wait=%d) based on PlayerFinalCell=(%d,%d)"),
+                CurrentTurnId, FinalIntents.Num(), AttackCount, MoveCount, WaitCount, PlayerFinalCell.X, PlayerFinalCell.Y);
+
+            // Update stored intents
+            EnemyData->SetIntents(FinalIntents);
+            CachedEnemyIntents = FinalIntents;
+        }
+        else
+        {
+            LOG_TURN(Log, TEXT("[Turn %d] ExecuteEnemyPhase: No enemies to process"), CurrentTurnId);
+        }
+    }
+    else
+    {
+        LOG_TURN(Warning, TEXT("[Turn %d] ExecuteEnemyPhase: Missing subsystems for intent regeneration (EnemyData=%d, EnemyAI=%d, PathFinder=%d, Player=%d)"),
+            CurrentTurnId, EnemyData != nullptr, EnemyAI != nullptr, LocalPathFinder != nullptr, PlayerPawn != nullptr);
+    }
+
+    if (UTurnEnemyPhaseSubsystem* EnemyPhase = World->GetSubsystem<UTurnEnemyPhaseSubsystem>())
     {
         EnemyPhase->ExecuteEnemyPhase(this, CurrentTurnId);
     }
@@ -613,12 +717,29 @@ void AGameTurnManagerBase::HandleMovePhaseCompleted(int32 FinishedTurnId)
         return;
     }
 
-    LOG_TURN(Log, TEXT("[Turn %d] Barrier complete - all move actions finished"), FinishedTurnId);
+    LOG_TURN(Log, TEXT("[Turn %d] Barrier complete - all move actions finished (EnemyPhaseInProgress=%d)"),
+        FinishedTurnId, bEnemyPhaseInProgress ? 1 : 0);
 
+    // Case 1: Player move phase just completed -> Start enemy phase
+    if (!bEnemyPhaseInProgress)
+    {
+        LOG_TURN(Log, TEXT("[Turn %d] Player move phase complete. Starting Enemy Phase..."), FinishedTurnId);
+
+        bPlayerMoveInProgress = false;
+        ApplyWaitInputGate(false);
+
+        // Start enemy phase
+        bEnemyPhaseInProgress = true;
+        ExecuteEnemyPhase();
+        return;
+    }
+
+    // Case 2: Enemy phase just completed -> End turn
+    LOG_TURN(Log, TEXT("[Turn %d] Enemy phase complete. Ending turn."), FinishedTurnId);
+
+    bEnemyPhaseInProgress = false;
     bPlayerMoveInProgress = false;
     ApplyWaitInputGate(false);
-
-    LOG_TURN(Log, TEXT("[Turn %d] All flags/gates cleared, advancing turn"), FinishedTurnId);
 
     if (bSequentialModeActive)
     {
@@ -626,13 +747,9 @@ void AGameTurnManagerBase::HandleMovePhaseCompleted(int32 FinishedTurnId)
         bSequentialMovePhaseStarted = false;
         bIsInMoveOnlyPhase = false;
         CachedResolvedActions.Reset();
-        LOG_TURN(Log,
-            TEXT("[Turn %d] Sequential move phase complete, ending enemy turn"), FinishedTurnId);
-        EndEnemyTurn();
-        return;
+        LOG_TURN(Log, TEXT("[Turn %d] Sequential mode flags cleared"), FinishedTurnId);
     }
 
-    LOG_TURN(Log, TEXT("[Turn %d] Move phase complete, calling EndEnemyTurn directly"), FinishedTurnId);
     EndEnemyTurn();
 }
 
@@ -794,10 +911,27 @@ void AGameTurnManagerBase::OpenInputWindow()
 
 void AGameTurnManagerBase::NotifyPlayerPossessed(APawn* NewPawn)
 {
-    if (UPlayerInputProcessor* InputProc = GetWorld()->GetSubsystem<UPlayerInputProcessor>())
+    LOG_TURN(Log, TEXT("[TurnManager] NotifyPlayerPossessed: %s"), NewPawn ? *NewPawn->GetName() : TEXT("nullptr"));
+
+    bPlayerPossessed = true;
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return;
+    }
+
+    if (UTurnInitializationSubsystem* InitSys = World->GetSubsystem<UTurnInitializationSubsystem>())
+    {
+        InitSys->NotifyPlayerPossessed(NewPawn);
+    }
+
+    if (UPlayerInputProcessor* InputProc = World->GetSubsystem<UPlayerInputProcessor>())
     {
         InputProc->OnPlayerPossessed(this, NewPawn);
     }
+
+    TryStartFirstTurn();
 }
 
 void AGameTurnManagerBase::TryStartFirstTurn()
@@ -913,15 +1047,19 @@ void AGameTurnManagerBase::CopyEnemyActors(TArray<AActor*>& OutEnemies)
 
 void AGameTurnManagerBase::ClearResidualInProgressTags()
 {
-    if (UAbilitySystemComponent* ASC = TurnSystemUtils::GetPlayerASC(this))
+    UWorld* World = GetWorld();
+    if (!World)
     {
-        const FGameplayTag InProgressTag = RogueGameplayTags::State_Action_InProgress;
-        if (ASC->HasMatchingGameplayTag(InProgressTag))
-        {
-            ASC->SetLooseGameplayTagCount(InProgressTag, 0);
-            LOG_TURN(Warning, TEXT("[Turn %d] ClearResidualInProgressTags: Cleared stale InProgress tag"), CurrentTurnId);
-        }
+        return;
     }
+
+    APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(World, 0);
+    TArray<AActor*> EnemyActors;
+    CopyEnemyActors(EnemyActors);
+
+    TurnTagCleanupUtils::ClearResidualInProgressTags(World, PlayerPawn, EnemyActors);
+    LOG_TURN(Log, TEXT("[Turn %d] ClearResidualInProgressTags: Cleared via TurnTagCleanupUtils (Player + %d enemies)"),
+        CurrentTurnId, EnemyActors.Num());
 }
 
 UAbilitySystemComponent* AGameTurnManagerBase::GetPlayerASC() const

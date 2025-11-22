@@ -181,6 +181,20 @@ public:
     bool HasIntents() const;
 
     /**
+     * 隣接している敵のインテントを攻撃にアップグレード
+     *
+     * プレイヤー移動後、敵フェーズ開始前に呼び出す。
+     * ターン開始時には遠かったが、プレイヤーが歩いて隣接した敵も
+     * 攻撃インテントを持つようになる。
+     *
+     * @param PlayerCell プレイヤーの現在グリッド位置
+     * @param AttackRange 攻撃範囲（Chebyshev距離、デフォルト=1で隣接）
+     * @return アップグレードされたインテント数
+     */
+    UFUNCTION(BlueprintCallable, Category = "Turn|Enemy")
+    int32 UpgradeIntentsForAdjacency(const FIntPoint& PlayerCell, int32 AttackRange = 1);
+
+    /**
      * Intentが存在しない場合のフォールバック生成
      *
      * @param TurnId 現在のターンID

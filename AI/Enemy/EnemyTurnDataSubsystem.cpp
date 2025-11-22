@@ -425,6 +425,56 @@ bool UEnemyTurnDataSubsystem::HasIntents() const
     return Intents.Num() > 0;
 }
 
+int32 UEnemyTurnDataSubsystem::UpgradeIntentsForAdjacency(const FIntPoint& PlayerCell, int32 AttackRange)
+{
+    // Use local variable to avoid needing RogueGameplayTags include here
+    static const FGameplayTag AttackTag = FGameplayTag::RequestGameplayTag(FName("AI.Intent.Attack"));
+    static const FGameplayTag MoveTag = FGameplayTag::RequestGameplayTag(FName("AI.Intent.Move"));
+
+    int32 UpgradedCount = 0;
+
+    for (FEnemyIntent& Intent : Intents)
+    {
+        // Skip if already an attack intent
+        if (Intent.AbilityTag.MatchesTag(AttackTag))
+        {
+            continue;
+        }
+
+        // Only upgrade Move intents (not Wait)
+        if (!Intent.AbilityTag.MatchesTag(MoveTag))
+        {
+            continue;
+        }
+
+        // Check Chebyshev distance from enemy's current position to player
+        const int32 DeltaX = FMath::Abs(Intent.CurrentCell.X - PlayerCell.X);
+        const int32 DeltaY = FMath::Abs(Intent.CurrentCell.Y - PlayerCell.Y);
+        const int32 ChebyshevDist = FMath::Max(DeltaX, DeltaY);
+
+        if (ChebyshevDist <= AttackRange)
+        {
+            // Upgrade to attack intent
+            Intent.AbilityTag = AttackTag;
+            Intent.NextCell = Intent.CurrentCell; // Attack from current position
+            UpgradedCount++;
+
+            UE_LOG(LogEnemyTurnDataSys, Log,
+                TEXT("[UpgradeIntentsForAdjacency] Upgraded enemy at (%d,%d) to ATTACK (Dist=%d, PlayerAt=(%d,%d))"),
+                Intent.CurrentCell.X, Intent.CurrentCell.Y, ChebyshevDist, PlayerCell.X, PlayerCell.Y);
+        }
+    }
+
+    if (UpgradedCount > 0)
+    {
+        UE_LOG(LogEnemyTurnDataSys, Warning,
+            TEXT("[UpgradeIntentsForAdjacency] Upgraded %d intents to ATTACK based on adjacency to player at (%d,%d)"),
+            UpgradedCount, PlayerCell.X, PlayerCell.Y);
+    }
+
+    return UpgradedCount;
+}
+
 void UEnemyTurnDataSubsystem::GetIntentsForSlot(
     int32 TargetSlot,
     TArray<FEnemyIntent>& OutIntents) const
