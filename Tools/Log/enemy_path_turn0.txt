@@ -1,0 +1,62 @@
+Log,0,RogueDungeon,17037496.472176,"[URogueDungeonSubsystem] ConfigActor=BP_DungeonConfigActor_C_1, ConfigDA=/Game/Rogue/Systems/BP_RogueFloorConfigData.BP_RogueFloorConfigData"
+Display,0,Temp,17037496.472187,"[RogueSubsystem] Generate START (Seed=11551, Map=64x64, Cell=100)"
+Log,0,Temp,17037496.472418,"Dungeon GENERATED: Seed=FRandomStream(InitialSeed=11551, Seed=1375037446) Rooms=31 Walkable=925 Reach=100.0%"
+Display,0,Temp,17037496.706098,"[RogueSubsystem] Generate DONE (Rooms=31, Walkable=925, Reach=100.0%)"
+Log,0,TurnInit,17037496.706462,InitializeGameTurnManager: Ready for HandleDungeonReady
+Warning,0,UnitBase,17037496.710917,[PostInitializeComponents] ✅ ASC callbacks registered for BP_PlayerUnit_C_0
+Warning,0,UnitBase,17037496.711761,[OnAbilitySystemInitialized] ========== START: BP_PlayerUnit_C_0 ==========
+Log,0,EnemyUnit,17037496.712886,[Constructor] ASC created for enemy unit (deferred controller spawn enabled)
+Log,0,AIController,17037496.715553,"[LyraTBSAIController] Constructor: bWantsPlayerState=true, TeamId=NoTeam"
+Log,0,EnemyUnit,17037496.715816,[PossessedBy] ========== START: BP_EnemyUnitBase_C_0 ==========
+Log,0,EnemyUnit,17037496.716560,[Constructor] ASC created for enemy unit (deferred controller spawn enabled)
+Log,0,AIController,17037496.719344,"[LyraTBSAIController] Constructor: bWantsPlayerState=true, TeamId=NoTeam"
+Log,0,EnemyUnit,17037496.719519,[PossessedBy] ========== START: BP_EnemyUnitBase_C_1 ==========
+Log,0,EnemyUnit,17037496.720249,[Constructor] ASC created for enemy unit (deferred controller spawn enabled)
+Log,0,AIController,17037496.722998,"[LyraTBSAIController] Constructor: bWantsPlayerState=true, TeamId=NoTeam"
+Log,0,EnemyUnit,17037496.723174,[PossessedBy] ========== START: BP_EnemyUnitBase_C_2 ==========
+Log,0,EnemyUnit,17037496.723796,[Constructor] ASC created for enemy unit (deferred controller spawn enabled)
+Log,0,AIController,17037496.726388,"[LyraTBSAIController] Constructor: bWantsPlayerState=true, TeamId=NoTeam"
+Log,0,EnemyUnit,17037496.726550,[PossessedBy] ========== START: BP_EnemyUnitBase_C_3 ==========
+Log,0,EnemyUnit,17037496.727187,[Constructor] ASC created for enemy unit (deferred controller spawn enabled)
+Log,0,AIController,17037496.729807,"[LyraTBSAIController] Constructor: bWantsPlayerState=true, TeamId=NoTeam"
+Log,0,EnemyUnit,17037496.729978,[PossessedBy] ========== START: BP_EnemyUnitBase_C_4 ==========
+Warning,0,TurnInit,17037496.731220,[Turn 0] ==== TurnInitialization START ====
+Log,0,TurnInit,17037496.731238,[Turn 0] GridOccupancy initialized with 6 units
+Log,0,TurnInit,17037496.731247,[Turn 0] Skipped initial DistanceField update (will be updated in ExecuteEnemyPhase)
+Warning,0,TurnCore,17037504.859426,"[TurnCore] CoreObservationPhase received PlayerCell=(53, 56)"
+Log,0,TurnCore,17037504.859438,[TurnCore] ObservationPhase: Purged outdated reservations for turn 0
+Log,0,TurnCore,17037504.859451,[TurnCore] ObservationPhase: Updating DistanceField with Margin=18 (Enemies=5)
+Log,0,TurnCore,17037504.859564,[TurnCore] ObservationPhase: Complete
+Log,0,EnemyAI,17037504.859584,"[BuildObservations] DistanceField updated with PlayerGrid=(53,56)"
+Log,0,EnemyAI,17037504.859634,"[BuildObservations] ==== RESULT ==== Generated 5 observations (Valid=5, Invalid=0)"
+Warning,0,EnemyAI,17037504.859647,"[CollectIntents] ==== START ==== Observations=5, Enemies=5"
+Log,0,EnemyThinker,17037504.859672,"[ComputeIntent] BP_EnemyUnitBase_C_0: Calling GetNextStep from (52,58) to Player at (53,56)"
+Warning,0,EnemyThinker,17037504.859684,"[ComputeIntent] BP_EnemyUnitBase_C_0: DF PlayerPos=(53,56), CurrentCellDist=24"
+Warning,0,EnemyThinker,17037504.859697,"[ComputeIntent] BP_EnemyUnitBase_C_0: GetNextStep returned (53,57) (moved=1, NextDist=10)"
+Warning,0,EnemyThinker,17037504.859711,"[ComputeIntent] BP_EnemyUnitBase_C_0: Neighbors: (53,58)=28 (51,58)=28 (52,59)=-1 (52,57)=14 (53,59)=-1 (53,57)=10 (51,59)=-1 (51,57)=24 "
+Log,0,EnemyThinker,17037504.859723,[ComputeIntent] BP_EnemyUnitBase_C_0: MOVE intent (TileDistance=2 > Range=1)
+Log,0,EnemyAI,17037504.859733,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_0, Thinker found, Intent=AI.Intent.Move"
+Log,0,EnemyThinker,17037504.859745,"[ComputeIntent] BP_EnemyUnitBase_C_1: Calling GetNextStep from (50,51) to Player at (53,56)"
+Warning,0,EnemyThinker,17037504.859754,"[ComputeIntent] BP_EnemyUnitBase_C_1: DF PlayerPos=(53,56), CurrentCellDist=244"
+Warning,0,EnemyThinker,17037504.859765,"[ComputeIntent] BP_EnemyUnitBase_C_1: GetNextStep returned (51,52) (moved=1, NextDist=112)"
+Warning,0,EnemyThinker,17037504.859777,"[ComputeIntent] BP_EnemyUnitBase_C_1: Neighbors: (51,51)=136 (49,51)=248 (50,52)=262 (50,50)=234 (51,52)=112 (51,50)=140 (49,52)=258 (49,50)=230 "
+Log,0,EnemyThinker,17037504.859787,[ComputeIntent] BP_EnemyUnitBase_C_1: MOVE intent (TileDistance=5 > Range=1)
+Log,0,EnemyAI,17037504.859798,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_1, Thinker found, Intent=AI.Intent.Move"
+Log,0,EnemyThinker,17037504.859809,"[ComputeIntent] BP_EnemyUnitBase_C_2: Calling GetNextStep from (50,56) to Player at (53,56)"
+Warning,0,EnemyThinker,17037504.859820,"[ComputeIntent] BP_EnemyUnitBase_C_2: DF PlayerPos=(53,56), CurrentCellDist=52"
+Warning,0,EnemyThinker,17037504.859833,"[ComputeIntent] BP_EnemyUnitBase_C_2: GetNextStep returned (51,56) (moved=1, NextDist=28)"
+Warning,0,EnemyThinker,17037504.859849,"[ComputeIntent] BP_EnemyUnitBase_C_2: Neighbors: (51,56)=28 (49,56)=56 (50,57)=42 (50,55)=70 (51,57)=24 (51,55)=80 (49,57)=52 (49,55)=66 "
+Log,0,EnemyThinker,17037504.859862,[ComputeIntent] BP_EnemyUnitBase_C_2: MOVE intent (TileDistance=3 > Range=1)
+Log,0,EnemyAI,17037504.859874,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_2, Thinker found, Intent=AI.Intent.Move"
+Log,0,EnemyThinker,17037504.859886,"[ComputeIntent] BP_EnemyUnitBase_C_3: Calling GetNextStep from (50,57) to Player at (53,56)"
+Warning,0,EnemyThinker,17037504.859895,"[ComputeIntent] BP_EnemyUnitBase_C_3: DF PlayerPos=(53,56), CurrentCellDist=42"
+Warning,0,EnemyThinker,17037504.859906,"[ComputeIntent] BP_EnemyUnitBase_C_3: GetNextStep returned (51,57) (moved=1, NextDist=24)"
+Warning,0,EnemyThinker,17037504.859918,"[ComputeIntent] BP_EnemyUnitBase_C_3: Neighbors: (51,57)=24 (49,57)=52 (50,58)=38 (50,56)=52 (51,58)=28 (51,56)=28 (49,58)=56 (49,56)=56 "
+Log,0,EnemyThinker,17037504.859929,[ComputeIntent] BP_EnemyUnitBase_C_3: MOVE intent (TileDistance=3 > Range=1)
+Log,0,EnemyAI,17037504.859938,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_3, Thinker found, Intent=AI.Intent.Move"
+Log,0,EnemyThinker,17037504.859951,"[ComputeIntent] BP_EnemyUnitBase_C_4: Calling GetNextStep from (52,52) to Player at (53,56)"
+Warning,0,EnemyThinker,17037504.859962,"[ComputeIntent] BP_EnemyUnitBase_C_4: DF PlayerPos=(53,56), CurrentCellDist=108"
+Warning,0,EnemyThinker,17037504.859973,"[ComputeIntent] BP_EnemyUnitBase_C_4: GetNextStep returned (51,53) (moved=1, NextDist=94)"
+Warning,0,EnemyThinker,17037504.859988,"[ComputeIntent] BP_EnemyUnitBase_C_4: Neighbors: (53,52)=112 (51,52)=112 (52,53)=98 (52,51)=126 (53,53)=108 (53,51)=122 (51,53)=94 (51,51)=136 "
+Log,0,EnemyThinker,17037504.859999,[ComputeIntent] BP_EnemyUnitBase_C_4: MOVE intent (TileDistance=4 > Range=1)
+Log,0,EnemyAI,17037504.860010,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_4, Thinker found, Intent=AI.Intent.Move"

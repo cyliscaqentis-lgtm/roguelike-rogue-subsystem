@@ -457,7 +457,7 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
         if (!bWalkable)
         {
             // Always log terrain blocks for diagnostics
-            UE_LOG(LogDistanceField, Log,
+            UE_LOG(LogDistanceField, Warning,
                 TEXT("[GetNextStep]   Neighbor (%d,%d): BLOCKED BY TERRAIN"),
                 N.X, N.Y);
             continue;
@@ -475,7 +475,7 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
             if (!bSide1Walkable || !bSide2Walkable)
             {
                 // Always log diagonal blocks for diagnostics
-                UE_LOG(LogDistanceField, Log,
+                UE_LOG(LogDistanceField, Warning,
                     TEXT("[GetNextStep]   Neighbor (%d,%d): DIAGONAL BLOCKED (Side1=(%d,%d):%d, Side2=(%d,%d):%d)"),
                     N.X, N.Y, Side1.X, Side1.Y, bSide1Walkable ? 1 : 0, Side2.X, Side2.Y, bSide2Walkable ? 1 : 0);
                 continue;
@@ -487,7 +487,7 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
         if (nd < 0 || nd >= d0)
         {
             // Always log non-improving moves for diagnostics
-            UE_LOG(LogDistanceField, Log,
+            UE_LOG(LogDistanceField, Warning,
                 TEXT("[GetNextStep]   Neighbor (%d,%d): NO IMPROVEMENT (Dist=%d, Current=%d)"),
                 N.X, N.Y, nd, d0);
             continue;
@@ -537,7 +537,7 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
         }
 
         // Always log candidate evaluation for diagnostics
-        UE_LOG(LogDistanceField, Log,
+        UE_LOG(LogDistanceField, Warning,
             TEXT("[GetNextStep]   Neighbor (%d,%d): %s (Dist=%d->%d, Align=%d, Diag=%d) %s"),
             N.X, N.Y,
             bIsBetter ? TEXT("CANDIDATE ACCEPTED") : TEXT("candidate rejected"),
@@ -556,14 +556,14 @@ FIntPoint UDistanceFieldSubsystem::GetNextStepTowardsPlayer(
     if (Best == FromCell)
     {
         // Always log when staying in place for diagnostics
-        UE_LOG(LogDistanceField, Log,
+        UE_LOG(LogDistanceField, Warning,
             TEXT("[GetNextStep] RESULT: STAY at (%d,%d) - no better neighbor found (checked %d candidates)"),
             FromCell.X, FromCell.Y, CandidateCount);
         return FromCell;
     }
 
     // Always log the final decision for diagnostics
-    UE_LOG(LogDistanceField, Log,
+    UE_LOG(LogDistanceField, Warning,
         TEXT("[GetNextStep] RESULT: From=(%d,%d) -> Next=(%d,%d) (Dist=%d->%d, Candidates=%d)"),
         FromCell.X, FromCell.Y, Best.X, Best.Y, d0, BestDist, CandidateCount);
 
@@ -596,10 +596,10 @@ bool UDistanceFieldSubsystem::CanMoveDiagonal(const FIntPoint& From, const FIntP
     const FIntPoint Side1 = From + FIntPoint(Delta.X, 0); // horizontal shoulder
     const FIntPoint Side2 = From + FIntPoint(0, Delta.Y); // vertical shoulder
 
-    // FIX (2025-11-11): Correct corner-cutting rule.
-    // Only allow diagonal movement if BOTH orthogonal shoulders are walkable.
-    // If either side is blocked, the diagonal is not allowed (prevents corner clipping).
-    return IsWalkable(Side1) && IsWalkable(Side2);
+    // CodeRevision: INC-2025-1123-FIX-R2 (Relax corner cutting rule) (2025-11-23 03:45)
+    // Allow diagonal movement if AT LEAST ONE orthogonal shoulder is walkable.
+    // This prevents enemies from taking huge detours just because of a single corner obstacle.
+    return IsWalkable(Side1) || IsWalkable(Side2);
 }
 
 //-----------------------------------------------------------------------------

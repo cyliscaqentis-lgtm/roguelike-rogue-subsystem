@@ -54,6 +54,9 @@ public:
     int32 GetDistanceAbs(const FIntPoint& Abs) const;
     bool EnsureCoverage(const FIntPoint& Abs);
 
+    // CodeRevision: INC-2025-1123-LOG-R5 (Debug getter for PlayerPosition) (2025-11-23 02:30)
+    FORCEINLINE FIntPoint GetPlayerPosition() const { return PlayerPosition; }
+
 private:
     bool IsWalkable(const FIntPoint& Cell, AActor* IgnoreActor = nullptr) const;  // ★★★ 修正 (2025-11-11): AI待機問題修正のためIgnoreActor追加
     bool CanMoveDiagonal(const FIntPoint& From, const FIntPoint& To) const;

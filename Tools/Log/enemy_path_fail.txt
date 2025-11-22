@@ -1,0 +1,231 @@
+Warning,2,TurnInit,17038673.977711,[Turn 2] ==== TurnInitialization START ====
+Log,2,TurnInit,17038673.977731,[Turn 2] GridOccupancy initialized with 6 units
+Log,2,TurnInit,17038673.977742,[Turn 2] Skipped initial DistanceField update (will be updated in ExecuteEnemyPhase)
+Warning,2,TurnCore,17038680.671299,"[TurnCore] CoreObservationPhase received PlayerCell=(59, 29)"
+Log,2,TurnCore,17038680.671310,[TurnCore] ObservationPhase: Purged outdated reservations for turn 2
+Log,2,TurnCore,17038680.671321,[TurnCore] ObservationPhase: Updating DistanceField with Margin=15 (Enemies=5)
+Log,2,TurnCore,17038680.671331,[TurnCore] ObservationPhase: Complete
+Log,2,EnemyAI,17038680.671341,"[BuildObservations] DistanceField updated with PlayerGrid=(59,29)"
+Log,2,EnemyAI,17038680.671381,"[BuildObservations] ==== RESULT ==== Generated 5 observations (Valid=5, Invalid=0)"
+Warning,2,EnemyAI,17038680.671392,"[CollectIntents] ==== START ==== Observations=5, Enemies=5"
+Log,2,EnemyThinker,17038680.671417,"[ComputeIntent] BP_EnemyUnitBase_C_0: Calling GetNextStep from (58,26) to Player at (59,29)"
+Warning,2,EnemyThinker,17038680.671429,"[ComputeIntent] BP_EnemyUnitBase_C_0: DF PlayerPos=(59,29), CurrentCellDist=104"
+Warning,2,EnemyThinker,17038680.671439,"[ComputeIntent] BP_EnemyUnitBase_C_0: GetNextStep returned (59,27) (moved=1, NextDist=28)"
+Warning,2,EnemyThinker,17038680.671455,"[ComputeIntent] BP_EnemyUnitBase_C_0: Neighbors: (59,26)=52 (57,26)=108 (58,27)=122 (58,25)=94 (59,27)=28 (59,25)=56 (57,27)=118 (57,25)=104 "
+Log,2,EnemyThinker,17038680.671466,[ComputeIntent] BP_EnemyUnitBase_C_0: MOVE intent (TileDistance=3 > Range=1)
+Log,2,EnemyAI,17038680.671479,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_0, Thinker found, Intent=AI.Intent.Move"
+Log,2,EnemyThinker,17038680.671490,"[ComputeIntent] BP_EnemyUnitBase_C_1: Calling GetNextStep from (59,27) to Player at (59,29)"
+Warning,2,EnemyThinker,17038680.671501,"[ComputeIntent] BP_EnemyUnitBase_C_1: DF PlayerPos=(59,29), CurrentCellDist=28"
+Warning,2,EnemyThinker,17038680.671513,"[ComputeIntent] BP_EnemyUnitBase_C_1: GetNextStep returned (59,28) (moved=1, NextDist=10)"
+Warning,2,EnemyThinker,17038680.671525,"[ComputeIntent] BP_EnemyUnitBase_C_1: Neighbors: (60,27)=24 (58,27)=122 (59,28)=10 (59,26)=52 (60,28)=14 (60,26)=42 (58,28)=14 (58,26)=104 "
+Log,2,EnemyThinker,17038680.671536,[ComputeIntent] BP_EnemyUnitBase_C_1: MOVE intent (TileDistance=2 > Range=1)
+Log,2,EnemyAI,17038680.671546,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_1, Thinker found, Intent=AI.Intent.Move"
+Log,2,EnemyThinker,17038680.671557,"[ComputeIntent] BP_EnemyUnitBase_C_2: Calling GetNextStep from (60,26) to Player at (59,29)"
+Warning,2,EnemyThinker,17038680.671568,"[ComputeIntent] BP_EnemyUnitBase_C_2: DF PlayerPos=(59,29), CurrentCellDist=42"
+Warning,2,EnemyThinker,17038680.671577,"[ComputeIntent] BP_EnemyUnitBase_C_2: GetNextStep returned (60,27) (moved=1, NextDist=24)"
+Warning,2,EnemyThinker,17038680.671589,"[ComputeIntent] BP_EnemyUnitBase_C_2: Neighbors: (61,26)=38 (59,26)=52 (60,27)=24 (60,25)=52 (61,27)=28 (61,25)=56 (59,27)=28 (59,25)=56 "
+Log,2,EnemyThinker,17038680.671598,[ComputeIntent] BP_EnemyUnitBase_C_2: MOVE intent (TileDistance=3 > Range=1)
+Log,2,EnemyAI,17038680.671608,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_2, Thinker found, Intent=AI.Intent.Move"
+Log,2,EnemyThinker,17038680.671618,"[ComputeIntent] BP_EnemyUnitBase_C_3: Calling GetNextStep from (61,27) to Player at (59,29)"
+Warning,2,EnemyThinker,17038680.671628,"[ComputeIntent] BP_EnemyUnitBase_C_3: DF PlayerPos=(59,29), CurrentCellDist=28"
+Warning,2,EnemyThinker,17038680.671639,"[ComputeIntent] BP_EnemyUnitBase_C_3: GetNextStep returned (60,28) (moved=1, NextDist=14)"
+Warning,2,EnemyThinker,17038680.671653,"[ComputeIntent] BP_EnemyUnitBase_C_3: Neighbors: (62,27)=-1 (60,27)=24 (61,28)=24 (61,26)=38 (62,28)=-1 (62,26)=-1 (60,28)=14 (60,26)=42 "
+Log,2,EnemyThinker,17038680.671663,[ComputeIntent] BP_EnemyUnitBase_C_3: MOVE intent (TileDistance=2 > Range=1)
+Log,2,EnemyAI,17038680.671672,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_3, Thinker found, Intent=AI.Intent.Move"
+Warning,2,EnemyAI,17038680.671730,[CollectIntents] === PASS 2: Move/Wait Intent Generation ===
+Warning,2,EnemyAI,17038680.671740,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_0: PrimaryCell=(59,27) CurrentCell=(58,26) PlayerCell=(59,29)"
+Warning,2,EnemyAI,17038680.671751,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_0: Walkable=1, CloserOrEqual=1 (Cost 104->28), Blocked=0"
+Warning,2,EnemyAI,17038680.671761,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_0: Using PRIMARY cell (59,27) -> Cost 104 -> 28"
+Warning,2,EnemyAI,17038680.671772,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_2: PrimaryCell=(60,27) CurrentCell=(60,26) PlayerCell=(59,29)"
+Warning,2,EnemyAI,17038680.671783,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_2: Walkable=1, CloserOrEqual=1 (Cost 42->24), Blocked=0"
+Warning,2,EnemyAI,17038680.671796,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_2: Using PRIMARY cell (60,27) -> Cost 42 -> 24"
+Warning,2,EnemyAI,17038680.671807,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_1: PrimaryCell=(59,28) CurrentCell=(59,27) PlayerCell=(59,29)"
+Warning,2,EnemyAI,17038680.671819,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_1: Walkable=1, CloserOrEqual=1 (Cost 28->10), Blocked=1"
+Warning,2,EnemyAI,17038680.671841,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_1: Using ALTERNATE cell (60,28) -> Dist 2 -> 1 (Candidates=3)"
+Warning,2,EnemyAI,17038680.671853,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_3: PrimaryCell=(60,28) CurrentCell=(61,27) PlayerCell=(59,29)"
+Warning,2,EnemyAI,17038680.671865,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_3: Walkable=1, CloserOrEqual=1 (Cost 28->14), Blocked=1"
+Log,2,GridOccupancy,17038680.671965,"[GridOccupancy] RESERVE DEST: BP_EnemyUnitBase_C_1 -> (60, 28) (TurnId=2)"
+Log,2,TurnCore,17038680.671977,"[TurnCore] Skip RegisterResolvedMove for BP_EnemyUnitBase_C_3 (bIsWait=0, FinalTag=AI.Intent.Wait, Reason=Success: Action (no conflict))"
+Error,2,AttackAbility,17038680.672133,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_4
+Error,2,AttackAbility,17038680.672156,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,2,AttackAbility,17038680.672169,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Error,2,AttackAbility,17038680.672179,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,2,AttackAbility,17038680.672190,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,2,AttackAbility,17038680.672200,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,2,AttackAbility,17038680.672210,[GA_MeleeAttack] ActivateAbility COMPLETED
+Log,2,GridOccupancy,17038680.827219,"[GridOccupancy] COMMIT: BP_PlayerUnit_C_0 -> (59,29)"
+Log,2,MoveAbility,17038680.827247,"[MoveComplete] Unit BP_PlayerUnit_C_0 reached destination, GA_MoveBase ending."
+Log,2,MoveAbility,17038680.827271,"[GA_MoveBase] Barrier completed in EndAbility for BP_PlayerUnit_C_0 (Turn=2, ActionId=74BB2F7844B30DCAC5F99B93E3787D28)"
+Log,2,TurnManager,17038680.827461,[Turn 2] Player action complete - enemy phase already in progress (skipping redundant AI calc)
+Log,2,UnitMovement,17038680.827472,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Error,2,AttackAbility,17038681.638858,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_4
+Error,2,AttackAbility,17038681.638882,[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Attacking stored target: BP_PlayerUnit_C_0
+Warning,2,Temp,17038681.639019,[DMG] Src=BP_EnemyUnitBase_C_4  Tgt=BP_PlayerUnit_C_0
+Error,2,AttackAbility,17038681.639961,"[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Montage completed, calling OnAttackCompleted()"
+Warning,2,TurnAction,17038681.639975,[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility
+Log,2,UnitMovement,17038681.640153,[UnitMovementComponent] Movement started with 1 waypoints
+Log,2,MoveReservation,17038681.640164,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_1, TurnId=2, ActionId=CAAD3DB546F4530EF76D4986262CE6EC"
+Error,2,AttackAbility,17038681.640190,[GA_MeleeAttack] BP_EnemyUnitBase_C_4: OnAttackCompleted RETURNED
+Log,2,GridOccupancy,17038681.796804,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_2 -> (60,27)"
+Log,2,MoveReservation,17038681.796825,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_2 TurnId=2
+Log,2,UnitMovement,17038681.796838,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,2,GridOccupancy,17038681.861520,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_1 -> (60,28)"
+Warning,3,TurnInit,17038681.862158,[Turn 3] ==== TurnInitialization START ====
+Log,3,TurnInit,17038681.862178,[Turn 3] GridOccupancy initialized with 6 units
+Log,3,TurnInit,17038681.862187,[Turn 3] Skipped initial DistanceField update (will be updated in ExecuteEnemyPhase)
+Warning,3,TurnInit,17038681.862217,[Turn 3] ==== OnTurnStarted (Subsystem) END ====
+Log,3,Temp,17038683.029863,"[PlayerController] TurnFacing direction cached: (0.00, 1.00)"
+Warning,3,TurnManager,17038683.030015,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.030325,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.030425,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.030543,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.030551,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.030629,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.040718,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.040743,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.040867,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.050417,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.050428,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.050509,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.061001,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.061013,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.061103,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.071631,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.071645,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.071739,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.081327,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.081336,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.081445,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.091578,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.091596,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.091689,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.101771,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.101782,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.101858,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.111533,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.111546,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.111629,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.121642,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.121660,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.121753,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.131402,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.131414,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.131501,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.141262,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.141273,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.141355,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.151416,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.151425,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.151510,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.161306,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.161319,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.161419,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.171504,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.171516,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.171596,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.181472,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.181487,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.181584,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.190765,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.190775,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.190845,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.201609,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.201620,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.201732,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.211910,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.211920,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.211991,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.222598,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.222610,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.222691,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.232857,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.232870,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.232970,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.242596,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.242609,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.242688,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.252146,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Log,3,Temp,17038683.252155,"[Client] ☁EFACING ONLY (No Turn): Direction=(0.0,-1.0), Yaw=-90.0"
+Warning,3,TurnManager,17038683.252224,[GameTurnManager] Command processing failed by CommandHandler
+Warning,3,TurnManager,17038683.262075,"[MovePrecheck] BLOCKED: Cell occupied by BP_EnemyUnitBase_C_4 | Cell (59,28) | From=(59,29) | Applying FACING ONLY (No Turn)"
+Warning,3,TurnCore,17038683.272284,"[TurnCore] CoreObservationPhase received PlayerCell=(58, 28)"
+Log,3,TurnCore,17038683.272293,[TurnCore] ObservationPhase: Purged outdated reservations for turn 3
+Log,3,TurnCore,17038683.272306,[TurnCore] ObservationPhase: Updating DistanceField with Margin=15 (Enemies=5)
+Log,3,TurnCore,17038683.272320,[TurnCore] ObservationPhase: Complete
+Log,3,EnemyAI,17038683.272331,"[BuildObservations] DistanceField updated with PlayerGrid=(58,28)"
+Log,3,EnemyAI,17038683.272377,"[BuildObservations] ==== RESULT ==== Generated 5 observations (Valid=5, Invalid=0)"
+Warning,3,EnemyAI,17038683.272388,"[CollectIntents] ==== START ==== Observations=5, Enemies=5"
+Log,3,EnemyThinker,17038683.272448,"[ComputeIntent] BP_EnemyUnitBase_C_1: Calling GetNextStep from (60,28) to Player at (58,28)"
+Warning,3,EnemyThinker,17038683.272458,"[ComputeIntent] BP_EnemyUnitBase_C_1: DF PlayerPos=(58,28), CurrentCellDist=28"
+Warning,3,EnemyThinker,17038683.272471,"[ComputeIntent] BP_EnemyUnitBase_C_1: GetNextStep returned (59,28) (moved=1, NextDist=10)"
+Warning,3,EnemyThinker,17038683.272484,"[ComputeIntent] BP_EnemyUnitBase_C_1: Neighbors: (61,28)=38 (59,28)=10 (60,29)=24 (60,27)=38 (61,29)=42 (61,27)=42 (59,29)=14 (59,27)=14 "
+Log,3,EnemyThinker,17038683.272495,[ComputeIntent] BP_EnemyUnitBase_C_1: MOVE intent (TileDistance=2 > Range=1)
+Log,3,EnemyAI,17038683.272507,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_1, Thinker found, Intent=AI.Intent.Move"
+Log,3,EnemyThinker,17038683.272518,"[ComputeIntent] BP_EnemyUnitBase_C_2: Calling GetNextStep from (60,27) to Player at (58,28)"
+Warning,3,EnemyThinker,17038683.272530,"[ComputeIntent] BP_EnemyUnitBase_C_2: DF PlayerPos=(58,28), CurrentCellDist=38"
+Warning,3,EnemyThinker,17038683.272541,"[ComputeIntent] BP_EnemyUnitBase_C_2: GetNextStep returned (59,28) (moved=1, NextDist=10)"
+Warning,3,EnemyThinker,17038683.272553,"[ComputeIntent] BP_EnemyUnitBase_C_2: Neighbors: (61,27)=42 (59,27)=14 (60,28)=28 (60,26)=56 (61,28)=38 (61,26)=52 (59,28)=10 (59,26)=66 "
+Log,3,EnemyThinker,17038683.272564,[ComputeIntent] BP_EnemyUnitBase_C_2: MOVE intent (TileDistance=2 > Range=1)
+Log,3,EnemyAI,17038683.272573,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_2, Thinker found, Intent=AI.Intent.Move"
+Log,3,EnemyThinker,17038683.272586,"[ComputeIntent] BP_EnemyUnitBase_C_3: Calling GetNextStep from (61,27) to Player at (58,28)"
+Warning,3,EnemyThinker,17038683.272597,"[ComputeIntent] BP_EnemyUnitBase_C_3: DF PlayerPos=(58,28), CurrentCellDist=42"
+Warning,3,EnemyThinker,17038683.272607,"[ComputeIntent] BP_EnemyUnitBase_C_3: GetNextStep returned (60,28) (moved=1, NextDist=28)"
+Warning,3,EnemyThinker,17038683.272620,"[ComputeIntent] BP_EnemyUnitBase_C_3: Neighbors: (62,27)=-1 (60,27)=38 (61,28)=38 (61,26)=52 (62,28)=-1 (62,26)=-1 (60,28)=28 (60,26)=56 "
+Log,3,EnemyThinker,17038683.272631,[ComputeIntent] BP_EnemyUnitBase_C_3: MOVE intent (TileDistance=3 > Range=1)
+Log,3,EnemyAI,17038683.272642,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_3, Thinker found, Intent=AI.Intent.Move"
+Warning,3,EnemyAI,17038683.272701,[CollectIntents] === PASS 2: Move/Wait Intent Generation ===
+Warning,3,EnemyAI,17038683.272712,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_3: PrimaryCell=(60,28) CurrentCell=(61,27) PlayerCell=(58,28)"
+Warning,3,EnemyAI,17038683.272725,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_3: Walkable=1, CloserOrEqual=1 (Cost 42->28), Blocked=0"
+Warning,3,EnemyAI,17038683.272737,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_3: Using PRIMARY cell (60,28) -> Cost 42 -> 28"
+Warning,3,EnemyAI,17038683.272749,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_1: PrimaryCell=(59,28) CurrentCell=(60,28) PlayerCell=(58,28)"
+Warning,3,EnemyAI,17038683.272758,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_1: Walkable=1, CloserOrEqual=1 (Cost 28->10), Blocked=1"
+Warning,3,EnemyAI,17038683.272784,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_1: Using ALTERNATE cell (59,29) -> Dist 2 -> 1 (Candidates=3)"
+Warning,3,EnemyAI,17038683.272796,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_2: PrimaryCell=(59,28) CurrentCell=(60,27) PlayerCell=(58,28)"
+Warning,3,EnemyAI,17038683.272808,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_2: Walkable=1, CloserOrEqual=1 (Cost 38->10), Blocked=1"
+Log,3,GridOccupancy,17038683.272909,"[GridOccupancy] RESERVE DEST: BP_EnemyUnitBase_C_1 -> (60, 29) (TurnId=3)"
+Log,3,TurnCore,17038683.272921,"[TurnCore] Skip RegisterResolvedMove for BP_EnemyUnitBase_C_2 (bIsWait=0, FinalTag=AI.Intent.Wait, Reason=Success: Action (no conflict))"
+Error,3,AttackAbility,17038683.273116,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_0
+Error,3,AttackAbility,17038683.273168,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,3,AttackAbility,17038683.273180,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Error,3,AttackAbility,17038683.273217,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,3,AttackAbility,17038683.273228,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,3,AttackAbility,17038683.273241,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,3,AttackAbility,17038683.273251,[GA_MeleeAttack] ActivateAbility COMPLETED
+Log,3,GridOccupancy,17038683.495041,"[GridOccupancy] COMMIT: BP_PlayerUnit_C_0 -> (58,28)"
+Log,3,MoveAbility,17038683.495060,"[MoveComplete] Unit BP_PlayerUnit_C_0 reached destination, GA_MoveBase ending."
+Log,3,MoveAbility,17038683.495073,"[GA_MoveBase] Barrier completed in EndAbility for BP_PlayerUnit_C_0 (Turn=3, ActionId=EA0EBE4B4F975CCC24E46A9636D63AB3)"
+Log,3,TurnManager,17038683.495212,[Turn 3] Player action complete - enemy phase already in progress (skipping redundant AI calc)
+Log,3,UnitMovement,17038683.495222,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Error,3,AttackAbility,17038684.235266,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_0
+Error,3,AttackAbility,17038684.235312,[GA_MeleeAttack] BP_EnemyUnitBase_C_0: Attacking stored target: BP_PlayerUnit_C_0
+Warning,3,Temp,17038684.235461,[DMG] Src=BP_EnemyUnitBase_C_0  Tgt=BP_PlayerUnit_C_0
+Error,3,AttackAbility,17038684.236605,"[GA_MeleeAttack] BP_EnemyUnitBase_C_0: Montage completed, calling OnAttackCompleted()"
+Warning,3,TurnAction,17038684.236621,[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility
+Warning,3,TurnAction,17038684.236635,"[GA_TurnActionBase] Defensive check: ASC found, checking tags"
+Warning,3,TurnAction,17038684.236646,"[GA_TurnActionBase] Defensive check: State_Ability_Executing=0, State_Action_InProgress=0"
+Error,3,AttackAbility,17038684.236792,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_4
+Error,3,AttackAbility,17038684.236822,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,3,AttackAbility,17038684.236837,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Error,3,AttackAbility,17038684.237302,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,3,AttackAbility,17038684.237318,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,3,AttackAbility,17038684.237331,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,3,AttackAbility,17038684.237342,[GA_MeleeAttack] ActivateAbility COMPLETED
+Error,3,AttackAbility,17038684.237383,[GA_MeleeAttack] BP_EnemyUnitBase_C_0: OnAttackCompleted RETURNED
+Error,3,AttackAbility,17038685.193628,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_4
+Error,3,AttackAbility,17038685.193650,[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Attacking stored target: BP_PlayerUnit_C_0
+Warning,3,Temp,17038685.193778,[DMG] Src=BP_EnemyUnitBase_C_4  Tgt=BP_PlayerUnit_C_0
+Error,3,AttackAbility,17038685.194941,"[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Montage completed, calling OnAttackCompleted()"
+Warning,3,TurnAction,17038685.194957,[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility
+Warning,3,TurnAction,17038685.194970,"[GA_TurnActionBase] Defensive check: ASC found, checking tags"
+Warning,3,TurnAction,17038685.194982,"[GA_TurnActionBase] Defensive check: State_Ability_Executing=0, State_Action_InProgress=0"
+Log,3,TurnManager,17038685.195042,"[Turn 3] Dispatching 2 cached enemy actions sequentially (Moves=2, Waits=1, NonMove=2)"
+Log,3,UnitMovement,17038685.195096,[UnitMovementComponent] Movement started with 1 waypoints
+Log,3,MoveReservation,17038685.195108,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_1, TurnId=3, ActionId=4B049F0747A5BD70840FFB987FDA9D04"
+Error,3,AttackAbility,17038685.195142,[GA_MeleeAttack] BP_EnemyUnitBase_C_4: OnAttackCompleted RETURNED
+Log,3,GridOccupancy,17038685.352871,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_1 -> (60,29)"
+Log,3,MoveReservation,17038685.352889,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_1 TurnId=3
+Log,3,UnitMovement,17038685.352901,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,3,GridOccupancy,17038685.416586,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_3 -> (60,28)"
+Warning,4,TurnInit,17038685.417066,[Turn 4] ==== TurnInitialization START ====
+Log,4,TurnInit,17038685.417088,[Turn 4] GridOccupancy initialized with 6 units
+Log,4,TurnInit,17038685.417099,[Turn 4] Skipped initial DistanceField update (will be updated in ExecuteEnemyPhase)

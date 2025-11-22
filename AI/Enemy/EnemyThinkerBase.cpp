@@ -94,11 +94,20 @@ FEnemyIntent UEnemyThinkerBase::DecideIntent_Implementation()
         UE_LOG(LogEnemyThinker, Error, TEXT("[PathFinder] GridPathfindingLibrary not found in cache"));
     }
 
-    UE_LOG(LogEnemyThinker, Warning, TEXT("[Grid] Enemy at (%d, %d): checking surroundings"), 
+    UE_LOG(LogEnemyThinker, Warning, TEXT("[Grid] Enemy at (%d, %d): checking surroundings"),
         Intent.CurrentCell.X, Intent.CurrentCell.Y);
+
+    // CodeRevision: INC-2025-1123-LOG-R5 (Debug: Log player position before GetNextStep call) (2025-11-23 02:30)
+    const FIntPoint PlayerPos = DistanceField->GetPlayerPosition();
+    UE_LOG(LogEnemyThinker, Warning, TEXT("[GetNextStep] BEFORE CALL: Enemy=(%d,%d) Player=(%d,%d)"),
+        Intent.CurrentCell.X, Intent.CurrentCell.Y, PlayerPos.X, PlayerPos.Y);
 
     const FIntPoint BeforeNextCell = Intent.NextCell;
     Intent.NextCell = DistanceField->GetNextStepTowardsPlayer(Intent.CurrentCell, GetOwner());
+
+    // Log the result immediately after GetNextStep returns
+    UE_LOG(LogEnemyThinker, Warning, TEXT("[GetNextStep] AFTER CALL: Enemy=(%d,%d) -> Next=(%d,%d)"),
+        Intent.CurrentCell.X, Intent.CurrentCell.Y, Intent.NextCell.X, Intent.NextCell.Y);
     int32 Distance = DistanceField->GetDistance(Intent.CurrentCell);
 
     const int32 TileDistanceToPlayer = (Distance >= 0) ? (Distance / 10) : -1;
@@ -420,14 +429,35 @@ FEnemyIntent UEnemyThinkerBase::ComputeIntent_Implementation(const FEnemyObserva
                 *GetNameSafe(GetOwner()), Intent.CurrentCell.X, Intent.CurrentCell.Y,
                 PlayerGridCell.X, PlayerGridCell.Y);
 
+            // CodeRevision: INC-2025-1123-LOG-R6 (Add DistanceField debug info) (2025-11-23 02:45)
+            // Log DistanceField's stored PlayerPosition and current cell distance
+            const FIntPoint DFPlayerPos = DistanceField->GetPlayerPosition();
+            const int32 CurrentDist = DistanceField->GetDistance(Intent.CurrentCell);
+            UE_LOG(LogEnemyThinker, Warning,
+                TEXT("[ComputeIntent] %s: DF PlayerPos=(%d,%d), CurrentCellDist=%d"),
+                *GetNameSafe(GetOwner()), DFPlayerPos.X, DFPlayerPos.Y, CurrentDist);
+
             // CodeRevision: INC-2025-1124-R1 (Delegate move validation to CoreResolvePhase) (2025-11-24 09:30)
             Intent.NextCell = DistanceField->GetNextStepTowardsPlayer(Intent.CurrentCell, GetOwner());
 
-            // Log the result of GetNextStep
+            // Log the result of GetNextStep with neighbor distances
             const bool bMoved = (Intent.NextCell != Intent.CurrentCell);
-            UE_LOG(LogEnemyThinker, Log,
-                TEXT("[ComputeIntent] %s: GetNextStep returned (%d,%d) (moved=%d)"),
-                *GetNameSafe(GetOwner()), Intent.NextCell.X, Intent.NextCell.Y, bMoved ? 1 : 0);
+            const int32 NextDist = DistanceField->GetDistance(Intent.NextCell);
+            UE_LOG(LogEnemyThinker, Warning,
+                TEXT("[ComputeIntent] %s: GetNextStep returned (%d,%d) (moved=%d, NextDist=%d)"),
+                *GetNameSafe(GetOwner()), Intent.NextCell.X, Intent.NextCell.Y, bMoved ? 1 : 0, NextDist);
+
+            // Log all 8 neighbor distances for debugging
+            static const FIntPoint Offsets[] = {{1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1}};
+            FString NeighborInfo;
+            for (const FIntPoint& Off : Offsets)
+            {
+                const FIntPoint N = Intent.CurrentCell + Off;
+                const int32 NDist = DistanceField->GetDistance(N);
+                NeighborInfo += FString::Printf(TEXT("(%d,%d)=%d "), N.X, N.Y, NDist);
+            }
+            UE_LOG(LogEnemyThinker, Warning, TEXT("[ComputeIntent] %s: Neighbors: %s"),
+                *GetNameSafe(GetOwner()), *NeighborInfo);
         }
         else
         {

@@ -218,12 +218,31 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
             {
                 if (!ActorsWithReservationsThisTurn.Contains(Occupant))
                 {
-                    // This actor is not moving this turn and blocks the cell.
-                    StationaryBlockers.Add(Cell, Occupant);
+                    // CodeRevision: INC-2025-1123-FIX-R5 (Handle external movers like Player) (2025-11-23 05:30)
+                    // Check if this occupant has an external reservation (e.g. Player moving via GAS).
+                    // If so, they block their DESTINATION, NOT their current cell.
+                    bool bIsMovingExternal = false;
+                    const FIntPoint ReservedDest = GridOccupancy->GetReservedCellForActor(Occupant);
+                    
+                    if (ReservedDest != FIntPoint(-1, -1) && ReservedDest != Cell)
+                    {
+                        StationaryBlockers.Add(ReservedDest, Occupant);
+                        bIsMovingExternal = true;
 
-                    UE_LOG(LogConflictResolver, Verbose,
-                        TEXT("[StaticBlockers] Stationary blocker %s at cell (%d,%d)"),
-                        *GetNameSafe(Occupant), Cell.X, Cell.Y);
+                        UE_LOG(LogConflictResolver, Verbose,
+                            TEXT("[StaticBlockers] External mover %s blocks DEST (%d,%d) instead of current (%d,%d)"),
+                            *GetNameSafe(Occupant), ReservedDest.X, ReservedDest.Y, Cell.X, Cell.Y);
+                    }
+
+                    if (!bIsMovingExternal)
+                    {
+                        // This actor is not moving this turn and blocks the cell.
+                        StationaryBlockers.Add(Cell, Occupant);
+
+                        UE_LOG(LogConflictResolver, Verbose,
+                            TEXT("[StaticBlockers] Stationary blocker %s at cell (%d,%d)"),
+                            *GetNameSafe(Occupant), Cell.X, Cell.Y);
+                    }
                 }
             }
         }
@@ -287,101 +306,11 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                     continue;
                 }
 
-                // Attempt to reroute before accepting defeat
-                bool bRerouted = false;
-                if (UWorld* World = GetWorld())
-                {
-                    if (UDistanceFieldSubsystem* DF = World->GetSubsystem<UDistanceFieldSubsystem>())
-                    {
-                        const FIntPoint CurrentCell = Blocked.CurrentCell;
-                        const int32 CurrentDist = DF->GetDistance(CurrentCell);
-
-                        if (CurrentDist >= 0)
-                        {
-                            const FIntPoint NeighborOffsets[4] = {
-                                FIntPoint(1, 0), FIntPoint(-1, 0),
-                                FIntPoint(0, 1), FIntPoint(0, -1)
-                            };
-
-                            FIntPoint BestCell = CurrentCell;
-                            int32 BestDist = CurrentDist;
-
-                            for (const FIntPoint& Offset : NeighborOffsets)
-                            {
-                                const FIntPoint Candidate = CurrentCell + Offset;
-
-                                // 1. Must not be the blocked cell
-                                if (Candidate == Cell) continue;
-
-                                // 2. Must not be a stationary blocker
-                                if (StationaryBlockers.Contains(Candidate)) continue;
-
-                                // 3. Must not be reserved by ANYONE (to avoid new conflicts)
-                                if (ReservationTable.Contains({0, Candidate})) continue;
-
-                                // 4. Must not be occupied by another unit (unless it's us)
-                                // Note: If occupied but NOT in StationaryBlockers AND NOT in ReservationTable,
-                                // it implies the unit is moving away and we can follow.
-                                if (GridOccupancy && GridOccupancy->IsCellOccupied(Candidate))
-                                {
-                                    AActor* Occupant = GridOccupancy->GetActorAtCell(Candidate);
-                                    if (Occupant && Occupant != Blocked.Actor)
-                                    {
-                                        // If occupant is stationary, we already skipped in step 2.
-                                        // If occupant has a reservation (moving), we skipped in step 3 IF they reserved THIS cell.
-                                        // If they reserved ANOTHER cell, ReservationTable won't contain {0, Candidate} for THEM.
-                                        // BUT, ReservationTable keys are Cells.
-                                        // So ReservationTable.Contains({0, Candidate}) checks if ANYONE is moving TO Candidate.
-                                        
-                                        // We also need to ensure the CURRENT occupant is actually moving away.
-                                        // If they are not in StationaryBlockers, they have a reservation.
-                                        // If that reservation is for Candidate (Wait), then ReservationTable has it.
-                                        // If that reservation is for Elsewhere, ReservationTable does NOT have Candidate.
-                                        // So we are safe!
-                                    }
-                                }
-
-                                // 4. Check distance field (must be better or equal, but strictly valid)
-                                const int32 Dist = DF->GetDistance(Candidate);
-                                if (Dist >= 0 && Dist <= BestDist) // Allow equal distance for side-stepping
-                                {
-                                    // Prefer strictly better
-                                    if (Dist < BestDist)
-                                    {
-                                        BestDist = Dist;
-                                        BestCell = Candidate;
-                                    }
-                                    // If equal, only pick if we haven't found a better one yet
-                                    else if (BestCell == CurrentCell)
-                                    {
-                                        BestCell = Candidate;
-                                    }
-                                }
-                            }
-
-                            if (BestCell != CurrentCell)
-                            {
-                                FResolvedAction ReroutedAction = CreateWaitAction(Blocked); // Start with base props
-                                ReroutedAction.bIsWait = false;
-                                ReroutedAction.NextCell = BestCell;
-                                ReroutedAction.AbilityTag = RogueGameplayTags::AI_Intent_Move;
-                                ReroutedAction.FinalAbilityTag = RogueGameplayTags::AI_Intent_Move;
-                                ReroutedAction.ResolutionReason = FString::Printf(
-                                    TEXT("Rerouted: Primary (%d,%d) blocked by %s -> Taking (%d,%d)"),
-                                    Cell.X, Cell.Y, *GetNameSafe(StationaryBlocker), BestCell.X, BestCell.Y);
-
-                                OptimisticActions.Add(ReroutedAction);
-                                bRerouted = true;
-
-                                UE_LOG(LogConflictResolver, Log,
-                                    TEXT("[ResolveAllConflicts] Rerouted %s from blocked (%d,%d) to (%d,%d)"),
-                                    *GetNameSafe(Blocked.Actor), Cell.X, Cell.Y, BestCell.X, BestCell.Y);
-                            }
-                        }
-                    }
-                }
-
-                if (!bRerouted)
+                // CodeRevision: INC-2025-1123-FIX-R3 (Remove automatic rerouting) (2025-11-23 04:00)
+                // Removed automatic rerouting logic. If the intended cell is blocked by a stationary unit,
+                // we should WAIT rather than picking a random adjacent cell that the AI didn't choose.
+                // The AI subsystem is responsible for picking valid moves.
+                
                 {
                     FResolvedAction WaitAction = CreateWaitAction(Blocked);
                     WaitAction.AbilityTag       = WaitTag;
@@ -677,79 +606,52 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
                     continue;
                 }
 
-                // Attempt to reroute before accepting defeat
-                bool bRerouted = false;
-                if (UWorld* World = GetWorld())
+                // CodeRevision: INC-2025-1123-FIX-R3 (Remove automatic rerouting) (2025-11-23 04:00)
+                // Removed automatic rerouting logic for conflict losers.
+                // If an actor loses a conflict, it should WAIT. Rerouting can lead to bad moves.
+                
                 {
-                    if (UDistanceFieldSubsystem* DF = World->GetSubsystem<UDistanceFieldSubsystem>())
+                    FResolvedAction LoserAction;
+                    LoserAction.Actor        = Loser.Actor;
+                    LoserAction.SourceActor  = Loser.Actor;
+                    LoserAction.CurrentCell  = Loser.CurrentCell;
+                    LoserAction.NextCell     = Loser.CurrentCell; // stays in place
+                    LoserAction.bIsWait      = true;
+                    // For losers, the final behavior is WAIT; the original intent
+                    // is no longer relevant for movement resolution.
+                    LoserAction.AbilityTag      = WaitTag;
+                    LoserAction.FinalAbilityTag = WaitTag;
+
+                    const bool bLoserSwapRejected = ApplySwapRejection(
+                        Loser,
+                        LoserAction,
+                        FString::Printf(
+                            TEXT("Conflict: Swap move forbidden (non-winning contender) at cell (%d,%d)"),
+                            Cell.X, Cell.Y));
+
+                    if (!bLoserSwapRejected && bAttackWonConflict && !Loser.AbilityTag.MatchesTag(AttackTag))
                     {
-                        const FIntPoint CurrentCell = Loser.CurrentCell;
-                        const int32 CurrentDist = DF->GetDistance(CurrentCell);
-
-                        if (CurrentDist >= 0)
-                        {
-                            const FIntPoint NeighborOffsets[4] = {
-                                FIntPoint(1, 0), FIntPoint(-1, 0),
-                                FIntPoint(0, 1), FIntPoint(0, -1)
-                            };
-
-                            FIntPoint BestCell = CurrentCell;
-                            int32 BestDist = CurrentDist;
-
-                            for (const FIntPoint& Offset : NeighborOffsets)
-                            {
-                                const FIntPoint Candidate = CurrentCell + Offset;
-
-                                // 1. Must not be the blocked cell (the one we lost)
-                                if (Candidate == Cell) continue;
-
-                                // 2. Must not be a stationary blocker
-                                if (StationaryBlockers.Contains(Candidate)) continue;
-
-                                // 3. Must not be reserved by ANYONE (to avoid new conflicts)
-                                if (ReservationTable.Contains({0, Candidate})) continue;
-
-                                // 4. Check distance field (must be better or equal, but strictly valid)
-                                const int32 Dist = DF->GetDistance(Candidate);
-                                if (Dist >= 0 && Dist <= BestDist) // Allow equal distance for side-stepping
-                                {
-                                    // Prefer strictly better
-                                    if (Dist < BestDist)
-                                    {
-                                        BestDist = Dist;
-                                        BestCell = Candidate;
-                                    }
-                                    // If equal, only pick if we haven't found a better one yet
-                                    else if (BestCell == CurrentCell)
-                                    {
-                                        BestCell = Candidate;
-                                    }
-                                }
-                            }
-
-                            if (BestCell != CurrentCell)
-                            {
-                                FResolvedAction ReroutedAction = CreateWaitAction(Loser); // Start with base props
-                                ReroutedAction.bIsWait = false;
-                                ReroutedAction.NextCell = BestCell;
-                                ReroutedAction.AbilityTag = RogueGameplayTags::AI_Intent_Move;
-                                ReroutedAction.FinalAbilityTag = RogueGameplayTags::AI_Intent_Move;
-                                ReroutedAction.ResolutionReason = FString::Printf(
-                                    TEXT("Rerouted: Lost conflict for (%d,%d) -> Taking (%d,%d)"),
-                                    Cell.X, Cell.Y, BestCell.X, BestCell.Y);
-
-                                OptimisticActions.Add(ReroutedAction);
-                                bRerouted = true;
-
-                                UE_LOG(LogConflictResolver, Log,
-                                    TEXT("[ResolveAllConflicts] Rerouted Loser %s from lost (%d,%d) to (%d,%d)"),
-                                    *GetNameSafe(Loser.Actor), Cell.X, Cell.Y, BestCell.X, BestCell.Y);
-                            }
-                        }
+                        // In Sequential mode, MOVE lost to ATTACK.
+                        LoserAction.ResolutionReason = FString::Printf(
+                            TEXT("LostConflict: Cell (%d,%d) locked by attacker (Sequential)"),
+                            Cell.X, Cell.Y);
                     }
-                }
+                    else if (!bLoserSwapRejected)
+                    {
+                        // Generic conflict loss (Simultaneous or Attack vs Attack).
+                        LoserAction.ResolutionReason = FString::Printf(
+                            TEXT("LostConflict: Cell (%d,%d) occupied by higher priority"),
+                            Cell.X, Cell.Y);
+                    }
 
-                if (!bRerouted)
+                    OptimisticActions.Add(LoserAction);
+
+                    UE_LOG(LogConflictResolver, Log,
+                        TEXT("Loser for (%d,%d) is %s, will wait. Reason: %s"),
+                        Cell.X, Cell.Y,
+                        *GetNameSafe(Loser.Actor),
+                        *LoserAction.ResolutionReason);
+                }
                 {
                     FResolvedAction LoserAction;
                     LoserAction.Actor        = Loser.Actor;
@@ -875,82 +777,20 @@ TArray<FResolvedAction> UConflictResolverSubsystem::ResolveAllConflicts()
 
                     bool bRerouted = false;
 
-                    // CodeRevision: INC-2025-1148-R1
-                    // Try to reroute to an adjacent cell if blocked
-                    if (UWorld* World = GetWorld())
+                    // CodeRevision: INC-2025-1123-FIX-R3 (Remove automatic rerouting) (2025-11-23 04:00)
+                    // Removed automatic rerouting logic.
+                    
                     {
-                        UGridOccupancySubsystem* GridOcc = ResolveGridOccupancy();
-                        UDistanceFieldSubsystem* DF = World->GetSubsystem<UDistanceFieldSubsystem>();
-
-                        if (GridOcc && DF && ActorPtr)
-                        {
-                            const FIntPoint CurrentCell = Action.CurrentCell;
-                            const int32 CurrentDist = DF->GetDistance(CurrentCell);
-
-                            if (CurrentDist >= 0)
-                            {
-                                const FIntPoint NeighborOffsets[4] = {
-                                    FIntPoint(1, 0),
-                                    FIntPoint(-1, 0),
-                                    FIntPoint(0, 1),
-                                    FIntPoint(0, -1)
-                                };
-
-                                FIntPoint BestCell = CurrentCell;
-                                int32 BestDist = CurrentDist;
-
-                                for (const FIntPoint& Offset : NeighborOffsets)
-                                {
-                                    const FIntPoint Candidate = CurrentCell + Offset;
-
-                                    // Do not enter stationary cells
-                                    if (StationaryCells.Contains(Candidate))
-                                    {
-                                        continue;
-                                    }
-
-                                    // Avoid cells occupied by others (unless it's us, though we are moving)
-                                    if (GridOcc->IsCellOccupied(Candidate))
-                                    {
-                                        AActor* Occupant = GridOcc->GetActorAtCell(Candidate);
-                                        if (Occupant && Occupant != ActorPtr)
-                                        {
-                                            continue;
-                                        }
-                                    }
-
-                                    const int32 Dist = DF->GetDistance(Candidate);
-                                    if (Dist >= 0 && Dist < BestDist)
-                                    {
-                                        BestDist = Dist;
-                                        BestCell = Candidate;
-                                    }
-                                }
-
-                                if (BestCell != CurrentCell)
-                                {
-                                    Action.NextCell        = BestCell;
-                                    Action.bIsWait         = false;
-                                    Action.AbilityTag      = MoveTag;
-                                    Action.FinalAbilityTag = MoveTag;
-                                    Action.ResolutionReason = FString::Printf(
-                                        TEXT("Revalidated(Iter%d): rerouted move off blocked cell (%d,%d) to (%d,%d)"),
-                                        IterationCount, TargetCell.X, TargetCell.Y, BestCell.X, BestCell.Y);
-
-                                    bRerouted = true;
-                                    bChanged = true; // State changed, need another pass
-
-                                    UE_LOG(LogConflictResolver, Log,
-                                        TEXT("[ResolveAllConflicts] Rerouted %s from blocked (%d,%d) to (%d,%d)"),
-                                        *GetNameSafe(ActorPtr),
-                                        TargetCell.X, TargetCell.Y,
-                                        BestCell.X, BestCell.Y);
-                                }
-                            }
-                        }
+                        Action.bIsWait         = true;
+                        Action.NextCell        = Action.CurrentCell;
+                        Action.AbilityTag      = WaitTag;
+                        Action.FinalAbilityTag = WaitTag;
+                        Action.ResolutionReason = FString::Printf(
+                            TEXT("LostConflict: Target cell (%d,%d) blocked by stationary unit (Revalidation Iter %d)"),
+                            TargetCell.X, TargetCell.Y, IterationCount);
+                        
+                        bChanged = true; // State changed, need another pass
                     }
-
-                    if (!bRerouted)
                     {
                         Action.bIsWait         = true;
                         Action.NextCell        = Action.CurrentCell;

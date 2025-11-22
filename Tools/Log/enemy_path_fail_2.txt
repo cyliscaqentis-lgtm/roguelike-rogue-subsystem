@@ -1,0 +1,87 @@
+Display,0,Temp,17039078.656471,"[RogueSubsystem] Generate START (Seed=12034, Map=64x64, Cell=100)"
+Warning,0,Temp,17039078.656485,Dungeon attempt 1 rejected: produced 11 rooms (min required=12) with template DungeonTemplate_NormalBSP_0. Re-rolling...
+Log,0,Temp,17039078.656784,"Dungeon GENERATED: Seed=FRandomStream(InitialSeed=12034, Seed=3032490762) Rooms=50 Walkable=1450 Reach=100.0%"
+Display,0,Temp,17039078.843212,"[RogueSubsystem] Generate DONE (Rooms=50, Walkable=1450, Reach=100.0%)"
+Log,0,TurnInit,17039078.843583,InitializeGameTurnManager: Ready for HandleDungeonReady
+Warning,0,UnitBase,17039078.848030,[PostInitializeComponents] ✅ ASC callbacks registered for BP_PlayerUnit_C_0
+Warning,0,UnitBase,17039078.848642,[OnAbilitySystemInitialized] ========== START: BP_PlayerUnit_C_0 ==========
+Log,0,EnemyUnit,17039078.849605,[Constructor] ASC created for enemy unit (deferred controller spawn enabled)
+Log,0,AIController,17039078.852179,"[LyraTBSAIController] Constructor: bWantsPlayerState=true, TeamId=NoTeam"
+Log,0,EnemyUnit,17039078.852416,[PossessedBy] ========== START: BP_EnemyUnitBase_C_0 ==========
+Log,0,EnemyUnit,17039078.853521,[Constructor] ASC created for enemy unit (deferred controller spawn enabled)
+Log,0,AIController,17039078.856050,"[LyraTBSAIController] Constructor: bWantsPlayerState=true, TeamId=NoTeam"
+Log,0,EnemyUnit,17039078.856282,[PossessedBy] ========== START: BP_EnemyUnitBase_C_1 ==========
+Log,0,EnemyUnit,17039078.856792,[Constructor] ASC created for enemy unit (deferred controller spawn enabled)
+Log,0,AIController,17039078.859286,"[LyraTBSAIController] Constructor: bWantsPlayerState=true, TeamId=NoTeam"
+Log,0,EnemyUnit,17039078.859445,[PossessedBy] ========== START: BP_EnemyUnitBase_C_2 ==========
+Log,0,EnemyUnit,17039078.860209,[Constructor] ASC created for enemy unit (deferred controller spawn enabled)
+Log,0,AIController,17039078.862673,"[LyraTBSAIController] Constructor: bWantsPlayerState=true, TeamId=NoTeam"
+Log,0,EnemyUnit,17039078.862834,[PossessedBy] ========== START: BP_EnemyUnitBase_C_3 ==========
+Log,0,EnemyUnit,17039078.863443,[Constructor] ASC created for enemy unit (deferred controller spawn enabled)
+Log,0,AIController,17039078.865814,"[LyraTBSAIController] Constructor: bWantsPlayerState=true, TeamId=NoTeam"
+Log,0,EnemyUnit,17039078.865984,[PossessedBy] ========== START: BP_EnemyUnitBase_C_4 ==========
+Warning,0,TurnInit,17039078.867190,[Turn 0] ==== TurnInitialization START ====
+Log,0,TurnInit,17039078.867215,[Turn 0] GridOccupancy initialized with 6 units
+Log,0,TurnInit,17039078.867225,[Turn 0] Skipped initial DistanceField update (will be updated in ExecuteEnemyPhase)
+Warning,0,Temp,17039078.867427,[PlayerController] Final ControlRotation re-fixed to Yaw=0.0 (post-IMC)
+NoLogging,0,HAL,17039078.888679,1101
+Warning,0,LoadErrors,17039078.888866,"パッケージ /Game/Effects/Particles/Weapons/NS_WeaponFire のロードの試行中に依存関係があるパッケージ /Game/Effects/Textures/Flipbooks/SmokeSwirl_3_Flipbook_CHANNELPACK を利用できませんでした。追加の説明情報は次のとおりです：
+FPackageName: Skipped package /Game/Effects/Textures/Flipbooks/SmokeSwirl_3_Flipbook_CHANNELPACK has a valid, mounted, mount point but does not exist either on disk or in iostore. The uncooked file would be expected on disk at 'C:/UnrealProjects/RoguelikeDungeon/Content/Effects/Textures/Flipbooks/SmokeSwirl_3_Flipbook_CHANNELPACK'. Perhaps it has been deleted or was not synced?
+"
+NoLogging,0,HAL,17039078.888871,
+Warning,0,Temp,17039078.909610,"[Camera Diagnostic] CameraYaw=0.0, ControlYaw=0.0, PawnYaw=0.0"
+Warning,0,TurnCore,17039082.876300,"[TurnCore] CoreObservationPhase received PlayerCell=(43, 11)"
+Log,0,TurnCore,17039082.876313,[TurnCore] ObservationPhase: Purged outdated reservations for turn 0
+Log,0,TurnCore,17039082.876325,[TurnCore] ObservationPhase: Updating DistanceField with Margin=16 (Enemies=5)
+Log,0,TurnCore,17039082.876336,[TurnCore] ObservationPhase: Complete
+Log,0,EnemyAI,17039082.876350,"[BuildObservations] DistanceField updated with PlayerGrid=(43,11)"
+Log,0,EnemyAI,17039082.876391,"[BuildObservations] ==== RESULT ==== Generated 5 observations (Valid=5, Invalid=0)"
+Warning,0,EnemyAI,17039082.876401,"[CollectIntents] ==== START ==== Observations=5, Enemies=5"
+Log,0,EnemyThinker,17039082.876425,"[ComputeIntent] BP_EnemyUnitBase_C_0: Calling GetNextStep from (39,10) to Player at (43,11)"
+Warning,0,EnemyThinker,17039082.876436,"[ComputeIntent] BP_EnemyUnitBase_C_0: DF PlayerPos=(43,11), CurrentCellDist=192"
+Warning,0,EnemyThinker,17039082.876451,"[ComputeIntent] BP_EnemyUnitBase_C_0: GetNextStep returned (39,9) (moved=1, NextDist=174)"
+Warning,0,EnemyThinker,17039082.876465,"[ComputeIntent] BP_EnemyUnitBase_C_0: Neighbors: (40,10)=188 (38,10)=202 (39,11)=202 (39,9)=174 (40,11)=-1 (40,9)=178 (38,11)=-1 (38,9)=-1 "
+Log,0,EnemyThinker,17039082.876476,[ComputeIntent] BP_EnemyUnitBase_C_0: MOVE intent (TileDistance=4 > Range=1)
+Log,0,EnemyAI,17039082.876486,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_0, Thinker found, Intent=AI.Intent.Move"
+Log,0,EnemyThinker,17039082.876496,"[ComputeIntent] BP_EnemyUnitBase_C_1: Calling GetNextStep from (43,9) to Player at (43,11)"
+Warning,0,EnemyThinker,17039082.876507,"[ComputeIntent] BP_EnemyUnitBase_C_1: DF PlayerPos=(43,11), CurrentCellDist=28"
+Warning,0,EnemyThinker,17039082.876516,"[ComputeIntent] BP_EnemyUnitBase_C_1: GetNextStep returned (43,10) (moved=1, NextDist=10)"
+Warning,0,EnemyThinker,17039082.876527,"[ComputeIntent] BP_EnemyUnitBase_C_1: Neighbors: (44,9)=-1 (42,9)=24 (43,10)=10 (43,8)=38 (44,10)=-1 (44,8)=-1 (42,10)=14 (42,8)=42 "
+Log,0,EnemyThinker,17039082.876537,[ComputeIntent] BP_EnemyUnitBase_C_1: MOVE intent (TileDistance=2 > Range=1)
+Log,0,EnemyAI,17039082.876547,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_1, Thinker found, Intent=AI.Intent.Move"
+Log,0,EnemyThinker,17039082.876555,"[ComputeIntent] BP_EnemyUnitBase_C_2: Calling GetNextStep from (41,9) to Player at (43,11)"
+Warning,0,EnemyThinker,17039082.876565,"[ComputeIntent] BP_EnemyUnitBase_C_2: DF PlayerPos=(43,11), CurrentCellDist=28"
+Warning,0,EnemyThinker,17039082.876575,"[ComputeIntent] BP_EnemyUnitBase_C_2: GetNextStep returned (42,10) (moved=1, NextDist=14)"
+Warning,0,EnemyThinker,17039082.876586,"[ComputeIntent] BP_EnemyUnitBase_C_2: Neighbors: (42,9)=24 (40,9)=178 (41,10)=24 (41,8)=52 (42,10)=14 (42,8)=42 (40,10)=188 (40,8)=160 "
+Log,0,EnemyThinker,17039082.876596,[ComputeIntent] BP_EnemyUnitBase_C_2: MOVE intent (TileDistance=2 > Range=1)
+Log,0,EnemyAI,17039082.876605,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_2, Thinker found, Intent=AI.Intent.Move"
+Log,0,EnemyThinker,17039082.876614,"[ComputeIntent] BP_EnemyUnitBase_C_3: Calling GetNextStep from (42,9) to Player at (43,11)"
+Warning,0,EnemyThinker,17039082.876623,"[ComputeIntent] BP_EnemyUnitBase_C_3: DF PlayerPos=(43,11), CurrentCellDist=24"
+Warning,0,EnemyThinker,17039082.876636,"[ComputeIntent] BP_EnemyUnitBase_C_3: GetNextStep returned (43,10) (moved=1, NextDist=10)"
+Warning,0,EnemyThinker,17039082.876648,"[ComputeIntent] BP_EnemyUnitBase_C_3: Neighbors: (43,9)=28 (41,9)=28 (42,10)=14 (42,8)=42 (43,10)=10 (43,8)=38 (41,10)=24 (41,8)=52 "
+Log,0,EnemyThinker,17039082.876658,[ComputeIntent] BP_EnemyUnitBase_C_3: MOVE intent (TileDistance=2 > Range=1)
+Log,0,EnemyAI,17039082.876667,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_3, Thinker found, Intent=AI.Intent.Move"
+Log,0,EnemyThinker,17039082.876676,"[ComputeIntent] BP_EnemyUnitBase_C_4: Calling GetNextStep from (43,5) to Player at (43,11)"
+Warning,0,EnemyThinker,17039082.876686,"[ComputeIntent] BP_EnemyUnitBase_C_4: DF PlayerPos=(43,11), CurrentCellDist=84"
+Warning,0,EnemyThinker,17039082.876696,"[ComputeIntent] BP_EnemyUnitBase_C_4: GetNextStep returned (43,6) (moved=1, NextDist=66)"
+Warning,0,EnemyThinker,17039082.876708,"[ComputeIntent] BP_EnemyUnitBase_C_4: Neighbors: (44,5)=-1 (42,5)=80 (43,6)=66 (43,4)=94 (44,6)=-1 (44,4)=-1 (42,6)=70 (42,4)=98 "
+Log,0,EnemyThinker,17039082.876718,[ComputeIntent] BP_EnemyUnitBase_C_4: MOVE intent (TileDistance=6 > Range=1)
+Log,0,EnemyAI,17039082.876728,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_4, Thinker found, Intent=AI.Intent.Move"
+Warning,0,EnemyAI,17039082.876748,[CollectIntents] === PASS 2: Move/Wait Intent Generation ===
+Warning,0,EnemyAI,17039082.876758,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_4: PrimaryCell=(43,6) CurrentCell=(43,5) PlayerCell=(43,11)"
+Warning,0,EnemyAI,17039082.876767,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_4: Walkable=1, CloserOrEqual=1 (Cost 84->66), Blocked=0"
+Warning,0,EnemyAI,17039082.876779,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_4: Using PRIMARY cell (43,6) -> Cost 84 -> 66"
+Warning,0,EnemyAI,17039082.876790,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_0: PrimaryCell=(39,9) CurrentCell=(39,10) PlayerCell=(43,11)"
+Warning,0,EnemyAI,17039082.876802,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_0: Walkable=1, CloserOrEqual=1 (Cost 192->174), Blocked=0"
+Warning,0,EnemyAI,17039082.876811,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_0: Using PRIMARY cell (39,9) -> Cost 192 -> 174"
+Warning,0,EnemyAI,17039082.876823,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_1: PrimaryCell=(43,10) CurrentCell=(43,9) PlayerCell=(43,11)"
+Warning,0,EnemyAI,17039082.876834,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_1: Walkable=1, CloserOrEqual=1 (Cost 28->10), Blocked=0"
+Warning,0,EnemyAI,17039082.876847,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_1: Using PRIMARY cell (43,10) -> Cost 28 -> 10"
+Warning,0,EnemyAI,17039082.876863,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_3: PrimaryCell=(43,10) CurrentCell=(42,9) PlayerCell=(43,11)"
+Warning,0,EnemyAI,17039082.876875,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_3: Walkable=1, CloserOrEqual=1 (Cost 24->10), Blocked=1"
+Warning,0,EnemyAI,17039082.876895,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_3: Using ALTERNATE cell (42,10) -> Dist 2 -> 1 (Candidates=4)"
+Warning,0,EnemyAI,17039082.876906,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_2: PrimaryCell=(42,10) CurrentCell=(41,9) PlayerCell=(43,11)"
+Warning,0,EnemyAI,17039082.876916,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_2: Walkable=1, CloserOrEqual=1 (Cost 28->14), Blocked=1"
+Warning,1,TurnInit,17039083.033735,[Turn 1] ==== TurnInitialization START ====
+Log,1,TurnInit,17039083.033797,[Turn 1] GridOccupancy initialized with 6 units
+Log,1,TurnInit,17039083.033811,[Turn 1] Skipped initial DistanceField update (will be updated in ExecuteEnemyPhase)

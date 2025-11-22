@@ -348,8 +348,29 @@ FEnemyIntent UEnemyAISubsystem::ComputeMoveOrWaitIntent(
         PrimaryCell = DistanceField->GetNextStepTowardsPlayer(Obs.GridPosition, EnemyActor);
     }
 
-    const int32 CurrentDist = Obs.DistanceInTiles;
-    const int32 PrimaryDist = FGridUtils::ChebyshevDistance(PrimaryCell, Obs.PlayerGridPosition);
+    const int32 CurrentChebyshev = Obs.DistanceInTiles;
+    const int32 PrimaryChebyshev = FGridUtils::ChebyshevDistance(PrimaryCell, Obs.PlayerGridPosition);
+
+    // CodeRevision: INC-2025-1123-FIX-R1 (Use DistanceField cost for closer check if available) (2025-11-23 03:30)
+    // Default to Chebyshev comparison
+    bool bPrimaryCloserOrEqual = (PrimaryChebyshev <= CurrentChebyshev);
+    int32 CurrentCost = CurrentChebyshev;
+    int32 PrimaryCost = PrimaryChebyshev;
+
+    // If DistanceField is available, use its cost (Dijkstra distance) which accounts for terrain
+    if (DistanceField)
+    {
+        const int32 DFCurrent = DistanceField->GetDistance(Obs.GridPosition);
+        const int32 DFPrimary = DistanceField->GetDistance(PrimaryCell);
+        
+        // Valid DF values are >= 0. If valid, use them.
+        if (DFCurrent >= 0 && DFPrimary >= 0)
+        {
+            CurrentCost = DFCurrent;
+            PrimaryCost = DFPrimary;
+            bPrimaryCloserOrEqual = (PrimaryCost <= CurrentCost);
+        }
+    }
 
     const bool bPrimaryWalkable = IsCellWalkable(EnemyActor, PrimaryCell);
 
@@ -361,10 +382,22 @@ FEnemyIntent UEnemyAISubsystem::ComputeMoveOrWaitIntent(
         HardBlockedCells.Contains(PrimaryCell) ||
         ClaimedMoveTargets.Contains(PrimaryCell);
 
-    // CodeRevision: INC-2025-1157-R1 (Re-introduce distance check: Allow maintain/reduce, reject increase) (2025-11-20 11:35)
-    // We allow PrimaryDist == CurrentDist to enable corner navigation (sideways moves),
-    // but we strictly reject PrimaryDist > CurrentDist to prevent moving away.
-    const bool bPrimaryCloserOrEqual = (PrimaryDist <= CurrentDist);
+    // CodeRevision: INC-2025-1123-LOG-R7 (Debug: Log primary cell check conditions) (2025-11-23 03:00)
+    UE_LOG(LogEnemyAI, Warning,
+        TEXT("[ComputeMoveOrWaitIntent] %s: PrimaryCell=(%d,%d) CurrentCell=(%d,%d) PlayerCell=(%d,%d)"),
+        *GetNameSafe(EnemyActor),
+        PrimaryCell.X, PrimaryCell.Y,
+        Obs.GridPosition.X, Obs.GridPosition.Y,
+        Obs.PlayerGridPosition.X, Obs.PlayerGridPosition.Y);
+    UE_LOG(LogEnemyAI, Warning,
+        TEXT("[ComputeMoveOrWaitIntent] %s: Walkable=%d, CloserOrEqual=%d (Cost %d->%d), Blocked=%d"),
+        *GetNameSafe(EnemyActor),
+        bPrimaryWalkable ? 1 : 0,
+        bPrimaryCloserOrEqual ? 1 : 0,
+        CurrentCost, PrimaryCost,
+        bPrimaryBlocked ? 1 : 0);
+
+
 
     if (PrimaryCell != Obs.GridPosition &&
         bPrimaryWalkable &&
@@ -373,19 +406,24 @@ FEnemyIntent UEnemyAISubsystem::ComputeMoveOrWaitIntent(
     {
         Intent.AbilityTag = RogueGameplayTags::AI_Intent_Move;
         Intent.NextCell = PrimaryCell;
-        UE_LOG(LogEnemyAI, Verbose,
-            TEXT("[ComputeMoveOrWaitIntent] %s: Using primary cell (%d,%d) -> Dist %d -> %d"),
+        UE_LOG(LogEnemyAI, Warning,
+            TEXT("[ComputeMoveOrWaitIntent] %s: Using PRIMARY cell (%d,%d) -> Cost %d -> %d"),
             *GetNameSafe(EnemyActor),
             PrimaryCell.X, PrimaryCell.Y,
-            CurrentDist, PrimaryDist);
+            CurrentCost, PrimaryCost);
         return Intent;
     }
+
+    // Log why primary was rejected
+    UE_LOG(LogEnemyAI, Warning,
+        TEXT("[ComputeMoveOrWaitIntent] %s: PRIMARY REJECTED - seeking alternate"),
+        *GetNameSafe(EnemyActor));
 
     TArray<FIntPoint> Candidates;
     FindAlternateMoveCells(
         Obs.GridPosition,
         Obs.PlayerGridPosition,
-        CurrentDist,
+        CurrentChebyshev,
         EnemyActor,
         HardBlockedCells,
         ClaimedMoveTargets,
@@ -399,13 +437,12 @@ FEnemyIntent UEnemyAISubsystem::ComputeMoveOrWaitIntent(
             Obs.PlayerGridPosition);
         const int32 ChosenDist = FGridUtils::ChebyshevDistance(ChosenCell, Obs.PlayerGridPosition);
 
-        // CodeRevision: INC-2025-1158-R1 (Prevent unnecessary shuffling behind friends) (2025-11-20 11:40)
-        // If the primary path was blocked by a unit (dynamic obstacle) but was otherwise walkable (not a wall),
-        // and our best alternate move is only "Equal Distance" (not strictly closer),
-        // and we are not already at the optimal distance (e.g. range 1 for melee),
-        // then we should WAIT instead of taking a sideways step.
+        // CodeRevision: INC-2025-1123-FIX-R4 (Disable Equal Distance Wait to allow following) (2025-11-23 04:30)
+        // Disabled INC-2025-1158-R1. We want enemies to follow each other even if the distance doesn't strictly improve.
+        // If we force WAIT here, enemies get stuck behind each other.
+        /*
         const bool bBlockedByUnit = bPrimaryBlocked && bPrimaryWalkable;
-        const bool bOnlyEqualDist = (ChosenDist == CurrentDist);
+        const bool bOnlyEqualDist = (ChosenDist == CurrentChebyshev);
 
         if (bBlockedByUnit && bOnlyEqualDist)
         {
@@ -418,14 +455,15 @@ FEnemyIntent UEnemyAISubsystem::ComputeMoveOrWaitIntent(
                 ChosenDist);
             return Intent;
         }
+        */
 
         Intent.AbilityTag = RogueGameplayTags::AI_Intent_Move;
         Intent.NextCell = ChosenCell;
-        UE_LOG(LogEnemyAI, Verbose,
-            TEXT("[ComputeMoveOrWaitIntent] %s: Using alternate cell (%d,%d) -> Dist %d -> %d (Candidates=%d)"),
+        UE_LOG(LogEnemyAI, Warning,
+            TEXT("[ComputeMoveOrWaitIntent] %s: Using ALTERNATE cell (%d,%d) -> Dist %d -> %d (Candidates=%d)"),
             *GetNameSafe(EnemyActor),
             ChosenCell.X, ChosenCell.Y,
-            CurrentDist, ChosenDist,
+            CurrentChebyshev, ChosenDist,
             Candidates.Num());
         return Intent;
     }

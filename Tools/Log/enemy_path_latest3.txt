@@ -1,0 +1,137 @@
+Warning,3,TurnInit,17040011.416250,[Turn 3] ==== TurnInitialization START ====
+Log,3,TurnInit,17040011.416277,[Turn 3] GridOccupancy initialized with 6 units
+Log,3,TurnInit,17040011.416290,[Turn 3] Skipped initial DistanceField update (will be updated in ExecuteEnemyPhase)
+Warning,3,TurnCore,17040011.424866,"[TurnCore] CoreObservationPhase received PlayerCell=(4, 57)"
+Log,3,TurnCore,17040011.424887,[TurnCore] ObservationPhase: Purged outdated reservations for turn 3
+Log,3,TurnCore,17040011.424909,[TurnCore] ObservationPhase: Updating DistanceField with Margin=19 (Enemies=5)
+Log,3,TurnCore,17040011.424926,[TurnCore] ObservationPhase: Complete
+Log,3,EnemyAI,17040011.424940,"[BuildObservations] DistanceField updated with PlayerGrid=(4,57)"
+Log,3,EnemyAI,17040011.424992,"[BuildObservations] ==== RESULT ==== Generated 5 observations (Valid=5, Invalid=0)"
+Warning,3,EnemyAI,17040011.425007,"[CollectIntents] ==== START ==== Observations=5, Enemies=5"
+Log,3,EnemyThinker,17040011.425035,"[ComputeIntent] BP_EnemyUnitBase_C_0: Calling GetNextStep from (9,61) to Player at (4,57)"
+Warning,3,EnemyThinker,17040011.425049,"[ComputeIntent] BP_EnemyUnitBase_C_0: DF PlayerPos=(4,57), CurrentCellDist=66"
+Warning,3,EnemyThinker,17040011.425066,"[ComputeIntent] BP_EnemyUnitBase_C_0: GetNextStep returned (8,60) (moved=1, NextDist=52)"
+Warning,3,EnemyThinker,17040011.425081,"[ComputeIntent] BP_EnemyUnitBase_C_0: Neighbors: (10,61)=84 (8,61)=56 (9,62)=-1 (9,60)=70 (10,62)=-1 (10,60)=80 (8,62)=-1 (8,60)=52 "
+Log,3,EnemyThinker,17040011.425095,[ComputeIntent] BP_EnemyUnitBase_C_0: MOVE intent (TileDistance=5 > Range=1)
+Log,3,EnemyAI,17040011.425110,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_0, Thinker found, Intent=AI.Intent.Move"
+Log,3,EnemyThinker,17040011.425124,"[ComputeIntent] BP_EnemyUnitBase_C_1: Calling GetNextStep from (3,59) to Player at (4,57)"
+Warning,3,EnemyThinker,17040011.425138,"[ComputeIntent] BP_EnemyUnitBase_C_1: DF PlayerPos=(4,57), CurrentCellDist=94"
+Warning,3,EnemyThinker,17040011.425168,"[ComputeIntent] BP_EnemyUnitBase_C_1: GetNextStep returned (4,58) (moved=1, NextDist=10)"
+Warning,3,EnemyThinker,17040011.425185,"[ComputeIntent] BP_EnemyUnitBase_C_1: Neighbors: (4,59)=28 (2,59)=118 (3,60)=90 (3,58)=14 (4,60)=80 (4,58)=10 (2,60)=108 (2,58)=128 "
+Log,3,EnemyThinker,17040011.425198,[ComputeIntent] BP_EnemyUnitBase_C_1: MOVE intent (TileDistance=2 > Range=1)
+Log,3,EnemyAI,17040011.425211,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_1, Thinker found, Intent=AI.Intent.Move"
+Log,3,EnemyThinker,17040011.425224,"[ComputeIntent] BP_EnemyUnitBase_C_2: Calling GetNextStep from (3,60) to Player at (4,57)"
+Warning,3,EnemyThinker,17040011.425237,"[ComputeIntent] BP_EnemyUnitBase_C_2: DF PlayerPos=(4,57), CurrentCellDist=90"
+Warning,3,EnemyThinker,17040011.425251,"[ComputeIntent] BP_EnemyUnitBase_C_2: GetNextStep returned (4,59) (moved=1, NextDist=28)"
+Warning,3,EnemyThinker,17040011.425268,"[ComputeIntent] BP_EnemyUnitBase_C_2: Neighbors: (4,60)=80 (2,60)=108 (3,61)=94 (3,59)=94 (4,61)=76 (4,59)=28 (2,61)=104 (2,59)=118 "
+Log,3,EnemyThinker,17040011.425279,[ComputeIntent] BP_EnemyUnitBase_C_2: MOVE intent (TileDistance=3 > Range=1)
+Log,3,EnemyAI,17040011.425291,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_2, Thinker found, Intent=AI.Intent.Move"
+Log,3,EnemyThinker,17040011.425304,"[ComputeIntent] BP_EnemyUnitBase_C_3: Calling GetNextStep from (4,60) to Player at (4,57)"
+Warning,3,EnemyThinker,17040011.425316,"[ComputeIntent] BP_EnemyUnitBase_C_3: DF PlayerPos=(4,57), CurrentCellDist=80"
+Warning,3,EnemyThinker,17040011.425332,"[ComputeIntent] BP_EnemyUnitBase_C_3: GetNextStep returned (4,59) (moved=1, NextDist=28)"
+Warning,3,EnemyThinker,17040011.425345,"[ComputeIntent] BP_EnemyUnitBase_C_3: Neighbors: (5,60)=42 (3,60)=90 (4,61)=76 (4,59)=28 (5,61)=66 (5,59)=24 (3,61)=94 (3,59)=94 "
+Log,3,EnemyThinker,17040011.425358,[ComputeIntent] BP_EnemyUnitBase_C_3: MOVE intent (TileDistance=3 > Range=1)
+Log,3,EnemyAI,17040011.425372,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_3, Thinker found, Intent=AI.Intent.Move"
+Log,3,EnemyThinker,17040011.425385,"[ComputeIntent] BP_EnemyUnitBase_C_4: Calling GetNextStep from (4,59) to Player at (4,57)"
+Warning,3,EnemyThinker,17040011.425401,"[ComputeIntent] BP_EnemyUnitBase_C_4: DF PlayerPos=(4,57), CurrentCellDist=28"
+Warning,3,EnemyThinker,17040011.425415,"[ComputeIntent] BP_EnemyUnitBase_C_4: GetNextStep returned (4,58) (moved=1, NextDist=10)"
+Warning,3,EnemyThinker,17040011.425431,"[ComputeIntent] BP_EnemyUnitBase_C_4: Neighbors: (5,59)=24 (3,59)=94 (4,60)=80 (4,58)=10 (5,60)=42 (5,58)=14 (3,60)=90 (3,58)=14 "
+Log,3,EnemyThinker,17040011.425442,[ComputeIntent] BP_EnemyUnitBase_C_4: MOVE intent (TileDistance=2 > Range=1)
+Log,3,EnemyAI,17040011.425456,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_4, Thinker found, Intent=AI.Intent.Move"
+Warning,3,EnemyAI,17040011.425488,[CollectIntents] === PASS 2: Move/Wait Intent Generation ===
+Warning,3,EnemyAI,17040011.425501,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_0: PrimaryCell=(8,60) CurrentCell=(9,61) PlayerCell=(4,57)"
+Warning,3,EnemyAI,17040011.425510,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_0: Walkable=1, CloserOrEqual=1 (Cost 66->52), Blocked=0"
+Warning,3,EnemyAI,17040011.425520,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_0: Using PRIMARY cell (8,60) -> Cost 66 -> 52"
+Warning,3,EnemyAI,17040011.425529,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_3: PrimaryCell=(4,59) CurrentCell=(4,60) PlayerCell=(4,57)"
+Warning,3,EnemyAI,17040011.425538,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_3: Walkable=1, CloserOrEqual=1 (Cost 80->28), Blocked=0"
+Warning,3,EnemyAI,17040011.425548,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_3: Using PRIMARY cell (4,59) -> Cost 80 -> 28"
+Warning,3,EnemyAI,17040011.425557,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_2: PrimaryCell=(4,59) CurrentCell=(3,60) PlayerCell=(4,57)"
+Warning,3,EnemyAI,17040011.425568,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_2: Walkable=1, CloserOrEqual=1 (Cost 90->28), Blocked=1"
+Warning,3,EnemyAI,17040011.425588,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_2: Using ALTERNATE cell (3,59) -> Dist 3 -> 2 (Candidates=4)"
+Warning,3,EnemyAI,17040011.425596,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_4: PrimaryCell=(4,58) CurrentCell=(4,59) PlayerCell=(4,57)"
+Warning,3,EnemyAI,17040011.425607,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_4: Walkable=1, CloserOrEqual=1 (Cost 28->10), Blocked=0"
+Warning,3,EnemyAI,17040011.425616,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_4: Using PRIMARY cell (4,58) -> Cost 28 -> 10"
+Warning,3,EnemyAI,17040011.425625,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_1: PrimaryCell=(4,58) CurrentCell=(3,59) PlayerCell=(4,57)"
+Warning,3,EnemyAI,17040011.425633,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_1: Walkable=1, CloserOrEqual=1 (Cost 94->10), Blocked=1"
+Warning,3,UnitMovement,17040011.614963,"[UnitMovementComponent] UpdateActorCell FAILED (Retry=5/5) for BP_EnemyUnitBase_C_2 at (3,59) - scheduling retry"
+Warning,3,UnitMovement,17040011.615050,"[UnitMovementComponent] UpdateActorCell FAILED (Retry=5/5) for BP_EnemyUnitBase_C_1 at (3,58) - scheduling retry"
+Error,3,UnitMovement,17040011.627512,"[UnitMovementComponent] UpdateActorCell FAILED after 6 retries. Forcing movement completion to avoid game hang. Actor=BP_EnemyUnitBase_C_2 FinalCell=(3,59)"
+Log,3,MoveReservation,17040011.627536,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_2 TurnId=3
+Log,3,UnitMovement,17040011.627549,[UnitMovementComponent] Movement finished and snapped. (RetryCount=6)
+Error,3,UnitMovement,17040011.627569,"[UnitMovementComponent] UpdateActorCell FAILED after 6 retries. Forcing movement completion to avoid game hang. Actor=BP_EnemyUnitBase_C_1 FinalCell=(3,58)"
+Log,3,MoveReservation,17040011.627581,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_1 TurnId=3
+Warning,4,TurnInit,17040011.651634,[Turn 4] ==== TurnInitialization START ====
+Log,4,TurnInit,17040011.651676,[Turn 4] GridOccupancy initialized with 6 units
+Log,4,TurnInit,17040011.651695,[Turn 4] Skipped initial DistanceField update (will be updated in ExecuteEnemyPhase)
+Warning,4,TurnCore,17040012.278426,"[TurnCore] CoreObservationPhase received PlayerCell=(5, 57)"
+Log,4,TurnCore,17040012.278437,[TurnCore] ObservationPhase: Purged outdated reservations for turn 4
+Log,4,TurnCore,17040012.278447,[TurnCore] ObservationPhase: Updating DistanceField with Margin=16 (Enemies=5)
+Log,4,TurnCore,17040012.278457,[TurnCore] ObservationPhase: Complete
+Log,4,EnemyAI,17040012.278466,"[BuildObservations] DistanceField updated with PlayerGrid=(5,57)"
+Log,4,EnemyAI,17040012.278529,"[BuildObservations] ==== RESULT ==== Generated 5 observations (Valid=5, Invalid=0)"
+Warning,4,EnemyAI,17040012.278541,"[CollectIntents] ==== START ==== Observations=5, Enemies=5"
+Log,4,EnemyThinker,17040012.278561,"[ComputeIntent] BP_EnemyUnitBase_C_0: Calling GetNextStep from (8,60) to Player at (5,57)"
+Warning,4,EnemyThinker,17040012.278572,"[ComputeIntent] BP_EnemyUnitBase_C_0: DF PlayerPos=(5,57), CurrentCellDist=42"
+Warning,4,EnemyThinker,17040012.278584,"[ComputeIntent] BP_EnemyUnitBase_C_0: GetNextStep returned (7,59) (moved=1, NextDist=28)"
+Warning,4,EnemyThinker,17040012.278601,"[ComputeIntent] BP_EnemyUnitBase_C_0: Neighbors: (9,60)=52 (7,60)=38 (8,61)=52 (8,59)=38 (9,61)=56 (9,59)=56 (7,61)=56 (7,59)=28 "
+Log,4,EnemyThinker,17040012.278612,[ComputeIntent] BP_EnemyUnitBase_C_0: MOVE intent (TileDistance=3 > Range=1)
+Log,4,EnemyAI,17040012.278622,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_0, Thinker found, Intent=AI.Intent.Move"
+Log,4,EnemyThinker,17040012.278632,"[ComputeIntent] BP_EnemyUnitBase_C_1: Calling GetNextStep from (3,59) to Player at (5,57)"
+Warning,4,EnemyThinker,17040012.278642,"[ComputeIntent] BP_EnemyUnitBase_C_1: DF PlayerPos=(5,57), CurrentCellDist=118"
+Warning,4,EnemyThinker,17040012.278652,"[ComputeIntent] BP_EnemyUnitBase_C_1: GetNextStep returned (4,58) (moved=1, NextDist=14)"
+Warning,4,EnemyThinker,17040012.278666,"[ComputeIntent] BP_EnemyUnitBase_C_1: Neighbors: (4,59)=94 (2,59)=122 (3,60)=108 (3,58)=136 (4,60)=90 (4,58)=14 (2,60)=118 (2,58)=132 "
+Log,4,EnemyThinker,17040012.278676,[ComputeIntent] BP_EnemyUnitBase_C_1: MOVE intent (TileDistance=2 > Range=1)
+Log,4,EnemyAI,17040012.278684,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_1, Thinker found, Intent=AI.Intent.Move"
+Log,4,EnemyThinker,17040012.278694,"[ComputeIntent] BP_EnemyUnitBase_C_2: Calling GetNextStep from (3,60) to Player at (5,57)"
+Warning,4,EnemyThinker,17040012.278704,"[ComputeIntent] BP_EnemyUnitBase_C_2: DF PlayerPos=(5,57), CurrentCellDist=108"
+Warning,4,EnemyThinker,17040012.278716,"[ComputeIntent] BP_EnemyUnitBase_C_2: GetNextStep returned (4,60) (moved=1, NextDist=90)"
+Warning,4,EnemyThinker,17040012.278729,"[ComputeIntent] BP_EnemyUnitBase_C_2: Neighbors: (4,60)=90 (2,60)=118 (3,61)=104 (3,59)=118 (4,61)=94 (4,59)=94 (2,61)=122 (2,59)=122 "
+Log,4,EnemyThinker,17040012.278739,[ComputeIntent] BP_EnemyUnitBase_C_2: MOVE intent (TileDistance=3 > Range=1)
+Log,4,EnemyAI,17040012.278749,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_2, Thinker found, Intent=AI.Intent.Move"
+Log,4,EnemyThinker,17040012.278761,"[ComputeIntent] BP_EnemyUnitBase_C_3: Calling GetNextStep from (4,59) to Player at (5,57)"
+Warning,4,EnemyThinker,17040012.278772,"[ComputeIntent] BP_EnemyUnitBase_C_3: DF PlayerPos=(5,57), CurrentCellDist=94"
+Warning,4,EnemyThinker,17040012.278783,"[ComputeIntent] BP_EnemyUnitBase_C_3: GetNextStep returned (5,58) (moved=1, NextDist=10)"
+Warning,4,EnemyThinker,17040012.278794,"[ComputeIntent] BP_EnemyUnitBase_C_3: Neighbors: (5,59)=28 (3,59)=118 (4,60)=90 (4,58)=14 (5,60)=80 (5,58)=10 (3,60)=108 (3,58)=136 "
+Log,4,EnemyThinker,17040012.278803,[ComputeIntent] BP_EnemyUnitBase_C_3: MOVE intent (TileDistance=2 > Range=1)
+Log,4,EnemyAI,17040012.278813,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_3, Thinker found, Intent=AI.Intent.Move"
+Warning,4,EnemyAI,17040012.278871,[CollectIntents] === PASS 2: Move/Wait Intent Generation ===
+Warning,4,EnemyAI,17040012.278881,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_2: PrimaryCell=(4,60) CurrentCell=(3,60) PlayerCell=(5,57)"
+Warning,4,EnemyAI,17040012.278891,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_2: Walkable=1, CloserOrEqual=1 (Cost 108->90), Blocked=0"
+Warning,4,EnemyAI,17040012.278902,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_2: Using PRIMARY cell (4,60) -> Cost 108 -> 90"
+Warning,4,EnemyAI,17040012.278912,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_0: PrimaryCell=(7,59) CurrentCell=(8,60) PlayerCell=(5,57)"
+Warning,4,EnemyAI,17040012.278923,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_0: Walkable=1, CloserOrEqual=1 (Cost 42->28), Blocked=0"
+Warning,4,EnemyAI,17040012.278936,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_0: Using PRIMARY cell (7,59) -> Cost 42 -> 28"
+Warning,4,EnemyAI,17040012.278947,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_3: PrimaryCell=(5,58) CurrentCell=(4,59) PlayerCell=(5,57)"
+Warning,4,EnemyAI,17040012.278957,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_3: Walkable=1, CloserOrEqual=1 (Cost 94->10), Blocked=0"
+Warning,4,EnemyAI,17040012.278968,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_3: Using PRIMARY cell (5,58) -> Cost 94 -> 10"
+Warning,4,EnemyAI,17040012.278979,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_1: PrimaryCell=(4,58) CurrentCell=(3,59) PlayerCell=(5,57)"
+Warning,4,EnemyAI,17040012.278988,"[ComputeMoveOrWaitIntent] BP_EnemyUnitBase_C_1: Walkable=1, CloserOrEqual=1 (Cost 118->14), Blocked=1"
+Log,4,GridOccupancy,17040012.279097,"[GridOccupancy] RESERVE DEST: BP_EnemyUnitBase_C_3 -> (5, 58) (TurnId=4)"
+Log,4,GridOccupancy,17040012.279110,"[GridOccupancy] RESERVE DEST: BP_EnemyUnitBase_C_1 -> (3, 58) (TurnId=4)"
+Error,4,AttackAbility,17040012.279256,[GA_MeleeAttack] ===== ActivateAbility CALLED ===== Actor=BP_EnemyUnitBase_C_4
+Error,4,AttackAbility,17040012.279279,"[GA_MeleeAttack] After Super::ActivateAbility, attempting CommitAbility"
+Error,4,AttackAbility,17040012.279291,[GA_MeleeAttack] CommitAbility SUCCESS - Proceeding with attack logic
+Error,4,AttackAbility,17040012.279303,"[GA_MeleeAttack] About to call PlayAttackMontage(), MontagePtr=AM_MM_MeleeAttack"
+Error,4,AttackAbility,17040012.279314,"[GA_MeleeAttack] PlayAttackMontage_Implementation CALLED, Montage=AM_MM_MeleeAttack"
+Error,4,AttackAbility,17040012.279324,[GA_MeleeAttack] Creating PlayMontageAndWait task...
+Error,4,AttackAbility,17040012.279335,[GA_MeleeAttack] ActivateAbility COMPLETED
+Log,4,GridOccupancy,17040012.431647,"[GridOccupancy] COMMIT: BP_PlayerUnit_C_0 -> (5,57)"
+Log,4,MoveAbility,17040012.431684,"[MoveComplete] Unit BP_PlayerUnit_C_0 reached destination, GA_MoveBase ending."
+Log,4,MoveAbility,17040012.431712,"[GA_MoveBase] Barrier completed in EndAbility for BP_PlayerUnit_C_0 (Turn=4, ActionId=3D26ADC54BFC91EECA3F4F8153B8C0CD)"
+Log,4,TurnManager,17040012.431897,[Turn 4] Player action complete - enemy phase already in progress (skipping redundant AI calc)
+Log,4,UnitMovement,17040012.431908,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Error,4,AttackAbility,17040013.245552,[GA_MeleeAttack] ===== OnMontageCompleted CALLED ===== Actor=BP_EnemyUnitBase_C_4
+Error,4,AttackAbility,17040013.245571,[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Attacking stored target: BP_PlayerUnit_C_0
+Warning,4,Temp,17040013.245686,[DMG] Src=BP_EnemyUnitBase_C_4  Tgt=BP_PlayerUnit_C_0
+Error,4,AttackAbility,17040013.247526,"[GA_MeleeAttack] BP_EnemyUnitBase_C_4: Montage completed, calling OnAttackCompleted()"
+Warning,4,TurnAction,17040013.247539,[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility
+Log,4,UnitMovement,17040013.247731,[UnitMovementComponent] Movement started with 1 waypoints
+Log,4,MoveReservation,17040013.247743,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_1, TurnId=4, ActionId=D846F1D84085BD04CFCF32A6CFA7B9E3"
+Error,4,AttackAbility,17040013.247769,[GA_MeleeAttack] BP_EnemyUnitBase_C_4: OnAttackCompleted RETURNED
+Log,4,GridOccupancy,17040013.250289,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_1 -> (3,58)"
+Log,4,MoveReservation,17040013.250307,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_1 TurnId=4
+Log,4,UnitMovement,17040013.250319,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,4,GridOccupancy,17040013.476868,"[GridOccupancy] COMMIT: BP_EnemyUnitBase_C_2 -> (4,60)"
+Warning,5,TurnInit,17040013.478063,[Turn 5] ==== TurnInitialization START ====
+Log,5,TurnInit,17040013.478083,[Turn 5] GridOccupancy initialized with 6 units
+Log,5,TurnInit,17040013.478094,[Turn 5] Skipped initial DistanceField update (will be updated in ExecuteEnemyPhase)

@@ -465,6 +465,17 @@ int32 UEnemyTurnDataSubsystem::UpgradeIntentsForAdjacency(const FIntPoint& Playe
 
         if (DistToCurrent <= AttackRange && DistToTarget <= AttackRange)
         {
+            // CodeRevision: INC-2025-1123-FIX-R6 (Prevent corner cutting attacks) (2025-11-23 06:00)
+            // Check for corner cutting (diagonal blockage) to the target position.
+            // Even if distance is 1, we can't attack through a wall corner.
+            if (!IsAttackLineClear(Intent.CurrentCell, PlayerTargetCell))
+            {
+                 UE_LOG(LogEnemyTurnDataSys, Verbose,
+                    TEXT("[UpgradeIntentsForAdjacency] Reject upgrade for (%d,%d): Corner blocked to target (%d,%d)"),
+                    Intent.CurrentCell.X, Intent.CurrentCell.Y, PlayerTargetCell.X, PlayerTargetCell.Y);
+                 continue;
+            }
+
             // Upgrade to attack intent - enemy is adjacent to both positions
             Intent.AbilityTag = AttackTag;
             Intent.NextCell = Intent.CurrentCell; // Attack from current position
@@ -542,6 +553,44 @@ void UEnemyTurnDataSubsystem::SetEnemiesSorted(const TArray<AActor*>& NewEnemies
             TEXT("[EnemyTurnData] SetEnemiesSorted: %d enemies (Revision=%d)"),
             EnemiesSorted.Num(), DataRevision);
     }
+}
+
+bool UEnemyTurnDataSubsystem::IsAttackLineClear(const FIntPoint& From, const FIntPoint& To) const
+{
+    // Orthogonal is always clear (assuming adjacency)
+    if (From.X == To.X || From.Y == To.Y)
+    {
+        return true;
+    }
+
+    // Diagonal check
+    FIntPoint Shoulder1(From.X, To.Y);
+    FIntPoint Shoulder2(To.X, From.Y);
+
+    UWorld* World = GetWorld();
+    if (World)
+    {
+        if (UGridPathfindingSubsystem* PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>())
+        {
+            // Check shoulders. We use IsCellWalkableIgnoringActor because units don't block LoS for melee (usually),
+            // but walls do.
+            bool bS1 = PathFinder->IsCellWalkableIgnoringActor(Shoulder1, nullptr);
+            bool bS2 = PathFinder->IsCellWalkableIgnoringActor(Shoulder2, nullptr);
+            
+            // At least one shoulder must be walkable to attack diagonally
+            if (!bS1 && !bS2)
+            {
+                UE_LOG(LogEnemyTurnDataSys, Verbose,
+                    TEXT("[IsAttackLineClear] Blocked by corner: From(%d,%d) To(%d,%d) Shoulders (%d,%d)=%d, (%d,%d)=%d"),
+                    From.X, From.Y, To.X, To.Y,
+                    Shoulder1.X, Shoulder1.Y, bS1,
+                    Shoulder2.X, Shoulder2.Y, bS2);
+                return false;
+            }
+        }
+    }
+    
+    return true;
 }
 
 //--------------------------------------------------------------------------

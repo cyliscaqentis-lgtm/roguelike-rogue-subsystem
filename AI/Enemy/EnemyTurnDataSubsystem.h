@@ -278,6 +278,14 @@ private:
      */
     void RebuildSortedArray();
 
+    /**
+     * 攻撃ラインがクリアかチェック（角抜け防止）
+     * @param From 攻撃元
+     * @param To 攻撃先
+     * @return 攻撃可能ならtrue
+     */
+    bool IsAttackLineClear(const FIntPoint& From, const FIntPoint& To) const;
+
     //--------------------------------------------------------------------------
     // Internal Data
     //--------------------------------------------------------------------------
