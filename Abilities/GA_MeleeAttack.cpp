@@ -33,6 +33,7 @@ struct FTargetFacingInfo
 // CodeRevision: INC-2025-00032-R1 (Removed FindGridLibrary() helper - use GetSubsystem() directly) (2025-01-XX XX:XX)
 
 // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
+// CodeRevision: INC-2025-1122-FACING-R1 (Use target's reserved cell for facing calculation even during movement) (2025-11-22)
 static FTargetFacingInfo ComputeTargetFacingInfo(AActor* Target, UWorld* World, UGridPathfindingSubsystem* GridLib)
 {
     FTargetFacingInfo Result;
@@ -52,12 +53,11 @@ static FTargetFacingInfo ComputeTargetFacingInfo(AActor* Target, UWorld* World, 
         Result.ReservedCell = Occupancy->GetReservedCellForActor(Target);
         if (Result.ReservedCell.X >= 0 && Result.ReservedCell.Y >= 0)
         {
-            const FIntPoint ActualCell = GridLib->WorldToGrid(Result.Location);
-            if (ActualCell == Result.ReservedCell)
-            {
-                Result.Location = GridLib->GridToWorld(Result.ReservedCell, Target->GetActorLocation().Z);
-                Result.bUsedReservedCell = true;
-            }
+            // Always use the reserved cell position for facing calculation.
+            // This ensures attackers face the target's destination (where they will be)
+            // rather than their current position (where they are during movement).
+            Result.Location = GridLib->GridToWorld(Result.ReservedCell, Target->GetActorLocation().Z);
+            Result.bUsedReservedCell = true;
         }
     }
 

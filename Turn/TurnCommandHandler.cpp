@@ -183,24 +183,11 @@ bool UTurnCommandHandler::ProcessPlayerCommand(const FPlayerCommand& Command)
 
 		ASC->HandleGameplayEvent(AttackEventData.EventTag, &AttackEventData);
 
-		// CodeRevision: INC-2025-1122-SIMUL-R4 (Trigger enemy phase for attack commands too) (2025-11-22)
-		// Attack commands also need to trigger enemy phase for simultaneous movement
-		// Player is not moving, so no reservation needed - use current position for intent generation
-		{
-			AGameTurnManagerBase* TurnManager = nullptr;
-			TArray<AActor*> FoundActors;
-			UGameplayStatics::GetAllActorsOfClass(GetWorld(), AGameTurnManagerBase::StaticClass(), FoundActors);
-			if (FoundActors.Num() > 0)
-			{
-				TurnManager = Cast<AGameTurnManagerBase>(FoundActors[0]);
-			}
-
-			if (TurnManager)
-			{
-				UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Player attack - triggering enemy phase for simultaneous movement."));
-				TurnManager->ExecuteEnemyPhase();
-			}
-		}
+		// CodeRevision: INC-2025-1122-ATTACK-SEQ-R1 (Do NOT trigger enemy phase immediately for attack commands) (2025-11-22)
+		// Player attack should complete BEFORE enemy phase starts.
+		// OnPlayerMoveCompleted (triggered by Gameplay.Event.Turn.Ability.Completed) will handle enemy phase dispatch
+		// after the player's attack ability finishes.
+		UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Player attack dispatched - enemy phase will start after attack completion."));
 
 		return true;
 	}

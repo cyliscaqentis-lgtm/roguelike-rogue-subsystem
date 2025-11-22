@@ -515,6 +515,19 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
         EndEnemyTurn();
         return;
     }
+
+    // CodeRevision: INC-2025-1122-ATTACK-SEQ-R2 (Trigger enemy phase after player action completes) (2025-11-22)
+    // If enemy phase hasn't been executed yet (e.g., player attacked without moving),
+    // start the enemy phase now that the player's action is complete.
+    if (!bEnemyPhaseExecutedThisTurn)
+    {
+        LOG_TURN(Log, TEXT("[Turn %d] Player action complete - starting enemy phase"), CurrentTurnId);
+        ExecuteEnemyPhase();
+    }
+    else
+    {
+        LOG_TURN(Log, TEXT("[Turn %d] Player action complete - enemy phase already in progress"), CurrentTurnId);
+    }
 }
 
 // CodeRevision: INC-2025-1122-SIMUL-R5 (Simplified - delegate intent regeneration to EnemyTurnDataSubsystem) (2025-11-22)

@@ -3,7 +3,7 @@
 // PlayerControllerBase.cpp
 #include "Player/PlayerControllerBase.h"
 #include "Turn/GameTurnManagerBase.h"
-// #include "Turn/TurnManagerSubsystem.h"  // 笘・・笘・邨ｱ蜷亥ｮ御ｺ・↓繧医ｊ蜑企勁 笘・・笘・
+// #include "Turn/TurnManagerSubsystem.h"  // 笘・E笘・邨ｱ蜷亥ｮ御ｺ・繧医ｊ蜑企勁 笘・E笘・
 // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 #include "Grid/GridPathfindingSubsystem.h"
 // CodeRevision: INC-2025-00032-R1 (Add TurnFlowCoordinator include for GetCurrentTurnIndex() replacement) (2025-01-XX XX:XX)
@@ -470,6 +470,7 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
     CachedInputDirection = FVector2D(Direction.X, Direction.Y);
 
     FIntPoint GridOffset = Quantize8Way(CachedInputDirection, AxisThreshold);
+    GridOffset.Y *= -1;
 
     FPlayerCommand Command;
     Command.CommandTag = MoveInputTag;
@@ -606,7 +607,7 @@ void APlayerControllerBase::Input_Attack_Triggered(const FInputActionValue& Valu
 		return;
 	}
 
-	// 笘・・笘・Use Input_TurnFacing direction for attack (2025-11-19) 笘・・笘・
+	// 笘・E笘・Use Input_TurnFacing direction for attack (2025-11-19) 笘・E笘・
 	// Attack direction is determined by the player's facing direction set via Input_TurnFacing.
 	// If no facing direction was set, Command.Direction will be zero and TurnCommandHandler will use ForwardVector as fallback.
 
@@ -703,6 +704,7 @@ FVector APlayerControllerBase::CalculateCameraRelativeDirection(const FVector2D&
     
     FVector Forward = FRotationMatrix(CameraRotation).GetScaledAxis(EAxis::X);
     FVector Right = FRotationMatrix(CameraRotation).GetScaledAxis(EAxis::Y);
+    Right *= -1.0f; // Align east/west input with grid/camera convention
     
     return (Forward * InputValue.Y + Right * InputValue.X);
 }
