@@ -6,6 +6,7 @@
 #include "ConflictResolverSubsystem.h"
 #include "StableActorRegistry.h"
 #include "Turn/GameTurnManagerBase.h"
+#include "Turn/MoveReservationSubsystem.h"
 #include "Turn/TurnFlowCoordinator.h"
 #include "TurnSystemTypes.h"
 #include "../Grid/GridOccupancySubsystem.h"
@@ -353,9 +354,14 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
         TEXT("[TurnCore] ResolvePhase: Resolved %d actions, Hash=0x%08X"),
         Resolved.Num(), TurnHash);
 
-    // Only true movement actions should reserve destination cells with the TurnManager.
+    // Only true movement actions should reserve destination cells with the MoveReservation subsystem.
+    UMoveReservationSubsystem* MoveRes = nullptr;
+    if (UWorld* World = GetWorld())
+    {
+        MoveRes = World->GetSubsystem<UMoveReservationSubsystem>();
+    }
 
-    if (AGameTurnManagerBase* TurnManager = ResolveTurnManager())
+    if (MoveRes)
     {
         for (FResolvedAction& Action : Resolved)
         {
@@ -363,7 +369,7 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
 
             if (bIsMoveLikeAction && !Action.bIsWait)
             {
-                const bool bReserved = TurnManager->RegisterResolvedMove(Action.SourceActor.Get(), Action.NextCell);
+                const bool bReserved = MoveRes->RegisterResolvedMove(Action.SourceActor.Get(), Action.NextCell);
                 if (!bReserved)
                 {
                     UE_LOG(LogTurnCore, Error,
@@ -371,7 +377,7 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
                         *GetNameSafe(Action.SourceActor.Get()), Action.NextCell.X, Action.NextCell.Y);
 
                     Action.bIsWait = true;
-                    Action.ResolutionReason = TEXT("TurnManager reservation failed - converted to wait");
+                    Action.ResolutionReason = TEXT("Move reservation failed - converted to wait");
                 }
             }
             else
@@ -384,6 +390,10 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
             }
         }
     }
+    else
+    {
+        UE_LOG(LogTurnCore, Error, TEXT("[TurnCore] MoveReservationSubsystem not found - skipping move registration"));
+    }
 
     return Resolved;
 }
@@ -394,6 +404,20 @@ TArray<FResolvedAction> UTurnCorePhaseManager::CoreResolvePhase(const TArray<FEn
 
 void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& ResolvedActions)
 {
+    AGameTurnManagerBase* TurnManager = ResolveTurnManager();
+    UMoveReservationSubsystem* MoveResSubsystem = nullptr;
+    if (UWorld* World = GetWorld())
+    {
+        MoveResSubsystem = World->GetSubsystem<UMoveReservationSubsystem>();
+    }
+    const bool bCanDispatchViaSubsystem = (TurnManager && MoveResSubsystem);
+
+    if (!MoveResSubsystem)
+    {
+        UE_LOG(LogTurnCore, Error,
+            TEXT("[Execute] MoveReservationSubsystem missing - falling back to direct ASC dispatch"));
+    }
+
     for (const FResolvedAction& Action : ResolvedActions)
     {
         if (!Action.SourceActor)
@@ -410,13 +434,13 @@ void UTurnCorePhaseManager::CoreExecutePhase(const TArray<FResolvedAction>& Reso
                 *GetNameSafe(Action.SourceActor.Get()));
         }
 
-        bool bHandledByTurnManager = false;
-        if (AGameTurnManagerBase* TurnManager = ResolveTurnManager())
+        bool bHandledByMoveSubsystem = false;
+        if (bCanDispatchViaSubsystem)
         {
-            bHandledByTurnManager = TurnManager->DispatchResolvedMove(Action);
+            bHandledByMoveSubsystem = MoveResSubsystem->DispatchResolvedMove(Action, TurnManager);
         }
 
-        if (bHandledByTurnManager)
+        if (bHandledByMoveSubsystem)
         {
             continue;
         }

@@ -538,12 +538,6 @@ protected:
     /** Get player's AbilitySystemComponent */
     UAbilitySystemComponent* GetPlayerASC() const;
 
-    /** Register a resolved move for collision tracking */
-    bool RegisterResolvedMove(AActor* SourceActor, const FIntPoint& TargetCell);
-
-    /** Dispatch a resolved move action */
-    bool DispatchResolvedMove(const FResolvedAction& Action);
-
     /** Get cached resolved actions for sequential processing */
     const TArray<FResolvedAction>& GetCachedResolvedActions() const { return CachedResolvedActions; }
 
@@ -551,14 +545,8 @@ protected:
     // Phase Execution
     //==========================================================================
 
-    void ExecuteSimultaneousPhase();
-    void ExecuteSequentialPhase();
-    // NOTE: ExecuteEnemyPhase() moved to public section (INC-2025-1122-SIMUL-R1)
-    void ExecuteMovePhase(bool bSkipAttackCheck = false);
     TSet<TWeakObjectPtr<AUnitBase>> ActiveMoveDelegates;
     TSet<TWeakObjectPtr<AUnitBase>> PendingPlayerFallbackMoves;
-    // CodeRevision: INC-2025-1117H-R1 (Generalize attack execution) (2025-11-17 19:10)
-    void ExecuteAttacks(const TArray<FResolvedAction>& PreResolvedAttacks = TArray<FResolvedAction>());
     void EndEnemyTurn();
 
     void OnPlayerMoveAccepted();
@@ -709,8 +697,6 @@ private:
     FVector2D CalculateDirectionFromTargetCell(const FIntPoint& TargetCell);
 
     void ExecuteEnemyMoves_Sequential();
-    // CodeRevision: INC-2025-1117H-R1 (Centralized move dispatch) (2025-11-17 19:10)
-    void DispatchMoveActions(const TArray<FResolvedAction>& ActionsToDispatch);
     // ★★★ Phase 4: Unused variable removal (2025-11-09) ★★★
     // Removed: bEnemyTurnEnding (unused)
 

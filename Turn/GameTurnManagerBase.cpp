@@ -8,7 +8,6 @@
 #include "Turn/TurnAdvanceGuardSubsystem.h"
 #include "Turn/PlayerInputProcessor.h"
 #include "Turn/UnitTurnStateSubsystem.h"
-#include "Turn/MoveReservationSubsystem.h"
 #include "Turn/PlayerMoveHandlerSubsystem.h"
 #include "Turn/TurnFlowCoordinator.h"
 #include "TBSLyraGameMode.h"
@@ -486,14 +485,6 @@ void AGameTurnManagerBase::OnPlayerCommandAccepted_Implementation(const FPlayerC
 
 
 
-void AGameTurnManagerBase::ExecuteSimultaneousPhase()
-{
-    if (UTurnEnemyPhaseSubsystem* EnemyPhase = GetWorld()->GetSubsystem<UTurnEnemyPhaseSubsystem>())
-    {
-        EnemyPhase->ExecuteSimultaneousPhase(this, CurrentTurnId);
-    }
-}
-
 void AGameTurnManagerBase::OnSimultaneousPhaseCompleted()
 {
     if (!IsAuthorityLike(GetWorld(), this))
@@ -505,12 +496,23 @@ void AGameTurnManagerBase::OnSimultaneousPhaseCompleted()
         TEXT("[Turn %d] OnSimultaneousPhaseCompleted: Simultaneous phase finished"),
         CurrentTurnId);
 
-    ExecuteAttacks();
-}
-
-void AGameTurnManagerBase::ExecuteSequentialPhase()
-{
-    ExecuteAttacks();
+    if (UWorld* World = GetWorld())
+    {
+        if (UTurnEnemyPhaseSubsystem* EnemyPhase = World->GetSubsystem<UTurnEnemyPhaseSubsystem>())
+        {
+            EnemyPhase->ExecuteAttacks(this, CurrentTurnId);
+        }
+        else
+        {
+            LOG_TURN(Error, TEXT("OnSimultaneousPhaseCompleted: UTurnEnemyPhaseSubsystem not found!"));
+            EndEnemyTurn();
+        }
+    }
+    else
+    {
+        LOG_TURN(Error, TEXT("OnSimultaneousPhaseCompleted: World is null, ending turn."));
+        EndEnemyTurn();
+    }
 }
 
 void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Payload)
@@ -625,57 +627,12 @@ void AGameTurnManagerBase::ExecuteEnemyMoves_Sequential()
     }
 }
 
-void AGameTurnManagerBase::DispatchMoveActions(const TArray<FResolvedAction>& ActionsToDispatch)
-{
-    if (!IsAuthorityLike(GetWorld(), this) || ActionsToDispatch.IsEmpty())
-    {
-        return;
-    }
-
-    if (UWorld* World = GetWorld())
-    {
-        if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
-        {
-            for (const FResolvedAction& Action : ActionsToDispatch)
-            {
-                MoveRes->DispatchResolvedMove(Action, this);
-            }
-        }
-    }
-}
-
 bool AGameTurnManagerBase::IsSequentialModeActive() const
 {
     return bSequentialModeActive;
 }
 
 
-
-void AGameTurnManagerBase::ExecuteAttacks(const TArray<FResolvedAction>& PreResolvedAttacks)
-{
-    if (UTurnEnemyPhaseSubsystem* EnemyPhase = GetWorld()->GetSubsystem<UTurnEnemyPhaseSubsystem>())
-    {
-        EnemyPhase->ExecuteAttacks(this, CurrentTurnId, PreResolvedAttacks);
-    }
-    else
-    {
-        LOG_TURN(Error, TEXT("ExecuteAttacks: UTurnEnemyPhaseSubsystem not found!"));
-        EndEnemyTurn();
-    }
-}
-
-void AGameTurnManagerBase::ExecuteMovePhase(bool bSkipAttackCheck)
-{
-    if (UTurnEnemyPhaseSubsystem* EnemyPhase = GetWorld()->GetSubsystem<UTurnEnemyPhaseSubsystem>())
-    {
-        EnemyPhase->ExecuteMovePhase(this, CurrentTurnId, bSkipAttackCheck);
-    }
-    else
-    {
-        LOG_TURN(Error, TEXT("ExecuteMovePhase: UTurnEnemyPhaseSubsystem not found!"));
-        EndEnemyTurn();
-    }
-}
 
 void AGameTurnManagerBase::HandleMovePhaseCompleted(int32 FinishedTurnId)
 {
@@ -1057,27 +1014,3 @@ UAbilitySystemComponent* AGameTurnManagerBase::GetPlayerASC() const
     return TurnSystemUtils::GetPlayerASC(const_cast<AGameTurnManagerBase*>(this));
 }
 
-bool AGameTurnManagerBase::RegisterResolvedMove(AActor* SourceActor, const FIntPoint& TargetCell)
-{
-    if (UWorld* World = GetWorld())
-    {
-        if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
-        {
-            return MoveRes->RegisterResolvedMove(SourceActor, TargetCell);
-        }
-    }
-    return false;
-}
-
-bool AGameTurnManagerBase::DispatchResolvedMove(const FResolvedAction& Action)
-{
-    if (UWorld* World = GetWorld())
-    {
-        if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
-        {
-            MoveRes->DispatchResolvedMove(Action, this);
-            return true;
-        }
-    }
-    return false;
-}

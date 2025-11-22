@@ -3,7 +3,9 @@
 #include "Turn/TurnCorePhaseManager.h"
 #include "AI/Enemy/EnemyTurnDataSubsystem.h"
 #include "Turn/AttackPhaseExecutorSubsystem.h"
+#include "Turn/MoveReservationSubsystem.h"
 #include "Utility/RogueGameplayTags.h"
+#include "Utility/TurnAuthorityUtils.h"
 #include "Kismet/GameplayStatics.h"
 
 void UTurnEnemyPhaseSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -289,8 +291,26 @@ bool UTurnEnemyPhaseSubsystem::DoesAnyIntentHaveAttack(const TArray<FEnemyIntent
 
 void UTurnEnemyPhaseSubsystem::DispatchMoveActions(AGameTurnManagerBase* TurnManager, const TArray<FResolvedAction>& Actions)
 {
-	if (TurnManager)
+	if (!TurnManager || Actions.IsEmpty())
 	{
-		TurnManager->DispatchMoveActions(Actions);
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World || !IsAuthorityLike(World, TurnManager))
+	{
+		return;
+	}
+
+	if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
+	{
+		for (const FResolvedAction& Action : Actions)
+		{
+			MoveRes->DispatchResolvedMove(Action, TurnManager);
+		}
+	}
+	else
+	{
+		LOG_TURN(Error, TEXT("[Turn %d] DispatchMoveActions: MoveReservationSubsystem not available"), TurnManager->GetCurrentTurnId());
 	}
 }
