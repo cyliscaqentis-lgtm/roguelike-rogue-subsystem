@@ -8,6 +8,7 @@
 
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
+#include "AbilitySystemBlueprintLibrary.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -307,6 +308,25 @@ void UGA_MoveBase::ActivateAbility(
             FMath::RoundToInt(EncodedDirection.X),
             FMath::RoundToInt(EncodedDirection.Y));
 
+        // Ensure step tag / gameplay event fire even for pre-resolved cell moves
+        if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
+        {
+            ASC->AddLooseGameplayTag(RogueGameplayTags::Event_Dungeon_Step);
+            UE_LOG(LogMoveAbility, Warning, TEXT("[GA_MoveBase] %s: Added Event_Dungeon_Step tag (Activate/ResolvedCell)"), *GetNameSafe(Avatar));
+        }
+        else
+        {
+            UE_LOG(LogMoveAbility, Error, TEXT("[GA_MoveBase] %s: ASC is NULL in ActivateAbility (ResolvedCell branch)"), *GetNameSafe(Avatar));
+        }
+        {
+            FGameplayEventData EventData;
+            EventData.EventTag = RogueGameplayTags::Event_Dungeon_Step;
+            EventData.Instigator = Avatar;
+            EventData.EventMagnitude = 1.0f; // 1 = start
+            UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(Avatar, EventData.EventTag, EventData);
+            UE_LOG(LogMoveAbility, Warning, TEXT("[GA_MoveBase] %s: Sent GameplayEvent Event_Dungeon_Step START (ResolvedCell)"), *GetNameSafe(Avatar));
+        }
+
         UE_LOG(LogMoveAbility, Log,
             TEXT("[GA_MoveBase] Starting move to resolved cell: Target=(%d,%d) Actor=%s Magnitude=%d"),
             TargetCell.X, TargetCell.Y, *GetNameSafe(Avatar), RawMagnitude);
@@ -346,6 +366,20 @@ void UGA_MoveBase::ActivateAbility(
     if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
     {
         ASC->AddLooseGameplayTag(RogueGameplayTags::Event_Dungeon_Step);
+        UE_LOG(LogMoveAbility, Warning, TEXT("[GA_MoveBase] %s: Added Event_Dungeon_Step tag (Activate)"), *GetNameSafe(Avatar));
+    }
+    else
+    {
+        UE_LOG(LogMoveAbility, Error, TEXT("[GA_MoveBase] %s: ASC is NULL in ActivateAbility"), *GetNameSafe(Avatar));
+    }
+    // Send GameplayEvent to the avatar actor (ASC will be resolved internally, usually PlayerState ASC for players)
+    {
+        FGameplayEventData EventData;
+        EventData.EventTag = RogueGameplayTags::Event_Dungeon_Step;
+        EventData.Instigator = Avatar;
+        EventData.EventMagnitude = 1.0f; // 1 = start
+        UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(Avatar, EventData.EventTag, EventData);
+        UE_LOG(LogMoveAbility, Warning, TEXT("[GA_MoveBase] %s: Sent GameplayEvent Event_Dungeon_Step START"), *GetNameSafe(Avatar));
     }
 
     const float FixedZ = ComputeFixedZ(Unit, Pathfinding);
@@ -530,7 +564,21 @@ void UGA_MoveBase::EndAbility(
 
     if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
     {
-        ASC->RemoveLooseGameplayTag(RogueGameplayTags::Event_Dungeon_Step);
+         ASC->RemoveLooseGameplayTag(RogueGameplayTags::Event_Dungeon_Step);
+         UE_LOG(LogMoveAbility, Warning, TEXT("[GA_MoveBase] %s: Removed Event_Dungeon_Step tag (EndAbility)"), *GetNameSafe(GetAvatarActorFromActorInfo()));
+    }
+    else
+    {
+         UE_LOG(LogMoveAbility, Error, TEXT("[GA_MoveBase] %s: ASC is NULL in EndAbility"), *GetNameSafe(GetAvatarActorFromActorInfo()));
+    }
+    {
+         // Notify animation/logic via GameplayEvent (end)
+         FGameplayEventData EventData;
+         EventData.EventTag = RogueGameplayTags::Event_Dungeon_Step;
+         EventData.Instigator = GetAvatarActorFromActorInfo();
+         EventData.EventMagnitude = 0.0f; // 0 = end
+         UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(GetAvatarActorFromActorInfo(), EventData.EventTag, EventData);
+         UE_LOG(LogMoveAbility, Warning, TEXT("[GA_MoveBase] %s: Sent GameplayEvent Event_Dungeon_Step END"), *GetNameSafe(GetAvatarActorFromActorInfo()));
     }
 
     // CodeRevision: INC-2025-00018-R3 (Remove barrier management - Phase 3) (2025-11-17)

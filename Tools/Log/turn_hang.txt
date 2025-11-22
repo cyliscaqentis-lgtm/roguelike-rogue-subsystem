@@ -1,0 +1,209 @@
+Type,TurnID,Category,Timestamp,Message
+Log,3,TurnBarrier,17030175.193383,[Barrier] Broadcasting OnAllMovesFinished for Turn 3
+Log,4,TurnManager,17030175.193402,[Turn 3] Barrier complete - all move actions finished (EnemyPhaseInProgress=1)
+Log,4,TurnManager,17030175.193417,[Turn 3] Enemy phase complete. Ending turn.
+Log,4,TurnManager,17030175.193441,[Turn 3] Sequential mode flags cleared
+Warning,4,TurnManager,17030175.193453,[Turn 3] ==== EndEnemyTurn ====
+Log,4,TurnManager,17030175.193478,[AdvanceTurnAndRestart] Current Turn: 3
+Log,4,TurnCore,17030175.193509,[TurnCore] CleanupPhase: Complete
+Log,4,TurnManager,17030175.193519,[AdvanceTurnAndRestart] CoreCleanupPhase completed
+Log,4,TurnFlow,17030175.193530,[TurnFlowCoordinator] Turn ended: TurnId=3
+Log,4,TurnFlow,17030175.193546,"[TurnFlowCoordinator] Turn advanced: TurnId=4, TurnIndex=4"
+Log,4,TurnManager,17030175.193558,[AdvanceTurnAndRestart] Turn advanced: 3 -> 4 (bEndTurnPosted reset)
+Log,4,TurnManager,17030175.193568,[AdvanceTurnAndRestart] Barrier::BeginTurn(4) called
+Log,4,TurnManager,17030175.193579,[AdvanceTurnAndRestart] OnTurnStarted broadcasted for turn 4
+Warning,4,TurnInit,17030175.193590,[Turn 4] ==== OnTurnStarted (Subsystem) START ====
+Log,4,TurnInit,17030175.193602,[Turn 4] ClearResidualInProgressTags called
+Log,4,EnemyAI,17030175.193661,"[CollectAllEnemies] Added[2]: BP_EnemyUnitBase_C_2 (TeamId=2, GTag=1, ByTeam=1, ActorTag=1)"
+Log,4,EnemyAI,17030175.193673,[CollectAllEnemies] ==== RESULT ==== found=6  collected=5  byGTag=5  byTeam=5  byActorTag=5
+Log,4,TurnInit,17030175.193682,[Turn 4] Enemy roster updated: 5 -> 5
+Warning,4,TurnInit,17030175.193693,[Turn 4] ==== TurnInitialization START ====
+Log,4,TurnInit,17030175.193724,[Turn 4] Skipped initial DistanceField update (will be updated in ExecuteEnemyPhase)
+Log,4,TurnInit,17030175.193736,[Turn 4] Skipped preliminary intent generation (will be generated in ExecuteEnemyPhase)
+Warning,4,TurnInit,17030175.193747,[Turn 4] ==== TurnInitialization END ====
+Warning,4,TurnInit,17030175.193758,[Turn 4] ==== OnTurnStarted (Subsystem) END ====
+Log,4,TurnManager,17030175.193824,[Turn 4] Client: Gate OPENED after replication (WindowId=5)
+Warning,4,Temp,17030175.193833,"[Client] OnRep: Window OPEN, gate reset"
+Log,4,Temp,17030175.413162,[Client] Command created: TurnId=4 (from TurnManager) WindowId=5
+Log,4,Temp,17030175.413300,[Client]   LastProcessedWindowId: -1 -> 5
+Log,4,MoveAbility,17030175.413315,"[GA_MoveBase] ABILITY ACTIVATED: Actor=BP_PlayerUnit_C_0, Team=0"
+Log,4,MoveAbility,17030175.413328,[GA_MoveBase] Registered with Barrier: Turn=4 ActionId=915213094CEE483CF865CCBE08BD3CF9 Registered=1
+Log,4,MoveAbility,17030175.413340,[GA_MoveBase] TurnId retrieved from TurnManager: 4 (Actor=BP_PlayerUnit_C_0)
+Warning,4,MoveAbility,17030175.413365,[GA_MoveBase] BP_PlayerUnit_C_0: Sent GameplayEvent Event_Dungeon_Step START (ResolvedCell)
+Log,4,MoveAbility,17030175.413398,"[GA_MoveBase] Starting move to resolved cell: Target=(55,25) Actor=BP_PlayerUnit_C_0 Magnitude=4210841"
+Log,4,MoveAbility,17030175.413411,[BindMoveFinishedDelegate] SUCCESS: Unit BP_PlayerUnit_C_0 delegate bound to UnitMovementComponent::OnMoveFinished
+Log,4,UnitBase,17030175.413422,[MoveUnit] BP_PlayerUnit_C_0: Delegating to MovementComponent (PathNum=1)
+Log,4,UnitMovement,17030175.413434,[UnitMovementComponent] Movement started with 1 waypoints
+Log,4,TurnManager,17030175.413461,"[TurnCommandHandler] Player move reserved (55,25) - triggering enemy phase for simultaneous movement."
+Log,4,TurnManager,17030175.413472,"[Turn 4] ExecuteEnemyPhase: Using RESERVED PlayerTargetCell=(55,25)"
+Warning,4,TurnCore,17030175.413509,"[TurnCore] CoreObservationPhase received PlayerCell=(55, 25)"
+Log,4,TurnCore,17030175.413521,[TurnCore] ObservationPhase: Purged outdated reservations for turn 4
+Log,4,TurnCore,17030175.413532,[TurnCore] ObservationPhase: Updating DistanceField with Margin=16 (Enemies=5)
+Log,4,TurnCore,17030175.413548,[TurnCore] ObservationPhase: Complete
+Log,4,EnemyThinker,17030175.413730,[ComputeIntent] BP_EnemyUnitBase_C_4: MOVE intent (TileDistance=2 > Range=1)
+Log,4,EnemyAI,17030175.413741,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_4, Thinker found, Intent=AI.Intent.Move"
+Warning,4,EnemyAI,17030175.413752,"[CollectIntents] Pass1 Complete: AttackIntents=0, HardBlockedCells=0"
+Warning,4,EnemyAI,17030175.413763,[CollectIntents] === PASS 2: Move/Wait Intent Generation ===
+Warning,4,EnemyAI,17030175.413776,"[CollectIntents] ==== RESULT ==== Generated 5 intents (Attack=0, Move=5, Wait=0)"
+Log,4,EnemyTurnDataSys,17030175.413786,"[Turn 4] RegenerateIntents: Generated 5 intents (Attack=0, Move=5, Wait=0) for PlayerCell=(55,25)"
+Log,4,TurnManager,17030175.413796,[Turn 4] Mode: SIMULTANEOUS
+Log,4,TurnManager,17030175.413808,[Turn 4] ==== Simultaneous Move Phase (No Attacks) ====
+Log,4,TurnManager,17030175.413821,[Turn 4] ExecuteSimultaneousPhase: Processing 5 intents via CoreResolvePhase
+Log,4,TurnCore,17030175.413833,"[TurnCore] ResolvePhase: Resolved 5 actions, Hash=0x02DFAE7D"
+Log,4,TurnManager,17030175.413904,[Turn 4] ExecuteSimultaneousPhase: CoreResolvePhase produced 5 resolved actions
+Log,4,UnitBase,17030175.413919,[MoveUnit] BP_EnemyUnitBase_C_2: Delegating to MovementComponent (PathNum=1)
+Log,4,UnitMovement,17030175.413930,[UnitMovementComponent] Movement started with 1 waypoints
+Log,4,MoveReservation,17030175.413949,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_2, TurnId=4, ActionId=FDC205AE4C40D07D1370E78016C74F1E"
+Log,4,UnitBase,17030175.413961,[MoveUnit] BP_EnemyUnitBase_C_1: Delegating to MovementComponent (PathNum=1)
+Log,4,UnitMovement,17030175.413973,[UnitMovementComponent] Movement started with 1 waypoints
+Log,4,MoveReservation,17030175.413996,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_1, TurnId=4, ActionId=C301A0A441544459468180BDA46A390D"
+Log,4,UnitBase,17030175.414008,[MoveUnit] BP_EnemyUnitBase_C_0: Delegating to MovementComponent (PathNum=1)
+Log,4,UnitMovement,17030175.414019,[UnitMovementComponent] Movement started with 1 waypoints
+Log,4,MoveReservation,17030175.414033,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_0, TurnId=4, ActionId=B44590294173070883BC99B214D38F5D"
+Log,4,UnitBase,17030175.414042,[MoveUnit] BP_EnemyUnitBase_C_3: Delegating to MovementComponent (PathNum=1)
+Log,4,UnitMovement,17030175.414052,[UnitMovementComponent] Movement started with 1 waypoints
+Log,4,MoveReservation,17030175.414063,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_3, TurnId=4, ActionId=A634B587402B207963D6DFBBEEC06B7B"
+Log,4,UnitBase,17030175.414071,[MoveUnit] BP_EnemyUnitBase_C_4: Delegating to MovementComponent (PathNum=1)
+Log,4,UnitMovement,17030175.414084,[UnitMovementComponent] Movement started with 1 waypoints
+Log,4,MoveReservation,17030175.414097,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_4, TurnId=4, ActionId=D7020166425709137E5737B60953CF92"
+Log,4,TurnManager,17030175.414107,[Turn 4] ExecuteSimultaneousPhase complete - 5 movements dispatched
+Warning,4,Temp,17030175.414138,[Client] 📤 RPC sent: Server_SubmitCommand(WindowId=5)
+Log,4,MoveReservation,17030175.578784,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_0 TurnId=4
+Log,4,UnitMovement,17030175.578796,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,4,MoveReservation,17030175.579509,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_2 TurnId=4
+Log,4,UnitMovement,17030175.579523,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,4,MoveAbility,17030175.579781,"[MoveComplete] Unit BP_PlayerUnit_C_0 reached destination, GA_MoveBase ending."
+Log,4,MoveAbility,17030175.579795,"[GA_MoveBase] Barrier completed in EndAbility for BP_PlayerUnit_C_0 (Turn=4, ActionId=915213094CEE483CF865CCBE08BD3CF9)"
+Warning,4,MoveAbility,17030175.579806,[GA_MoveBase] BP_PlayerUnit_C_0: Removed Event_Dungeon_Step tag (EndAbility)
+Warning,4,MoveAbility,17030175.579817,[GA_MoveBase] BP_PlayerUnit_C_0: Sent GameplayEvent Event_Dungeon_Step END
+Warning,4,TurnAction,17030175.579828,[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility
+Warning,4,TurnAction,17030175.579839,"[GA_TurnActionBase] Defensive check: ASC found, checking tags"
+Warning,4,TurnAction,17030175.579854,"[GA_TurnActionBase] Defensive check: State_Ability_Executing=0, State_Action_InProgress=0"
+Warning,4,MoveAbility,17030175.579864,[TurnNotify] GA_MoveBase completion: Actor=BP_PlayerUnit_C_0 TurnId=4
+Log,4,TurnManager,17030175.579875,Turn 4: OnPlayerMoveCompleted Tag=Gameplay.Event.Turn.Ability.Completed
+Log,4,TurnManager,17030175.579925,[Turn 4] Client: Gate CLOSED after replication
+Log,4,TurnManager,17030175.579935,[Turn 4] Player action complete - enemy phase already in progress (skipping redundant AI calc)
+Log,4,UnitMovement,17030175.579946,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,4,MoveReservation,17030175.581651,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_3 TurnId=4
+Log,4,UnitMovement,17030175.581665,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Warning,4,UnitMovement,17030175.638241,"[UnitMovementComponent] UpdateActorCell FAILED (Retry=1/5) for BP_EnemyUnitBase_C_1 at (57,27) - scheduling retry"
+Log,4,MoveReservation,17030175.639859,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_4 TurnId=4
+Log,4,UnitMovement,17030175.639871,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Warning,4,TurnBarrier,17030175.744323,[Barrier] Turn 4: ALL ACTIONS COMPLETED (Remaining=0) -> Scheduling OnAllMovesFinished (NextTick)
+Log,4,MoveReservation,17030175.744345,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_1 TurnId=4
+Log,4,UnitMovement,17030175.744356,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,4,TurnBarrier,17030175.755501,[Barrier] Broadcasting OnAllMovesFinished for Turn 4
+Log,5,TurnManager,17030175.755520,[Turn 4] Barrier complete - all move actions finished (EnemyPhaseInProgress=1)
+Log,5,TurnManager,17030175.755531,[Turn 4] Enemy phase complete. Ending turn.
+Warning,5,TurnManager,17030175.755554,[Turn 4] ==== EndEnemyTurn ====
+Log,5,TurnManager,17030175.755575,[AdvanceTurnAndRestart] Current Turn: 4
+Log,5,TurnCore,17030175.755595,[TurnCore] CleanupPhase: Complete
+Log,5,TurnManager,17030175.755605,[AdvanceTurnAndRestart] CoreCleanupPhase completed
+Log,5,TurnFlow,17030175.755622,[TurnFlowCoordinator] Turn ended: TurnId=4
+Log,5,TurnFlow,17030175.755632,"[TurnFlowCoordinator] Turn advanced: TurnId=5, TurnIndex=5"
+Log,5,TurnManager,17030175.755642,[AdvanceTurnAndRestart] Turn advanced: 4 -> 5 (bEndTurnPosted reset)
+Log,5,TurnManager,17030175.755653,[AdvanceTurnAndRestart] Barrier::BeginTurn(5) called
+Log,5,TurnManager,17030175.755664,[AdvanceTurnAndRestart] OnTurnStarted broadcasted for turn 5
+Warning,5,TurnInit,17030175.755675,[Turn 5] ==== OnTurnStarted (Subsystem) START ====
+Log,5,TurnInit,17030175.755686,[Turn 5] ClearResidualInProgressTags called
+Log,5,EnemyAI,17030175.755738,"[CollectAllEnemies] Added[2]: BP_EnemyUnitBase_C_2 (TeamId=2, GTag=1, ByTeam=1, ActorTag=1)"
+Log,5,EnemyAI,17030175.755749,[CollectAllEnemies] ==== RESULT ==== found=6  collected=5  byGTag=5  byTeam=5  byActorTag=5
+Log,5,TurnInit,17030175.755759,[Turn 5] Enemy roster updated: 5 -> 5
+Warning,5,TurnInit,17030175.755768,[Turn 5] ==== TurnInitialization START ====
+Log,5,TurnInit,17030175.755799,[Turn 5] Skipped initial DistanceField update (will be updated in ExecuteEnemyPhase)
+Log,5,TurnInit,17030175.755811,[Turn 5] Skipped preliminary intent generation (will be generated in ExecuteEnemyPhase)
+Warning,5,TurnInit,17030175.755823,[Turn 5] ==== TurnInitialization END ====
+Warning,5,TurnInit,17030175.755834,[Turn 5] ==== OnTurnStarted (Subsystem) END ====
+Log,5,TurnManager,17030175.755898,[Turn 5] Client: Gate OPENED after replication (WindowId=6)
+Warning,5,Temp,17030175.755908,"[Client] OnRep: Window OPEN, gate reset"
+Log,5,Temp,17030175.905697,[Client] Command created: TurnId=5 (from TurnManager) WindowId=6
+Log,5,Temp,17030175.905812,[Client]   LastProcessedWindowId: -1 -> 6
+Log,5,MoveAbility,17030175.905823,"[GA_MoveBase] ABILITY ACTIVATED: Actor=BP_PlayerUnit_C_0, Team=0"
+Log,5,MoveAbility,17030175.905836,[GA_MoveBase] Registered with Barrier: Turn=5 ActionId=C8BAA06D41F59151DFF9AAAF15CEA202 Registered=1
+Log,5,MoveAbility,17030175.905848,[GA_MoveBase] TurnId retrieved from TurnManager: 5 (Actor=BP_PlayerUnit_C_0)
+Warning,5,MoveAbility,17030175.905871,[GA_MoveBase] BP_PlayerUnit_C_0: Sent GameplayEvent Event_Dungeon_Step START (ResolvedCell)
+Log,5,MoveAbility,17030175.905882,"[GA_MoveBase] Starting move to resolved cell: Target=(54,25) Actor=BP_PlayerUnit_C_0 Magnitude=4208793"
+Log,5,MoveAbility,17030175.905895,[BindMoveFinishedDelegate] SUCCESS: Unit BP_PlayerUnit_C_0 delegate bound to UnitMovementComponent::OnMoveFinished
+Log,5,UnitBase,17030175.905905,[MoveUnit] BP_PlayerUnit_C_0: Delegating to MovementComponent (PathNum=1)
+Log,5,UnitMovement,17030175.905915,[UnitMovementComponent] Movement started with 1 waypoints
+Log,5,TurnManager,17030175.905936,"[TurnCommandHandler] Player move reserved (54,25) - triggering enemy phase for simultaneous movement."
+Log,5,TurnManager,17030175.905947,"[Turn 5] ExecuteEnemyPhase: Using RESERVED PlayerTargetCell=(54,25)"
+Warning,5,TurnCore,17030175.906001,"[TurnCore] CoreObservationPhase received PlayerCell=(54, 25)"
+Log,5,TurnCore,17030175.906013,[TurnCore] ObservationPhase: Purged outdated reservations for turn 5
+Log,5,TurnCore,17030175.906023,[TurnCore] ObservationPhase: Updating DistanceField with Margin=16 (Enemies=5)
+Log,5,TurnCore,17030175.906035,[TurnCore] ObservationPhase: Complete
+Log,5,EnemyThinker,17030175.906204,[ComputeIntent] BP_EnemyUnitBase_C_4: MOVE intent (TileDistance=2 > Range=1)
+Log,5,EnemyAI,17030175.906214,"[ComputeIntent] Enemy=BP_EnemyUnitBase_C_4, Thinker found, Intent=AI.Intent.Move"
+Warning,5,EnemyAI,17030175.906225,"[CollectIntents] Pass1 Complete: AttackIntents=0, HardBlockedCells=0"
+Warning,5,EnemyAI,17030175.906236,[CollectIntents] === PASS 2: Move/Wait Intent Generation ===
+Warning,5,EnemyAI,17030175.906262,"[CollectIntents] ==== RESULT ==== Generated 5 intents (Attack=0, Move=5, Wait=0)"
+Log,5,EnemyTurnDataSys,17030175.906274,"[Turn 5] RegenerateIntents: Generated 5 intents (Attack=0, Move=5, Wait=0) for PlayerCell=(54,25)"
+Log,5,TurnManager,17030175.906285,[Turn 5] Mode: SIMULTANEOUS
+Log,5,TurnManager,17030175.906296,[Turn 5] ==== Simultaneous Move Phase (No Attacks) ====
+Log,5,TurnManager,17030175.906307,[Turn 5] ExecuteSimultaneousPhase: Processing 5 intents via CoreResolvePhase
+Log,5,TurnCore,17030175.906317,"[TurnCore] ResolvePhase: Resolved 5 actions, Hash=0x257C35A6"
+Log,5,TurnManager,17030175.906376,[Turn 5] ExecuteSimultaneousPhase: CoreResolvePhase produced 5 resolved actions
+Log,5,UnitBase,17030175.906387,[MoveUnit] BP_EnemyUnitBase_C_2: Delegating to MovementComponent (PathNum=1)
+Log,5,UnitMovement,17030175.906401,[UnitMovementComponent] Movement started with 1 waypoints
+Log,5,MoveReservation,17030175.906418,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_2, TurnId=5, ActionId=151A9E7F4B7E83D6FCB940BDF57755AA"
+Log,5,UnitBase,17030175.906428,[MoveUnit] BP_EnemyUnitBase_C_0: Delegating to MovementComponent (PathNum=1)
+Log,5,UnitMovement,17030175.906437,[UnitMovementComponent] Movement started with 1 waypoints
+Log,5,MoveReservation,17030175.906448,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_0, TurnId=5, ActionId=F4687D86493E18CF354E0397F83B4F64"
+Log,5,UnitBase,17030175.906457,[MoveUnit] BP_EnemyUnitBase_C_1: Delegating to MovementComponent (PathNum=1)
+Log,5,UnitMovement,17030175.906468,[UnitMovementComponent] Movement started with 1 waypoints
+Log,5,MoveReservation,17030175.906482,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_1, TurnId=5, ActionId=230D9FB04FFF84B7A30A93891DE7BD72"
+Log,5,UnitBase,17030175.906493,[MoveUnit] BP_EnemyUnitBase_C_3: Delegating to MovementComponent (PathNum=1)
+Log,5,UnitMovement,17030175.906502,[UnitMovementComponent] Movement started with 1 waypoints
+Log,5,MoveReservation,17030175.906520,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_3, TurnId=5, ActionId=FE1EF14E428CDD2E0E2E52889B314182"
+Log,5,UnitBase,17030175.906535,[MoveUnit] BP_EnemyUnitBase_C_4: Delegating to MovementComponent (PathNum=1)
+Log,5,UnitMovement,17030175.906547,[UnitMovementComponent] Movement started with 1 waypoints
+Log,5,MoveReservation,17030175.906559,"[DispatchResolvedMove] Registered enemy move: Actor=BP_EnemyUnitBase_C_4, TurnId=5, ActionId=20BEA5C64EF5A22A0A73ECA34380BF59"
+Log,5,TurnManager,17030175.906569,[Turn 5] ExecuteSimultaneousPhase complete - 5 movements dispatched
+Warning,5,Temp,17030175.906599,[Client] 📤 RPC sent: Server_SubmitCommand(WindowId=6)
+Log,5,MoveReservation,17030176.065221,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_4 TurnId=5
+Log,5,UnitMovement,17030176.065234,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,5,MoveReservation,17030176.065516,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_3 TurnId=5
+Log,5,UnitMovement,17030176.065533,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Warning,5,UnitMovement,17030176.066011,"[UnitMovementComponent] UpdateActorCell FAILED (Retry=1/5) for BP_EnemyUnitBase_C_2 at (57,27) - scheduling retry"
+Log,5,MoveAbility,17030176.066170,"[MoveComplete] Unit BP_PlayerUnit_C_0 reached destination, GA_MoveBase ending."
+Log,5,MoveAbility,17030176.066183,"[GA_MoveBase] Barrier completed in EndAbility for BP_PlayerUnit_C_0 (Turn=5, ActionId=C8BAA06D41F59151DFF9AAAF15CEA202)"
+Warning,5,MoveAbility,17030176.066200,[GA_MoveBase] BP_PlayerUnit_C_0: Removed Event_Dungeon_Step tag (EndAbility)
+Warning,5,MoveAbility,17030176.066213,[GA_MoveBase] BP_PlayerUnit_C_0: Sent GameplayEvent Event_Dungeon_Step END
+Warning,5,TurnAction,17030176.066224,[GA_TurnActionBase] Defensive check: Attempting to get ASC after Super::EndAbility
+Warning,5,TurnAction,17030176.066235,"[GA_TurnActionBase] Defensive check: ASC found, checking tags"
+Warning,5,TurnAction,17030176.066246,"[GA_TurnActionBase] Defensive check: State_Ability_Executing=0, State_Action_InProgress=0"
+Warning,5,MoveAbility,17030176.066257,[TurnNotify] GA_MoveBase completion: Actor=BP_PlayerUnit_C_0 TurnId=5
+Log,5,TurnManager,17030176.066267,Turn 5: OnPlayerMoveCompleted Tag=Gameplay.Event.Turn.Ability.Completed
+Log,5,TurnManager,17030176.066321,[Turn 5] Client: Gate CLOSED after replication
+Log,5,TurnManager,17030176.066331,[Turn 5] Player action complete - enemy phase already in progress (skipping redundant AI calc)
+Log,5,UnitMovement,17030176.066342,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,5,MoveReservation,17030176.137288,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_1 TurnId=5
+Log,5,UnitMovement,17030176.137300,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,5,MoveReservation,17030176.138471,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_0 TurnId=5
+Log,5,UnitMovement,17030176.138493,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Warning,5,TurnBarrier,17030176.169479,[Barrier] Turn 5: ALL ACTIONS COMPLETED (Remaining=0) -> Scheduling OnAllMovesFinished (NextTick)
+Log,5,MoveReservation,17030176.169502,[HandleManualMoveFinished] Completed barrier for BP_EnemyUnitBase_C_2 TurnId=5
+Log,5,UnitMovement,17030176.169525,[UnitMovementComponent] Movement finished and snapped. (RetryCount=0)
+Log,5,TurnBarrier,17030176.179631,[Barrier] Broadcasting OnAllMovesFinished for Turn 5
+Log,6,TurnManager,17030176.179649,[Turn 5] Barrier complete - all move actions finished (EnemyPhaseInProgress=1)
+Log,6,TurnManager,17030176.179660,[Turn 5] Enemy phase complete. Ending turn.
+Warning,6,TurnManager,17030176.179691,[Turn 5] ==== EndEnemyTurn ====
+Log,6,TurnManager,17030176.179713,[AdvanceTurnAndRestart] Current Turn: 5
+Log,6,TurnCore,17030176.179732,[TurnCore] CleanupPhase: Complete
+Log,6,TurnManager,17030176.179740,[AdvanceTurnAndRestart] CoreCleanupPhase completed
+Log,6,TurnFlow,17030176.179748,[TurnFlowCoordinator] Turn ended: TurnId=5
+Log,6,TurnFlow,17030176.179756,"[TurnFlowCoordinator] Turn advanced: TurnId=6, TurnIndex=6"
+Log,6,TurnManager,17030176.179766,[AdvanceTurnAndRestart] Turn advanced: 5 -> 6 (bEndTurnPosted reset)
+Log,6,TurnManager,17030176.179776,[AdvanceTurnAndRestart] Barrier::BeginTurn(6) called
+Log,6,TurnManager,17030176.179784,[AdvanceTurnAndRestart] OnTurnStarted broadcasted for turn 6
+Warning,6,TurnInit,17030176.179798,[Turn 6] ==== OnTurnStarted (Subsystem) START ====
+Log,6,TurnInit,17030176.179807,[Turn 6] ClearResidualInProgressTags called
+Log,6,EnemyAI,17030176.179858,"[CollectAllEnemies] Added[2]: BP_EnemyUnitBase_C_2 (TeamId=2, GTag=1, ByTeam=1, ActorTag=1)"
+Log,6,EnemyAI,17030176.179868,[CollectAllEnemies] ==== RESULT ==== found=6  collected=5  byGTag=5  byTeam=5  byActorTag=5
+Log,6,TurnInit,17030176.179877,[Turn 6] Enemy roster updated: 5 -> 5
+Warning,6,TurnInit,17030176.179885,[Turn 6] ==== TurnInitialization START ====
+Log,6,TurnInit,17030176.179936,[Turn 6] Skipped initial DistanceField update (will be updated in ExecuteEnemyPhase)
+Log,6,TurnInit,17030176.179946,[Turn 6] Skipped preliminary intent generation (will be generated in ExecuteEnemyPhase)
+Warning,6,TurnInit,17030176.179956,[Turn 6] ==== TurnInitialization END ====
+Warning,6,TurnInit,17030176.179968,[Turn 6] ==== OnTurnStarted (Subsystem) END ====
+Log,6,TurnManager,17030176.180034,[Turn 6] Client: Gate OPENED after replication (WindowId=7)

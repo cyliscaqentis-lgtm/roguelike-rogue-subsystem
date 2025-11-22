@@ -79,6 +79,7 @@ When working on this project (including Claude Code and other AI assistants):
 ### 2025-11-22
 
 #### Performance
+- `INC-2025-1122-PERF-R2` - Reduced `UpdateActorCell` retry delay from 0.1s to 0.02s to minimize freeze perception when grid occupancy conflicts occur; reduces worst-case retry delay from 0.5s to 0.1s (`Character/UnitMovementComponent.cpp`) (2025-11-22 22:00)
 - `INC-2025-1122-PERF-R1` - Fixed performance issue causing frame hitches on every player step: removed redundant AI calculation in `OnPlayerMoveCompleted` when enemy phase was already executed (simultaneous movement case), reducing AI calculations from 3x to 2x per turn (`Turn/GameTurnManagerBase.cpp`) (2025-11-22 20:45)
 
 #### Bug Fixes

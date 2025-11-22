@@ -104,6 +104,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement")
 	float MaxPixelsPerSec = 1200.f;
 
+	/** アニメ用: 現在の移動方向 (XY 正規化) */
+	UFUNCTION(BlueprintPure, Category = "Unit|Movement|Anim")
+	FVector GetMoveDirectionAnim() const { return MoveDirectionAnim; }
+
+	/** アニメ用: 現在の移動速度 (cm/s) */
+	UFUNCTION(BlueprintPure, Category = "Unit|Movement|Anim")
+	float GetMoveSpeedAnim() const { return MoveSpeedAnim; }
+
 	void UpdateSpeedFromStats(const FUnitStatBlock& StatBlock);
 
 	// ========== Events ==========
@@ -161,6 +169,14 @@ protected:
     /** グリッド更新再試行用タイマーハンドル */
     UPROPERTY(Transient)
     FTimerHandle GridUpdateRetryHandle;
+    // ========== Animation Support ==========
+    UPROPERTY(BlueprintReadOnly, Category = "Unit|Movement|Anim")
+    FVector MoveDirectionAnim = FVector::ZeroVector;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Unit|Movement|Anim")
+    float MoveSpeedAnim = 0.0f;
+
+    // ========== Internal Methods ==========
 
 	// ========== Internal Methods ==========
 
@@ -184,4 +200,7 @@ protected:
 	 * オーナーUnitを取得
 	 */
 	AUnitBase* GetOwnerUnit() const;
+
+	/** アニメ用の速度・方向を強制リセット */
+	void ResetAnimMotion();
 };

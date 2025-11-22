@@ -40,6 +40,12 @@ void UUnitMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	{
 		UpdateMovement(DeltaTime);
 	}
+	else
+	{
+		// Ensure anim-facing variables decay to idle when not moving.
+		MoveDirectionAnim = FVector::ZeroVector;
+		MoveSpeedAnim = 0.0f;
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -124,6 +130,7 @@ void UUnitMovementComponent::CancelMovement()
 	// イベント配信
 	AUnitBase* OwnerUnit = GetOwnerUnit();
 	OnMoveCancelled.Broadcast(OwnerUnit, LastPosition);
+    ResetAnimMotion();
 
 	UE_LOG(LogUnitMovement, Log, TEXT("[UnitMovementComponent] Movement cancelled at %.2f, %.2f, %.2f"),
 		LastPosition.X, LastPosition.Y, LastPosition.Z);
@@ -176,6 +183,8 @@ void UUnitMovementComponent::UpdateMovement(float DeltaTime)
 	const FVector CurrentLocation = Owner->GetActorLocation();
 	const FVector TargetLocation = CurrentPath[CurrentPathIndex];
 	const FVector Direction = (TargetLocation - CurrentLocation).GetSafeNormal();
+    MoveDirectionAnim = FVector(Direction.X, Direction.Y, 0.0f).GetSafeNormal();
+    MoveSpeedAnim = PixelsPerSec;
 	const float DistanceToTarget = FVector::Dist(CurrentLocation, TargetLocation);
 
 	// 到達判定
@@ -215,6 +224,8 @@ void UUnitMovementComponent::UpdateMovement(float DeltaTime)
 	}
 
 	Owner->SetActorLocation(NewLocation);
+    MoveDirectionAnim = FVector(Direction.X, Direction.Y, 0.0f).GetSafeNormal();
+    MoveSpeedAnim = PixelsPerSec;
 }
 
 void UUnitMovementComponent::MoveToNextWaypoint()
@@ -270,11 +281,12 @@ void UUnitMovementComponent::FinishMovement()
 								GridUpdateRetryCount, MaxGridUpdateRetries,
 								*GetNameSafe(OwnerUnit), FinalCell.X, FinalCell.Y);
 
+							// CodeRevision: INC-2025-1122-PERF-R2 (Reduce retry delay from 0.1s to 0.02s to minimize freeze perception)
 							World->GetTimerManager().SetTimer(
 								GridUpdateRetryHandle,
 								this,
 								&UUnitMovementComponent::FinishMovement,
-								0.1f,
+								0.02f,
 								false);
 
 							return;
@@ -307,6 +319,8 @@ void UUnitMovementComponent::FinishMovement()
 	CurrentPathIndex = 0;
 
 	OnMoveFinished.Broadcast(OwnerUnit);
+    MoveDirectionAnim = FVector::ZeroVector;
+    MoveSpeedAnim = 0.0f;
 
 	UE_LOG(LogUnitMovement, Log,
 		TEXT("[UnitMovementComponent] Movement finished and snapped. (RetryCount=%d)"),
@@ -315,4 +329,10 @@ void UUnitMovementComponent::FinishMovement()
 AUnitBase* UUnitMovementComponent::GetOwnerUnit() const
 {
 	return Cast<AUnitBase>(GetOwner());
+}
+
+void UUnitMovementComponent::ResetAnimMotion()
+{
+	MoveDirectionAnim = FVector::ZeroVector;
+	MoveSpeedAnim = 0.0f;
 }

@@ -77,6 +77,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Unit|Tile")
     void AdjustTile();
 
+    /** アニメ用に統一した移動速度取得（cm/s）。MoveSpeedAnim -> PixelsPerSec -> StatBlock の順でフォールバック。 */
+    UFUNCTION(BlueprintPure, Category = "Unit|Movement")
+    float GetMoveSpeedForAnim() const;
+
     UFUNCTION(BlueprintCallable, Category = "Unit|Detection")
     TArray<AUnitBase*> GetAdjacentPlayers() const;
 

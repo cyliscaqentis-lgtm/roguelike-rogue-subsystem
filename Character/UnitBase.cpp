@@ -23,9 +23,17 @@
 #include "Grid/GridOccupancySubsystem.h"
 #include "Grid/GridPathfindingSubsystem.h"
 #include "TimerManager.h"
+#include "HAL/IConsoleManager.h"
 
 // Log category
 DEFINE_LOG_CATEGORY_STATIC(LogUnitBase, Log, All);
+
+// Console toggle for per-frame Step tag debug logging
+static TAutoConsoleVariable<int32> CVarDebugStepTag(
+    TEXT("ts.DebugStepTag"),
+    0,
+    TEXT("When non-zero, UnitBase::Tick logs whether Event_Dungeon_Step tag is present on the unit's ASC."),
+    ECVF_Cheat);
 
 //------------------------------------------------------------------------------
 // Constructor
@@ -296,6 +304,22 @@ void AUnitBase::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
 
+    // Debug: per-frame check for Event_Dungeon_Step tag (optional)
+    static const auto CVarLogStepTag =
+        IConsoleManager::Get().FindConsoleVariable(TEXT("ts.DebugStepTag"));
+    const bool bLog = CVarLogStepTag && CVarLogStepTag->GetInt() != 0;
+
+    if (bLog)
+    {
+        if (UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
+        {
+            const bool bHasStep = ASC->HasMatchingGameplayTag(RogueGameplayTags::Event_Dungeon_Step);
+            UE_LOG(LogTemp, Warning,
+                TEXT("[StepTagDebug] %s: Has Event_Dungeon_Step = %d"),
+                *GetName(), bHasStep ? 1 : 0);
+        }
+    }
+
     // ★★★ 移動処理はMovementCompが独自のTickで処理するため、ここでは何もしない ★★★
 }
 
@@ -455,6 +479,34 @@ void AUnitBase::AdjustTile()
             }
         }
     }
+}
+
+float AUnitBase::GetMoveSpeedForAnim() const
+{
+    if (MovementComp)
+    {
+        const float AnimSpeed = MovementComp->GetMoveSpeedAnim();
+        if (AnimSpeed > KINDA_SMALL_NUMBER)
+        {
+            return AnimSpeed;
+        }
+
+        if (MovementComp->PixelsPerSec > KINDA_SMALL_NUMBER)
+        {
+            return MovementComp->PixelsPerSec;
+        }
+    }
+
+    if (StatBlock.CurrentSpeed > KINDA_SMALL_NUMBER)
+    {
+        return StatBlock.CurrentSpeed;
+    }
+    if (StatBlock.MaxSpeed > KINDA_SMALL_NUMBER)
+    {
+        return StatBlock.MaxSpeed;
+    }
+
+    return 0.0f;
 }
 
 //------------------------------------------------------------------------------
