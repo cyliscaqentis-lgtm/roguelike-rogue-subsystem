@@ -99,6 +99,7 @@ void APlayerControllerBase::Tick(float DeltaTime)
     }
 
     // CodeRevision: INC-2025-1128-R1 (Reset latches only when a new window id is detected or after rejection) (2025-11-27 15:00)
+    // CodeRevision: INC-2025-1122-PERF-R5 (Process buffered input on window change for seamless movement)
     if (CurrentInputWindowId != LastHandledInputWindowId)
     {
         bSentThisInputWindow = false;
@@ -108,6 +109,13 @@ void APlayerControllerBase::Tick(float DeltaTime)
         UE_LOG(LogTemp, Warning,
             TEXT("[Client_Tick] Input window change detected (Prev=%d, Now=%d) -> latch reset (WinId=%d)"),
             PreviousWindowId, NewWindowId, CurrentInputWindowId);
+
+        // Process buffered input immediately on new window (for seamless continuous movement)
+        if (bHasBufferedInput && bNow)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[Client] New window with buffered input - processing immediately"));
+            ProcessBufferedInput();
+        }
     }
 
     if (bPrevWaitingForPlayerInput && !bNow)
@@ -117,6 +125,14 @@ void APlayerControllerBase::Tick(float DeltaTime)
 
         UE_LOG(LogTemp, Verbose, TEXT("[Client] Window CLOSE -> cleanup latch, mark WindowId=%d as processed"),
             CurrentInputWindowId);
+    }
+
+    // CodeRevision: INC-2025-1122-PERF-R4 (Process buffered input immediately when gate opens)
+    // Detect gate opening transition and process any buffered input
+    if (!bPrevWaitingForPlayerInput && bNow && bHasBufferedInput)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Client] Gate OPENED with buffered input - processing immediately"));
+        ProcessBufferedInput();
     }
 
     bPrevWaitingForPlayerInput = bNow;
@@ -424,6 +440,8 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
         return;
     }
 
+    const FVector2D RawInput = Value.Get<FVector2D>();
+
     const bool bWaitingReplicated = CachedTurnManager->WaitingForPlayerInput;
 
     bool bGateOpenClient = false;
@@ -439,24 +457,33 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
         TEXT("[Client] Input_Move_Triggered: bWaitingReplicated=%d, bGateOpenClient=%d, bSentThisInputWindow=%d, WindowId=%d"),
         bWaitingReplicated, bGateOpenClient, bSentThisInputWindow, CurrentInputWindowId);
 
+    // CodeRevision: INC-2025-1122-PERF-R4 (Buffer input while gate is closed)
+    // If gate is not open yet, buffer the input for immediate processing when gate opens
     if (!bWaitingReplicated || !bGateOpenClient)
     {
-        UE_LOG(LogTemp, Warning,
-            TEXT("[Client] ❁EInput BLOCKED by gate check: WaitingForPlayerInput=%d, Gate=%d"),
-            bWaitingReplicated, bGateOpenClient);
+        // Buffer the input direction for processing when gate opens
+        BufferedInputDirection = RawInput;
+        bHasBufferedInput = true;
+        UE_LOG(LogTemp, Log,
+            TEXT("[Client] Input BUFFERED (gate closed): Direction=(%.2f, %.2f), WaitingForPlayerInput=%d, Gate=%d"),
+            RawInput.X, RawInput.Y, bWaitingReplicated, bGateOpenClient);
         return;
     }
 
     if (bSentThisInputWindow)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Client] ❁EInput BLOCKED by latch: bSentThisInputWindow=true, WindowId=%d"),
-            CurrentInputWindowId);
+        // CodeRevision: INC-2025-1122-PERF-R5 (Buffer input for next turn even after command sent)
+        // For seamless continuous movement, buffer the next input direction
+        // so it can be processed immediately when the next turn begins
+        BufferedInputDirection = RawInput;
+        bHasBufferedInput = true;
+        UE_LOG(LogTemp, Log,
+            TEXT("[Client] Input BUFFERED (for next turn): Direction=(%.2f, %.2f), WindowId=%d"),
+            RawInput.X, RawInput.Y, CurrentInputWindowId);
         return;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[Client] ✁EInput PASSED all guards, preparing to send command"));
-
-    const FVector2D RawInput = Value.Get<FVector2D>();
+    UE_LOG(LogTemp, Warning, TEXT("[Client] ✅ Input PASSED all guards, preparing to send command"));
     FVector Direction = CalculateCameraRelativeDirection(RawInput);
 
     if (Direction.Size() < DeadzoneThreshold) 
@@ -823,8 +850,72 @@ void APlayerControllerBase::Server_TurnFacing_Implementation(FVector2D Direction
     UE_LOG(LogTemp, Verbose, TEXT("[TurnFacing_Server] Yaw=%.1f (Non-Consuming, Barrier-free)"), Yaw);
 }
 
+// CodeRevision: INC-2025-1122-PERF-R4 (Process buffered input when gate opens)
+void APlayerControllerBase::ProcessBufferedInput()
+{
+    if (!bHasBufferedInput)
+    {
+        return;
+    }
 
+    // Clear the buffer flag first to prevent re-entry
+    bHasBufferedInput = false;
 
+    if (!IsValid(CachedTurnManager))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Client] ProcessBufferedInput: TurnManager invalid"));
+        return;
+    }
+
+    if (bSentThisInputWindow)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Client] ProcessBufferedInput: Already sent this window"));
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[Client] ProcessBufferedInput: Processing buffered direction=(%.2f, %.2f)"),
+        BufferedInputDirection.X, BufferedInputDirection.Y);
+
+    // Process the buffered input as if it was just received
+    FVector Direction = CalculateCameraRelativeDirection(BufferedInputDirection);
+
+    if (Direction.Size() < DeadzoneThreshold)
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("[Client] ProcessBufferedInput: Deadzone (%.2f < %.2f)"),
+            Direction.Size(), DeadzoneThreshold);
+        return;
+    }
+
+    Direction.Normalize();
+    CachedInputDirection = FVector2D(Direction.X, Direction.Y);
+
+    FIntPoint GridOffset = Quantize8Way(CachedInputDirection, AxisThreshold);
+    GridOffset.Y *= -1;
+
+    FPlayerCommand Command;
+    Command.CommandTag = MoveInputTag;
+    Command.Direction = FVector(GridOffset.X, GridOffset.Y, 0.0f);
+    Command.TargetActor = GetPawn();
+    Command.TargetCell = GetCurrentGridCell() + GridOffset;
+
+    if (UWorld* World = GetWorld())
+    {
+        if (UTurnFlowCoordinator* TFC = World->GetSubsystem<UTurnFlowCoordinator>())
+        {
+            Command.TurnId = TFC->GetCurrentTurnId();
+            Command.WindowId = TFC->GetCurrentInputWindowId();
+        }
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("[Client] ProcessBufferedInput: Command created TurnId=%d WindowId=%d"),
+        Command.TurnId, Command.WindowId);
+
+    bSentThisInputWindow = true;
+    Server_SubmitCommand(Command);
+
+    UE_LOG(LogTemp, Warning, TEXT("[Client] 📤 BUFFERED RPC sent: Server_SubmitCommand(WindowId=%d)"),
+        Command.WindowId);
+}
 
 
 

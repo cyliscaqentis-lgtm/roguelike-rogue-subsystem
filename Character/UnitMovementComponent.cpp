@@ -281,13 +281,10 @@ void UUnitMovementComponent::FinishMovement()
 								GridUpdateRetryCount, MaxGridUpdateRetries,
 								*GetNameSafe(OwnerUnit), FinalCell.X, FinalCell.Y);
 
-							// CodeRevision: INC-2025-1122-PERF-R2 (Reduce retry delay from 0.1s to 0.02s to minimize freeze perception)
-							World->GetTimerManager().SetTimer(
-								GridUpdateRetryHandle,
-								this,
-								&UUnitMovementComponent::FinishMovement,
-								0.02f,
-								false);
+							// CodeRevision: INC-2025-1122-PERF-R3 (Use NextTick instead of timed delay for instant retry)
+							// Two-Phase Commit requires waiting for the previous occupant to commit.
+							// Using NextTick instead of 0.02s delay reduces retry latency to ~1 frame.
+							World->GetTimerManager().SetTimerForNextTick(this, &UUnitMovementComponent::FinishMovement);
 
 							return;
 						}

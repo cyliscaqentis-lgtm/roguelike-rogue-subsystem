@@ -285,4 +285,14 @@ private:
 
     /** ★★★ 固定カメラYaw値（OnPossess時に設定、UpdateRotation()で使用） (2025-11-10) */
     float FixedCameraYaw = TNumericLimits<float>::Max();
+
+    // CodeRevision: INC-2025-1122-PERF-R4 (Input buffering to eliminate gate replication delay)
+    /** Buffered input direction while gate is closed */
+    FVector2D BufferedInputDirection = FVector2D::ZeroVector;
+
+    /** Whether there is a buffered input waiting to be processed */
+    bool bHasBufferedInput = false;
+
+    /** Process buffered input when gate opens */
+    void ProcessBufferedInput();
 };

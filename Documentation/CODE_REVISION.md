@@ -79,6 +79,9 @@ When working on this project (including Claude Code and other AI assistants):
 ### 2025-11-22
 
 #### Performance
+- `INC-2025-1122-PERF-R5` - Enhanced input buffering for seamless continuous movement: now buffers input even after command is sent (for next turn), and processes buffer on window change in addition to gate opening; enables uninterrupted walking rhythm when holding direction (`Player/PlayerControllerBase.cpp`) (2025-11-23 01:30)
+- `INC-2025-1122-PERF-R4` - Implemented input buffering to eliminate gate replication delay: when player inputs while gate is closed (waiting for replication), the input is buffered and processed immediately when gate opens in Tick, reducing perceived latency by ~200-300ms (`Player/PlayerControllerBase.h`, `Player/PlayerControllerBase.cpp`) (2025-11-23 01:00)
+- `INC-2025-1122-PERF-R3` - Changed `UpdateActorCell` retry from timed delay (0.02s) to `SetTimerForNextTick` for instant retry on next frame; eliminates retry latency entirely when Two-Phase Commit requires waiting for previous occupant (`Character/UnitMovementComponent.cpp`) (2025-11-23 00:45)
 - `INC-2025-1122-PERF-R2` - Reduced `UpdateActorCell` retry delay from 0.1s to 0.02s to minimize freeze perception when grid occupancy conflicts occur; reduces worst-case retry delay from 0.5s to 0.1s (`Character/UnitMovementComponent.cpp`) (2025-11-22 22:00)
 - `INC-2025-1122-PERF-R1` - Fixed performance issue causing frame hitches on every player step: removed redundant AI calculation in `OnPlayerMoveCompleted` when enemy phase was already executed (simultaneous movement case), reducing AI calculations from 3x to 2x per turn (`Turn/GameTurnManagerBase.cpp`) (2025-11-22 20:45)
 
