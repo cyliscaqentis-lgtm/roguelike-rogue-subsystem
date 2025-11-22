@@ -24,6 +24,27 @@ void UTurnEnemyPhaseSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
+void UTurnEnemyPhaseSubsystem::EnterSequentialMode()
+{
+	bSequentialModeActive = true;
+	bSequentialMovePhaseStarted = false;
+	bIsInMoveOnlyPhase = false;
+}
+
+void UTurnEnemyPhaseSubsystem::ResetSequentialMode()
+{
+	bSequentialModeActive = false;
+	bSequentialMovePhaseStarted = false;
+	bIsInMoveOnlyPhase = false;
+}
+
+void UTurnEnemyPhaseSubsystem::MarkSequentialMoveOnlyPhase()
+{
+	bSequentialModeActive = true;
+	bSequentialMovePhaseStarted = true;
+	bIsInMoveOnlyPhase = true;
+}
+
 void UTurnEnemyPhaseSubsystem::ExecuteEnemyPhase(AGameTurnManagerBase* TurnManager, int32 TurnId)
 {
 	if (!TurnManager) return;
@@ -36,20 +57,18 @@ void UTurnEnemyPhaseSubsystem::ExecuteEnemyPhase(AGameTurnManagerBase* TurnManag
 		return;
 	}
 
-	// Use cached intents from TurnManager if available, or fetch from EnemyData
-	const TArray<FEnemyIntent>& Intents = TurnManager->CachedEnemyIntents;
-	const bool bHasAttack = DoesAnyIntentHaveAttack(Intents, TurnId);
+    // Use intents from EnemyData (source of truth)
+    const TArray<FEnemyIntent>& Intents = LocalEnemyData->Intents;
+    const bool bHasAttack = DoesAnyIntentHaveAttack(Intents, TurnId);
 
 	if (bHasAttack)
 	{
 		LOG_TURN(Log, TEXT("[Turn %d] Mode: SEQUENTIAL"), TurnId);
-		TurnManager->bSequentialModeActive = true;
-		TurnManager->bSequentialMovePhaseStarted = false;
-		TurnManager->bIsInMoveOnlyPhase = false;
+		EnterSequentialMode();
 
 		// Resolve conflicts
 		TArray<FResolvedAction> ResolvedActions = PhaseManager->CoreResolvePhase(Intents);
-		TurnManager->CachedResolvedActions = ResolvedActions;
+		StoredResolvedActions = ResolvedActions;
 
 		TArray<FResolvedAction> AttackActions;
 		const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
@@ -63,17 +82,17 @@ void UTurnEnemyPhaseSubsystem::ExecuteEnemyPhase(AGameTurnManagerBase* TurnManag
 
 		if (AttackActions.IsEmpty())
 		{
-			ExecuteSequentialMovePhase(TurnManager, TurnId, ResolvedActions);
-		}
-		else
-		{
-			ExecuteAttacks(TurnManager, TurnId, AttackActions);
-		}
+            ExecuteSequentialMovePhase(TurnManager, TurnId, ResolvedActions);
+        }
+        else
+        {
+            ExecuteAttacks(TurnManager, TurnId, AttackActions);
+        }
 	}
 	else
 	{
 		LOG_TURN(Log, TEXT("[Turn %d] Mode: SIMULTANEOUS"), TurnId);
-		TurnManager->bSequentialModeActive = false;
+		ResetSequentialMode();
 		ExecuteSimultaneousPhase(TurnManager, TurnId);
 	}
 }
@@ -159,6 +178,10 @@ void UTurnEnemyPhaseSubsystem::ExecuteSequentialMovePhase(AGameTurnManagerBase* 
 {
 	if (!TurnManager) return;
 
+	MarkSequentialMoveOnlyPhase();
+
+	const TArray<FResolvedAction>& ActionsToUse = CachedActions.Num() > 0 ? CachedActions : StoredResolvedActions;
+
 	TArray<FResolvedAction> EnemyMoveActions;
 	int32 TotalActions = 0;
 	int32 TotalEnemyMoves = 0;
@@ -168,7 +191,7 @@ void UTurnEnemyPhaseSubsystem::ExecuteSequentialMovePhase(AGameTurnManagerBase* 
 	const FGameplayTag MoveTag = RogueGameplayTags::AI_Intent_Move;
 	const FGameplayTag WaitTag = RogueGameplayTags::AI_Intent_Wait;
 
-	for (const FResolvedAction& Action : CachedActions)
+	for (const FResolvedAction& Action : ActionsToUse)
 	{
 		TotalActions++;
 		if (Action.AbilityTag.MatchesTag(MoveTag) || Action.FinalAbilityTag.MatchesTag(MoveTag))
@@ -194,8 +217,6 @@ void UTurnEnemyPhaseSubsystem::ExecuteSequentialMovePhase(AGameTurnManagerBase* 
 		return;
 	}
 
-	TurnManager->bSequentialMovePhaseStarted = true;
-	TurnManager->bIsInMoveOnlyPhase = true;
 	TurnManager->bEnemyPhaseInProgress = true;
 
 	LOG_TURN(Log, TEXT("[Turn %d] Dispatching %d cached enemy actions sequentially (Moves=%d, Waits=%d, NonMove=%d)"),
@@ -208,11 +229,9 @@ void UTurnEnemyPhaseSubsystem::ExecuteAttacks(AGameTurnManagerBase* TurnManager,
 {
 	if (!TurnManager) return;
 
-	if (!TurnManager->bSequentialModeActive)
+	if (!bSequentialModeActive)
 	{
-		TurnManager->bSequentialModeActive = true;
-		TurnManager->bSequentialMovePhaseStarted = false;
-		TurnManager->bIsInMoveOnlyPhase = false;
+		EnterSequentialMode();
 	}
 
 	TArray<FResolvedAction> AttacksToExecute = PreResolvedAttacks;
@@ -223,7 +242,7 @@ void UTurnEnemyPhaseSubsystem::ExecuteAttacks(AGameTurnManagerBase* TurnManager,
 		if (PhaseManager && EnemyData)
 		{
 			TArray<FResolvedAction> Resolved = PhaseManager->CoreResolvePhase(EnemyData->Intents);
-			TurnManager->CachedResolvedActions = Resolved;
+			StoredResolvedActions = Resolved;
 
 			const FGameplayTag AttackTag = RogueGameplayTags::AI_Intent_Attack;
 			for (const FResolvedAction& Action : Resolved)
@@ -239,10 +258,7 @@ void UTurnEnemyPhaseSubsystem::ExecuteAttacks(AGameTurnManagerBase* TurnManager,
 	if (AttacksToExecute.IsEmpty())
 	{
 		LOG_TURN(Log, TEXT("[Turn %d] ExecuteAttacks: No attacks to execute. Proceeding to moves."), TurnId);
-		// We need cached actions for move phase. If we resolved above, they are in TurnManager.
-		// If PreResolvedAttacks was empty but passed in, we might assume TurnManager has cached actions?
-		// Safe bet is to use TurnManager->GetCachedResolvedActions()
-		ExecuteSequentialMovePhase(TurnManager, TurnId, TurnManager->CachedResolvedActions);
+		ExecuteSequentialMovePhase(TurnManager, TurnId, StoredResolvedActions);
 		return;
 	}
 
@@ -255,7 +271,7 @@ void UTurnEnemyPhaseSubsystem::ExecuteAttacks(AGameTurnManagerBase* TurnManager,
 	else
 	{
 		LOG_TURN(Error, TEXT("[Turn %d] ExecuteAttacks: AttackExecutor is NULL! Skipping attacks."), TurnId);
-		ExecuteSequentialMovePhase(TurnManager, TurnId, TurnManager->GetCachedResolvedActions());
+		ExecuteSequentialMovePhase(TurnManager, TurnId, StoredResolvedActions);
 	}
 }
 

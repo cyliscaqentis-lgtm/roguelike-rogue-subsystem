@@ -184,9 +184,6 @@ public:
     // Removed: GetPlayerPawn() - replaced with direct UGameplayStatics call
     // Removed: GetPlayerActor() - unused wrapper function
 
-    UFUNCTION(BlueprintPure, Category = "Turn|State")
-    void GetCachedEnemies(TArray<AActor*>& OutEnemies) const;
-
     // CodeRevision: INC-2025-00017-R1 (Remove wrapper functions - Phase 3) (2025-11-16 15:20)
     // Removed: HasAnyAttackIntent() - replaced with direct EnemyTurnDataSubsystem access
 
@@ -360,10 +357,6 @@ public:
     // Removed: TObjectPtr<UDebugObserverCSV> DebugObserverCSV = nullptr; (use DebugObservers array and cast)
     // Removed: TObjectPtr<UEnemyTurnDataSubsystem> EnemyTurnData = nullptr; (use GetWorld()->GetSubsystem<UEnemyTurnDataSubsystem>())
 
-    /** Cached enemy intents for the current turn (used for sequential checks) */
-    UPROPERTY(Transient)
-    TArray<FEnemyIntent> CachedEnemyIntents;
-
     /** Player's pending move intent (held until next Resolve) */
     UPROPERTY()
     FEnemyIntent PendingPlayerIntent;
@@ -436,30 +429,13 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Turn|Phase")
     double PhaseStartTime = 0.0;
 
-    /** Toggle State.Action.InProgress tag on the player ASC */
-    UFUNCTION(BlueprintCallable, Category="Turn|State")
-    void MarkMoveInProgress(bool bInProgress);
-
     /** Execute enemy phase (move + attack). Can be called immediately after player command for simultaneous movement. */
     // CodeRevision: INC-2025-1122-SIMUL-R1 (Made public for TurnCommandHandler simultaneous movement) (2025-11-22)
     UFUNCTION(BlueprintCallable, Category="Turn|Enemy")
     void ExecuteEnemyPhase();
 
-    /** Open input window for player moves */
-    UFUNCTION(BlueprintCallable, Category="Turn")
-    void OpenInputWindow();
-
     UFUNCTION(BlueprintCallable, Category="Turn|Flow")
     void NotifyPlayerPossessed(APawn* NewPawn);
-
-    /** Apply wait input gate to player ASC */
-    void ApplyWaitInputGate(bool bOpen);
-
-    /** Clear all resolved move reservations */
-    UFUNCTION(BlueprintCallable, Category = "Turn|State")
-    bool IsInputOpen_Server() const;
-
-
 
 public:
 protected:
@@ -520,27 +496,7 @@ protected:
     /** Perform turn advance and begin next turn (called from AdvanceTurnAndRestart) */
     void PerformTurnAdvanceAndBeginNextTurn();
 
-    /** Finalize player move after completion */
-    void FinalizePlayerMove(AActor* CompletedActor);
-
-    /** Set player move state (direction and progress flag) */
-    void SetPlayerMoveState(const FVector& Direction, bool bInProgress);
-
-    /** Refresh enemy roster for the current turn */
-    void RefreshEnemyRoster(APawn* PlayerPawn, int32 TurnId, const TCHAR* Context);
-
-    /** Copy enemy actors to output array */
-    void CopyEnemyActors(TArray<AActor*>& OutEnemies);
-
-    /** Clear any residual InProgress tags from previous turns */
-    void ClearResidualInProgressTags();
-
     /** Get player's AbilitySystemComponent */
-    UAbilitySystemComponent* GetPlayerASC() const;
-
-    /** Get cached resolved actions for sequential processing */
-    const TArray<FResolvedAction>& GetCachedResolvedActions() const { return CachedResolvedActions; }
-
     //==========================================================================
     // Phase Execution
     //==========================================================================
@@ -606,11 +562,6 @@ protected:
     //==========================================================================
 
     FGameplayTag Tag_MoveCommandEvent;
-    FGameplayTag Tag_AbilityMove;
-    FGameplayTag Tag_TurnAbilityCompleted;
-    FGameplayTag Phase_Turn_Init;
-    FGameplayTag Phase_Player_Wait;
-
     //==========================================================================
     // Internal State Flags
     //==========================================================================
@@ -676,22 +627,12 @@ private:
     FTimerHandle AbilityWaitTimerHandle;
 
     /** Sequential phase tracking */
-    // CodeRevision: INC-2025-00023-R1 (Handle sequential attack -> move transitions) (2025-11-17 19:15)
-    bool bSequentialModeActive = false;
-    bool bSequentialMovePhaseStarted = false;
-    UPROPERTY()
-    bool bIsInMoveOnlyPhase = false;
-
     // CodeRevision: INC-2025-1117G-R1 (Cache resolved actions for sequential enemy processing) (2025-11-17 19:30)
-    TArray<FResolvedAction> CachedResolvedActions;
-
     // NOTE: PendingMoveActionRegistrations moved to MoveReservationSubsystem (INC-2025-1122-R2)
 
     //==========================================================================
     // Internal Initialization
     //==========================================================================
-
-    void InitGameplayTags();
 
     static float EncodeDir8ToMagnitude(const FVector2D& Dir);
     FVector2D CalculateDirectionFromTargetCell(const FIntPoint& TargetCell);

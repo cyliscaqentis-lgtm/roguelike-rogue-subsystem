@@ -3,10 +3,11 @@
 // PlayerControllerBase.cpp
 #include "Player/PlayerControllerBase.h"
 #include "Turn/GameTurnManagerBase.h"
-// #include "Turn/TurnManagerSubsystem.h"  // ★★★ 統合完了により削除 ★★★
+// #include "Turn/TurnManagerSubsystem.h"  // ☁E�E☁E統合完亁E��より削除 ☁E�E☁E
 // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
 #include "Grid/GridPathfindingSubsystem.h"
 // CodeRevision: INC-2025-00032-R1 (Add TurnFlowCoordinator include for GetCurrentTurnIndex() replacement) (2025-01-XX XX:XX)
+#include "Turn/PlayerInputProcessor.h"
 #include "Turn/TurnFlowCoordinator.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -29,7 +30,7 @@
 
 APlayerControllerBase::APlayerControllerBase()
 {
-    // Tick を常に有効化
+    // Tick を常に有効匁E
     PrimaryActorTick.bCanEverTick = true;
     PrimaryActorTick.bStartWithTickEnabled = true;
     SetTickableWhenPaused(false);
@@ -72,7 +73,7 @@ void APlayerControllerBase::Tick(float DeltaTime)
         return;
     }
 
-    // TurnFlowCoordinatorから現在のWindowIdを取得
+    // TurnFlowCoordinatorから現在のWindowIdを取征E
     UTurnFlowCoordinator* TFC = GetWorld() ? GetWorld()->GetSubsystem<UTurnFlowCoordinator>() : nullptr;
 
     if (!bPrevInitSynced)
@@ -207,7 +208,7 @@ void APlayerControllerBase::OnPossess(APawn* InPawn)
 
     if (InPawn && InPawn->GetName().Contains(TEXT("PlayerUnit")))
     {
-        // UnitManagerを直接取得
+        // UnitManagerを直接取征E
         if (UWorld* World = GetWorld())
         {
             for (TActorIterator<AUnitManager> It(World); It; ++It)
@@ -441,19 +442,19 @@ void APlayerControllerBase::Input_Move_Triggered(const FInputActionValue& Value)
     if (!bWaitingReplicated || !bGateOpenClient)
     {
         UE_LOG(LogTemp, Warning,
-            TEXT("[Client] ❌ Input BLOCKED by gate check: WaitingForPlayerInput=%d, Gate=%d"),
+            TEXT("[Client] ❁EInput BLOCKED by gate check: WaitingForPlayerInput=%d, Gate=%d"),
             bWaitingReplicated, bGateOpenClient);
         return;
     }
 
     if (bSentThisInputWindow)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[Client] ❌ Input BLOCKED by latch: bSentThisInputWindow=true, WindowId=%d"),
+        UE_LOG(LogTemp, Warning, TEXT("[Client] ❁EInput BLOCKED by latch: bSentThisInputWindow=true, WindowId=%d"),
             CurrentInputWindowId);
         return;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[Client] ✅ Input PASSED all guards, preparing to send command"));
+    UE_LOG(LogTemp, Warning, TEXT("[Client] ✁EInput PASSED all guards, preparing to send command"));
 
     const FVector2D RawInput = Value.Get<FVector2D>();
     FVector Direction = CalculateCameraRelativeDirection(RawInput);
@@ -605,7 +606,7 @@ void APlayerControllerBase::Input_Attack_Triggered(const FInputActionValue& Valu
 		return;
 	}
 
-	// ★★★ Use Input_TurnFacing direction for attack (2025-11-19) ★★★
+	// ☁E�E☁EUse Input_TurnFacing direction for attack (2025-11-19) ☁E�E☁E
 	// Attack direction is determined by the player's facing direction set via Input_TurnFacing.
 	// If no facing direction was set, Command.Direction will be zero and TurnCommandHandler will use ForwardVector as fallback.
 
@@ -752,7 +753,7 @@ FIntPoint APlayerControllerBase::ServerGetCurrentCell() const
 
 void APlayerControllerBase::Server_SubmitCommand_Implementation(const FPlayerCommand& CommandIn)
 {
-    UE_LOG(LogTemp, Warning, TEXT("[Server] ★ SubmitCommand RPC RECEIVED"));
+    UE_LOG(LogTemp, Warning, TEXT("[Server] ☁ESubmitCommand RPC RECEIVED"));
     UE_LOG(LogTemp, Warning, TEXT("[Server] Client sent WindowId=%d, TurnId=%d, Tag=%s, Dir=(%.1f, %.1f)"),
         CommandIn.WindowId, CommandIn.TurnId, *CommandIn.CommandTag.ToString(),
         CommandIn.Direction.X, CommandIn.Direction.Y);
@@ -763,7 +764,7 @@ void APlayerControllerBase::Server_SubmitCommand_Implementation(const FPlayerCom
         return;
     }
 
-    // TurnFlowCoordinatorから現在のWindowIdを取得
+    // TurnFlowCoordinatorから現在のWindowIdを取征E
     UTurnFlowCoordinator* TFC = GetWorld() ? GetWorld()->GetSubsystem<UTurnFlowCoordinator>() : nullptr;
     const int32 CurrentWindowId = TFC ? TFC->GetCurrentInputWindowId() : 0;
 
@@ -778,7 +779,8 @@ void APlayerControllerBase::Server_SubmitCommand_Implementation(const FPlayerCom
 
     UE_LOG(LogTemp, Log, TEXT("[Server] WindowId validated: %d"), Command.WindowId);
 
-    if (!CachedTurnManager->IsInputOpen_Server())
+    UPlayerInputProcessor* InputProcServer = GetWorld() ? GetWorld()->GetSubsystem<UPlayerInputProcessor>() : nullptr;
+    if (!InputProcServer || !InputProcServer->IsInputOpen_Server(CachedTurnManager.Get()))
     {
         bool bGateOpen = false;
         if (const IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(GetPawn()))
@@ -855,7 +857,7 @@ void APlayerControllerBase::GridSmokeTest()
 
 void APlayerControllerBase::Client_NotifyMoveRejected_Implementation()
 {
-    UE_LOG(LogTemp, Warning, TEXT("[Client] ★★★ MOVE REJECTED RPC RECEIVED ★★★"));
+    UE_LOG(LogTemp, Warning, TEXT("[Client] MOVE REJECTED RPC RECEIVED"));
     UE_LOG(LogTemp, Warning, TEXT("[Client] BEFORE reset: bSentThisInputWindow=%d, LastProcessedWindowId=%d, WindowId=%d"),
         bSentThisInputWindow, LastProcessedWindowId, CurrentInputWindowId);
 
@@ -870,14 +872,18 @@ void APlayerControllerBase::Client_NotifyMoveRejected_Implementation()
     {
         UE_LOG(LogTemp, Error, TEXT("[Client] Client_NotifyMoveRejected: TurnManager invalid, cannot ensure Gate state"));
     }
-    else
+    else if (UWorld* World = GetWorld())
     {
-        CachedTurnManager->ApplyWaitInputGate(true);
-        UE_LOG(LogTemp, Warning, TEXT("[Client] ★ Gate_Input_Open tag explicitly re-applied via TurnManager"));
+        if (UPlayerInputProcessor* InputProc = World->GetSubsystem<UPlayerInputProcessor>())
+        {
+            InputProc->ApplyWaitInputGate(true);
+            UE_LOG(LogTemp, Warning, TEXT("[Client] Gate_Input_Open tag explicitly re-applied via InputProcessor"));
+        }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[Client] ✅ All state reset complete. Player can retry input."));
+    UE_LOG(LogTemp, Warning, TEXT("[Client] All state reset complete. Player can retry input."));
 }
+
 
 void APlayerControllerBase::Client_ConfirmCommandAccepted_Implementation(int32 WindowId)
 {
@@ -891,8 +897,7 @@ void APlayerControllerBase::Client_ConfirmCommandAccepted_Implementation(int32 W
     bSentThisInputWindow = true;
     LastProcessedWindowId = WindowId;
 
-    UE_LOG(LogTemp, Log, TEXT("[Client] ★★★ COMMAND ACCEPTED ACK (WindowId=%d) -> Latches confirmed ★★★"),
-        WindowId);
+    UE_LOG(LogTemp, Log, TEXT("[Client] COMMAND ACCEPTED ACK (WindowId=%d) -> Latches confirmed"), WindowId);
     UE_LOG(LogTemp, Log, TEXT("[Client]   bSentThisInputWindow: false -> true"));
     UE_LOG(LogTemp, Log, TEXT("[Client]   LastProcessedWindowId: %d -> %d"),
         LastProcessedWindowId == WindowId ? -1 : LastProcessedWindowId, WindowId);
@@ -914,7 +919,8 @@ void APlayerControllerBase::Client_ApplyFacingNoTurn_Implementation(int32 Window
         NewRotation.Yaw = Yaw;
         ControlledPawn->SetActorRotation(NewRotation);
 
-        UE_LOG(LogTemp, Log, TEXT("[Client] ★ FACING ONLY (No Turn): Direction=(%.1f,%.1f), Yaw=%.1f"),
+        UE_LOG(LogTemp, Log, TEXT("[Client] ☁EFACING ONLY (No Turn): Direction=(%.1f,%.1f), Yaw=%.1f"),
             Direction.X, Direction.Y, Yaw);
     }
 }
+

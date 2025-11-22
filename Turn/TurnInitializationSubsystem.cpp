@@ -77,10 +77,6 @@ void UTurnInitializationSubsystem::OnTurnStarted(AGameTurnManagerBase* Manager, 
 	InitializeTurn(TurnId, PlayerPawn, EnemyActors);
 
 	// Cache intents to Manager
-	if (UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>())
-	{
-		Manager->CachedEnemyIntents = EnemyData->Intents;
-	}
 
 	UE_LOG(LogTurnInit, Warning, TEXT("[Turn %d] ==== OnTurnStarted (Subsystem) END ===="), TurnId);
 }
@@ -235,8 +231,6 @@ void UTurnInitializationSubsystem::InitializeGameTurnManager(AGameTurnManagerBas
 		UE_LOG(LogTurnInit, Warning, TEXT("InitializeGameTurnManager: Not authoritative, skipping"));
 		return;
 	}
-
-	Manager->InitGameplayTags();
 
 	ATBSLyraGameMode* GM = GetWorld()->GetAuthGameMode<ATBSLyraGameMode>();
 	if (!ensure(GM))

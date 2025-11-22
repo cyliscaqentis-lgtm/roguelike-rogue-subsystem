@@ -3,6 +3,7 @@
 #include "Turn/TurnSystemInitializer.h"
 
 #include "Turn/GameTurnManagerBase.h"
+#include "Utility/RogueGameplayTags.h"
 #include "Turn/TurnActionBarrierSubsystem.h"
 #include "Turn/TurnCommandHandler.h"
 #include "Turn/TurnDebugSubsystem.h"
@@ -11,6 +12,7 @@
 #include "Turn/AttackPhaseExecutorSubsystem.h"
 #include "Turn/UnitTurnStateSubsystem.h"
 #include "Turn/TurnInitializationSubsystem.h"
+#include "Utility/TurnSystemUtils.h"
 #include "AI/Enemy/EnemyAISubsystem.h"
 #include "AI/Enemy/EnemyTurnDataSubsystem.h"
 #include "Grid/GridPathfindingSubsystem.h"
@@ -153,7 +155,17 @@ bool UTurnSystemInitializer::InitializeTurnSystem(AGameTurnManagerBase* TurnMana
 	UE_LOG(LogTurnManager, Log, TEXT("InitializeTurnSystem: PathFinder ready: %s"), *GetNameSafe(TurnManager->PathFinder));
 
 	// 5) Collect initial enemies.
-	TurnManager->RefreshEnemyRoster(PlayerPawn, TurnManager->CurrentTurnId, TEXT("InitializeTurnSystem"));
+	TArray<AActor*> InitialEnemies;
+	if (UEnemyAISubsystem* EnemyAI = World->GetSubsystem<UEnemyAISubsystem>())
+	{
+		EnemyAI->CollectAllEnemies(PlayerPawn, InitialEnemies);
+	}
+
+	if (TurnManager->UnitTurnStateSubsystem)
+	{
+		TurnManager->UnitTurnStateSubsystem->UpdateEnemies(InitialEnemies);
+	}
+
 	const int32 EnemyCount = TurnManager->UnitTurnStateSubsystem ? TurnManager->UnitTurnStateSubsystem->GetCachedEnemyRefs().Num() : 0;
 	UE_LOG(LogTurnManager, Log, TEXT("InitializeTurnSystem: CollectEnemies completed (%d enemies)"), EnemyCount);
 
@@ -205,18 +217,18 @@ bool UTurnSystemInitializer::InitializeTurnSystem(AGameTurnManagerBase* TurnMana
 	}
 
 	// 8) Bind TurnAbilityCompleted handler on the player ASC.
-	if (UAbilitySystemComponent* ASC = TurnManager->GetPlayerASC())
+	if (UAbilitySystemComponent* ASC = TurnSystemUtils::GetPlayerASC(TurnManager))
 	{
 		if (TurnManager->PlayerMoveCompletedHandle.IsValid())
 		{
-			if (FGameplayEventMulticastDelegate* Delegate = ASC->GenericGameplayEventCallbacks.Find(TurnManager->Tag_TurnAbilityCompleted))
+			if (FGameplayEventMulticastDelegate* Delegate = ASC->GenericGameplayEventCallbacks.Find(RogueGameplayTags::Gameplay_Event_Turn_Ability_Completed))
 			{
 				Delegate->Remove(TurnManager->PlayerMoveCompletedHandle);
 			}
 			TurnManager->PlayerMoveCompletedHandle.Reset();
 		}
 
-		FGameplayEventMulticastDelegate& Delegate = ASC->GenericGameplayEventCallbacks.FindOrAdd(TurnManager->Tag_TurnAbilityCompleted);
+		FGameplayEventMulticastDelegate& Delegate = ASC->GenericGameplayEventCallbacks.FindOrAdd(RogueGameplayTags::Gameplay_Event_Turn_Ability_Completed);
 		TurnManager->PlayerMoveCompletedHandle = Delegate.AddUObject(TurnManager, &AGameTurnManagerBase::OnPlayerMoveCompleted);
 
 		UE_LOG(LogTurnManager, Log, TEXT("InitializeTurnSystem: Bound to Gameplay.Event.Turn.Ability.Completed event"));

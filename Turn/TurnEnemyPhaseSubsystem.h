@@ -43,7 +43,7 @@ public:
 	/**
 	 * Executes the sequential move phase (after attacks or if no attacks).
 	 */
-	void ExecuteSequentialMovePhase(AGameTurnManagerBase* TurnManager, int32 TurnId, const TArray<FResolvedAction>& CachedActions);
+	void ExecuteSequentialMovePhase(AGameTurnManagerBase* TurnManager, int32 TurnId, const TArray<FResolvedAction>& CachedActions = TArray<FResolvedAction>());
 
 	/**
 	 * Executes attacks sequentially.
@@ -68,4 +68,21 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UAttackPhaseExecutorSubsystem> AttackExecutor;
+
+	TArray<FResolvedAction> StoredResolvedActions;
+
+	// Sequential mode tracking (owned by EnemyPhase subsystem)
+	bool bSequentialModeActive = false;
+	bool bSequentialMovePhaseStarted = false;
+	bool bIsInMoveOnlyPhase = false;
+
+public:
+	// Sequential mode accessors
+	bool IsSequentialModeActive() const { return bSequentialModeActive; }
+	bool HasSequentialMovePhaseStarted() const { return bSequentialMovePhaseStarted; }
+	bool IsInMoveOnlyPhase() const { return bIsInMoveOnlyPhase; }
+
+	void EnterSequentialMode();
+	void ResetSequentialMode();
+	void MarkSequentialMoveOnlyPhase();
 };

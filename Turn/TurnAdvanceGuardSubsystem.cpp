@@ -5,7 +5,11 @@
 #include "../Utility/ProjectDiagnostics.h"
 #include "Turn/GameTurnManagerBase.h"
 #include "Turn/TurnActionBarrierSubsystem.h"
+#include "Turn/UnitTurnStateSubsystem.h"
+#include "Utility/TurnSystemUtils.h"
 #include "Utility/RogueGameplayTags.h"
+#include "Utility/TurnTagCleanupUtils.h"
+#include "Kismet/GameplayStatics.h"
 
 DEFINE_LOG_CATEGORY(LogTurnAdvanceGuard);
 
@@ -98,10 +102,25 @@ void UTurnAdvanceGuardSubsystem::HandleEndEnemyTurn(AGameTurnManagerBase* TurnMa
     bool bBarrierQuiet = false;
     int32 InProgressCount = 0;
 
+    auto CleanupResidualTags = [TurnManager]()
+    {
+        if (!TurnManager) return;
+        UWorld* World = TurnManager->GetWorld();
+        if (!World) return;
+
+        APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(World, 0);
+        TArray<AActor*> EnemyActors;
+        if (TurnManager->UnitTurnStateSubsystem)
+        {
+            TurnManager->UnitTurnStateSubsystem->CopyEnemiesTo(EnemyActors);
+        }
+        TurnTagCleanupUtils::ClearResidualInProgressTags(World, PlayerPawn, EnemyActors);
+    };
+
     if (!CanAdvanceTurn(TurnManager, TurnId, &bBarrierQuiet, &InProgressCount))
     {
         DumpBarrierState(TurnId);
-        TurnManager->ClearResidualInProgressTags();
+        CleanupResidualTags();
 
         if (bBarrierQuiet && InProgressCount > 0)
         {
@@ -118,7 +137,7 @@ void UTurnAdvanceGuardSubsystem::HandleEndEnemyTurn(AGameTurnManagerBase* TurnMa
         return;
     }
 
-    TurnManager->ClearResidualInProgressTags();
+    CleanupResidualTags();
     TurnManager->AdvanceTurnAndRestart();
 }
 
@@ -157,7 +176,7 @@ int32 UTurnAdvanceGuardSubsystem::CollectInProgressCount(const AGameTurnManagerB
         return 0;
     }
 
-    if (UAbilitySystemComponent* ASC = TurnManager->GetPlayerASC())
+    if (UAbilitySystemComponent* ASC = TurnSystemUtils::GetPlayerASC(const_cast<AGameTurnManagerBase*>(TurnManager)))
     {
         bOutAscValid = true;
         return ASC->GetTagCount(RogueGameplayTags::State_Action_InProgress);

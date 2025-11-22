@@ -14,6 +14,7 @@
 #include "Utility/TurnTagCleanupUtils.h"
 #include "Utility/TurnAuthorityUtils.h"
 #include "Utility/TurnCommandEncoding.h"
+#include "Turn/PlayerInputProcessor.h"
 
 DEFINE_LOG_CATEGORY(LogMoveReservation);
 
@@ -393,12 +394,13 @@ void UMoveReservationSubsystem::HandleManualMoveFinished(AUnitBase* Unit)
     const bool bPlayerFallback = PendingPlayerFallbackMoves.Remove(Unit) > 0;
     if (bPlayerFallback && CachedTurnManager.IsValid())
     {
-        CachedTurnManager->FinalizePlayerMove(Unit);
+        if (UPlayerInputProcessor* InputProc = World->GetSubsystem<UPlayerInputProcessor>())
+        {
+            InputProc->OnPlayerMoveFinalized(CachedTurnManager.Get(), Unit);
+        }
     }
-    else
-    {
-        ReleaseMoveReservation(Unit);
-    }
+
+    ReleaseMoveReservation(Unit);
 }
 
 bool UMoveReservationSubsystem::IsPendingPlayerFallback(AUnitBase* Unit) const
@@ -462,7 +464,17 @@ bool UMoveReservationSubsystem::TriggerPlayerMoveAbility(const FResolvedAction& 
     const int32 TriggeredCount = ASC->HandleGameplayEvent(EventData.EventTag, &EventData);
     if (TriggeredCount > 0)
     {
-        TurnManager->SetPlayerMoveState(FVector(static_cast<double>(DirX), static_cast<double>(DirY), 0.0), true);
+        TurnManager->CachedPlayerCommand.Direction = FVector(static_cast<double>(DirX), static_cast<double>(DirY), 0.0);
+        TurnManager->bPlayerMoveInProgress = true;
+
+        if (UWorld* World = GetWorld())
+        {
+            if (UPlayerInputProcessor* InputProc = World->GetSubsystem<UPlayerInputProcessor>())
+            {
+                InputProc->SetPlayerMoveState(TurnManager->CachedPlayerCommand.Direction, true);
+            }
+        }
+
         UE_LOG(LogMoveReservation, Log,
             TEXT("[TriggerPlayerMove] Player move ability triggered toward (%d,%d)"),
             Action.NextCell.X, Action.NextCell.Y);
