@@ -27,6 +27,8 @@
 #include "Character/LyraPawnExtensionComponent.h"
 #include "AbilitySystem/LyraAbilitySystemComponent.h"
 #include "../Utility/RogueGameplayTags.h"
+#include "Turn/UnitTurnStateSubsystem.h"
+#include "../Grid/GridPathfindingSubsystem.h"
 #include "EngineUtils.h"
 
 DEFINE_LOG_CATEGORY(LogTurnCore);
@@ -153,7 +155,8 @@ void UTurnCorePhaseManager::CoreObservationPhase(const FIntPoint& PlayerCell)
     int32 Margin = 100; // Default fallback
     TSet<FIntPoint> EnemyPositions;
 
-    if (UUnitTurnStateSubsystem* UnitState = World->GetSubsystem<UUnitTurnStateSubsystem>())
+    UWorld* World = GetWorld();
+    if (UUnitTurnStateSubsystem* UnitState = World ? World->GetSubsystem<UUnitTurnStateSubsystem>() : nullptr)
     {
         TArray<AActor*> Enemies;
         UnitState->CopyEnemiesTo(Enemies);
