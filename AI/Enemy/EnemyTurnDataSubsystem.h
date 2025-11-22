@@ -119,6 +119,9 @@ public:
     UFUNCTION(BlueprintPure, Category = "Turn|Enemy")
     bool HasAttackIntent() const;
 
+    UFUNCTION(BlueprintPure, Category = "Turn|Enemy")
+    bool HasWaitIntent() const;
+
     //--------------------------------------------------------------------------
     // Intent配列の管理
     //--------------------------------------------------------------------------

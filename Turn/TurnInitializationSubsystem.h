@@ -7,6 +7,8 @@
 class APawn;
 class AActor;
 struct FEnemyIntent;
+class AGameTurnManagerBase;
+class URogueDungeonSubsystem;
 
 /**
  * UTurnInitializationSubsystem
@@ -29,12 +31,52 @@ public:
 	virtual void Deinitialize() override;
 
 	/**
-	 * Initialize all turn-start systems
-	 * @param TurnId The turn ID being started
-	 * @param PlayerPawn The player's pawn
-	 * @param Enemies Array of enemy actors
+	 * Initialize GameTurnManager (BeginPlay logic)
 	 */
 	void InitializeTurn(int32 TurnId, APawn* PlayerPawn, const TArray<AActor*>& Enemies);
+
+	/**
+	 * Handle turn start logic (roster refresh, tag cleanup, initialization)
+	 * Delegated from GameTurnManagerBase::OnTurnStartedHandler
+	 */
+	void OnTurnStarted(AGameTurnManagerBase* Manager, int32 TurnId);
+
+	/**
+	 * Resolve or spawn PathFinder subsystem
+	 * Moved from GameTurnManagerBase for better separation of concerns
+	 */
+	void ResolveOrSpawnPathFinder(AGameTurnManagerBase* Manager);
+
+	/**
+	 * Resolve or spawn UnitManager actor
+	 * Moved from GameTurnManagerBase for better separation of concerns
+	 */
+	void ResolveOrSpawnUnitManager(AGameTurnManagerBase* Manager);
+
+	/**
+	 * Check if all conditions are met to start the first turn
+	 */
+	bool CanStartFirstTurn() const;
+
+	/**
+	 * Notify that player has been possessed
+	 */
+	void NotifyPlayerPossessed(APawn* NewPawn);
+
+	/**
+	 * Notify that pathfinding is ready
+	 */
+	void NotifyPathReady();
+
+	/**
+	 * Notify that units have been spawned
+	 */
+	void NotifyUnitsSpawned();
+
+	/**
+	 * Mark that first turn has started
+	 */
+	void MarkFirstTurnStarted();
 
 	/**
 	 * Update the DistanceField for pathfinding
@@ -81,4 +123,10 @@ private:
 
 	// Current turn ID for logging
 	int32 CurrentTurnId = INDEX_NONE;
+
+	/** Initialization state flags */
+	bool bPathReady = false;
+	bool bUnitsSpawned = false;
+	bool bPlayerPossessed = false;
+	bool bFirstTurnStarted = false;
 };

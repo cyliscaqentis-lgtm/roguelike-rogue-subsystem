@@ -134,8 +134,27 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Turn System")
     static bool IsGASReady(AActor* Actor);
 
+	UFUNCTION()
+	bool ShouldEnsureIntents();
+
+	UFUNCTION()
+	void EnsureEnemyIntents(int32 TurnId, APawn* PlayerPawn);
+
     UFUNCTION(BlueprintCallable, Category = "Turn System")
     bool AllEnemiesReady(const TArray<AActor*>& Enemies) const;
+
+    /**
+     * Execute the move phase with conflict resolution
+     * @param TurnId Current turn ID
+     * @param PlayerPawn Player's pawn
+     * @param OutCancelledPlayer True if player move was cancelled
+     * @return Resolved actions to dispatch
+     */
+    TArray<FResolvedAction> ExecuteMovePhaseWithResolution(
+        int32 TurnId,
+        APawn* PlayerPawn,
+        bool& OutCancelledPlayer);
+
 
 private:
     // ========================================================================

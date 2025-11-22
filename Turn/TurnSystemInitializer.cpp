@@ -137,7 +137,10 @@ bool UTurnSystemInitializer::InitializeTurnSystem(AGameTurnManagerBase* TurnMana
 	if (!TurnManager->PathFinder)
 	{
 		UE_LOG(LogTurnManager, Warning, TEXT("InitializeTurnSystem: PathFinder not injected, attempting resolve..."));
-		TurnManager->ResolveOrSpawnPathFinder();
+		if (UTurnInitializationSubsystem* InitSys = World->GetSubsystem<UTurnInitializationSubsystem>())
+		{
+			InitSys->ResolveOrSpawnPathFinder(TurnManager);
+		}
 	}
 
 	if (!TurnManager->PathFinder)

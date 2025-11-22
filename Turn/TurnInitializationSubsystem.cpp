@@ -9,8 +9,191 @@
 #include "Turn/TurnSystemTypes.h"
 #include "Utility/GridUtils.h"
 #include "GameFramework/Pawn.h"
+#include "Turn/GameTurnManagerBase.h"
+#include "Debug/DebugObserverCSV.h"
+#include "Grid/URogueDungeonSubsystem.h"
+#include "Character/UnitManager.h"
+#include "TBSLyraGameMode.h"
+#include "Kismet/GameplayStatics.h"
+#include "Grid/DungeonFloorGenerator.h"
+#include "Grid/AABB.h"
+#include "Turn/UnitTurnStateSubsystem.h"
+#include "Utility/TurnTagCleanupUtils.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogTurnInit, Log, All);
+
+void UTurnInitializationSubsystem::OnTurnStarted(AGameTurnManagerBase* Manager, int32 TurnId)
+{
+	if (!Manager) return;
+
+	UE_LOG(LogTurnInit, Warning, TEXT("[Turn %d] ==== OnTurnStarted (Subsystem) START ===="), TurnId);
+
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	// Get PlayerPawn
+	APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(World, 0);
+
+	// Clear residual tags
+	TArray<AActor*> EnemiesForCleanup;
+	if (UUnitTurnStateSubsystem* UnitState = World->GetSubsystem<UUnitTurnStateSubsystem>())
+	{
+		UnitState->CopyEnemiesTo(EnemiesForCleanup);
+	}
+	TurnTagCleanupUtils::ClearResidualInProgressTags(World, PlayerPawn, EnemiesForCleanup);
+	
+	UE_LOG(LogTurnInit, Log, TEXT("[Turn %d] ClearResidualInProgressTags called"), TurnId);
+
+	// Refresh enemy roster
+	if (UUnitTurnStateSubsystem* UnitState = World->GetSubsystem<UUnitTurnStateSubsystem>())
+	{
+		const int32 CachedBefore = UnitState->GetCachedEnemyRefs().Num();
+		
+		TArray<AActor*> CollectedEnemies;
+		if (UEnemyAISubsystem* EnemyAI = World->GetSubsystem<UEnemyAISubsystem>())
+		{
+			EnemyAI->CollectAllEnemies(PlayerPawn, CollectedEnemies);
+		}
+		else
+		{
+			UE_LOG(LogTurnInit, Warning, TEXT("[Turn %d] EnemyAISubsystem not available"), TurnId);
+		}
+
+		UnitState->UpdateEnemies(CollectedEnemies);
+		const int32 AfterCount = UnitState->GetCachedEnemyRefs().Num();
+
+		UE_LOG(LogTurnInit, Log, TEXT("[Turn %d] Enemy roster updated: %d -> %d"), TurnId, CachedBefore, AfterCount);
+	}
+
+	// Get updated enemies for initialization
+	TArray<AActor*> EnemyActors;
+	if (UUnitTurnStateSubsystem* UnitState = World->GetSubsystem<UUnitTurnStateSubsystem>())
+	{
+		UnitState->CopyEnemiesTo(EnemyActors);
+	}
+
+	// Initialize Turn
+	InitializeTurn(TurnId, PlayerPawn, EnemyActors);
+
+	// Cache intents to Manager
+	if (UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>())
+	{
+		Manager->CachedEnemyIntents = EnemyData->Intents;
+	}
+
+	UE_LOG(LogTurnInit, Warning, TEXT("[Turn %d] ==== OnTurnStarted (Subsystem) END ===="), TurnId);
+}
+
+void UTurnInitializationSubsystem::ResolveOrSpawnPathFinder(AGameTurnManagerBase* Manager)
+{
+	if (!Manager) return;
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		UE_LOG(LogTurnInit, Error, TEXT("ResolveOrSpawnPathFinder: World is null"));
+		return;
+	}
+
+	if (IsValid(Manager->PathFinder.Get()))
+	{
+		return;
+	}
+
+	// Get UGridPathfindingSubsystem (subsystems are automatically created by engine, no spawning needed)
+	Manager->PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>();
+
+	if (IsValid(Manager->PathFinder.Get()))
+	{
+		UE_LOG(LogTurnInit, Log, TEXT("ResolveOrSpawnPathFinder: Retrieved UGridPathfindingSubsystem"));
+	}
+	else
+	{
+		UE_LOG(LogTurnInit, Error, TEXT("ResolveOrSpawnPathFinder: Failed to get UGridPathfindingSubsystem!"));
+	}
+}
+
+void UTurnInitializationSubsystem::ResolveOrSpawnUnitManager(AGameTurnManagerBase* Manager)
+{
+	if (!Manager) return;
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		UE_LOG(LogTurnInit, Error, TEXT("ResolveOrSpawnUnitManager: World is null"));
+		return;
+	}
+
+	if (IsValid(Manager->UnitMgr))
+	{
+		return;
+	}
+
+	// Try to find existing UnitManager
+	TArray<AActor*> Found;
+	UGameplayStatics::GetAllActorsOfClass(World, AUnitManager::StaticClass(), Found);
+	if (Found.Num() > 0)
+	{
+		Manager->UnitMgr = Cast<AUnitManager>(Found[0]);
+		UE_LOG(LogTurnInit, Log, TEXT("ResolveOrSpawnUnitManager: Found existing UnitManager: %s"), *GetNameSafe(Manager->UnitMgr));
+		return;
+	}
+
+	// Try to get from GameMode
+	if (ATBSLyraGameMode* GM = World->GetAuthGameMode<ATBSLyraGameMode>())
+	{
+		Manager->UnitMgr = GM->GetUnitManager();
+		if (IsValid(Manager->UnitMgr))
+		{
+			UE_LOG(LogTurnInit, Log, TEXT("ResolveOrSpawnUnitManager: Got UnitManager from GameMode: %s"), *GetNameSafe(Manager->UnitMgr));
+			return;
+		}
+	}
+
+	// Spawn new UnitManager
+	UE_LOG(LogTurnInit, Log, TEXT("ResolveOrSpawnUnitManager: Spawning UnitManager"));
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	Manager->UnitMgr = World->SpawnActor<AUnitManager>(AUnitManager::StaticClass(), FTransform::Identity, Params);
+
+	if (IsValid(Manager->UnitMgr))
+	{
+		UE_LOG(LogTurnInit, Log, TEXT("ResolveOrSpawnUnitManager: Spawned UnitManager: %s"), *GetNameSafe(Manager->UnitMgr));
+	}
+	else
+	{
+		UE_LOG(LogTurnInit, Error, TEXT("ResolveOrSpawnUnitManager: Failed to spawn UnitManager!"));
+	}
+}
+
+bool UTurnInitializationSubsystem::CanStartFirstTurn() const
+{
+	return bPathReady && bUnitsSpawned && bPlayerPossessed && !bFirstTurnStarted;
+}
+
+void UTurnInitializationSubsystem::NotifyPlayerPossessed(APawn* NewPawn)
+{
+	bPlayerPossessed = true;
+	UE_LOG(LogTurnInit, Log, TEXT("NotifyPlayerPossessed: %s"), *GetNameSafe(NewPawn));
+}
+
+void UTurnInitializationSubsystem::NotifyPathReady()
+{
+	bPathReady = true;
+	UE_LOG(LogTurnInit, Log, TEXT("NotifyPathReady: Pathfinding system is ready"));
+}
+
+void UTurnInitializationSubsystem::NotifyUnitsSpawned()
+{
+	bUnitsSpawned = true;
+	UE_LOG(LogTurnInit, Log, TEXT("NotifyUnitsSpawned: Unit spawning complete"));
+}
+
+void UTurnInitializationSubsystem::MarkFirstTurnStarted()
+{
+	bFirstTurnStarted = true;
+	UE_LOG(LogTurnInit, Log, TEXT("MarkFirstTurnStarted: First turn has been started"));
+}
 
 void UTurnInitializationSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -22,6 +205,140 @@ void UTurnInitializationSubsystem::Deinitialize()
 {
 	Super::Deinitialize();
 	UE_LOG(LogTurnInit, Log, TEXT("TurnInitializationSubsystem deinitialized"));
+}
+
+void UTurnInitializationSubsystem::InitializeGameTurnManager(AGameTurnManagerBase* Manager)
+{
+	if (!Manager) return;
+
+	UE_LOG(LogTurnInit, Warning, TEXT("InitializeGameTurnManager: START..."));
+
+	// CSV Observer
+	UDebugObserverCSV* CSVObserver = Manager->FindComponentByClass<UDebugObserverCSV>();
+	if (CSVObserver)
+	{
+		Manager->DebugObservers.Add(CSVObserver);
+		Manager->CachedCsvObserver = CSVObserver;
+		UE_LOG(LogTurnInit, Log, TEXT("InitializeGameTurnManager: Found and added UDebugObserverCSV to DebugObservers."));
+
+		CSVObserver->MarkSessionStart();
+		CSVObserver->SetCurrentTurnForLogging(0);
+	}
+	else
+	{
+		UE_LOG(LogTurnInit, Warning, TEXT("InitializeGameTurnManager: UDebugObserverCSV component not found."));
+	}
+
+	if (!Manager->IsAuthorityLike(GetWorld(), Manager))
+	{
+		UE_LOG(LogTurnInit, Warning, TEXT("InitializeGameTurnManager: Not authoritative, skipping"));
+		return;
+	}
+
+	Manager->InitGameplayTags();
+
+	ATBSLyraGameMode* GM = GetWorld()->GetAuthGameMode<ATBSLyraGameMode>();
+	if (!ensure(GM))
+	{
+		UE_LOG(LogTurnInit, Error, TEXT("InitializeGameTurnManager: GameMode not found"));
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	Manager->DungeonSys = World->GetSubsystem<URogueDungeonSubsystem>();
+
+	UE_LOG(LogTurnInit, Warning, TEXT("InitializeGameTurnManager: DungeonSys=%p"), static_cast<void*>(Manager->DungeonSys.Get()));
+
+	if (Manager->DungeonSys)
+	{
+		Manager->DungeonSys->OnGridReady.AddDynamic(Manager, &AGameTurnManagerBase::HandleDungeonReady);
+		UE_LOG(LogTurnInit, Log, TEXT("InitializeGameTurnManager: Subscribed to DungeonSys->OnGridReady"));
+
+		UE_LOG(LogTurnInit, Log, TEXT("InitializeGameTurnManager: Triggering dungeon generation..."));
+		Manager->DungeonSys->StartGenerateFromLevel();
+	}
+	else
+	{
+		UE_LOG(LogTurnInit, Error, TEXT("InitializeGameTurnManager: DungeonSys is null!"));
+	}
+
+	UE_LOG(LogTurnInit, Log, TEXT("InitializeGameTurnManager: Ready for HandleDungeonReady"));
+}
+
+void UTurnInitializationSubsystem::HandleDungeonReady(AGameTurnManagerBase* Manager, URogueDungeonSubsystem* DungeonSys)
+{
+	if (!Manager || !DungeonSys)
+	{
+		UE_LOG(LogTurnInit, Error, TEXT("HandleDungeonReady: Invalid Manager or DungeonSys"));
+		return;
+	}
+
+	UGridPathfindingSubsystem* GridPathfindingSubsystem = World->GetSubsystem<UGridPathfindingSubsystem>();
+	if (!GridPathfindingSubsystem)
+	{
+		UE_LOG(LogTurnInit, Error, TEXT("HandleDungeonReady: GridPathfindingSubsystem not available"));
+		return;
+	}
+
+	if (!Manager->PathFinder)
+	{
+		Manager->PathFinder = GridPathfindingSubsystem;
+	}
+
+	if (!Manager->UnitMgr)
+	{
+		UE_LOG(LogTurnInit, Log, TEXT("HandleDungeonReady: Creating UnitManager..."));
+		ResolveOrSpawnUnitManager(Manager);
+	}
+
+	if (!IsValid(Manager->PathFinder) || !IsValid(Manager->UnitMgr))
+	{
+		UE_LOG(LogTurnInit, Error, TEXT("HandleDungeonReady: Dependencies not ready"));
+		return;
+	}
+
+	// Initialize GridPathfindingSubsystem
+	if (ADungeonFloorGenerator* Floor = DungeonSys->GetFloorGenerator())
+	{
+		FGridInitParams InitParams;
+		InitParams.GridCostArray = Floor->GridCells;
+		InitParams.MapSize = FVector(Floor->GridWidth, Floor->GridHeight, 0.f);
+		InitParams.TileSizeCM = Floor->CellSize;
+		InitParams.Origin = FVector::ZeroVector;
+
+		GridPathfindingSubsystem->InitializeFromParams(InitParams);
+
+		UE_LOG(LogTurnInit, Warning, TEXT("[PF.Init] Size=%dx%d Cell=%d"), Floor->GridWidth, Floor->GridHeight, Floor->CellSize);
+
+		Manager->bPathReady = true;
+	}
+	else
+	{
+		UE_LOG(LogTurnInit, Error, TEXT("HandleDungeonReady: FloorGenerator not available"));
+	}
+
+	if (IsValid(Manager->UnitMgr))
+	{
+		Manager->UnitMgr->PathFinder = Manager->PathFinder;
+
+		if (ADungeonFloorGenerator* Floor = DungeonSys->GetFloorGenerator())
+		{
+			Manager->UnitMgr->MapSize = FVector(Floor->GridWidth, Floor->GridHeight, 0.f);
+		}
+
+		TArray<AAABB*> GeneratedRooms;
+		DungeonSys->GetGeneratedRooms(GeneratedRooms);
+
+		Manager->UnitMgr->BuildUnits(GeneratedRooms);
+		Manager->bUnitsSpawned = true;
+	}
+
+	UE_LOG(LogTurnInit, Log, TEXT("HandleDungeonReady: Completed, initializing turn system..."));
+
+	Manager->InitializeTurnSystem();
+	Manager->TryStartFirstTurn();
 }
 
 void UTurnInitializationSubsystem::InitializeTurn(int32 TurnId, APawn* PlayerPawn, const TArray<AActor*>& Enemies)

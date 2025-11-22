@@ -43,6 +43,36 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Input")
 	bool IsInputOpen_Server() const;
 
+	/** 入力ゲートを適用（ASCへのタグ追加/削除） */
+	void ApplyWaitInputGate(bool bOpen);
+
+	//==========================================================================
+	// Phase 7: Manager Delegation API
+	//==========================================================================
+
+	/** Open input window for a specific turn (delegated from Manager) */
+	UFUNCTION(BlueprintCallable, Category = "Input", meta = (BlueprintAuthorityOnly))
+	void OpenTurnInputWindow(class AGameTurnManagerBase* Manager, int32 TurnId);
+
+	/** Close input window (delegated from Manager) */
+	UFUNCTION(BlueprintCallable, Category = "Input", meta = (BlueprintAuthorityOnly))
+	void CloseTurnInputWindow(class AGameTurnManagerBase* Manager);
+
+	/** Handle player move finalization (delegated from Manager) */
+	void OnPlayerMoveFinalized(class AGameTurnManagerBase* Manager, AActor* CompletedActor);
+
+	/** Handle player possession (delegated from Manager) */
+	void OnPlayerPossessed(class AGameTurnManagerBase* Manager, APawn* NewPawn);
+
+	/** Check if input is open on server (delegated from Manager) */
+	bool IsInputOpen_Server(const class AGameTurnManagerBase* Manager) const;
+
+	/** Toggle State.Action.InProgress tag */
+	void MarkMoveInProgress(bool bInProgress);
+
+	/** Set player move state (direction and progress flag) */
+	void SetPlayerMoveState(const FVector& Direction, bool bInProgress);
+
 	//==========================================================================
 	// コマンド検証
 	//==========================================================================
@@ -85,9 +115,6 @@ protected:
 
 	/** WindowIdが有効か検証 */
 	bool IsValidWindowId(int32 WindowId) const;
-
-	/** 入力ゲートを適用（ASCへのタグ追加/削除） */
-	void ApplyWaitInputGate(bool bOpen);
 
 	/** サーバー権限で入力受付状態を設定 */
 	void SetWaitingForPlayerInput_ServerLike(bool bNew);

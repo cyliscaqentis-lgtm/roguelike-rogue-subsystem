@@ -990,6 +990,36 @@ UAbilitySystemComponent* UTurnCorePhaseManager::ResolveASC(AActor* Actor)
     return nullptr;
 }
 
+#include "AI/Enemy/EnemyTurnDataSubsystem.h"
+#include "Turn/UnitTurnStateSubsystem.h"
+#include "Grid/GridPathfindingSubsystem.h"
+
+bool UTurnCorePhaseManager::ShouldEnsureIntents()
+{
+    if (const UEnemyTurnDataSubsystem* EnemyTurnData = GetWorld()->GetSubsystem<UEnemyTurnDataSubsystem>())
+    {
+        return !EnemyTurnData->HasAttackIntent() &&
+               !EnemyTurnData->HasWaitIntent();
+    }
+    return false;
+}
+
+void UTurnCorePhaseManager::EnsureEnemyIntents(int32 TurnId, APawn* PlayerPawn)
+{
+	if (UEnemyTurnDataSubsystem* EnemyTurnData = GetWorld()->GetSubsystem<UEnemyTurnDataSubsystem>())
+	{
+		UGridPathfindingSubsystem* PathFinder = GetWorld()->GetSubsystem<UGridPathfindingSubsystem>();
+		UUnitTurnStateSubsystem* UnitState = GetWorld()->GetSubsystem<UUnitTurnStateSubsystem>();
+		if(!UnitState || !PathFinder) return;
+		
+		TArray<AActor*> EnemyActors;
+		UnitState->CopyEnemiesTo(EnemyActors);
+		
+		TArray<FEnemyIntent> GeneratedIntents; // Dummy variable
+		EnemyTurnData->EnsureIntentsFallback(TurnId, PlayerPawn, PathFinder, EnemyActors, GeneratedIntents);
+	}
+}
+
 bool UTurnCorePhaseManager::IsGASReady(AActor* Actor)
 {
     if (!Actor)
@@ -1028,6 +1058,99 @@ bool UTurnCorePhaseManager::IsGASReady(AActor* Actor)
         TEXT("[TurnCore] IsGASReady: %s has %d abilities - READY"),
         *GetNameSafe(Actor), Abilities.Num());
     return true;
+}
+
+void UTurnCorePhaseManager::EnsureEnemyIntents(int32 TurnId, APawn* PlayerPawn)
+{
+	if (UEnemyTurnDataSubsystem* EnemyTurnData = GetWorld()->GetSubsystem<UEnemyTurnDataSubsystem>())
+	{
+		EnemyTurnData->EnsureIntentsFallback(TurnId, PlayerPawn);
+	}
+}
+
+#include "Turn/MoveReservationSubsystem.h"
+#include "Utility/RogueGameplayTags.h"
+
+namespace TurnCorePhaseManager_Private
+{
+    void AppendPlayerIntentIfPending(UWorld* World, APawn* PlayerPawn, TArray<FEnemyIntent>& InOutIntents)
+    {
+        if (!PlayerPawn || !World) return;
+
+        UGridPathfindingSubsystem* PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>();
+        UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>();
+        if(!PathFinder || !MoveRes) return;
+        
+        const FVector PlayerLoc = PlayerPawn->GetActorLocation();
+        const FIntPoint PlayerCurrentCell = PathFinder->WorldToGrid(PlayerLoc);
+
+        const TMap<TWeakObjectPtr<AActor>, FIntPoint>& Reservations = MoveRes->GetPendingMoveReservations();
+        TWeakObjectPtr<AActor> PlayerKey(PlayerPawn);
+        const FIntPoint* PlayerNextCell = Reservations.Find(PlayerKey);
+
+        if (PlayerNextCell && PlayerCurrentCell != *PlayerNextCell)
+        {
+            FEnemyIntent PlayerIntent;
+            PlayerIntent.Actor = PlayerPawn;
+            PlayerIntent.CurrentCell = PlayerCurrentCell;
+            PlayerIntent.NextCell = *PlayerNextCell;
+            PlayerIntent.AbilityTag = RogueGameplayTags::AI_Intent_Move;
+            PlayerIntent.BasePriority = 200; // High priority for player
+            InOutIntents.Add(PlayerIntent);
+        }
+    }
+}
+
+TArray<FResolvedAction> UTurnCorePhaseManager::ExecuteMovePhaseWithResolution(int32 TurnId, APawn* PlayerPawn, bool& OutCancelledPlayer)
+{
+    OutCancelledPlayer = false;
+    UWorld* World = GetWorld();
+    
+    UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>();
+    if (!EnemyData) 
+    { 
+        UE_LOG(LogTurnCore, Error, TEXT("ExecuteMovePhaseWithResolution: EnemyData subsystem not found"));
+        return {}; 
+    }
+    
+    if (ShouldEnsureIntents())
+    {
+        EnsureEnemyIntents(TurnId, PlayerPawn);
+    }
+    
+    if (EnemyData->Intents.Num() == 0) 
+    { 
+        UE_LOG(LogTurnCore, Log, TEXT("ExecuteMovePhaseWithResolution: No intents to process"));
+        return {}; 
+    }
+    
+    TArray<FEnemyIntent> AllIntents = EnemyData->Intents;
+    
+    TurnCorePhaseManager_Private::AppendPlayerIntentIfPending(World, PlayerPawn, AllIntents);
+    
+    TArray<FResolvedAction> ResolvedActions = CoreResolvePhase(AllIntents);
+    
+    if (PlayerPawn) {
+        for (const FResolvedAction& Action : ResolvedActions) {
+            if (IsValid(Action.SourceActor.Get()) && Action.SourceActor.Get() == PlayerPawn && Action.bIsWait) {
+                OutCancelledPlayer = true;
+                
+                UE_LOG(LogTurnCore, Warning, TEXT("Player move cancelled by conflict resolver"));
+                
+                if (UAbilitySystemComponent* ASC = PlayerPawn->FindComponentByClass<UAbilitySystemComponent>()) {
+                    ASC->CancelAllAbilities();
+                }
+                
+                if(UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>()) {
+                    MoveRes->ReleaseMoveReservation(PlayerPawn);
+                }
+                
+                return {};
+            }
+        }
+    }
+    
+    return ResolvedActions;
 }
 
 bool UTurnCorePhaseManager::AllEnemiesReady(const TArray<AActor*>& Enemies) const

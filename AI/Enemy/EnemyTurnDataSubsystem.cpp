@@ -268,6 +268,31 @@ bool UEnemyTurnDataSubsystem::HasAttackIntent() const
     return false;
 }
 
+bool UEnemyTurnDataSubsystem::HasWaitIntent() const
+{
+    const FGameplayTag WaitTag = FGameplayTag::RequestGameplayTag(TEXT("AI.Intent.Wait"), false);
+
+    if (!WaitTag.IsValid())
+    {
+        UE_LOG(LogEnemyTurnDataSys, Warning,
+            TEXT("[HasWaitIntent] AI.Intent.Wait tag not found"));
+        return false;
+    }
+
+    for (const FEnemyIntent& Intent : Intents)
+    {
+        if (Intent.AbilityTag.MatchesTag(WaitTag))
+        {
+            UE_LOG(LogEnemyTurnDataSys, Verbose,
+                TEXT("[HasWaitIntent] Wait intent found: %s"),
+                *GetNameSafe(Intent.Actor.Get()));
+            return true;
+        }
+    }
+
+    return false;
+}
+
 //--------------------------------------------------------------------------
 // Intent配列の管理
 //--------------------------------------------------------------------------

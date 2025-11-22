@@ -8,6 +8,154 @@
 #include "GameFramework/PlayerController.h"
 #include "Utility/RogueGameplayTags.h"
 #include "Utility/TurnAuthorityUtils.h"
+#include "Turn/GameTurnManagerBase.h"
+#include "Turn/MoveReservationSubsystem.h"
+#include "Turn/TurnCommandHandler.h"
+#include "Kismet/GameplayStatics.h"
+
+void UPlayerInputProcessor::OpenTurnInputWindow(AGameTurnManagerBase* Manager, int32 TurnId)
+{
+	UWorld* World = GetWorld();
+	if (!IsAuthorityLike(World))
+	{
+		return;
+	}
+
+	UTurnFlowCoordinator* TFC = World->GetSubsystem<UTurnFlowCoordinator>();
+	if (TFC)
+	{
+		TFC->OpenNewInputWindow();
+		const int32 WindowId = TFC->GetCurrentInputWindowId();
+		
+		// Update internal state
+		OpenInputWindow(TurnId, WindowId);
+
+		// Notify CommandHandler
+		if (UTurnCommandHandler* CmdHandler = World->GetSubsystem<UTurnCommandHandler>())
+		{
+			CmdHandler->BeginInputWindow(WindowId);
+		}
+
+		// Update Manager state (if needed for replication, though we are moving away from it)
+		// Manager->WaitingForPlayerInput = true; // Managed via OnRep/SetWaitingForPlayerInput_ServerLike in Processor? 
+		// Actually Manager still has WaitingForPlayerInput replicated property. 
+		// For now, we keep Manager's property in sync or rely on Processor's property if clients use it.
+		// But Manager::WaitingForPlayerInput is used in many places.
+		// Let's assume Manager delegates to us, so we should update our state, and Manager might update its own via callback or we update it here.
+		// Since Manager passed 'this', we can update it.
+		if (Manager)
+		{
+			Manager->WaitingForPlayerInput = true;
+			Manager->OnRep_WaitingForPlayerInput(); // Manually call OnRep for server
+		}
+	}
+}
+
+void UPlayerInputProcessor::CloseTurnInputWindow(AGameTurnManagerBase* Manager)
+{
+	CloseInputWindow();
+	if (Manager)
+	{
+		Manager->WaitingForPlayerInput = false;
+		Manager->OnRep_WaitingForPlayerInput();
+	}
+}
+
+void UPlayerInputProcessor::OnPlayerMoveFinalized(AGameTurnManagerBase* Manager, AActor* CompletedActor)
+{
+	CloseTurnInputWindow(Manager);
+	
+	// Release reservation
+	if (UWorld* World = GetWorld())
+	{
+		if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
+		{
+			MoveRes->ReleaseMoveReservation(CompletedActor);
+		}
+	}
+
+	// Remove tags
+	if (UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(CompletedActor))
+	{
+		ASC->RemoveLooseGameplayTag(RogueGameplayTags::Phase_Player_WaitInput);
+	}
+}
+
+void UPlayerInputProcessor::OnPlayerPossessed(AGameTurnManagerBase* Manager, APawn* NewPawn)
+{
+	if (!Manager) return;
+
+	// Logic from Manager::NotifyPlayerPossessed
+	// We need to access Manager's bTurnStarted, bDeferOpenOnPossess.
+	// Since they are public/protected, we might need to be friend or they need to be public.
+	// They are public in GameTurnManagerBase.h (checked in Step 294).
+	
+	if (Manager->bTurnStarted && !Manager->WaitingForPlayerInput)
+	{
+		OpenTurnInputWindow(Manager, Manager->CurrentTurnId);
+		Manager->bDeferOpenOnPossess = false;
+	}
+	else if (Manager->bTurnStarted && Manager->bDeferOpenOnPossess)
+	{
+		OpenTurnInputWindow(Manager, Manager->CurrentTurnId);
+		Manager->bDeferOpenOnPossess = false;
+	}
+	else if (!Manager->bTurnStarted)
+	{
+		Manager->bDeferOpenOnPossess = true;
+		Manager->TryStartFirstTurn();
+	}
+}
+
+bool UPlayerInputProcessor::IsInputOpen_Server(const AGameTurnManagerBase* Manager) const
+{
+	if (!bWaitingForPlayerInput)
+	{
+		return false;
+	}
+
+	// Check ASC tag
+	UWorld* World = GetWorld();
+	if (APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr)
+	{
+		if (APawn* Pawn = PC->GetPawn())
+		{
+			if (UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Pawn))
+			{
+				return ASC->HasMatchingGameplayTag(RogueGameplayTags::Gate_Input_Open);
+			}
+		}
+	}
+	return false;
+}
+
+void UPlayerInputProcessor::MarkMoveInProgress(bool bInProgress)
+{
+	UWorld* World = GetWorld();
+	if (APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr)
+	{
+		if (APawn* Pawn = PC->GetPawn())
+		{
+			if (UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Pawn))
+			{
+				if (bInProgress)
+				{
+					ASC->AddLooseGameplayTag(RogueGameplayTags::State_Action_InProgress);
+				}
+				else
+				{
+					ASC->RemoveLooseGameplayTag(RogueGameplayTags::State_Action_InProgress);
+				}
+			}
+		}
+	}
+}
+
+void UPlayerInputProcessor::SetPlayerMoveState(const FVector& Direction, bool bInProgress)
+{
+	CachedPlayerCommand.Direction = Direction;
+	MarkMoveInProgress(bInProgress);
+}
 
 void UPlayerInputProcessor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {

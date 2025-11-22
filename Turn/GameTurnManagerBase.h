@@ -17,10 +17,18 @@
 #include "../Utility/ProjectDiagnostics.h"
 #include "GameTurnManagerBase.generated.h"
 
+// Logging Macros
+#define LOG_TURN(Verbosity, Format, ...) UE_LOG(LogTurnManager, Verbosity, Format, ##__VA_ARGS__)
+#define LOG_TURN_VERBOSE(TurnId, Format, ...) \
+    if (CVarTurnLog.GetValueOnGameThread() >= 2) { \
+        UE_LOG(LogTurnManager, Verbose, TEXT("[Turn %d] ") Format, TurnId, ##__VA_ARGS__); \
+    }
+
 class UEnemyTurnDataSubsystem;
 class UEnemyAISubsystem;
 class UAttackPhaseExecutorSubsystem;
 class UTurnActionBarrierSubsystem;
+class UTurnEnemyPhaseSubsystem;
 class UAbilitySystemComponent;
 class UUnitTurnStateSubsystem;
 class UTurnSystemInitializer;
@@ -63,6 +71,7 @@ class LYRAGAME_API AGameTurnManagerBase : public AActor
 
     // CodeRevision: INC-2025-1122-R2 (Allow MoveReservationSubsystem access to protected members)
     friend class UMoveReservationSubsystem;
+    friend class UTurnEnemyPhaseSubsystem;
 
 public:
     //==========================================================================
@@ -72,7 +81,7 @@ public:
     AGameTurnManagerBase();
     virtual void BeginPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type Reason) override;
-    virtual void Tick(float DeltaTime) override;
+
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
     // CodeRevision: INC-2025-1125-R1 (Expose sequential flag for resolver checks) (2025-11-25 12:00)
     bool IsSequentialModeActive() const;
@@ -113,20 +122,6 @@ public:
     // Removed: GetCurrentInputWindowId() - use TurnFlowCoordinator->GetCurrentInputWindowId() instead
     // Removed: GetCurrentTurnIndex() - use TurnFlowCoordinator->GetCurrentTurnIndex() instead
 
-    //==========================================================================
-    // PathFinder Accessor
-    //==========================================================================
-
-    /** Get GridPathfindingSubsystem (new subsystem-based access) */
-    // CodeRevision: INC-2025-00032-R1 (Removed GetCachedPathFinder() - use GetGridPathfindingSubsystem() instead) (2025-01-XX XX:XX)
-    UFUNCTION(BlueprintPure, Category = "Turn|Services")
-    class UGridPathfindingSubsystem* GetGridPathfindingSubsystem() const;
-
-
-    // CodeRevision: INC-2025-00017-R1 (Remove wrapper functions - Phase 4) (2025-11-16 15:25)
-    // Removed: GetDungeonSystem() - use DungeonSystem member directly
-    // Removed: GetFloorGenerator() - use DungeonSystem->GetFloorGenerator() directly
-
     // CodeRevision: INC-2025-00017-R1 (Remove unused wrapper functions - Phase 1) (2025-11-16 15:00)
     // Removed: EnsureFloorGenerated() - unused wrapper function
     // Removed: NextFloor() - unused wrapper function
@@ -155,7 +150,7 @@ public:
     //==========================================================================
 
     UFUNCTION(BlueprintCallable, Category = "Turn|Flow", meta = (DeprecatedFunction, DeprecationMessage = "Use OnPlayerMoveCompleted flow instead"))
-    void ContinueTurnAfterInput();
+
 
     UFUNCTION(BlueprintCallable, Category = "Turn|Flow")
     void AdvanceTurnAndRestart();
@@ -177,11 +172,7 @@ public:
     // Utilities
     //==========================================================================
 
-    /**
-     * Force remove State.Action.InProgress tags from all units (player + enemies).
-     * Used as a safety fallback after barriers to prevent stuck turns.
-     */
-    void ClearResidualInProgressTags();
+
 
     // CodeRevision: INC-2025-00017-R1 (Remove unused wrapper functions - Phase 1 & 3) (2025-11-16 15:00)
     // Removed: BuildAllObservations() - unused wrapper function
@@ -404,17 +395,6 @@ public:
     UPROPERTY()
     bool bDeferOpenOnPossess = false;
 
-    /** Flag indicating if pathfinding is ready */
-    UPROPERTY()
-    bool bPathReady = false;
-
-    /** Flag indicating if units have been spawned */
-    UPROPERTY()
-    bool bUnitsSpawned = false;
-
-    /** Flag indicating if player has been possessed */
-    UPROPERTY()
-    bool bPlayerPossessed = false;
 
 
     // CodeRevision: INC-2025-00032-R1 (Removed CachedPathFinder member - use PathFinder only) (2025-01-XX XX:XX)
@@ -439,21 +419,6 @@ public:
     UFUNCTION(BlueprintCallable, Category="Turn|State")
     void MarkMoveInProgress(bool bInProgress);
 
-    /** Clear all resolved move reservations */
-    void ClearResolvedMoves();
-
-    /**
-     * Register a resolved move for an actor.
-     * @return true if reservation succeeded, false if failed
-     */
-    bool RegisterResolvedMove(AActor* Actor, const FIntPoint& Cell);
-
-    bool IsMoveAuthorized(AActor* Actor, const FIntPoint& Cell) const;
-    bool HasReservationFor(AActor* Actor, const FIntPoint& Cell) const;
-    void ReleaseMoveReservation(AActor* Actor);
-
-    bool TriggerPlayerMoveAbility(const FResolvedAction& Action, AUnitBase* Unit);
-
     /** Open input window for player moves */
     UFUNCTION(BlueprintCallable, Category="Turn")
     void OpenInputWindow();
@@ -468,20 +433,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Turn|State")
     bool IsInputOpen_Server() const;
 
-protected:
-    //==========================================================================
-    // PathFinder Resolution / Spawning (for editor)
-    //==========================================================================
-    void ResolveOrSpawnPathFinder();
-    
-    //==========================================================================
-    // UnitManager Resolution / Spawning (for editor)
-    //==========================================================================
-    void ResolveOrSpawnUnitManager();
+
 
 public:
-    // Public access for TurnCorePhaseManager
-    bool DispatchResolvedMove(const FResolvedAction& Action);
 protected:
     //==========================================================================
     // Phase 5: Gate Synchronization
@@ -528,18 +482,11 @@ protected:
     // Helper Functions
     //==========================================================================
 
-    // CodeRevision: INC-2025-00030-R2 (Migrate to UGridPathfindingSubsystem) (2025-11-17 00:40)
-    UGridPathfindingSubsystem* FindPathFinder(UWorld* World) const;
-    UAbilitySystemComponent* GetPlayerASC() const;
 
-    void RefreshEnemyRoster(APawn* PlayerPawn, int32 TurnId, const TCHAR* ContextLabel);
-    void CopyEnemyActors(TArray<AActor*>& OutEnemies) const;
 
-    void EnsureEnemyIntents(APawn* PlayerPawn);
 
-    /** Try to start the first turn after ASC is ready */
-    UFUNCTION()
-    void TryStartFirstTurnAfterASCReady();
+
+
 
     /** Try to start the first turn when all conditions are met */
     void TryStartFirstTurn();
@@ -552,14 +499,6 @@ protected:
     void ExecuteSequentialPhase();
     void ExecuteEnemyPhase();
     void ExecuteMovePhase(bool bSkipAttackCheck = false);
-    UFUNCTION()
-    void HandleManualMoveFinished(AUnitBase* Unit);
-    void RegisterManualMoveDelegate(AUnitBase* Unit, bool bIsPlayerFallback);
-    void FinalizePlayerMove(AActor* CompletedActor);
-
-    // CodeRevision: INC-2025-1122-R4 (Add setter for MoveReservationSubsystem callback) (2025-11-22)
-    void SetPlayerMoveState(const FVector& Direction, bool bInProgress);
-
     TSet<TWeakObjectPtr<AUnitBase>> ActiveMoveDelegates;
     TSet<TWeakObjectPtr<AUnitBase>> PendingPlayerFallbackMoves;
     // CodeRevision: INC-2025-1117H-R1 (Generalize attack execution) (2025-11-17 19:10)
@@ -598,8 +537,7 @@ protected:
     // Subsystem Accessors
     //==========================================================================
 
-    UPROPERTY()
-    TObjectPtr<UEnemyAISubsystem> EnemyAISubsystem = nullptr;
+
 
     UPROPERTY(Transient)
     TObjectPtr<UUnitTurnStateSubsystem> UnitTurnStateSubsystem = nullptr;
@@ -710,24 +648,11 @@ private:
     static float EncodeDir8ToMagnitude(const FVector2D& Dir);
     FVector2D CalculateDirectionFromTargetCell(const FIntPoint& TargetCell);
 
-    // Helper for packing/unpacking directions
-    static int32 PackDirection(const FIntPoint& Dir);
-    static FIntPoint UnpackDirection(int32 Magnitude);
-
-    bool ResolveMovePhaseDependencies(const TCHAR* ContextLabel, bool bLogSubsystemPresence, UTurnCorePhaseManager*& OutPhaseManager, UEnemyTurnDataSubsystem*& OutEnemyData);
-    void AppendPlayerIntentIfPending(APawn* PlayerPawn, TArray<FEnemyIntent>& InOutIntents, bool bSimultaneousContext);
-    void LogPlayerPositionBeforeAdvance() const;
-    void PerformTurnAdvanceAndBeginNextTurn();
-
-    // CodeRevision: INC-2025-1122-R2 (Delegate to TurnTagCleanupUtils) (2025-11-22)
-    static int32 RemoveGameplayTagLoose(UAbilitySystemComponent* ASC, const FGameplayTag& TagToRemove);
-    static int32 CleanseBlockingTags(UAbilitySystemComponent* ASC, AActor* ActorForLog);
-
     void ExecuteEnemyMoves_Sequential();
     // CodeRevision: INC-2025-1117H-R1 (Centralized move dispatch) (2025-11-17 19:10)
     void DispatchMoveActions(const TArray<FResolvedAction>& ActionsToDispatch);
     // ★★★ Phase 4: Unused variable removal (2025-11-09) ★★★
     // Removed: bEnemyTurnEnding (unused)
 
-    bool DoesAnyIntentHaveAttack() const;
+
 };
