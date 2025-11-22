@@ -91,6 +91,10 @@ void UTurnAdvanceGuardSubsystem::HandleEndEnemyTurn(AGameTurnManagerBase* TurnMa
     }
 
     const int32 TurnId = TurnManager->GetCurrentTurnId();
+
+    // CodeRevision: INC-2025-1122-R6 (Fix retry logic: Reset posted flag to allow subsequent retries if barrier is busy)
+    TurnManager->bEndTurnPosted = false;
+
     bool bBarrierQuiet = false;
     int32 InProgressCount = 0;
 

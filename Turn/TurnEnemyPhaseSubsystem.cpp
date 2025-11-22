@@ -194,6 +194,7 @@ void UTurnEnemyPhaseSubsystem::ExecuteSequentialMovePhase(AGameTurnManagerBase* 
 
 	TurnManager->bSequentialMovePhaseStarted = true;
 	TurnManager->bIsInMoveOnlyPhase = true;
+	TurnManager->bEnemyPhaseInProgress = true;
 
 	LOG_TURN(Log, TEXT("[Turn %d] Dispatching %d cached enemy actions sequentially (Moves=%d, Waits=%d, NonMove=%d)"),
 		TurnId, EnemyMoveActions.Num(), TotalEnemyMoves, TotalEnemyWaits, TotalEnemyNonMoves);

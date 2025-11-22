@@ -555,6 +555,7 @@ void AGameTurnManagerBase::ExecuteEnemyPhase()
         return;
     }
     bEnemyPhaseExecutedThisTurn = true;
+    bEnemyPhaseInProgress = true;
 
     UWorld* World = GetWorld();
     if (!World)
@@ -723,6 +724,15 @@ void AGameTurnManagerBase::HandleMovePhaseCompleted(int32 FinishedTurnId)
     // Case 1: Player move phase just completed -> Start enemy phase
     if (!bEnemyPhaseInProgress)
     {
+        // If we receive a barrier completion but enemy phase was already executed,
+        // it means this is a late callback from the enemy phase (e.g. simultaneous moves finishing).
+        // We should ignore it to avoid double-execution logic or misleading logs.
+        if (bEnemyPhaseExecutedThisTurn)
+        {
+             LOG_TURN(Log, TEXT("[Turn %d] HandleMovePhaseCompleted: Late barrier completion received after Enemy Phase execution. Ignoring."), FinishedTurnId);
+             return;
+        }
+
         LOG_TURN(Log, TEXT("[Turn %d] Player move phase complete. Starting Enemy Phase..."), FinishedTurnId);
 
         bPlayerMoveInProgress = false;
