@@ -440,6 +440,11 @@ public:
     UFUNCTION(BlueprintCallable, Category="Turn|State")
     void MarkMoveInProgress(bool bInProgress);
 
+    /** Execute enemy phase (move + attack). Can be called immediately after player command for simultaneous movement. */
+    // CodeRevision: INC-2025-1122-SIMUL-R1 (Made public for TurnCommandHandler simultaneous movement) (2025-11-22)
+    UFUNCTION(BlueprintCallable, Category="Turn|Enemy")
+    void ExecuteEnemyPhase();
+
     /** Open input window for player moves */
     UFUNCTION(BlueprintCallable, Category="Turn")
     void OpenInputWindow();
@@ -548,7 +553,7 @@ protected:
 
     void ExecuteSimultaneousPhase();
     void ExecuteSequentialPhase();
-    void ExecuteEnemyPhase();
+    // NOTE: ExecuteEnemyPhase() moved to public section (INC-2025-1122-SIMUL-R1)
     void ExecuteMovePhase(bool bSkipAttackCheck = false);
     TSet<TWeakObjectPtr<AUnitBase>> ActiveMoveDelegates;
     TSet<TWeakObjectPtr<AUnitBase>> PendingPlayerFallbackMoves;

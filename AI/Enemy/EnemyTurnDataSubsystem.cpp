@@ -619,3 +619,73 @@ bool UEnemyTurnDataSubsystem::EnsureIntentsFallback(
 
     return FallbackIntents.Num() > 0;
 }
+
+// CodeRevision: INC-2025-1122-SIMUL-R5 (Extract intent regeneration logic from ExecuteEnemyPhase) (2025-11-22)
+bool UEnemyTurnDataSubsystem::RegenerateIntentsForPlayerPosition(int32 TurnId, const FIntPoint& PlayerTargetCell, TArray<FEnemyIntent>& OutIntents)
+{
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        UE_LOG(LogEnemyTurnDataSys, Error, TEXT("[Turn %d] RegenerateIntents: World is null"), TurnId);
+        return false;
+    }
+
+    UEnemyAISubsystem* EnemyAI = World->GetSubsystem<UEnemyAISubsystem>();
+    UGridPathfindingSubsystem* PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>();
+
+    if (!EnemyAI || !PathFinder)
+    {
+        UE_LOG(LogEnemyTurnDataSys, Warning,
+            TEXT("[Turn %d] RegenerateIntents: Missing subsystems (EnemyAI=%d, PathFinder=%d)"),
+            TurnId, EnemyAI != nullptr, PathFinder != nullptr);
+        return false;
+    }
+
+    // Rebuild enemy list
+    RebuildEnemyList(FName("Enemy"));
+
+    // Get enemy actors
+    TArray<AActor*> EnemyActors = GetEnemiesSortedCopy();
+    UE_LOG(LogEnemyTurnDataSys, Log,
+        TEXT("[Turn %d] RegenerateIntents: Found %d enemies after RebuildEnemyList"),
+        TurnId, EnemyActors.Num());
+
+    if (EnemyActors.Num() == 0)
+    {
+        OutIntents.Empty();
+        Intents.Empty();
+        UE_LOG(LogEnemyTurnDataSys, Log, TEXT("[Turn %d] RegenerateIntents: No enemies to process"), TurnId);
+        return true; // Not an error, just no enemies
+    }
+
+    // Build observations based on player's target position
+    TArray<FEnemyObservation> FinalObservations;
+    EnemyAI->BuildObservations(EnemyActors, PlayerTargetCell, PathFinder, FinalObservations);
+
+    // Generate intents based on observations
+    TArray<FEnemyIntent> FinalIntents;
+    EnemyAI->CollectIntents(FinalObservations, EnemyActors, FinalIntents);
+
+    // Count intents for logging
+    int32 AttackCount = 0;
+    int32 MoveCount = 0;
+    int32 WaitCount = 0;
+    static const FGameplayTag AttackTag = FGameplayTag::RequestGameplayTag(FName("AI.Intent.Attack"));
+    static const FGameplayTag MoveTag = FGameplayTag::RequestGameplayTag(FName("AI.Intent.Move"));
+    for (const FEnemyIntent& Intent : FinalIntents)
+    {
+        if (Intent.AbilityTag.MatchesTag(AttackTag)) AttackCount++;
+        else if (Intent.AbilityTag.MatchesTag(MoveTag)) MoveCount++;
+        else WaitCount++;
+    }
+
+    UE_LOG(LogEnemyTurnDataSys, Log,
+        TEXT("[Turn %d] RegenerateIntents: Generated %d intents (Attack=%d, Move=%d, Wait=%d) for PlayerCell=(%d,%d)"),
+        TurnId, FinalIntents.Num(), AttackCount, MoveCount, WaitCount, PlayerTargetCell.X, PlayerTargetCell.Y);
+
+    // Store and output
+    Intents = FinalIntents;
+    OutIntents = FinalIntents;
+
+    return true;
+}

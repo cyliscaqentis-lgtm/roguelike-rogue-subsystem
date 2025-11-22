@@ -542,10 +542,13 @@ void AGameTurnManagerBase::OnPlayerMoveCompleted(const FGameplayEventData* Paylo
 		return;
 	}
 
+	// CodeRevision: INC-2025-1122-SIMUL-R1 (Removed ExecuteEnemyPhase call - now triggered from TurnCommandHandler for simultaneous movement) (2025-11-22)
+	// AI knowledge update only - enemy phase is triggered immediately when command is accepted
 	CachedEnemyIntents = FinalIntents;
-	ExecuteEnemyPhase();
+	// ExecuteEnemyPhase();  // REMOVED: Now called from TurnCommandHandler for simultaneous movement
 }
 
+// CodeRevision: INC-2025-1122-SIMUL-R5 (Simplified - delegate intent regeneration to EnemyTurnDataSubsystem) (2025-11-22)
 void AGameTurnManagerBase::ExecuteEnemyPhase()
 {
     // Guard against double execution in the same turn
@@ -565,65 +568,42 @@ void AGameTurnManagerBase::ExecuteEnemyPhase()
         return;
     }
 
-    // Regenerate enemy intents based on player's FINAL position (after player move)
-    // This ensures enemies react to where the player actually ended up, not where they started
-    UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>();
-    UEnemyAISubsystem* EnemyAI = World->GetSubsystem<UEnemyAISubsystem>();
+    // Determine player's target cell for intent generation
     UGridPathfindingSubsystem* LocalPathFinder = World->GetSubsystem<UGridPathfindingSubsystem>();
+    UGridOccupancySubsystem* Occupancy = World->GetSubsystem<UGridOccupancySubsystem>();
+    UEnemyTurnDataSubsystem* EnemyData = World->GetSubsystem<UEnemyTurnDataSubsystem>();
     APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(World, 0);
 
-    if (EnemyData && EnemyAI && LocalPathFinder && PlayerPawn)
+    if (EnemyData && LocalPathFinder && PlayerPawn)
     {
-        const FIntPoint PlayerFinalCell = LocalPathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
-        LOG_TURN(Log, TEXT("[Turn %d] ExecuteEnemyPhase: Regenerating intents for PlayerFinalCell=(%d,%d)"),
-            CurrentTurnId, PlayerFinalCell.X, PlayerFinalCell.Y);
+        // Use player's reserved target cell if available, otherwise use current position
+        FIntPoint PlayerFinalCell;
+        const FIntPoint ReservedCell = Occupancy ? Occupancy->GetReservedCellForActor(PlayerPawn) : FIntPoint(-1, -1);
 
-        // Ensure enemy list is up-to-date before regenerating intents
-        EnemyData->RebuildEnemyList(FName("Enemy"));
-
-        // Get enemy actors
-        TArray<AActor*> EnemyActors = EnemyData->GetEnemiesSortedCopy();
-        LOG_TURN(Log, TEXT("[Turn %d] ExecuteEnemyPhase: Found %d enemies after RebuildEnemyList"), CurrentTurnId, EnemyActors.Num());
-
-        if (EnemyActors.Num() > 0)
+        if (ReservedCell != FIntPoint(-1, -1))
         {
-            // Rebuild observations based on player's final position
-            TArray<FEnemyObservation> FinalObservations;
-            EnemyAI->BuildObservations(EnemyActors, PlayerFinalCell, LocalPathFinder, FinalObservations);
-
-            // Regenerate intents based on new observations
-            TArray<FEnemyIntent> FinalIntents;
-            EnemyAI->CollectIntents(FinalObservations, EnemyActors, FinalIntents);
-
-            // Count attack intents for logging
-            int32 AttackCount = 0;
-            int32 MoveCount = 0;
-            int32 WaitCount = 0;
-            static const FGameplayTag AttackTag = FGameplayTag::RequestGameplayTag(FName("AI.Intent.Attack"));
-            static const FGameplayTag MoveTag = FGameplayTag::RequestGameplayTag(FName("AI.Intent.Move"));
-            for (const FEnemyIntent& Intent : FinalIntents)
-            {
-                if (Intent.AbilityTag.MatchesTag(AttackTag)) AttackCount++;
-                else if (Intent.AbilityTag.MatchesTag(MoveTag)) MoveCount++;
-                else WaitCount++;
-            }
-
-            LOG_TURN(Warning, TEXT("[Turn %d] ExecuteEnemyPhase: Regenerated %d intents (Attack=%d, Move=%d, Wait=%d) based on PlayerFinalCell=(%d,%d)"),
-                CurrentTurnId, FinalIntents.Num(), AttackCount, MoveCount, WaitCount, PlayerFinalCell.X, PlayerFinalCell.Y);
-
-            // Update stored intents
-            EnemyData->SetIntents(FinalIntents);
-            CachedEnemyIntents = FinalIntents;
+            PlayerFinalCell = ReservedCell;
+            LOG_TURN(Log, TEXT("[Turn %d] ExecuteEnemyPhase: Using RESERVED PlayerTargetCell=(%d,%d)"),
+                CurrentTurnId, PlayerFinalCell.X, PlayerFinalCell.Y);
         }
         else
         {
-            LOG_TURN(Log, TEXT("[Turn %d] ExecuteEnemyPhase: No enemies to process"), CurrentTurnId);
+            PlayerFinalCell = LocalPathFinder->WorldToGrid(PlayerPawn->GetActorLocation());
+            LOG_TURN(Log, TEXT("[Turn %d] ExecuteEnemyPhase: Using CURRENT player position=(%d,%d)"),
+                CurrentTurnId, PlayerFinalCell.X, PlayerFinalCell.Y);
+        }
+
+        // Delegate intent regeneration to EnemyTurnDataSubsystem
+        TArray<FEnemyIntent> FinalIntents;
+        if (EnemyData->RegenerateIntentsForPlayerPosition(CurrentTurnId, PlayerFinalCell, FinalIntents))
+        {
+            CachedEnemyIntents = FinalIntents;
         }
     }
     else
     {
-        LOG_TURN(Warning, TEXT("[Turn %d] ExecuteEnemyPhase: Missing subsystems for intent regeneration (EnemyData=%d, EnemyAI=%d, PathFinder=%d, Player=%d)"),
-            CurrentTurnId, EnemyData != nullptr, EnemyAI != nullptr, LocalPathFinder != nullptr, PlayerPawn != nullptr);
+        LOG_TURN(Warning, TEXT("[Turn %d] ExecuteEnemyPhase: Missing subsystems (EnemyData=%d, PathFinder=%d, Player=%d)"),
+            CurrentTurnId, EnemyData != nullptr, LocalPathFinder != nullptr, PlayerPawn != nullptr);
     }
 
     if (UTurnEnemyPhaseSubsystem* EnemyPhase = World->GetSubsystem<UTurnEnemyPhaseSubsystem>())

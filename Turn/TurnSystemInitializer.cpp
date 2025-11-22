@@ -10,6 +10,7 @@
 #include "Turn/PlayerInputProcessor.h"
 #include "Turn/AttackPhaseExecutorSubsystem.h"
 #include "Turn/UnitTurnStateSubsystem.h"
+#include "Turn/TurnInitializationSubsystem.h"
 #include "AI/Enemy/EnemyAISubsystem.h"
 #include "AI/Enemy/EnemyTurnDataSubsystem.h"
 #include "Grid/GridPathfindingSubsystem.h"

@@ -211,6 +211,19 @@ public:
         const TArray<AActor*>& InEnemyActors,
         TArray<FEnemyIntent>& OutIntents);
 
+    // CodeRevision: INC-2025-1122-SIMUL-R5 (Extract intent regeneration logic from ExecuteEnemyPhase) (2025-11-22)
+    /**
+     * Regenerate enemy intents based on player's predicted position.
+     * Used during simultaneous movement to calculate intents based on where the player will end up.
+     *
+     * @param TurnId Current turn ID for logging
+     * @param PlayerTargetCell The cell where the player is moving to (or current position if not moving)
+     * @param OutIntents Output array of generated intents
+     * @return true if intents were generated successfully
+     */
+    UFUNCTION(BlueprintCallable, Category = "Turn|Enemy")
+    bool RegenerateIntentsForPlayerPosition(int32 TurnId, const FIntPoint& PlayerTargetCell, TArray<FEnemyIntent>& OutIntents);
+
     /**
      * 指定TimeSlotのIntentを抽出（BPループ削減）
      */

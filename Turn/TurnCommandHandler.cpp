@@ -14,6 +14,7 @@
 #include "Engine/ActorInstanceHandle.h"
 #include "Turn/TurnFlowCoordinator.h"
 #include "Turn/GameTurnManagerBase.h"
+#include "Turn/MoveReservationSubsystem.h"
 #include "AI/Enemy/EnemyTurnDataSubsystem.h"
 
 //------------------------------------------------------------------------------
@@ -182,6 +183,25 @@ bool UTurnCommandHandler::ProcessPlayerCommand(const FPlayerCommand& Command)
 
 		ASC->HandleGameplayEvent(AttackEventData.EventTag, &AttackEventData);
 
+		// CodeRevision: INC-2025-1122-SIMUL-R4 (Trigger enemy phase for attack commands too) (2025-11-22)
+		// Attack commands also need to trigger enemy phase for simultaneous movement
+		// Player is not moving, so no reservation needed - use current position for intent generation
+		{
+			AGameTurnManagerBase* TurnManager = nullptr;
+			TArray<AActor*> FoundActors;
+			UGameplayStatics::GetAllActorsOfClass(GetWorld(), AGameTurnManagerBase::StaticClass(), FoundActors);
+			if (FoundActors.Num() > 0)
+			{
+				TurnManager = Cast<AGameTurnManagerBase>(FoundActors[0]);
+			}
+
+			if (TurnManager)
+			{
+				UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Player attack - triggering enemy phase for simultaneous movement."));
+				TurnManager->ExecuteEnemyPhase();
+			}
+		}
+
 		return true;
 	}
 	// CodeRevision: INC-2025-1145-R1 (Treat move commands as validated so GameTurnManagerBase can run MovePrecheck and ACK instead of dropping input) (2025-11-20 14:00)
@@ -349,6 +369,33 @@ bool UTurnCommandHandler::TryExecuteMoveCommand(const FPlayerCommand& Command)
 	if (ASC)
 	{
 		ASC->HandleGameplayEvent(EventData.EventTag, &EventData);
+	}
+
+	// CodeRevision: INC-2025-1122-SIMUL-R1 (Trigger enemy phase immediately for simultaneous movement) (2025-11-22)
+	// CodeRevision: INC-2025-1122-SIMUL-R2 (Use GridOccupancySubsystem::GetReservedCellForActor instead of custom variable) (2025-11-22)
+	// CodeRevision: INC-2025-1122-SIMUL-R3 (Register player move reservation before ExecuteEnemyPhase via MoveReservationSubsystem) (2025-11-22)
+	// Trigger enemy phase immediately after player command is accepted
+	// This ensures enemies start moving at the same time as the player (simultaneous movement)
+	if (TurnManager)
+	{
+		// Register player's target cell reservation BEFORE ExecuteEnemyPhase
+		// so that GetReservedCellForActor returns the correct target cell for intent generation
+		if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
+		{
+			const bool bReserved = MoveRes->RegisterResolvedMove(PlayerPawn, TargetCell);
+			if (bReserved)
+			{
+				UE_LOG(LogTurnManager, Log, TEXT("[TurnCommandHandler] Player move reserved (%d,%d) - triggering enemy phase for simultaneous movement."),
+					TargetCell.X, TargetCell.Y);
+			}
+			else
+			{
+				UE_LOG(LogTurnManager, Warning, TEXT("[TurnCommandHandler] Player move reservation FAILED for (%d,%d) - enemy phase will use current position."),
+					TargetCell.X, TargetCell.Y);
+			}
+		}
+
+		TurnManager->ExecuteEnemyPhase();
 	}
 
 	return true;
