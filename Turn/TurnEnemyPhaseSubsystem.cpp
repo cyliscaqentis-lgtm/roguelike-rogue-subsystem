@@ -26,7 +26,9 @@ void UTurnEnemyPhaseSubsystem::ExecuteEnemyPhase(AGameTurnManagerBase* TurnManag
 {
 	if (!TurnManager) return;
 
-	if (!ResolveDependencies(TurnId, TEXT("ExecuteEnemyPhase"), PhaseManager, EnemyData))
+	UTurnCorePhaseManager* LocalPhaseManager = nullptr;
+	UEnemyTurnDataSubsystem* LocalEnemyData = nullptr;
+	if (!ResolveDependencies(TurnId, TEXT("ExecuteEnemyPhase"), LocalPhaseManager, LocalEnemyData))
 	{
 		TurnManager->EndEnemyTurn();
 		return;
@@ -125,12 +127,14 @@ void UTurnEnemyPhaseSubsystem::ExecuteSimultaneousPhase(AGameTurnManagerBase* Tu
 
 	LOG_TURN(Log, TEXT("[Turn %d] ==== Simultaneous Move Phase (No Attacks) ===="), TurnId);
 
-	if (!ResolveDependencies(TurnId, TEXT("ExecuteSimultaneousPhase"), PhaseManager, EnemyData))
+	UTurnCorePhaseManager* LocalPhaseManager = nullptr;
+	UEnemyTurnDataSubsystem* LocalEnemyData = nullptr;
+	if (!ResolveDependencies(TurnId, TEXT("ExecuteSimultaneousPhase"), LocalPhaseManager, LocalEnemyData))
 	{
 		return;
 	}
 
-	TArray<FEnemyIntent> AllIntents = EnemyData->Intents;
+	TArray<FEnemyIntent> AllIntents = LocalEnemyData->Intents;
 
 	// Add player intent
 	if (UWorld* World = GetWorld())
@@ -140,7 +144,7 @@ void UTurnEnemyPhaseSubsystem::ExecuteSimultaneousPhase(AGameTurnManagerBase* Tu
 
 	LOG_TURN(Log, TEXT("[Turn %d] ExecuteSimultaneousPhase: Processing %d intents via CoreResolvePhase"), TurnId, AllIntents.Num());
 
-	TArray<FResolvedAction> ResolvedActions = PhaseManager->CoreResolvePhase(AllIntents);
+	TArray<FResolvedAction> ResolvedActions = LocalPhaseManager->CoreResolvePhase(AllIntents);
 
 	LOG_TURN(Log, TEXT("[Turn %d] ExecuteSimultaneousPhase: CoreResolvePhase produced %d resolved actions"), TurnId, ResolvedActions.Num());
 

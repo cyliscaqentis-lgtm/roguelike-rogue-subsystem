@@ -1,5 +1,16 @@
 #include "Turn/GameTurnManagerBase.h"
 #include "Turn/TurnEnemyPhaseSubsystem.h"
+#include "Turn/TurnInitializationSubsystem.h"
+#include "Turn/TurnSystemInitializer.h"
+#include "Turn/TurnDebugSubsystem.h"
+#include "Turn/TurnCorePhaseManager.h"
+#include "Turn/TurnCommandHandler.h"
+#include "Turn/TurnAdvanceGuardSubsystem.h"
+#include "Turn/PlayerInputProcessor.h"
+#include "Turn/UnitTurnStateSubsystem.h"
+#include "Turn/MoveReservationSubsystem.h"
+#include "Turn/PlayerMoveHandlerSubsystem.h"
+#include "Turn/TurnFlowCoordinator.h"
 #include "TBSLyraGameMode.h"
 #include "Grid/GridPathfindingSubsystem.h"
 #include "Character/UnitManager.h"
@@ -8,11 +19,18 @@
 #include "Grid/GridOccupancySubsystem.h"
 #include "Grid/AABB.h"
 #include "AI/Enemy/EnemyTurnDataSubsystem.h"
+#include "AI/Enemy/EnemyAISubsystem.h"
+#include "AI/Ally/AllyTurnDataSubsystem.h"
+#include "Debug/DebugObserverCSV.h"
 #include "Utility/TurnSystemUtils.h"
+
+// Console variable for turn logging
+TAutoConsoleVariable<int32> CVarTurnLog(
+    TEXT("ts.TurnLog"),
     1,
     TEXT("0:Off, 1:Key events only, 2:Verbose debug output"),
     ECVF_Default
-     );
+);
 
 // 0: Do not regenerate DistanceField / enemy intents when a MOVE command is accepted (use preliminary intents from turn start)
 // 1: Regenerate DistanceField / enemy intents on MOVE accept using predicted player destination (heavier but more predictive)
@@ -34,6 +52,27 @@ AGameTurnManagerBase::AGameTurnManagerBase()
     SetReplicateMovement(false);    
 
     LOG_TURN(Log, TEXT("[TurnManager] Constructor: Replication enabled (bReplicates=true, bAlwaysRelevant=true)"));
+}
+
+void AGameTurnManagerBase::BeginPlay()
+{
+    Super::BeginPlay();
+    LOG_TURN(Log, TEXT("[TurnManager] BeginPlay"));
+}
+
+void AGameTurnManagerBase::HandleDungeonReady(URogueDungeonSubsystem* InDungeonSys)
+{
+    LOG_TURN(Log, TEXT("[TurnManager] HandleDungeonReady received"));
+    if (UTurnInitializationSubsystem* InitSys = GetWorld()->GetSubsystem<UTurnInitializationSubsystem>())
+    {
+        InitSys->HandleDungeonReady(this, InDungeonSys);
+    }
+}
+
+void AGameTurnManagerBase::OnExperienceLoaded(const ULyraExperienceDefinition* Experience)
+{
+    LOG_TURN(Log, TEXT("[TurnManager] OnExperienceLoaded"));
+    InitializeTurnSystem();
 }
 
 void AGameTurnManagerBase::InitializeTurnSystem()
@@ -69,11 +108,6 @@ void AGameTurnManagerBase::InitializeTurnSystem()
 
 	bHasInitialized = true;
 	LOG_TURN(Log, TEXT("InitializeTurnSystem: Initialization completed successfully"));
-}
-
-void AGameTurnManagerBase::Tick(float DeltaTime)
-{
-    Super::Tick(DeltaTime);
 }
 
 void AGameTurnManagerBase::OnRep_CurrentTurnId()
@@ -144,28 +178,45 @@ void AGameTurnManagerBase::StartTurn()
 
 void AGameTurnManagerBase::BeginPhase(FGameplayTag PhaseTag)
 {
-    
     FGameplayTag OldPhase = CurrentPhase;
     CurrentPhase = PhaseTag;
     PhaseStartTime = FPlatformTime::Seconds();
 
-if (DebugSubsystem)
+    if (DebugSubsystem)
     {
         DebugSubsystem->LogPhaseTransition(OldPhase, PhaseTag);
     }
     else
     {
-        
         UE_LOG(LogTurnPhase, Log, TEXT("PhaseStart:%s"), *PhaseTag.ToString());
     }
 
     if (PhaseTag == Phase_Player_Wait)
     {
-        
         WaitingForPlayerInput = true;
-        // ApplyWaitInputGate(true); // REMOVED: Redundant, OpenInputWindow handles this via PlayerInputProcessor
         OpenInputWindow();
     }
+}
+
+void AGameTurnManagerBase::EndPhase(FGameplayTag PhaseTag)
+{
+    const double PhaseDuration = FPlatformTime::Seconds() - PhaseStartTime;
+
+    if (DebugSubsystem)
+    {
+        DebugSubsystem->LogPhaseTransition(PhaseTag, FGameplayTag::EmptyTag);
+    }
+    else
+    {
+        UE_LOG(LogTurnPhase, Log, TEXT("PhaseEnd:%s (Duration: %.3fs)"), *PhaseTag.ToString(), PhaseDuration);
+    }
+
+    if (PhaseTag == Phase_Player_Wait)
+    {
+        WaitingForPlayerInput = false;
+    }
+
+    CurrentPhase = FGameplayTag::EmptyTag;
 }
 
 bool AGameTurnManagerBase::ShouldSimulMove_Implementation(const FPlayerCommand& Command, const FBoardSnapshot& Snapshot) const
@@ -727,13 +778,17 @@ void AGameTurnManagerBase::TryStartFirstTurn()
 {
     if (!IsAuthorityLike(GetWorld(), this)) return;
 
-    if (UTurnInitializationSubsystem* Init = GetWorld()->GetSubsystem<UTurnInitializationSubsystem>())
+    if (bPathReady && bUnitsSpawned && bPlayerPossessed && !bTurnStarted)
     {
-        if (Init->CanStartFirstTurn())
-        {
-            LOG_TURN(Warning, TEXT("[TryStartFirstTurn] All conditions met -> Starting Turn 0"));
-            StartFirstTurn();
-        }
+        LOG_TURN(Warning, TEXT("[TryStartFirstTurn] All conditions met: PathReady=%d UnitsSpawned=%d PlayerPossessed=%d -> Starting Turn 0"),
+            bPathReady, bUnitsSpawned, bPlayerPossessed);
+
+        StartFirstTurn();
+    }
+    else
+    {
+        LOG_TURN(Log, TEXT("[TryStartFirstTurn] Waiting: PathReady=%d UnitsSpawned=%d PlayerPossessed=%d TurnStarted=%d"),
+            bPathReady, bUnitsSpawned, bPlayerPossessed, bTurnStarted);
     }
 }
 
@@ -792,9 +847,83 @@ void AGameTurnManagerBase::SetPlayerMoveState(const FVector& Direction, bool bIn
 {
     CachedPlayerCommand.Direction = Direction;
     bPlayerMoveInProgress = bInProgress;
-    
+
     if (UPlayerInputProcessor* InputProc = GetWorld()->GetSubsystem<UPlayerInputProcessor>())
     {
         InputProc->SetPlayerMoveState(Direction, bInProgress);
     }
+}
+
+void AGameTurnManagerBase::RefreshEnemyRoster(APawn* PlayerPawn, int32 TurnId, const TCHAR* Context)
+{
+    UWorld* World = GetWorld();
+    if (!World) return;
+
+    TArray<AActor*> CollectedEnemies;
+    if (UEnemyAISubsystem* EnemyAI = World->GetSubsystem<UEnemyAISubsystem>())
+    {
+        EnemyAI->CollectAllEnemies(PlayerPawn, CollectedEnemies);
+    }
+
+    if (UnitTurnStateSubsystem)
+    {
+        UnitTurnStateSubsystem->UpdateEnemies(CollectedEnemies);
+        LOG_TURN(Log, TEXT("[Turn %d] RefreshEnemyRoster (%s): Updated with %d enemies"),
+            TurnId, Context, CollectedEnemies.Num());
+    }
+}
+
+void AGameTurnManagerBase::CopyEnemyActors(TArray<AActor*>& OutEnemies)
+{
+    if (UnitTurnStateSubsystem)
+    {
+        UnitTurnStateSubsystem->CopyEnemiesTo(OutEnemies);
+    }
+    else
+    {
+        OutEnemies.Reset();
+    }
+}
+
+void AGameTurnManagerBase::ClearResidualInProgressTags()
+{
+    if (UAbilitySystemComponent* ASC = TurnSystemUtils::GetPlayerASC(this))
+    {
+        const FGameplayTag InProgressTag = RogueGameplayTags::State_Action_InProgress;
+        if (ASC->HasMatchingGameplayTag(InProgressTag))
+        {
+            ASC->SetLooseGameplayTagCount(InProgressTag, 0);
+            LOG_TURN(Warning, TEXT("[Turn %d] ClearResidualInProgressTags: Cleared stale InProgress tag"), CurrentTurnId);
+        }
+    }
+}
+
+UAbilitySystemComponent* AGameTurnManagerBase::GetPlayerASC() const
+{
+    return TurnSystemUtils::GetPlayerASC(const_cast<AGameTurnManagerBase*>(this));
+}
+
+bool AGameTurnManagerBase::RegisterResolvedMove(AActor* SourceActor, const FIntPoint& TargetCell)
+{
+    if (UWorld* World = GetWorld())
+    {
+        if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
+        {
+            return MoveRes->RegisterResolvedMove(SourceActor, TargetCell);
+        }
+    }
+    return false;
+}
+
+bool AGameTurnManagerBase::DispatchResolvedMove(const FResolvedAction& Action)
+{
+    if (UWorld* World = GetWorld())
+    {
+        if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
+        {
+            MoveRes->DispatchResolvedMove(Action, this);
+            return true;
+        }
+    }
+    return false;
 }

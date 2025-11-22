@@ -54,6 +54,18 @@ public:
 	void ResolveOrSpawnUnitManager(AGameTurnManagerBase* Manager);
 
 	/**
+	 * Initialize the GameTurnManager during BeginPlay
+	 * Called from TurnSystemInitializer::InitializeTurnSystem
+	 */
+	void InitializeGameTurnManager(AGameTurnManagerBase* Manager);
+
+	/**
+	 * Handle dungeon ready callback
+	 * Called when URogueDungeonSubsystem::OnGridReady fires
+	 */
+	void HandleDungeonReady(AGameTurnManagerBase* Manager, URogueDungeonSubsystem* DungeonSys);
+
+	/**
 	 * Check if all conditions are met to start the first turn
 	 */
 	bool CanStartFirstTurn() const;

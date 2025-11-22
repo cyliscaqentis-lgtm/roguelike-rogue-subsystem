@@ -25,6 +25,7 @@
 #include "Turn/GameTurnManagerBase.h"
 #include "Turn/TurnFlowCoordinator.h"
 #include "Turn/TurnActionBarrierSubsystem.h"
+#include "Turn/MoveReservationSubsystem.h"
 #include "Utility/PathFinderUtils.h"
 #include "Utility/TurnCommandEncoding.h"
 #include "TimerManager.h"
@@ -797,10 +798,15 @@ void UGA_MoveBase::StartMoveToCell(const FIntPoint& TargetCell)
         return;
     }
 
-    const AGameTurnManagerBase* TurnManager = GetTurnManager();
-    const bool bTargetReserved = (TurnManager && Unit)
-        ? TurnManager->HasReservationFor(Unit, TargetCell)
-        : false;
+    UWorld* World = GetWorld();
+    bool bTargetReserved = false;
+    if (World && Unit)
+    {
+        if (UMoveReservationSubsystem* MoveRes = World->GetSubsystem<UMoveReservationSubsystem>())
+        {
+            bTargetReserved = MoveRes->HasReservationFor(Unit, TargetCell);
+        }
+    }
 
     // Phase 5: Collision Prevention - Require reservation (2025-11-09)
     // CRITICAL FIX: Units can ONLY move to cells reserved for them

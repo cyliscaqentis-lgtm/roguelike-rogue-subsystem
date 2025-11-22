@@ -1060,14 +1060,6 @@ bool UTurnCorePhaseManager::IsGASReady(AActor* Actor)
     return true;
 }
 
-void UTurnCorePhaseManager::EnsureEnemyIntents(int32 TurnId, APawn* PlayerPawn)
-{
-	if (UEnemyTurnDataSubsystem* EnemyTurnData = GetWorld()->GetSubsystem<UEnemyTurnDataSubsystem>())
-	{
-		EnemyTurnData->EnsureIntentsFallback(TurnId, PlayerPawn);
-	}
-}
-
 #include "Turn/MoveReservationSubsystem.h"
 #include "Utility/RogueGameplayTags.h"
 

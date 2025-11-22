@@ -19,6 +19,7 @@
 #include "Grid/AABB.h"
 #include "Turn/UnitTurnStateSubsystem.h"
 #include "Utility/TurnTagCleanupUtils.h"
+#include "Utility/TurnAuthorityUtils.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogTurnInit, Log, All);
 
@@ -229,7 +230,7 @@ void UTurnInitializationSubsystem::InitializeGameTurnManager(AGameTurnManagerBas
 		UE_LOG(LogTurnInit, Warning, TEXT("InitializeGameTurnManager: UDebugObserverCSV component not found."));
 	}
 
-	if (!Manager->IsAuthorityLike(GetWorld(), Manager))
+	if (!IsAuthorityLike(GetWorld(), Manager))
 	{
 		UE_LOG(LogTurnInit, Warning, TEXT("InitializeGameTurnManager: Not authoritative, skipping"));
 		return;
@@ -272,6 +273,13 @@ void UTurnInitializationSubsystem::HandleDungeonReady(AGameTurnManagerBase* Mana
 	if (!Manager || !DungeonSys)
 	{
 		UE_LOG(LogTurnInit, Error, TEXT("HandleDungeonReady: Invalid Manager or DungeonSys"));
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		UE_LOG(LogTurnInit, Error, TEXT("HandleDungeonReady: World is null"));
 		return;
 	}
 

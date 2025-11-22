@@ -187,7 +187,7 @@ void APlayerControllerBase::EnsureTurnManagerCached()
             if (CachedTurnManager)
             {
                 // CodeRevision: INC-2025-00032-R1 (Remove GetCachedPathFinder() - use GetGridPathfindingSubsystem() instead) (2025-01-XX XX:XX)
-                PathFinder = CachedTurnManager->GetGridPathfindingSubsystem();
+                PathFinder = World->GetSubsystem<UGridPathfindingSubsystem>();
                 UE_LOG(LogTemp, Log, TEXT("[Client] TurnManager cached successfully: %s"),
                     *CachedTurnManager->GetName());
 

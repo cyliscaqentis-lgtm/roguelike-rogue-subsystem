@@ -72,6 +72,10 @@ class LYRAGAME_API AGameTurnManagerBase : public AActor
     // CodeRevision: INC-2025-1122-R2 (Allow MoveReservationSubsystem access to protected members)
     friend class UMoveReservationSubsystem;
     friend class UTurnEnemyPhaseSubsystem;
+    friend class UPlayerInputProcessor;
+    friend class UTurnInitializationSubsystem;
+    friend class UTurnSystemInitializer;
+    friend class UTurnCorePhaseManager;
 
 public:
     //==========================================================================
@@ -148,9 +152,6 @@ public:
     //==========================================================================
     // Turn Flow API
     //==========================================================================
-
-    UFUNCTION(BlueprintCallable, Category = "Turn|Flow", meta = (DeprecatedFunction, DeprecationMessage = "Use OnPlayerMoveCompleted flow instead"))
-
 
     UFUNCTION(BlueprintCallable, Category = "Turn|Flow")
     void AdvanceTurnAndRestart();
@@ -395,6 +396,18 @@ public:
     UPROPERTY()
     bool bDeferOpenOnPossess = false;
 
+    /** Flag indicating if pathfinding is ready */
+    UPROPERTY()
+    bool bPathReady = false;
+
+    /** Flag indicating if units have been spawned */
+    UPROPERTY()
+    bool bUnitsSpawned = false;
+
+    /** Flag indicating if player has been possessed */
+    UPROPERTY()
+    bool bPlayerPossessed = false;
+
 
 
     // CodeRevision: INC-2025-00032-R1 (Removed CachedPathFinder member - use PathFinder only) (2025-01-XX XX:XX)
@@ -490,6 +503,36 @@ protected:
 
     /** Try to start the first turn when all conditions are met */
     void TryStartFirstTurn();
+
+    /** Perform turn advance and begin next turn (called from AdvanceTurnAndRestart) */
+    void PerformTurnAdvanceAndBeginNextTurn();
+
+    /** Finalize player move after completion */
+    void FinalizePlayerMove(AActor* CompletedActor);
+
+    /** Set player move state (direction and progress flag) */
+    void SetPlayerMoveState(const FVector& Direction, bool bInProgress);
+
+    /** Refresh enemy roster for the current turn */
+    void RefreshEnemyRoster(APawn* PlayerPawn, int32 TurnId, const TCHAR* Context);
+
+    /** Copy enemy actors to output array */
+    void CopyEnemyActors(TArray<AActor*>& OutEnemies);
+
+    /** Clear any residual InProgress tags from previous turns */
+    void ClearResidualInProgressTags();
+
+    /** Get player's AbilitySystemComponent */
+    UAbilitySystemComponent* GetPlayerASC() const;
+
+    /** Register a resolved move for collision tracking */
+    bool RegisterResolvedMove(AActor* SourceActor, const FIntPoint& TargetCell);
+
+    /** Dispatch a resolved move action */
+    bool DispatchResolvedMove(const FResolvedAction& Action);
+
+    /** Get cached resolved actions for sequential processing */
+    const TArray<FResolvedAction>& GetCachedResolvedActions() const { return CachedResolvedActions; }
 
     //==========================================================================
     // Phase Execution
@@ -598,6 +641,10 @@ private:
     /** Input processing subsystem (2025-11-09 Refactoring) */
     UPROPERTY(Transient)
     TObjectPtr<UPlayerInputProcessor> PlayerInputProcessor = nullptr;
+
+    /** Enemy AI subsystem reference */
+    UPROPERTY(Transient)
+    TObjectPtr<UEnemyAISubsystem> EnemyAISubsystem = nullptr;
 
     /** Helper subsystem that performs the heavy InitializeTurnSystem sequence. */
     friend class UTurnSystemInitializer;
